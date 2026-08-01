@@ -179,6 +179,8 @@ class MainActivity : SimpleActivity() {
             when (menuItem.itemId) {
                 R.id.show_recycle_bin -> launchRecycleBin()
                 R.id.show_archived -> launchArchivedConversations()
+                R.id.bulk_send -> launchBulkSend()
+                R.id.pushplus_forwarding -> launchPushPlusSettings()
                 R.id.settings -> launchSettings()
                 R.id.about -> launchAbout()
                 else -> return@setOnMenuItemClickListener false
@@ -624,6 +626,16 @@ class MainActivity : SimpleActivity() {
     private fun launchSettings() {
         hideKeyboard()
         startActivity(Intent(applicationContext, SettingsActivity::class.java))
+    }
+
+    private fun launchPushPlusSettings() {
+        hideKeyboard()
+        startActivity(Intent(applicationContext, PushPlusSettingsActivity::class.java))
+    }
+
+    private fun launchBulkSend() {
+        hideKeyboard()
+        startActivity(Intent(applicationContext, BulkSendActivity::class.java))
     }
 
     private fun launchAbout() {

@@ -12,6 +12,7 @@ androidx-constraintlayout = "2.2.1"
 androidx-swiperefreshlayout = "1.2.0"
 androidx-lifecycleprocess = "2.10.0"
 androidx-documentfile = "1.1.0"
+androidx-work = "2.11.0"
 #Eventbus
 eventbus = "3.3.1"
 #Room
@@ -36,6 +37,7 @@ androidx-constraintlayout = { module = "androidx.constraintlayout:constraintlayo
 androidx-lifecycle-process = { module = "androidx.lifecycle:lifecycle-process", version.ref = "androidx-lifecycleprocess" }
 androidx-swiperefreshlayout = { module = "androidx.swiperefreshlayout:swiperefreshlayout", version.ref = "androidx-swiperefreshlayout" }
 androidx-documentfile = { module = "androidx.documentfile:documentfile", version.ref = "androidx-documentfile" }
+androidx-work-runtime = { module = "androidx.work:work-runtime-ktx", version.ref = "androidx-work" }
 #Room
 androidx-room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
 androidx-room-ktx = { module = "androidx.room:room-ktx", version.ref = "room" }

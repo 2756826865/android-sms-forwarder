@@ -25,6 +25,8 @@ import org.fossify.messages.extensions.updateConversationArchivedStatus
 import org.fossify.messages.helpers.ReceiverUtils.isMessageFilteredOut
 import org.fossify.messages.helpers.refreshConversations
 import org.fossify.messages.helpers.refreshMessages
+import org.fossify.messages.forwarding.PushPlusConfig
+import org.fossify.messages.forwarding.PushPlusWorker
 import org.fossify.messages.models.Message
 
 class SmsReceiver : BroadcastReceiver() {
@@ -68,6 +70,17 @@ class SmsReceiver : BroadcastReceiver() {
                     subscriptionId = subscriptionId,
                     status = status
                 )
+
+                if (PushPlusConfig(appContext).enabled) {
+                    PushPlusWorker.enqueue(
+                        context = appContext,
+                        sender = address,
+                        body = body,
+                        receivedAt = date,
+                        subscriptionId = subscriptionId,
+                        uniqueId = "$date-${address.hashCode()}-${body.hashCode()}"
+                    )
+                }
             } finally {
                 pending.finish()
             }

@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <org.fossify.commons.views.MyAppBarLayout
+        android:id="@+id/bulk_send_appbar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <com.google.android.material.appbar.MaterialToolbar
+            android:id="@+id/bulk_send_toolbar"
+            android:layout_width="match_parent"
+            android:layout_height="?attr/actionBarSize"
+            android:background="@color/color_primary"
+            app:title="@string/bulk_send"
+            app:titleTextAppearance="@style/AppTheme.ActionBar.TitleTextStyle" />
+    </org.fossify.commons.views.MyAppBarLayout>
+
+    <LinearLayout
+        android:id="@+id/bulk_send_holder"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior">
+
+        <org.fossify.commons.views.MyEditText
+            android:id="@+id/bulk_send_search"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:hint="@string/bulk_send_search"
+            android:inputType="text"
+            android:paddingHorizontal="16dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="12dp">
+
+            <Button
+                android:id="@+id/bulk_send_select_all"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/bulk_send_select_all" />
+
+            <Button
+                android:id="@+id/bulk_send_clear"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/bulk_send_clear" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/bulk_send_selected_count"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="6dp"
+            android:text="@string/bulk_send_selected_zero" />
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/bulk_send_recipients"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:clipToPadding="false"
+            app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
+
+        <Spinner
+            android:id="@+id/bulk_send_sim"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:contentDescription="@string/bulk_send_sim"
+            android:paddingHorizontal="12dp" />
+
+        <org.fossify.commons.views.MyEditText
+            android:id="@+id/bulk_send_body"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="@string/bulk_send_message"
+            android:inputType="textCapSentences|textMultiLine"
+            android:maxHeight="140dp"
+            android:minHeight="72dp"
+            android:padding="16dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:alpha="0.7"
+            android:paddingHorizontal="16dp"
+            android:text="@string/bulk_send_cost_notice"
+            android:textSize="12sp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/bulk_send_action"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_margin="12dp"
+            android:text="@string/bulk_send_action" />
+    </LinearLayout>
+</androidx.coordinatorlayout.widget.CoordinatorLayout>
