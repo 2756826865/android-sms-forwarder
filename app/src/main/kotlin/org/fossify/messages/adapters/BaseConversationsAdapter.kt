@@ -200,7 +200,7 @@ abstract class BaseConversationsAdapter(
 
             if (activity.config.showListAvatars) {
                 if (!activity.config.showLetterAvatars && conversation.photoUri.isBlank()) {
-                    conversationImage.setImageResource(R.drawable.ic_person_vector)
+                    conversationImage.setImageResource(org.fossify.commons.R.drawable.ic_person_vector)
                     conversationImage.setBackgroundResource(R.drawable.miui_avatar_background)
                     conversationImage.setPadding(14, 14, 14, 14)
                 } else {
