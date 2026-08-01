@@ -1,10 +1,12 @@
 package org.fossify.messages.activities
 
 import android.annotation.SuppressLint
+import android.graphics.Color
 import android.os.Bundle
 import android.telephony.SmsMessage
 import android.telephony.SubscriptionManager
 import android.widget.ArrayAdapter
+import androidx.core.view.isVisible
 import org.fossify.commons.dialogs.ConfirmationDialog
 import org.fossify.commons.extensions.onTextChangeListener
 import org.fossify.commons.extensions.toast
@@ -38,9 +40,14 @@ class BulkSendActivity : SimpleActivity() {
         )
         setupTopAppBar(binding.bulkSendAppbar, NavigationIcon.Arrow)
         updateTextColors(binding.bulkSendHolder)
+        applyLightUiColors()
         binding.bulkSendRecipients.adapter = adapter
 
-        binding.bulkSendSearch.onTextChangeListener { applyFilter(it) }
+        binding.bulkSendSearch.onTextChangeListener {
+            applyFilter(it)
+            updateManualNumberAction(it)
+        }
+        binding.bulkSendAddNumber.setOnClickListener { addManualNumber() }
         binding.bulkSendSelectAll.setOnClickListener {
             val visible = adapter.visibleNumbers()
             if (selectedNumbers.size + visible.count { it !in selectedNumbers } > MAX_RECIPIENTS) {
@@ -75,7 +82,9 @@ class BulkSendActivity : SimpleActivity() {
             }.distinctBy { it.number }.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
 
             runOnUiThread {
+                val manualRecipients = allRecipients.filter { it.name == getString(R.string.bulk_send_manual_number) }
                 allRecipients.clear()
+                allRecipients.addAll(manualRecipients)
                 allRecipients.addAll(recipients)
                 applyFilter(binding.bulkSendSearch.value)
             }
@@ -92,6 +101,37 @@ class BulkSendActivity : SimpleActivity() {
         adapter.submitList(filtered)
     }
 
+    private fun updateManualNumberAction(query: String) {
+        val number = normalizeManualNumber(query)
+        val canAdd = number != null && allRecipients.none { it.number == number }
+        binding.bulkSendAddNumber.isVisible = canAdd
+        if (canAdd) {
+            binding.bulkSendAddNumber.text = getString(R.string.bulk_send_add_number, number)
+        }
+    }
+
+    private fun addManualNumber() {
+        val number = normalizeManualNumber(binding.bulkSendSearch.value) ?: return
+        if (number !in selectedNumbers && selectedNumbers.size >= MAX_RECIPIENTS) {
+            toast(getString(R.string.bulk_send_too_many, MAX_RECIPIENTS))
+            return
+        }
+
+        if (allRecipients.none { it.number == number }) {
+            allRecipients.add(0, BulkRecipient(getString(R.string.bulk_send_manual_number), number))
+        }
+        selectedNumbers.add(number)
+        binding.bulkSendSearch.setText("")
+        applyFilter("")
+        updateSelectedCount()
+    }
+
+    private fun normalizeManualNumber(input: String): String? {
+        val compact = input.trim().replace(Regex("[\\s()\\-]"), "")
+        if (!compact.matches(Regex("\\+?[0-9]{3,20}"))) return null
+        return compact
+    }
+
     @SuppressLint("MissingPermission")
     private fun loadSimOptions() {
         val active = runCatching { subscriptionManagerCompat().activeSubscriptionInfoList.orEmpty() }.getOrDefault(emptyList())
@@ -102,7 +142,21 @@ class BulkSendActivity : SimpleActivity() {
                 add(SimOption("SIM${index + 1}${if (carrier.isBlank()) "" else " · $carrier"}", info.subscriptionId))
             }
         }
-        binding.bulkSendSim.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, simOptions)
+        binding.bulkSendSim.adapter = ArrayAdapter(this, R.layout.item_bulk_sim_option, simOptions).apply {
+            setDropDownViewResource(R.layout.item_bulk_sim_option)
+        }
+    }
+
+    private fun applyLightUiColors() {
+        binding.bulkSendHolder.setBackgroundColor(Color.WHITE)
+        binding.bulkSendSearch.setTextColor(Color.rgb(17, 17, 17))
+        binding.bulkSendSearch.setHintTextColor(Color.rgb(138, 138, 138))
+        binding.bulkSendAddNumber.setTextColor(Color.rgb(21, 148, 71))
+        binding.bulkSendSelectAll.setTextColor(Color.rgb(34, 34, 34))
+        binding.bulkSendClear.setTextColor(Color.rgb(34, 34, 34))
+        binding.bulkSendSelectedCount.setTextColor(Color.rgb(85, 85, 85))
+        binding.bulkSendBody.setTextColor(Color.rgb(17, 17, 17))
+        binding.bulkSendBody.setHintTextColor(Color.rgb(119, 119, 119))
     }
 
     private fun confirmSend() {

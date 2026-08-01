@@ -28,6 +28,7 @@ import org.fossify.messages.helpers.refreshMessages
 import org.fossify.messages.forwarding.PushPlusConfig
 import org.fossify.messages.forwarding.PushPlusWorker
 import org.fossify.messages.models.Message
+import java.security.MessageDigest
 
 class SmsReceiver : BroadcastReceiver() {
 
@@ -46,6 +47,17 @@ class SmsReceiver : BroadcastReceiver() {
                 val subject = parts.last().pseudoSubject.orEmpty()
                 val status = parts.last().status
                 val body = buildString { parts.forEach { append(it.messageBody.orEmpty()) } }
+                val receivedAt = parts.minOfOrNull { it.timestampMillis }
+                    ?.takeIf { it > 0L }
+                    ?: System.currentTimeMillis()
+                val subscriptionId = intent.getIntExtra(
+                    "subscription",
+                    intent.getIntExtra("subscription_id", -1)
+                )
+
+                if (isDuplicate(appContext, address, body, receivedAt, subscriptionId)) {
+                    return@ensureBackgroundThread
+                }
 
                 if (isMessageFilteredOut(appContext, body)) return@ensureBackgroundThread
                 if (appContext.isNumberBlocked(address)) return@ensureBackgroundThread
@@ -56,20 +68,8 @@ class SmsReceiver : BroadcastReceiver() {
                     if (result == ContactLookupResult.NotFound) return@ensureBackgroundThread
                 }
 
-                val date = System.currentTimeMillis()
+                val date = receivedAt
                 val threadId = appContext.getThreadId(address)
-                val subscriptionId = intent.getIntExtra("subscription", -1)
-
-                handleMessageSync(
-                    context = appContext,
-                    address = address,
-                    subject = subject,
-                    body = body,
-                    date = date,
-                    threadId = threadId,
-                    subscriptionId = subscriptionId,
-                    status = status
-                )
 
                 if (PushPlusConfig(appContext).enabled) {
                     PushPlusWorker.enqueue(
@@ -80,6 +80,22 @@ class SmsReceiver : BroadcastReceiver() {
                         subscriptionId = subscriptionId,
                         uniqueId = "$date-${address.hashCode()}-${body.hashCode()}"
                     )
+                }
+
+                runCatching {
+                    handleMessageSync(
+                        context = appContext,
+                        address = address,
+                        subject = subject,
+                        body = body,
+                        date = date,
+                        threadId = threadId,
+                        subscriptionId = subscriptionId,
+                        status = status
+                    )
+                }.onFailure { error ->
+                    PushPlusConfig(appContext).lastStatus =
+                        "已收到短信；本机短信库写入失败：${error.message ?: error.javaClass.simpleName}"
                 }
             } finally {
                 pending.finish()
@@ -164,5 +180,30 @@ class SmsReceiver : BroadcastReceiver() {
             threadId = threadId,
             bitmap = bitmap
         )
+    }
+
+    private fun isDuplicate(
+        context: Context,
+        address: String,
+        body: String,
+        receivedAt: Long,
+        subscriptionId: Int
+    ): Boolean = synchronized(duplicateLock) {
+        val raw = "$address\u0000$body\u0000$receivedAt\u0000$subscriptionId"
+        val fingerprint = MessageDigest.getInstance("SHA-256")
+            .digest(raw.toByteArray())
+            .joinToString("") { "%02x".format(it) }
+        val preferences = context.getSharedPreferences(DUPLICATE_PREFS, Context.MODE_PRIVATE)
+        val previous = preferences.getString(KEY_LAST_FINGERPRINT, null)
+        preferences.edit()
+            .putString(KEY_LAST_FINGERPRINT, fingerprint)
+            .apply()
+        previous == fingerprint
+    }
+
+    companion object {
+        private const val DUPLICATE_PREFS = "sms_receiver_state"
+        private const val KEY_LAST_FINGERPRINT = "last_fingerprint"
+        private val duplicateLock = Any()
     }
 }

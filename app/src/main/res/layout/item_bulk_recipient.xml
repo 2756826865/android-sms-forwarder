@@ -28,6 +28,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:maxLines="1"
+            android:textColor="#151515"
             android:textSize="16sp" />
 
         <TextView
@@ -36,6 +37,7 @@
             android:layout_height="wrap_content"
             android:alpha="0.7"
             android:maxLines="1"
+            android:textColor="#606060"
             android:textSize="14sp" />
     </LinearLayout>
 </LinearLayout>

@@ -13,15 +13,17 @@
             android:id="@+id/bulk_send_toolbar"
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
-            android:background="@color/color_primary"
+            android:background="@android:color/white"
             app:title="@string/bulk_send"
-            app:titleTextAppearance="@style/AppTheme.ActionBar.TitleTextStyle" />
+            app:navigationIconTint="#111111"
+            app:titleTextColor="#111111" />
     </org.fossify.commons.views.MyAppBarLayout>
 
     <LinearLayout
         android:id="@+id/bulk_send_holder"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:background="@android:color/white"
         android:orientation="vertical"
         app:layout_behavior="@string/appbar_scrolling_view_behavior">
 
@@ -29,9 +31,25 @@
             android:id="@+id/bulk_send_search"
             android:layout_width="match_parent"
             android:layout_height="52dp"
+            android:layout_marginHorizontal="16dp"
+            android:layout_marginTop="10dp"
+            android:background="@drawable/home_search_background"
             android:hint="@string/bulk_send_search"
-            android:inputType="text"
-            android:paddingHorizontal="16dp" />
+            android:inputType="phone"
+            android:paddingHorizontal="18dp"
+            android:textColor="#111111"
+            android:textColorHint="#8A8A8A" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/bulk_send_add_number"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="start|center_vertical"
+            android:paddingHorizontal="16dp"
+            android:text="@string/bulk_send_add_number_preview"
+            android:textColor="#159447"
+            android:visibility="gone" />
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -40,19 +58,29 @@
             android:orientation="horizontal"
             android:paddingHorizontal="12dp">
 
-            <Button
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/bulk_send_select_all"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
+                android:layout_marginEnd="6dp"
                 android:layout_weight="1"
-                android:text="@string/bulk_send_select_all" />
+                android:text="@string/bulk_send_select_all"
+                android:textColor="#222222"
+                app:cornerRadius="18dp"
+                app:strokeColor="#D5D5D5" />
 
-            <Button
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/bulk_send_clear"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
                 android:layout_weight="1"
-                android:text="@string/bulk_send_clear" />
+                android:text="@string/bulk_send_clear"
+                android:textColor="#222222"
+                app:cornerRadius="18dp"
+                app:strokeColor="#D5D5D5" />
         </LinearLayout>
 
         <TextView
@@ -61,7 +89,8 @@
             android:layout_height="wrap_content"
             android:paddingHorizontal="16dp"
             android:paddingVertical="6dp"
-            android:text="@string/bulk_send_selected_zero" />
+            android:text="@string/bulk_send_selected_zero"
+            android:textColor="#555555" />
 
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/bulk_send_recipients"
@@ -76,7 +105,7 @@
             android:layout_width="match_parent"
             android:layout_height="48dp"
             android:contentDescription="@string/bulk_send_sim"
-            android:paddingHorizontal="12dp" />
+            android:paddingHorizontal="16dp" />
 
         <org.fossify.commons.views.MyEditText
             android:id="@+id/bulk_send_body"
@@ -86,7 +115,9 @@
             android:inputType="textCapSentences|textMultiLine"
             android:maxHeight="140dp"
             android:minHeight="72dp"
-            android:padding="16dp" />
+            android:padding="16dp"
+            android:textColor="#111111"
+            android:textColorHint="#777777" />
 
         <TextView
             android:layout_width="match_parent"
@@ -94,6 +125,7 @@
             android:alpha="0.7"
             android:paddingHorizontal="16dp"
             android:text="@string/bulk_send_cost_notice"
+            android:textColor="#666666"
             android:textSize="12sp" />
 
         <com.google.android.material.button.MaterialButton
@@ -101,6 +133,9 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_margin="12dp"
-            android:text="@string/bulk_send_action" />
+            android:text="@string/bulk_send_action"
+            android:textColor="@android:color/white"
+            app:backgroundTint="#20C45A"
+            app:cornerRadius="22dp" />
     </LinearLayout>
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

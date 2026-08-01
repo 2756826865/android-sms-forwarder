@@ -1,16 +1,21 @@
 package org.fossify.messages.activities
 
 import android.annotation.SuppressLint
+import android.Manifest
 import android.app.role.RoleManager
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.pm.ShortcutInfo
 import android.content.pm.ShortcutManager
 import android.graphics.drawable.Icon
 import android.graphics.drawable.LayerDrawable
+import android.graphics.Color
 import android.os.Bundle
 import android.provider.Telephony
 import android.text.TextUtils
 import androidx.appcompat.content.res.AppCompatResources
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import org.fossify.commons.dialogs.PermissionRequiredDialog
 import org.fossify.commons.extensions.adjustAlpha
 import org.fossify.commons.extensions.appLaunched
@@ -32,6 +37,7 @@ import org.fossify.commons.extensions.getProperPrimaryColor
 import org.fossify.commons.extensions.getProperTextColor
 import org.fossify.commons.extensions.hideKeyboard
 import org.fossify.commons.extensions.openNotificationSettings
+import org.fossify.commons.extensions.onTextChangeListener
 import org.fossify.commons.extensions.toast
 import org.fossify.commons.extensions.underlineText
 import org.fossify.commons.extensions.updateTextColors
@@ -75,7 +81,7 @@ import org.greenrobot.eventbus.Subscribe
 import org.greenrobot.eventbus.ThreadMode
 
 class MainActivity : SimpleActivity() {
-    override var isSearchBarEnabled = true
+    override var isSearchBarEnabled = false
     
     private val MAKE_DEFAULT_APP_REQUEST = 1
 
@@ -85,6 +91,11 @@ class MainActivity : SimpleActivity() {
     private var bus: EventBus? = null
 
     private val binding by viewBinding(ActivityMainBinding::inflate)
+    private val receiveSmsPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (!granted) toast(R.string.receive_sms_permission_required)
+    }
 
     @SuppressLint("InlinedApi")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -92,6 +103,7 @@ class MainActivity : SimpleActivity() {
         setContentView(binding.root)
         appLaunched(BuildConfig.APPLICATION_ID)
         setupOptionsMenu()
+        setupHomeSearch()
         refreshMenuItems()
 
         setupEdgeToEdge(padBottomImeAndSystem = listOf(binding.conversationsList))
@@ -124,6 +136,10 @@ class MainActivity : SimpleActivity() {
         }
 
         updateTextColors(binding.mainCoordinator)
+        binding.homeHeader.setBackgroundColor(Color.WHITE)
+        binding.homeTitle.setTextColor(Color.rgb(17, 17, 17))
+        binding.homeSearch.setTextColor(Color.rgb(22, 22, 22))
+        binding.homeSearch.setHintTextColor(Color.rgb(138, 138, 138))
         binding.searchHolder.setBackgroundColor(getProperBackgroundColor())
 
         val properPrimaryColor = getProperPrimaryColor()
@@ -146,7 +162,10 @@ class MainActivity : SimpleActivity() {
     }
 
     override fun onBackPressedCompat(): Boolean {
-        return if (binding.mainMenu.isSearchOpen) {
+        return if (binding.homeSearch.text?.isNotEmpty() == true) {
+            binding.homeSearch.setText("")
+            true
+        } else if (binding.mainMenu.isSearchOpen) {
             binding.mainMenu.closeSearch()
             true
         } else {
@@ -157,6 +176,7 @@ class MainActivity : SimpleActivity() {
 
     private fun setupOptionsMenu() {
         binding.mainMenu.requireToolbar().inflateMenu(R.menu.menu_main)
+        binding.mainMenu.requireToolbar().title = ""
         binding.mainMenu.toggleHideOnScroll(true)
         binding.mainMenu.setupMenu()
 
@@ -186,6 +206,19 @@ class MainActivity : SimpleActivity() {
                 else -> return@setOnMenuItemClickListener false
             }
             return@setOnMenuItemClickListener true
+        }
+    }
+
+    private fun setupHomeSearch() {
+        binding.homeSearch.onTextChangeListener { text ->
+            if (text.isNotBlank()) {
+                binding.searchHolder.beVisible()
+                binding.searchHolder.alpha = 1f
+                searchTextChanged(text, true)
+            } else {
+                binding.searchHolder.beGone()
+                searchTextChanged("", true)
+            }
         }
     }
 
@@ -248,6 +281,7 @@ class MainActivity : SimpleActivity() {
             if (it) {
                 handlePermission(PERMISSION_SEND_SMS) {
                     if (it) {
+                        ensureReceiveSmsPermission()
                         handlePermission(PERMISSION_READ_CONTACTS) {
                             handleNotificationPermission { granted ->
                                 if (!granted) {
@@ -272,6 +306,12 @@ class MainActivity : SimpleActivity() {
             } else {
                 finish()
             }
+        }
+    }
+
+    private fun ensureReceiveSmsPermission() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECEIVE_SMS) != PackageManager.PERMISSION_GRANTED) {
+            receiveSmsPermissionLauncher.launch(Manifest.permission.RECEIVE_SMS)
         }
     }
 

@@ -175,6 +175,7 @@ abstract class BaseConversationsAdapter(
             }
 
             val isUnread = !conversation.read
+            unreadIndicator.beVisibleIf(isUnread)
             val style = if (isUnread) {
                 conversationBodyShort.alpha = 1f
                 if (conversation.isScheduled) Typeface.BOLD_ITALIC else Typeface.BOLD

@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_launcher_name">短信转发</string>
+    <string name="home_primary">主要</string>
+    <string name="home_search_sms">搜索短信</string>
+    <string name="receive_sms_permission_required">必须允许“接收短信”权限，应用才能显示和转发新短信</string>
     <string name="pushplus_forwarding">PushPlus 短信转发</string>
     <string name="pushplus_enable">收到短信后自动推送</string>
     <string name="pushplus_token">PushPlus Token</string>
@@ -18,7 +21,10 @@
     <string name="pushplus_last_status">最近状态：%1$s</string>
     <string name="pushplus_privacy_note">Token 会使用 Android Keystore 加密后保存在本机。短信内容将直接发送至 PushPlus 接口。</string>
     <string name="bulk_send">批量发送短信</string>
-    <string name="bulk_send_search">搜索联系人或号码</string>
+    <string name="bulk_send_search">搜索联系人或输入号码</string>
+    <string name="bulk_send_add_number">＋ 添加号码 %1$s</string>
+    <string name="bulk_send_add_number_preview">＋ 添加输入的号码</string>
+    <string name="bulk_send_manual_number">手动添加</string>
     <string name="bulk_send_select_all">全选当前结果</string>
     <string name="bulk_send_clear">清空选择</string>
     <string name="bulk_send_selected">已选择 %1$d 人</string>
