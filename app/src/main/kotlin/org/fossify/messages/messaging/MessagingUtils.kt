@@ -58,7 +58,7 @@ class MessagingUtils(val context: Context) {
             if (type != Sms.MESSAGE_TYPE_ALL) {
                 put(Sms.TYPE, type)
             }
-            if (threadId != -1L) {
+            if (threadId > 0L) {
                 put(Sms.THREAD_ID, threadId)
             }
         }

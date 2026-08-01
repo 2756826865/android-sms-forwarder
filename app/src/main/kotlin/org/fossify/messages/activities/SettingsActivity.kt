@@ -1,8 +1,12 @@
 package org.fossify.messages.activities
 
 import android.content.Intent
+import android.graphics.Color
 import android.os.Bundle
+import android.view.ViewGroup
+import android.widget.LinearLayout
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.content.res.AppCompatResources
 import org.fossify.commons.activities.ManageBlockedNumbersActivity
 import org.fossify.commons.dialogs.ChangeDateTimeFormatDialog
 import org.fossify.commons.dialogs.ConfirmationDialog
@@ -99,6 +103,8 @@ class SettingsActivity : SimpleActivity() {
     override fun onResume() {
         super.onResume()
         setupTopAppBar(binding.settingsAppbar, NavigationIcon.Arrow)
+        binding.settingsToolbar.title = ""
+        binding.settingsToolbar.setBackgroundColor(Color.WHITE)
 
         setupCustomizeColors()
         setupCustomizeNotifications()
@@ -123,6 +129,7 @@ class SettingsActivity : SimpleActivity() {
         setupMessagesExport()
         setupMessagesImport()
         updateTextColors(binding.settingsNestedScrollview)
+        applyCardStyle()
 
         if (
             blockedNumbersAtPause != -1 && blockedNumbersAtPause != getBlockedNumbers().hashCode()
@@ -140,7 +147,23 @@ class SettingsActivity : SimpleActivity() {
             binding.settingsSecurityLabel,
             binding.settingsMigratingLabel
         ).forEach {
-            it.setTextColor(getProperPrimaryColor())
+            it.setTextColor(Color.rgb(124, 134, 157))
+        }
+    }
+
+    private fun applyCardStyle() {
+        binding.settingsLargeTitle.setTextColor(Color.rgb(17, 17, 17))
+        val cardSpacing = (2 * resources.displayMetrics.density).toInt()
+        for (index in 0 until binding.settingsHolder.childCount) {
+            val child = binding.settingsHolder.getChildAt(index)
+            if (child is ViewGroup && child.id != R.id.settings_large_title) {
+                child.background = AppCompatResources.getDrawable(this, R.drawable.settings_card_background)
+                (child.layoutParams as? LinearLayout.LayoutParams)?.let { params ->
+                    params.topMargin = cardSpacing
+                    params.bottomMargin = cardSpacing
+                    child.layoutParams = params
+                }
+            }
         }
     }
 

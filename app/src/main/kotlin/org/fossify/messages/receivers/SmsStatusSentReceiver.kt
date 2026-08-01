@@ -13,10 +13,12 @@ import org.fossify.commons.extensions.getMyContactsCursor
 import org.fossify.commons.helpers.ensureBackgroundThread
 import org.fossify.messages.extensions.getMessageRecipientAddress
 import org.fossify.messages.extensions.getNameFromAddress
+import org.fossify.messages.extensions.getSmsThreadId
 import org.fossify.messages.extensions.getThreadId
 import org.fossify.messages.extensions.messagesDB
 import org.fossify.messages.extensions.messagingUtils
 import org.fossify.messages.extensions.notificationHelper
+import org.fossify.messages.extensions.syncThreadToLocal
 import org.fossify.messages.helpers.refreshConversations
 import org.fossify.messages.helpers.refreshMessages
 
@@ -53,6 +55,10 @@ class SmsStatusSentReceiver : SendStatusReceiver() {
                 }
 
                 context.messagesDB.updateType(messageId, type)
+                val threadId = context.getSmsThreadId(messageId)
+                if (threadId != 0L) {
+                    context.syncThreadToLocal(threadId)
+                }
                 refreshMessages()
                 refreshConversations()
             }

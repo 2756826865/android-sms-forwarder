@@ -1,5 +1,6 @@
 package org.fossify.messages.adapters
 
+import android.graphics.Color
 import android.util.TypedValue
 import android.view.Menu
 import android.view.View
@@ -67,14 +68,15 @@ class SearchResultsAdapter(
 
     private fun setupView(view: View, searchResult: SearchResult) {
         ItemSearchResultBinding.bind(view).apply {
+            val highlightColor = Color.rgb(0, 168, 72)
             searchResultTitle.apply {
-                text = searchResult.title.highlightTextPart(textToHighlight, properPrimaryColor)
+                text = searchResult.title.highlightTextPart(textToHighlight, highlightColor)
                 setTextColor(textColor)
                 setTextSize(TypedValue.COMPLEX_UNIT_PX, fontSize * 1.2f)
             }
 
             searchResultSnippet.apply {
-                text = searchResult.snippet.highlightTextPart(textToHighlight, properPrimaryColor)
+                text = searchResult.snippet.highlightTextPart(textToHighlight, highlightColor)
                 setTextColor(textColor)
                 setTextSize(TypedValue.COMPLEX_UNIT_PX, fontSize * 0.9f)
             }

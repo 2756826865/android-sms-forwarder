@@ -26,6 +26,11 @@
         android:title="@string/pushplus_forwarding"
         app:showAsAction="never" />
     <item
+        android:id="@+id/resync_messages"
+        android:showAsAction="never"
+        android:title="@string/resync_all_messages"
+        app:showAsAction="never" />
+    <item
         android:id="@+id/settings"
         android:icon="@drawable/ic_settings_cog_vector"
         android:showAsAction="always"

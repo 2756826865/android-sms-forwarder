@@ -111,6 +111,10 @@ class Config(context: Context) : BaseConfig(context) {
         get() = prefs.getBoolean(WAS_DB_CLEARED, false)
         set(wasDbCleared) = prefs.edit().putBoolean(WAS_DB_CLEARED, wasDbCleared).apply()
 
+    var fullHistorySyncedV2: Boolean
+        get() = prefs.getBoolean("full_history_synced_v2", false)
+        set(value) = prefs.edit().putBoolean("full_history_synced_v2", value).apply()
+
     var keyboardHeight: Int
         get() = prefs.getInt(SOFT_KEYBOARD_HEIGHT, context.getDefaultKeyboardHeight())
         set(keyboardHeight) = prefs.edit().putInt(SOFT_KEYBOARD_HEIGHT, keyboardHeight).apply()

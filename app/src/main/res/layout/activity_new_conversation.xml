@@ -14,9 +14,10 @@
             android:id="@+id/new_conversation_toolbar"
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
-            android:background="@color/color_primary"
-            app:title="@string/new_conversation"
-            app:titleTextAppearance="@style/AppTheme.ActionBar.TitleTextStyle" />
+            android:background="@android:color/white"
+            app:navigationIconTint="#111111"
+            app:title=""
+            app:titleTextColor="#111111" />
 
     </org.fossify.commons.views.MyAppBarLayout>
 
@@ -24,12 +25,25 @@
         android:id="@+id/new_conversation_holder"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:background="@android:color/white"
         app:layout_behavior="@string/appbar_scrolling_view_behavior">
+
+        <TextView
+            android:id="@+id/new_conversation_large_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="24dp"
+            android:layout_marginTop="16dp"
+            android:text="@string/new_conversation"
+            android:textColor="#111111"
+            android:textSize="34sp"
+            android:textStyle="bold" />
 
         <org.fossify.commons.views.MyEditText
             android:id="@+id/new_conversation_address"
             android:layout_width="match_parent"
-            android:layout_height="@dimen/normal_icon_size"
+            android:layout_height="56dp"
+            android:layout_below="@id/new_conversation_large_title"
             android:layout_marginStart="@dimen/activity_margin"
             android:layout_marginEnd="@dimen/activity_margin"
             android:layout_toStartOf="@+id/new_conversation_confirm"
@@ -37,7 +51,9 @@
             android:gravity="center_vertical"
             android:hint="@string/add_contact_or_number"
             android:inputType="textCapWords"
-            android:textSize="@dimen/big_text_size" />
+            android:textColor="#111111"
+            android:textColorHint="#8A8A8A"
+            android:textSize="18sp" />
 
         <ImageView
             android:id="@+id/new_conversation_confirm"

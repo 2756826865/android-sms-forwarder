@@ -835,7 +835,9 @@ fun Context.insertNewSMS(
         put(Sms.BODY, body)
         put(Sms.DATE, date)
         put(Sms.READ, read)
-        put(Sms.THREAD_ID, threadId)
+        if (threadId > 0L) {
+            put(Sms.THREAD_ID, threadId)
+        }
         put(Sms.TYPE, type)
         put(Sms.SUBSCRIPTION_ID, subscriptionId)
     }
@@ -846,6 +848,16 @@ fun Context.insertNewSMS(
     } catch (_: Exception) {
         0L
     }
+}
+
+fun Context.getSmsThreadId(messageId: Long): Long {
+    if (messageId <= 0L) return 0L
+    var result = 0L
+    val uri = Uri.withAppendedPath(Sms.CONTENT_URI, messageId.toString())
+    queryCursor(uri, arrayOf(Sms.THREAD_ID), null, null, null, false) { cursor ->
+        result = cursor.getLongValue(Sms.THREAD_ID)
+    }
+    return result
 }
 
 fun Context.removeAllArchivedConversations(callback: (() -> Unit)? = null) {
@@ -1263,6 +1275,53 @@ fun Context.insertOrUpdateConversation(
         )
     }
     conversationsDB.insertOrUpdate(updatedConv)
+}
+
+fun Context.createConversationFromMessage(message: Message): Conversation {
+    val participantNumbers = message.participants
+        .flatMap { contact -> contact.phoneNumbers.map { it.normalizedNumber.ifBlank { it.value } } }
+        .filter { it.isNotBlank() }
+        .distinct()
+    val address = message.senderPhoneNumber.ifBlank { participantNumbers.firstOrNull().orEmpty() }
+    val participantNames = message.participants.mapNotNull { contact ->
+        contact.name.takeIf { it.isNotBlank() }
+    }.distinct()
+    val fallbackName = getNameAndPhotoFromPhoneNumber(address).name.ifBlank { address }
+    val title = participantNames.joinToString(", ").ifBlank { fallbackName }
+    return Conversation(
+        threadId = message.threadId,
+        snippet = message.body,
+        date = message.date,
+        read = message.read,
+        title = title,
+        photoUri = message.senderPhotoUri,
+        isGroupConversation = participantNumbers.size > 1,
+        phoneNumber = address,
+        unreadCount = if (message.isReceivedMessage() && !message.read) 1 else 0
+    )
+}
+
+fun Context.syncThreadToLocal(threadId: Long, loadAll: Boolean = false): List<Message> {
+    if (threadId == 0L) return emptyList()
+    val limit = if (loadAll) Int.MAX_VALUE else MESSAGES_LIMIT
+    val providerMessages = getMessages(
+        threadId = threadId,
+        includeScheduledMessages = false,
+        limit = limit
+    )
+    providerMessages.chunked(100).forEach { batch ->
+        messagesDB.insertMessages(*batch.toTypedArray())
+    }
+
+    val localMessages = messagesDB.getThreadMessages(threadId)
+    val providerConversation = getConversations(threadId).firstOrNull()
+    val conversation = providerConversation ?: localMessages.filterNot { it.isScheduled }
+        .maxByOrNull { it.date }
+        ?.let(::createConversationFromMessage)
+    if (conversation != null) {
+        insertOrUpdateConversation(conversation)
+    }
+    return localMessages
 }
 
 fun Context.renameConversation(conversation: Conversation, newTitle: String): Conversation {

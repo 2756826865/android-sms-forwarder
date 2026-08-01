@@ -5,6 +5,7 @@ import android.Manifest
 import android.app.role.RoleManager
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.res.ColorStateList
 import android.content.pm.ShortcutInfo
 import android.content.pm.ShortcutManager
 import android.graphics.drawable.Icon
@@ -30,7 +31,6 @@ import org.fossify.commons.extensions.checkAppSideloading
 import org.fossify.commons.extensions.checkWhatsNew
 import org.fossify.commons.extensions.convertToBitmap
 import org.fossify.commons.extensions.fadeIn
-import org.fossify.commons.extensions.formatDateOrTime
 import org.fossify.commons.extensions.getMyContactsCursor
 import org.fossify.commons.extensions.getProperBackgroundColor
 import org.fossify.commons.extensions.getProperPrimaryColor
@@ -63,15 +63,18 @@ import org.fossify.messages.databinding.ActivityMainBinding
 import org.fossify.messages.extensions.checkAndDeleteOldRecycleBinMessages
 import org.fossify.messages.extensions.clearAllMessagesIfNeeded
 import org.fossify.messages.extensions.clearExpiredScheduledMessages
+import org.fossify.messages.extensions.createConversationFromMessage
 import org.fossify.messages.extensions.config
 import org.fossify.messages.extensions.conversationsDB
 import org.fossify.messages.extensions.getConversations
 import org.fossify.messages.extensions.getMessages
 import org.fossify.messages.extensions.insertOrUpdateConversation
 import org.fossify.messages.extensions.messagesDB
+import org.fossify.messages.extensions.syncThreadToLocal
 import org.fossify.messages.helpers.SEARCHED_MESSAGE_ID
 import org.fossify.messages.helpers.THREAD_ID
 import org.fossify.messages.helpers.THREAD_TITLE
+import org.fossify.messages.helpers.formatConversationDate
 import org.fossify.messages.models.Conversation
 import org.fossify.messages.models.Events
 import org.fossify.messages.models.Message
@@ -140,6 +143,7 @@ class MainActivity : SimpleActivity() {
         binding.homeTitle.setTextColor(Color.rgb(17, 17, 17))
         binding.homeSearch.setTextColor(Color.rgb(22, 22, 22))
         binding.homeSearch.setHintTextColor(Color.rgb(138, 138, 138))
+        binding.conversationsFab.backgroundTintList = ColorStateList.valueOf(Color.rgb(32, 196, 90))
         binding.searchHolder.setBackgroundColor(getProperBackgroundColor())
 
         val properPrimaryColor = getProperPrimaryColor()
@@ -165,9 +169,6 @@ class MainActivity : SimpleActivity() {
         return if (binding.homeSearch.text?.isNotEmpty() == true) {
             binding.homeSearch.setText("")
             true
-        } else if (binding.mainMenu.isSearchOpen) {
-            binding.mainMenu.closeSearch()
-            true
         } else {
             appLockManager.lock()
             false
@@ -175,32 +176,15 @@ class MainActivity : SimpleActivity() {
     }
 
     private fun setupOptionsMenu() {
-        binding.mainMenu.requireToolbar().inflateMenu(R.menu.menu_main)
-        binding.mainMenu.requireToolbar().title = ""
-        binding.mainMenu.toggleHideOnScroll(true)
-        binding.mainMenu.setupMenu()
-
-        binding.mainMenu.onSearchClosedListener = {
-            fadeOutSearch()
-        }
-
-        binding.mainMenu.onSearchTextChangedListener = { text ->
-            if (text.isNotEmpty()) {
-                if (binding.searchHolder.alpha < 1f) {
-                    binding.searchHolder.fadeIn()
-                }
-            } else {
-                fadeOutSearch()
-            }
-            searchTextChanged(text)
-        }
-
-        binding.mainMenu.requireToolbar().setOnMenuItemClickListener { menuItem ->
+        binding.mainMenu.inflateMenu(R.menu.menu_main)
+        binding.mainMenu.title = ""
+        binding.mainMenu.setOnMenuItemClickListener { menuItem ->
             when (menuItem.itemId) {
                 R.id.show_recycle_bin -> launchRecycleBin()
                 R.id.show_archived -> launchArchivedConversations()
                 R.id.bulk_send -> launchBulkSend()
                 R.id.pushplus_forwarding -> launchPushPlusSettings()
+                R.id.resync_messages -> resyncAllMessages()
                 R.id.settings -> launchSettings()
                 R.id.about -> launchAbout()
                 else -> return@setOnMenuItemClickListener false
@@ -223,7 +207,7 @@ class MainActivity : SimpleActivity() {
     }
 
     private fun refreshMenuItems() {
-        binding.mainMenu.requireToolbar().menu.apply {
+        binding.mainMenu.menu.apply {
             findItem(R.id.show_recycle_bin).isVisible = config.useRecycleBin
             findItem(R.id.show_archived).isVisible = config.isArchiveAvailable
         }
@@ -246,7 +230,8 @@ class MainActivity : SimpleActivity() {
     }
 
     private fun updateMenuColors() {
-        binding.mainMenu.updateColors()
+        binding.mainMenu.setBackgroundColor(Color.WHITE)
+        binding.mainMenu.setTitleTextColor(Color.rgb(17, 17, 17))
     }
 
     private fun loadMessages() {
@@ -360,11 +345,10 @@ class MainActivity : SimpleActivity() {
             val privateContacts = MyContactsContentProvider.getSimpleContacts(this, privateCursor)
             val conversations = getConversations(privateContacts = privateContacts)
 
-            conversations.forEach { clonedConversation ->
-                val threadIds = cachedConversations.map { it.threadId }
-                if (!threadIds.contains(clonedConversation.threadId)) {
-                    conversationsDB.insertOrUpdate(clonedConversation)
-                    cachedConversations.add(clonedConversation)
+            conversations.forEach { providerConversation ->
+                insertOrUpdateConversation(providerConversation)
+                if (cachedConversations.none { it.threadId == providerConversation.threadId }) {
+                    cachedConversations.add(providerConversation)
                 }
             }
 
@@ -373,7 +357,8 @@ class MainActivity : SimpleActivity() {
 
                 val isTemporaryThread = cachedConversation.isScheduled
                 val isConversationDeleted = !conversations.map { it.threadId }.contains(threadId)
-                if (isConversationDeleted && !isTemporaryThread) {
+                val hasLocalMessages = messagesDB.getThreadMessages(threadId).isNotEmpty()
+                if (isConversationDeleted && !isTemporaryThread && !hasLocalMessages) {
                     conversationsDB.deleteThreadId(threadId)
                 }
 
@@ -406,18 +391,28 @@ class MainActivity : SimpleActivity() {
                 }
             }
 
-            val allConversations = conversationsDB.getNonArchived() as ArrayList<Conversation>
-            runOnUiThread {
-                setupConversations(allConversations)
+            val needsFullHistorySync = !config.fullHistorySyncedV2
+            conversations.forEach { conversation ->
+                syncThreadToLocal(conversation.threadId, loadAll = needsFullHistorySync)
+            }
+            if (needsFullHistorySync) {
+                config.fullHistorySyncedV2 = true
             }
 
-            if (config.appRunCount == 1) {
-                conversations.map { it.threadId }.forEach { threadId ->
-                    val messages = getMessages(threadId, includeScheduledMessages = false)
-                    messages.chunked(30).forEach { currentMessages ->
-                        messagesDB.insertMessages(*currentMessages.toTypedArray())
+            messagesDB.getAll()
+                .filter { !it.isScheduled && it.threadId != 0L }
+                .groupBy { it.threadId }
+                .forEach { (threadId, threadMessages) ->
+                    if (conversationsDB.getConversationWithThreadId(threadId) == null) {
+                        threadMessages.maxByOrNull { it.date }
+                            ?.let(::createConversationFromMessage)
+                            ?.let(::insertOrUpdateConversation)
                     }
                 }
+
+            val allConversations = ArrayList(conversationsDB.getNonArchived())
+            runOnUiThread {
+                setupConversations(allConversations)
             }
         }
     }
@@ -561,7 +556,7 @@ class MainActivity : SimpleActivity() {
     }
 
     private fun searchTextChanged(text: String, forceUpdate: Boolean = false) {
-        if (!binding.mainMenu.isSearchOpen && !forceUpdate) {
+        if (binding.homeSearch.text.isNullOrBlank() && !forceUpdate) {
             return
         }
 
@@ -589,11 +584,7 @@ class MainActivity : SimpleActivity() {
     ) {
         val searchResults = ArrayList<SearchResult>()
         conversations.forEach { conversation ->
-            val date = (conversation.date * 1000L).formatDateOrTime(
-                context = this,
-                hideTimeOnOtherDays = true,
-                showCurrentYear = true
-            )
+            val date = formatConversationDate(conversation.date)
 
             val searchResult = SearchResult(
                 messageId = -1,
@@ -613,11 +604,7 @@ class MainActivity : SimpleActivity() {
                 recipient = TextUtils.join(", ", participantNames)
             }
 
-            val date = (message.date * 1000L).formatDateOrTime(
-                context = this,
-                hideTimeOnOtherDays = true,
-                showCurrentYear = true
-            )
+            val date = formatConversationDate(message.date)
 
             val searchResult = SearchResult(
                 messageId = message.id,
@@ -676,6 +663,12 @@ class MainActivity : SimpleActivity() {
     private fun launchBulkSend() {
         hideKeyboard()
         startActivity(Intent(applicationContext, BulkSendActivity::class.java))
+    }
+
+    private fun resyncAllMessages() {
+        config.fullHistorySyncedV2 = false
+        toast(R.string.resync_started)
+        getCachedConversations()
     }
 
     private fun launchAbout() {

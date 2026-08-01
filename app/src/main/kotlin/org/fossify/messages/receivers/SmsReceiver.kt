@@ -12,15 +12,15 @@ import org.fossify.commons.helpers.SimpleContactsHelper
 import org.fossify.commons.helpers.ensureBackgroundThread
 import org.fossify.commons.models.PhoneNumber
 import org.fossify.commons.models.SimpleContact
-import org.fossify.messages.extensions.getConversations
 import org.fossify.messages.extensions.getNameFromAddress
 import org.fossify.messages.extensions.getNotificationBitmap
 import org.fossify.messages.extensions.getThreadId
+import org.fossify.messages.extensions.getSmsThreadId
 import org.fossify.messages.extensions.insertNewSMS
-import org.fossify.messages.extensions.insertOrUpdateConversation
 import org.fossify.messages.extensions.messagesDB
 import org.fossify.messages.extensions.shouldUnarchive
 import org.fossify.messages.extensions.showReceivedMessageNotification
+import org.fossify.messages.extensions.syncThreadToLocal
 import org.fossify.messages.extensions.updateConversationArchivedStatus
 import org.fossify.messages.helpers.ReceiverUtils.isMessageFilteredOut
 import org.fossify.messages.helpers.refreshConversations
@@ -124,7 +124,7 @@ class SmsReceiver : BroadcastReceiver() {
         val photoUri = SimpleContactsHelper(context).getPhotoUriFromPhoneNumber(address)
         val bitmap = context.getNotificationBitmap(photoUri)
 
-        val newMessageId = context.insertNewSMS(
+        val insertedMessageId = context.insertNewSMS(
             address = address,
             subject = subject,
             body = body,
@@ -134,10 +134,11 @@ class SmsReceiver : BroadcastReceiver() {
             type = type,
             subscriptionId = subscriptionId
         )
-
-        context.getConversations(threadId).firstOrNull()?.let { conv ->
-            runCatching { context.insertOrUpdateConversation(conv) }
-        }
+        val resolvedThreadId = context.getSmsThreadId(insertedMessageId)
+            .takeIf { it > 0L }
+            ?: threadId.takeIf { it > 0L }
+            ?: fallbackThreadId(address)
+        val newMessageId = insertedMessageId.takeIf { it > 0L } ?: -date
 
         val senderName = context.getMyContactsCursor(favoritesOnly = false, withPhoneNumbersOnly = true).use {
             context.getNameFromAddress(address, it)
@@ -161,7 +162,7 @@ class SmsReceiver : BroadcastReceiver() {
             participants = arrayListOf(participant),
             date = (date / 1000).toInt(),
             read = false,
-            threadId = threadId,
+            threadId = resolvedThreadId,
             isMMS = false,
             attachment = null,
             senderPhoneNumber = address,
@@ -171,9 +172,10 @@ class SmsReceiver : BroadcastReceiver() {
         )
 
         context.messagesDB.insertOrUpdate(message)
+        context.syncThreadToLocal(resolvedThreadId)
 
         if (context.shouldUnarchive()) {
-            context.updateConversationArchivedStatus(threadId, false)
+            context.updateConversationArchivedStatus(resolvedThreadId, false)
         }
 
         refreshMessages()
@@ -183,10 +185,13 @@ class SmsReceiver : BroadcastReceiver() {
             address = address,
             senderName = senderName,
             body = body,
-            threadId = threadId,
+            threadId = resolvedThreadId,
             bitmap = bitmap
         )
     }
+
+    private fun fallbackThreadId(address: String): Long =
+        -(address.hashCode().toLong() and 0x7fffffffL) - 1L
 
     private fun isDuplicate(
         context: Context,

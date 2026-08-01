@@ -38,6 +38,9 @@ interface MessagesDao {
     @Query("SELECT * FROM messages WHERE thread_id = :threadId")
     fun getThreadMessages(threadId: Long): List<Message>
 
+    @Query("SELECT * FROM messages WHERE thread_id = :threadId AND date < :beforeDate ORDER BY date DESC LIMIT :limit")
+    fun getOlderThreadMessages(threadId: Long, beforeDate: Int, limit: Int): List<Message>
+
     @Query("SELECT messages.* FROM messages LEFT OUTER JOIN recycle_bin_messages ON messages.id = recycle_bin_messages.id WHERE recycle_bin_messages.id IS NULL AND thread_id = :threadId")
     fun getNonRecycledThreadMessages(threadId: Long): List<Message>
 

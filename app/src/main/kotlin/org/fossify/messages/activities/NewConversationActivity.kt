@@ -1,6 +1,7 @@
 package org.fossify.messages.activities
 
 import android.content.Intent
+import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
 import android.view.WindowManager
@@ -80,6 +81,8 @@ class NewConversationActivity : SimpleActivity() {
     override fun onResume() {
         super.onResume()
         setupTopAppBar(binding.newConversationAppbar, NavigationIcon.Arrow)
+        binding.newConversationToolbar.title = ""
+        binding.newConversationToolbar.setBackgroundColor(Color.WHITE)
         binding.noContactsPlaceholder2.setTextColor(getProperPrimaryColor())
         binding.noContactsPlaceholder2.underlineText()
         binding.suggestionsLabel.setTextColor(getProperPrimaryColor())

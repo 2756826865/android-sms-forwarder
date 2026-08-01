@@ -488,7 +488,11 @@ class ThreadActivity : SimpleActivity() {
 
             val cachedMessagesCode = messages.hashCode()
             if (!isRecycleBin) {
-                messages = getMessages(threadId)
+                val providerMessages = getMessages(threadId)
+                messages = (messages + providerMessages)
+                    .associateBy { it.getStableId() }
+                    .values
+                    .toList()
                 if (config.useRecycleBin) {
                     val recycledMessages = messagesDB.getThreadMessagesFromRecycleBin(threadId)
                     messages = messages.filterNotInByKey(recycledMessages) { it.getStableId() }
@@ -811,8 +815,13 @@ class ThreadActivity : SimpleActivity() {
 
     private fun fetchOlderMessages(cutoff: Int): List<Message> {
         val olderFromProvider = getMessages(threadId, cutoff)
+        val olderFromLocal = messagesDB.getOlderThreadMessages(threadId, cutoff, MESSAGES_LIMIT)
         val messageSnapshot = messages.toSortedMessages()
-        val older = olderFromProvider.filterNotInByKey(messageSnapshot) { it.getStableId() }
+        val older = (olderFromLocal + olderFromProvider)
+            .associateBy { it.getStableId() }
+            .values
+            .toList()
+            .filterNotInByKey(messageSnapshot) { it.getStableId() }
 
         if (older.isEmpty()) {
             allMessagesFetched = true

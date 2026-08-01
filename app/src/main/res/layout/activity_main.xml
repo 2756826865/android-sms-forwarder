@@ -6,10 +6,19 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <org.fossify.commons.views.MySearchMenu
-        android:id="@+id/main_menu"
+    <org.fossify.commons.views.MyAppBarLayout
+        android:id="@+id/main_appbar"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content" />
+        android:layout_height="wrap_content">
+
+        <com.google.android.material.appbar.MaterialToolbar
+            android:id="@+id/main_menu"
+            android:layout_width="match_parent"
+            android:layout_height="?attr/actionBarSize"
+            android:background="@android:color/white"
+            app:titleTextColor="#111111" />
+
+    </org.fossify.commons.views.MyAppBarLayout>
 
     <RelativeLayout
         android:id="@+id/main_nested_scrollview"
@@ -184,6 +193,8 @@
         android:layout_gravity="bottom|end"
         android:layout_margin="@dimen/activity_margin"
         android:src="@drawable/ic_plus_vector"
+        android:tint="@android:color/white"
+        app:backgroundTint="#20C45A"
         app:applyWindowInsets="true" />
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

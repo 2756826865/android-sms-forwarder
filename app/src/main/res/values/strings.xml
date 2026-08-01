@@ -3,6 +3,9 @@
     <string name="app_launcher_name">短信转发</string>
     <string name="home_primary">主要</string>
     <string name="home_search_sms">搜索短信</string>
+    <string name="resync_all_messages">重新同步全部短信</string>
+    <string name="resync_started">正在从系统短信库重新同步全部短信</string>
+    <string name="settings_messages_title">短信</string>
     <string name="receive_sms_permission_required">必须允许“接收短信”权限，应用才能显示和转发新短信</string>
     <string name="pushplus_forwarding">PushPlus 短信转发</string>
     <string name="pushplus_enable">收到短信后自动推送</string>
@@ -47,7 +50,7 @@
     <string name="bulk_send_started">已提交 %1$d 个发送任务</string>
     <string name="bulk_send_default_sim">系统默认 SIM</string>
     <string name="bulk_send_cost_notice">运营商可能收取短信费用，并可能限制短时间大量发送。单次最多 30 个号码。</string>
-    <string name="type_a_message">Type a message…</string>
+    <string name="type_a_message">输入信息…</string>
     <string name="message_not_sent_short">Message not sent</string>
     <string name="message_not_sent_touch_retry">Not sent. Touch to retry.</string>
     <string name="message_sending_error">Your message to \'%s\' has not been sent</string>
@@ -73,9 +76,9 @@
         <item quantity="other">and %d others</item>
     </plurals>
     <!-- New conversation -->
-    <string name="new_conversation">New conversation</string>
-    <string name="add_contact_or_number">Add Contact or Number…</string>
-    <string name="suggestions">Suggestions</string>
+    <string name="new_conversation">新建短信</string>
+    <string name="add_contact_or_number">收件人姓名或号码</string>
+    <string name="suggestions">最近联系人</string>
     <!-- Group conversation -->
     <string name="members">Members</string>
     <string name="conversation_name">Conversation name</string>
