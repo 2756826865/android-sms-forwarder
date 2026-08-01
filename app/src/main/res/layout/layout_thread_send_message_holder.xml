@@ -5,7 +5,7 @@
     android:id="@+id/message_holder"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="@android:color/white"
+    android:background="@color/miui_page_background"
     android:paddingVertical="6dp">
 
     <RelativeLayout
@@ -170,17 +170,18 @@
 
     <org.fossify.commons.views.MyButton
         android:id="@+id/thread_send_message"
-        android:layout_width="@dimen/normal_icon_size"
-        android:layout_height="@dimen/normal_icon_size"
+        android:layout_width="52dp"
+        android:layout_height="52dp"
         android:layout_marginEnd="@dimen/small_margin"
         android:alpha="0.4"
-        android:background="?selectableItemBackgroundBorderless"
+        android:background="@drawable/send_button_background"
         android:clickable="false"
         android:contentDescription="@string/ok"
         android:drawableTop="@drawable/ic_send_vector"
-        android:paddingVertical="@dimen/small_margin"
+        android:padding="12dp"
         android:text="@string/sms"
-        android:textSize="@dimen/smaller_text_size"
+        android:textColor="@android:color/white"
+        android:textSize="0sp"
         app:layout_constraintBottom_toBottomOf="@+id/thread_type_message"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="@+id/thread_type_message" />

@@ -189,6 +189,7 @@ abstract class BaseConversationsAdapter(
             }
 
             setupBadgeCount(unreadCountBadge, isUnread, conversation.unreadCount)
+            conversationImage.beVisibleIf(activity.config.showListAvatars)
             // at group conversations we use an icon as the placeholder, not any letter
             val placeholder = if (conversation.isGroupConversation) {
                 SimpleContactsHelper(activity).getColoredGroupIcon(conversation.title)
@@ -196,12 +197,22 @@ abstract class BaseConversationsAdapter(
                 null
             }
 
-            SimpleContactsHelper(activity).loadContactImage(
-                path = conversation.photoUri,
-                imageView = conversationImage,
-                placeholderName = conversation.title,
-                placeholderImage = placeholder
-            )
+            if (activity.config.showListAvatars) {
+                if (!activity.config.showLetterAvatars && conversation.photoUri.isBlank()) {
+                    conversationImage.setImageResource(R.drawable.ic_person_vector)
+                    conversationImage.setBackgroundResource(R.drawable.miui_avatar_background)
+                    conversationImage.setPadding(14, 14, 14, 14)
+                } else {
+                    conversationImage.background = null
+                    conversationImage.setPadding(0, 0, 0, 0)
+                    SimpleContactsHelper(activity).loadContactImage(
+                        path = conversation.photoUri,
+                        imageView = conversationImage,
+                        placeholderName = conversation.title,
+                        placeholderImage = placeholder
+                    )
+                }
+            }
         }
     }
 

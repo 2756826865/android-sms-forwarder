@@ -4,8 +4,13 @@ import android.content.Intent
 import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
+import android.telephony.SubscriptionManager
+import android.view.Gravity
+import android.view.ViewGroup
 import android.view.WindowManager
+import android.widget.TextView
 import android.widget.Toast
+import androidx.appcompat.content.res.AppCompatResources
 import com.google.gson.Gson
 import com.reddit.indicatorfastscroll.FastScrollItemIndicator
 import org.fossify.commons.extensions.applyColorFilter
@@ -48,12 +53,14 @@ import org.fossify.messages.helpers.THREAD_NUMBER
 import org.fossify.messages.helpers.THREAD_TEXT
 import org.fossify.messages.helpers.THREAD_TITLE
 import org.fossify.messages.messaging.isShortCodeWithLetters
+import org.fossify.messages.messaging.BulkSendWorker
 import java.net.URLDecoder
 import java.util.Locale
 
 class NewConversationActivity : SimpleActivity() {
     private var allContacts = ArrayList<SimpleContact>()
     private var privateContacts = ArrayList<SimpleContact>()
+    private val selectedRecipients = linkedMapOf<String, String>()
 
     private val binding by viewBinding(ActivityNewConversationBinding::inflate)
 
@@ -63,7 +70,7 @@ class NewConversationActivity : SimpleActivity() {
         title = getString(R.string.new_conversation)
         updateTextColors(binding.newConversationHolder)
 
-        setupEdgeToEdge(padBottomImeAndSystem = listOf(binding.contactsList))
+        setupEdgeToEdge(padBottomImeAndSystem = listOf(binding.newConversationComposer))
         setupMaterialScrollListener(
             scrollingView = binding.contactsList,
             topAppBar = binding.newConversationAppbar
@@ -71,6 +78,11 @@ class NewConversationActivity : SimpleActivity() {
 
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
         binding.newConversationAddress.requestFocus()
+        binding.newConversationMessage.onTextChangeListener { updateSendButton() }
+        binding.newConversationSend.setOnClickListener { sendComposedMessage() }
+        binding.newConversationAddAttachment.setOnClickListener {
+            toast(R.string.attachments_in_thread)
+        }
 
         // READ_CONTACTS permission is not mandatory, but without it we won't be able to show any suggestions during typing
         handlePermission(PERMISSION_READ_CONTACTS) {
@@ -83,9 +95,11 @@ class NewConversationActivity : SimpleActivity() {
         setupTopAppBar(binding.newConversationAppbar, NavigationIcon.Arrow)
         binding.newConversationToolbar.title = ""
         binding.newConversationToolbar.setBackgroundColor(Color.WHITE)
+        window.statusBarColor = Color.WHITE
+        window.navigationBarColor = Color.WHITE
         binding.noContactsPlaceholder2.setTextColor(getProperPrimaryColor())
         binding.noContactsPlaceholder2.underlineText()
-        binding.suggestionsLabel.setTextColor(getProperPrimaryColor())
+        binding.suggestionsLabel.setTextColor(Color.rgb(139, 148, 168))
     }
 
     private fun initContacts() {
@@ -119,7 +133,7 @@ class NewConversationActivity : SimpleActivity() {
                 toast(R.string.invalid_short_code, length = Toast.LENGTH_LONG)
                 return@setOnClickListener
             }
-            launchThreadActivity(number, number)
+            addRecipient(number, number)
         }
 
         binding.noContactsPlaceholder2.setOnClickListener {
@@ -197,7 +211,7 @@ class NewConversationActivity : SimpleActivity() {
                 hideKeyboard()
                 val contact = it as SimpleContact
                 maybeShowNumberPickerDialog(contact.phoneNumbers) { number ->
-                    launchThreadActivity(number.normalizedNumber, contact.name)
+                    addRecipient(number.normalizedNumber, contact.name)
                 }
             }.apply {
                 binding.contactsList.adapter = this
@@ -240,7 +254,7 @@ class NewConversationActivity : SimpleActivity() {
                                 )
                                 binding.suggestionsHolder.addView(root)
                                 root.setOnClickListener {
-                                    launchThreadActivity(
+                                    addRecipient(
                                         contact.phoneNumbers.first().normalizedNumber,
                                         contact.name
                                     )
@@ -266,6 +280,74 @@ class NewConversationActivity : SimpleActivity() {
                 FastScrollItemIndicator.Text("")
             }
         })
+    }
+
+    private fun addRecipient(number: String, name: String) {
+        val normalized = number.trim().replace(Regex("[\\s()-]"), "")
+        if (normalized.isBlank() || selectedRecipients.containsKey(normalized)) return
+        selectedRecipients[normalized] = name.ifBlank { normalized }
+        binding.newConversationAddress.setText("")
+        binding.newConversationAddress.hint = getString(R.string.recipient_label)
+        rebuildRecipientChips()
+        updateSendButton()
+    }
+
+    private fun rebuildRecipientChips() {
+        binding.selectedRecipientsHolder.removeAllViews()
+        selectedRecipients.forEach { (number, name) ->
+            val chip = TextView(this).apply {
+                text = name.ifBlank { number }
+                textSize = 16f
+                setTextColor(Color.rgb(17, 17, 17))
+                gravity = Gravity.CENTER
+                background = AppCompatResources.getDrawable(
+                    this@NewConversationActivity,
+                    R.drawable.suggested_chip_background
+                )
+                setPadding(18, 8, 12, 8)
+                compoundDrawablePadding = 6
+                setCompoundDrawablesWithIntrinsicBounds(0, 0, R.drawable.ic_cross_vector, 0)
+                setOnClickListener {
+                    selectedRecipients.remove(number)
+                    rebuildRecipientChips()
+                    updateSendButton()
+                }
+            }
+            val margin = (6 * resources.displayMetrics.density).toInt()
+            chip.layoutParams = ViewGroup.MarginLayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { marginEnd = margin }
+            binding.selectedRecipientsHolder.addView(chip)
+        }
+        binding.selectedRecipientsScroll.beVisibleIf(selectedRecipients.isNotEmpty())
+        if (selectedRecipients.isEmpty()) {
+            binding.newConversationAddress.hint = getString(R.string.add_contact_or_number)
+        }
+    }
+
+    private fun updateSendButton() {
+        binding.newConversationSend.isEnabled =
+            selectedRecipients.isNotEmpty() && binding.newConversationMessage.value.isNotBlank()
+        binding.newConversationSend.alpha = if (binding.newConversationSend.isEnabled) 1f else 0.45f
+    }
+
+    private fun sendComposedMessage() {
+        val body = binding.newConversationMessage.value.trim()
+        when {
+            selectedRecipients.isEmpty() -> toast(R.string.new_message_no_recipient)
+            body.isBlank() -> toast(R.string.new_message_no_content)
+            else -> {
+                BulkSendWorker.enqueue(
+                    applicationContext,
+                    body,
+                    SubscriptionManager.INVALID_SUBSCRIPTION_ID,
+                    selectedRecipients.keys.toList()
+                )
+                toast(R.string.new_message_queued)
+                finish()
+            }
+        }
     }
 
     private fun launchThreadActivity(phoneNumber: String, name: String, body: String = "") {

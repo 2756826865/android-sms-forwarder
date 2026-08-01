@@ -1,34 +1,33 @@
 <?xml version="1.0" encoding="utf-8"?>
 <androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/settings_coordinator"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:background="@color/miui_page_background">
 
     <org.fossify.commons.views.MyAppBarLayout
         android:id="@+id/settings_appbar"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content">
+        android:layout_height="wrap_content"
+        android:background="@color/miui_page_background">
 
         <com.google.android.material.appbar.MaterialToolbar
             android:id="@+id/settings_toolbar"
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
-            android:background="@android:color/white"
-            app:navigationIconTint="#111111"
-            app:title=""
-            app:titleTextColor="#111111" />
-
+            android:background="@color/miui_page_background"
+            app:navigationIconTint="@color/miui_primary_text"
+            app:title="" />
     </org.fossify.commons.views.MyAppBarLayout>
 
     <androidx.core.widget.NestedScrollView
         android:id="@+id/settings_nested_scrollview"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="#F7F7F7"
+        android:clipToPadding="false"
         android:fillViewport="true"
-        android:scrollbars="none"
+        android:paddingBottom="28dp"
         app:layout_behavior="@string/appbar_scrolling_view_behavior">
 
         <LinearLayout
@@ -36,480 +35,253 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:paddingHorizontal="20dp"
-            android:paddingBottom="24dp">
+            android:paddingStart="20dp"
+            android:paddingEnd="20dp">
 
             <TextView
                 android:id="@+id/settings_large_title"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:paddingTop="12dp"
-                android:paddingBottom="16dp"
+                android:layout_marginStart="8dp"
+                android:layout_marginTop="18dp"
+                android:layout_marginBottom="30dp"
                 android:text="@string/settings_messages_title"
-                android:textColor="#111111"
-                android:textSize="34sp"
-                android:textStyle="bold" />
+                android:textColor="@color/miui_primary_text"
+                android:textSize="38sp" />
 
             <TextView
-                android:id="@+id/settings_color_customization_section_label"
-                style="@style/SettingsSectionLabelStyle"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="@string/color_customization" />
+                android:layout_marginStart="8dp"
+                android:layout_marginBottom="8dp"
+                android:text="@string/settings_display"
+                android:textColor="@color/miui_section_text"
+                android:textSize="15sp" />
 
-            <androidx.constraintlayout.widget.ConstraintLayout
-                android:id="@+id/settings_color_customization_holder"
-                style="@style/SettingsHolderTextViewOneLinerStyle"
+            <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content">
+                android:layout_height="wrap_content"
+                android:background="@drawable/settings_card_background"
+                android:orientation="vertical"
+                android:paddingVertical="4dp">
 
-                <org.fossify.commons.views.MyTextView
-                    android:id="@+id/settings_color_customization_label"
-                    style="@style/SettingsTextLabelStyle"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/customize_colors"
-                    app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintTop_toTopOf="parent" />
+                <LinearLayout
+                    android:id="@+id/settings_show_avatars_holder"
+                    android:layout_width="match_parent"
+                    android:layout_height="84dp"
+                    android:foreground="?attr/selectableItemBackground"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingHorizontal="20dp">
 
-            </androidx.constraintlayout.widget.ConstraintLayout>
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
 
-            <include
-                android:id="@+id/settings_color_customization_divider"
-                layout="@layout/divider" />
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/settings_show_avatars"
+                            android:textColor="@color/miui_primary_text"
+                            android:textSize="18sp" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:text="@string/settings_show_avatars_summary"
+                            android:textColor="@color/miui_secondary_text"
+                            android:textSize="13sp" />
+                    </LinearLayout>
+
+                    <org.fossify.commons.views.MyMaterialSwitch
+                        android:id="@+id/settings_show_avatars"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:clickable="false"
+                        app:thumbTint="@color/miui_switch_thumb"
+                        app:trackTint="@color/miui_switch_track" />
+                </LinearLayout>
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginStart="20dp"
+                    android:background="@color/miui_divider" />
+
+                <LinearLayout
+                    android:id="@+id/settings_text_avatars_holder"
+                    android:layout_width="match_parent"
+                    android:layout_height="84dp"
+                    android:foreground="?attr/selectableItemBackground"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingHorizontal="20dp">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/settings_text_avatars"
+                            android:textColor="@color/miui_primary_text"
+                            android:textSize="18sp" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:text="@string/settings_text_avatars_summary"
+                            android:textColor="@color/miui_secondary_text"
+                            android:textSize="13sp" />
+                    </LinearLayout>
+
+                    <org.fossify.commons.views.MyMaterialSwitch
+                        android:id="@+id/settings_text_avatars"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:clickable="false"
+                        app:thumbTint="@color/miui_switch_thumb"
+                        app:trackTint="@color/miui_switch_track" />
+                </LinearLayout>
+            </LinearLayout>
 
             <TextView
-                android:id="@+id/settings_general_settings_label"
-                style="@style/SettingsSectionLabelStyle"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="@string/general_settings" />
+                android:layout_marginStart="8dp"
+                android:layout_marginTop="26dp"
+                android:layout_marginBottom="8dp"
+                android:text="@string/settings_functions"
+                android:textColor="@color/miui_section_text"
+                android:textSize="15sp" />
 
-            <org.fossify.commons.views.PurchaseThankYouItem
-                android:id="@+id/settings_purchase_thank_you_holder"
+            <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"/>
+                android:layout_height="wrap_content"
+                android:background="@drawable/settings_card_background"
+                android:orientation="vertical"
+                android:paddingVertical="4dp">
 
-            <RelativeLayout
-                android:id="@+id/settings_use_english_holder"
-                style="@style/SettingsHolderSwitchStyle"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content">
-
-                <org.fossify.commons.views.MyMaterialSwitch
-                    android:id="@+id/settings_use_english"
-                    style="@style/SettingsSwitchStyle"
+                <TextView
+                    android:id="@+id/settings_pushplus_holder"
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/use_english_language" />
+                    android:layout_height="64dp"
+                    android:drawableEnd="@drawable/ic_chevron_right_vector"
+                    android:foreground="?attr/selectableItemBackground"
+                    android:gravity="center_vertical"
+                    android:paddingHorizontal="20dp"
+                    android:text="@string/pushplus_forwarding"
+                    android:textColor="@color/miui_primary_text"
+                    android:textSize="18sp" />
 
-            </RelativeLayout>
+                <View android:layout_width="match_parent" android:layout_height="1dp" android:layout_marginStart="20dp" android:background="@color/miui_divider" />
 
-            <RelativeLayout
-                android:id="@+id/settings_language_holder"
-                style="@style/SettingsHolderTextViewStyle"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content">
+                <TextView
+                    android:id="@+id/settings_blocking_holder"
+                    android:layout_width="match_parent"
+                    android:layout_height="64dp"
+                    android:drawableEnd="@drawable/ic_chevron_right_vector"
+                    android:foreground="?attr/selectableItemBackground"
+                    android:gravity="center_vertical"
+                    android:paddingHorizontal="20dp"
+                    android:text="@string/settings_blocking"
+                    android:textColor="@color/miui_primary_text"
+                    android:textSize="18sp" />
 
-                <org.fossify.commons.views.MyTextView
-                    android:id="@+id/settings_language_label"
-                    style="@style/SettingsTextLabelStyle"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/language" />
+                <View android:layout_width="match_parent" android:layout_height="1dp" android:layout_marginStart="20dp" android:background="@color/miui_divider" />
 
-                <org.fossify.commons.views.MyTextView
-                    android:id="@+id/settings_language"
-                    style="@style/SettingsTextValueStyle"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_below="@+id/settings_language_label"
-                    tools:text="English" />
+                <LinearLayout
+                    android:id="@+id/settings_batch_delay_holder"
+                    android:layout_width="match_parent"
+                    android:layout_height="82dp"
+                    android:foreground="?attr/selectableItemBackground"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingHorizontal="20dp">
 
-            </RelativeLayout>
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/settings_batch_delay" android:textColor="@color/miui_primary_text" android:textSize="18sp" />
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="@string/settings_batch_delay_summary" android:textColor="@color/miui_secondary_text" android:textSize="13sp" />
+                    </LinearLayout>
 
-            <RelativeLayout
-                android:id="@+id/settings_change_date_time_format_holder"
-                style="@style/SettingsHolderTextViewOneLinerStyle"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content">
-
-                <org.fossify.commons.views.MyTextView
-                    android:id="@+id/settings_change_date_time_format"
-                    style="@style/SettingsTextLabelStyle"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/change_date_and_time_format" />
-
-            </RelativeLayout>
-
-            <RelativeLayout
-                android:id="@+id/settings_manage_blocked_numbers_holder"
-                style="@style/SettingsHolderTextViewOneLinerStyle"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content">
-
-                <org.fossify.commons.views.MyTextView
-                    android:id="@+id/settings_manage_blocked_numbers"
-                    style="@style/SettingsTextLabelStyle"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/manage_blocked_numbers" />
-
-            </RelativeLayout>
-
-            <RelativeLayout
-                android:id="@+id/settings_manage_blocked_keywords_holder"
-                style="@style/SettingsHolderTextViewOneLinerStyle"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content">
-
-                <org.fossify.commons.views.MyTextView
-                    android:id="@+id/settings_manage_blocked_keywords"
-                    style="@style/SettingsTextLabelStyle"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/manage_blocked_keywords" />
-
-            </RelativeLayout>
-
-            <RelativeLayout
-                android:id="@+id/settings_font_size_holder"
-                style="@style/SettingsHolderTextViewStyle"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content">
-
-                <org.fossify.commons.views.MyTextView
-                    android:id="@+id/settings_font_size_label"
-                    style="@style/SettingsTextLabelStyle"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/font_size" />
-
-                <org.fossify.commons.views.MyTextView
-                    android:id="@+id/settings_font_size"
-                    style="@style/SettingsTextValueStyle"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_below="@+id/settings_font_size_label"
-                    tools:text="@string/medium" />
-
-            </RelativeLayout>
-
-            <include
-                android:id="@+id/settings_general_settings_divider"
-                layout="@layout/divider" />
+                    <TextView
+                        android:id="@+id/settings_batch_delay"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:drawableEnd="@drawable/ic_chevron_right_vector"
+                        android:drawablePadding="8dp"
+                        android:textColor="@color/miui_secondary_text"
+                        android:textSize="15sp" />
+                </LinearLayout>
+            </LinearLayout>
 
             <TextView
-                android:id="@+id/settings_notifications_label"
-                style="@style/SettingsSectionLabelStyle"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="@string/notifications" />
+                android:layout_marginStart="8dp"
+                android:layout_marginTop="26dp"
+                android:layout_marginBottom="8dp"
+                android:text="@string/settings_other"
+                android:textColor="@color/miui_section_text"
+                android:textSize="15sp" />
 
-            <RelativeLayout
-                android:id="@+id/settings_customize_notifications_holder"
-                style="@style/SettingsHolderTextViewOneLinerStyle"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content">
-
-                <org.fossify.commons.views.MyTextView
-                    android:id="@+id/settings_customize_notifications_label"
-                    style="@style/SettingsTextLabelStyle"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/customize_notifications" />
-
-            </RelativeLayout>
-
-            <RelativeLayout
-                android:id="@+id/settings_lock_screen_visibility_holder"
-                style="@style/SettingsHolderTextViewStyle"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content">
-
-                <org.fossify.commons.views.MyTextView
-                    android:id="@+id/settings_lock_screen_visibility_label"
-                    style="@style/SettingsTextLabelStyle"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/lock_screen_visibility" />
-
-                <org.fossify.commons.views.MyTextView
-                    android:id="@+id/settings_lock_screen_visibility"
-                    style="@style/SettingsTextValueStyle"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_below="@+id/settings_lock_screen_visibility_label"
-                    tools:text="@string/sender_and_message" />
-
-            </RelativeLayout>
-
-            <include
-                android:id="@+id/settings_notifications_divider"
-                layout="@layout/divider" />
-
-            <TextView
-                android:id="@+id/settings_outgoing_messages_label"
-                style="@style/SettingsSectionLabelStyle"
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="@string/outgoing_messages" />
+                android:background="@drawable/settings_card_background"
+                android:orientation="vertical"
+                android:paddingVertical="4dp">
 
-            <RelativeLayout
-                android:id="@+id/settings_show_character_counter_holder"
-                style="@style/SettingsHolderSwitchStyle"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content">
-
-                <org.fossify.commons.views.MyMaterialSwitch
-                    android:id="@+id/settings_show_character_counter"
-                    style="@style/SettingsSwitchStyle"
+                <TextView
+                    android:id="@+id/settings_recently_deleted_holder"
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/show_character_counter" />
+                    android:layout_height="64dp"
+                    android:drawableEnd="@drawable/ic_chevron_right_vector"
+                    android:foreground="?attr/selectableItemBackground"
+                    android:gravity="center_vertical"
+                    android:paddingHorizontal="20dp"
+                    android:text="@string/settings_recently_deleted"
+                    android:textColor="@color/miui_primary_text"
+                    android:textSize="18sp" />
 
-            </RelativeLayout>
+                <View android:layout_width="match_parent" android:layout_height="1dp" android:layout_marginStart="20dp" android:background="@color/miui_divider" />
 
-            <RelativeLayout
-                android:id="@+id/settings_use_simple_characters_holder"
-                style="@style/SettingsHolderSwitchStyle"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content">
-
-                <org.fossify.commons.views.MyMaterialSwitch
-                    android:id="@+id/settings_use_simple_characters"
-                    style="@style/SettingsSwitchStyle"
+                <LinearLayout
+                    android:id="@+id/settings_sync_holder"
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/use_simple_characters" />
+                    android:layout_height="78dp"
+                    android:foreground="?attr/selectableItemBackground"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingHorizontal="20dp">
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/settings_sync" android:textColor="@color/miui_primary_text" android:textSize="18sp" />
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="@string/settings_sync_summary" android:textColor="@color/miui_secondary_text" android:textSize="13sp" />
+                    </LinearLayout>
+                    <ImageView android:layout_width="20dp" android:layout_height="20dp" android:src="@drawable/ic_chevron_right_vector" />
+                </LinearLayout>
 
-            </RelativeLayout>
+                <View android:layout_width="match_parent" android:layout_height="1dp" android:layout_marginStart="20dp" android:background="@color/miui_divider" />
 
-            <RelativeLayout
-                android:id="@+id/settings_send_on_enter_holder"
-                style="@style/SettingsHolderSwitchStyle"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content">
-
-                <org.fossify.commons.views.MyMaterialSwitch
-                    android:id="@+id/settings_send_on_enter"
-                    style="@style/SettingsSwitchStyle"
+                <TextView
+                    android:id="@+id/settings_about_holder"
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/send_on_enter" />
-
-            </RelativeLayout>
-
-            <RelativeLayout
-                android:id="@+id/settings_enable_delivery_reports_holder"
-                style="@style/SettingsHolderSwitchStyle"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content">
-
-                <org.fossify.commons.views.MyMaterialSwitch
-                    android:id="@+id/settings_enable_delivery_reports"
-                    style="@style/SettingsSwitchStyle"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/enable_delivery_reports" />
-
-            </RelativeLayout>
-
-            <RelativeLayout
-                android:id="@+id/settings_send_long_message_mms_holder"
-                style="@style/SettingsHolderSwitchStyle"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content">
-
-                <org.fossify.commons.views.MyMaterialSwitch
-                    android:id="@+id/settings_send_long_message_mms"
-                    style="@style/SettingsSwitchStyle"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/send_long_message_mms" />
-
-            </RelativeLayout>
-
-            <RelativeLayout
-                android:id="@+id/settings_send_group_message_mms_holder"
-                style="@style/SettingsHolderSwitchStyle"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content">
-
-                <org.fossify.commons.views.MyMaterialSwitch
-                    android:id="@+id/settings_send_group_message_mms"
-                    style="@style/SettingsSwitchStyle"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/group_message_mms" />
-
-            </RelativeLayout>
-
-            <RelativeLayout
-                android:id="@+id/settings_mms_file_size_limit_holder"
-                style="@style/SettingsHolderTextViewStyle"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content">
-
-                <org.fossify.commons.views.MyTextView
-                    android:id="@+id/settings_mms_file_size_limit_label"
-                    style="@style/SettingsTextLabelStyle"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/mms_file_size_limit" />
-
-                <org.fossify.commons.views.MyTextView
-                    android:id="@+id/settings_mms_file_size_limit"
-                    style="@style/SettingsTextValueStyle"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_below="@+id/settings_mms_file_size_limit_label"
-                    tools:text="@string/mms_file_size_limit_none" />
-
-            </RelativeLayout>
-
-            <include
-                android:id="@+id/settings_outgoing_messages_divider"
-                layout="@layout/divider" />
-
-            <TextView
-                android:id="@+id/settings_archived_messages_label"
-                style="@style/SettingsSectionLabelStyle"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/archived_conversations" />
-
-            <RelativeLayout
-                android:id="@+id/settings_keep_conversations_archived_holder"
-                style="@style/SettingsHolderSwitchStyle"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content">
-
-                <org.fossify.commons.views.MyMaterialSwitch
-                    android:id="@+id/settings_keep_conversations_archived"
-                    style="@style/SettingsSwitchStyle"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/keep_conversations_archived" />
-
-            </RelativeLayout>
-
-            <include
-                android:id="@+id/settings_archive_divider"
-                layout="@layout/divider" />
-
-            <TextView
-                android:id="@+id/settings_recycle_bin_label"
-                style="@style/SettingsSectionLabelStyle"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/recycle_bin" />
-
-            <RelativeLayout
-                android:id="@+id/settings_use_recycle_bin_holder"
-                style="@style/SettingsHolderSwitchStyle"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content">
-
-                <org.fossify.commons.views.MyMaterialSwitch
-                    android:id="@+id/settings_use_recycle_bin"
-                    style="@style/SettingsSwitchStyle"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/move_items_into_recycle_bin" />
-
-            </RelativeLayout>
-
-            <RelativeLayout
-                android:id="@+id/settings_empty_recycle_bin_holder"
-                style="@style/SettingsHolderTextViewStyle"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content">
-
-                <org.fossify.commons.views.MyTextView
-                    android:id="@+id/settings_empty_recycle_bin_label"
-                    style="@style/SettingsTextLabelStyle"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/empty_recycle_bin" />
-
-                <org.fossify.commons.views.MyTextView
-                    android:id="@+id/settings_empty_recycle_bin_size"
-                    style="@style/SettingsTextValueStyle"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_below="@+id/settings_empty_recycle_bin_label"
-                    tools:text="0 B" />
-
-            </RelativeLayout>
-
-            <include
-                android:id="@+id/settings_recycle_bin_divider"
-                layout="@layout/divider" />
-
-            <TextView
-                android:id="@+id/settings_security_label"
-                style="@style/SettingsSectionLabelStyle"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/security" />
-
-            <RelativeLayout
-                android:id="@+id/settings_app_password_protection_holder"
-                style="@style/SettingsHolderSwitchStyle"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content">
-
-                <org.fossify.commons.views.MyMaterialSwitch
-                    android:id="@+id/settings_app_password_protection"
-                    style="@style/SettingsSwitchStyle"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/password_protect_whole_app" />
-
-            </RelativeLayout>
-
-            <include
-                android:id="@+id/settings_migrating_divider"
-                layout="@layout/divider" />
-
-            <TextView
-                android:id="@+id/settings_migrating_label"
-                style="@style/SettingsSectionLabelStyle"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/migrating" />
-
-            <RelativeLayout
-                android:id="@+id/settings_export_messages_holder"
-                style="@style/SettingsHolderTextViewOneLinerStyle"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content">
-
-                <org.fossify.commons.views.MyTextView
-                    android:id="@+id/settings_export_messages"
-                    style="@style/SettingsTextLabelStyle"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/export_messages" />
-
-            </RelativeLayout>
-
-            <RelativeLayout
-                android:id="@+id/settings_import_messages_holder"
-                style="@style/SettingsHolderTextViewOneLinerStyle"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content">
-
-                <org.fossify.commons.views.MyTextView
-                    android:id="@+id/settings_import_messages"
-                    style="@style/SettingsTextLabelStyle"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/import_messages" />
-
-            </RelativeLayout>
+                    android:layout_height="64dp"
+                    android:drawableEnd="@drawable/ic_chevron_right_vector"
+                    android:foreground="?attr/selectableItemBackground"
+                    android:gravity="center_vertical"
+                    android:paddingHorizontal="20dp"
+                    android:text="@string/about"
+                    android:textColor="@color/miui_primary_text"
+                    android:textSize="18sp" />
+            </LinearLayout>
         </LinearLayout>
     </androidx.core.widget.NestedScrollView>
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

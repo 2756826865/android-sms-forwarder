@@ -864,9 +864,9 @@ class ThreadActivity : SimpleActivity() {
         val textColor = getProperTextColor()
 
         binding.messageHolder.apply {
-            threadSendMessage.setTextColor(textColor)
+            threadSendMessage.setTextColor(Color.WHITE)
             threadSendMessage.compoundDrawables.forEach {
-                it?.applyColorFilter(textColor)
+                it?.applyColorFilter(Color.WHITE)
             }
 
             confirmManageContacts.applyColorFilter(textColor)
@@ -2046,7 +2046,7 @@ class ThreadActivity : SimpleActivity() {
             R.drawable.ic_send_vector
         }
         ResourcesCompat.getDrawable(resources, drawableResId, theme)?.apply {
-            applyColorFilter(getProperTextColor())
+            applyColorFilter(Color.WHITE)
             binding.messageHolder.threadSendMessage.setCompoundDrawablesWithIntrinsicBounds(
                 null, this, null, null
             )

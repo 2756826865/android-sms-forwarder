@@ -13,8 +13,8 @@
             android:id="@+id/bulk_send_toolbar"
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
-            android:background="@android:color/white"
-            app:title="@string/bulk_send"
+            android:background="@color/miui_page_background"
+            app:title=""
             app:navigationIconTint="#111111"
             app:titleTextColor="#111111" />
     </org.fossify.commons.views.MyAppBarLayout>
@@ -23,17 +23,26 @@
         android:id="@+id/bulk_send_holder"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="@android:color/white"
+        android:background="@color/miui_page_background"
         android:orientation="vertical"
         app:layout_behavior="@string/appbar_scrolling_view_behavior">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="24dp"
+            android:layout_marginTop="20dp"
+            android:layout_marginBottom="22dp"
+            android:text="@string/bulk_send"
+            android:textColor="@color/miui_primary_text"
+            android:textSize="35sp" />
 
         <org.fossify.commons.views.MyEditText
             android:id="@+id/bulk_send_search"
             android:layout_width="match_parent"
             android:layout_height="52dp"
             android:layout_marginHorizontal="16dp"
-            android:layout_marginTop="10dp"
-            android:background="@drawable/home_search_background"
+            android:background="@drawable/message_input_background"
             android:hint="@string/bulk_send_search"
             android:inputType="phone"
             android:paddingHorizontal="18dp"
@@ -135,7 +144,7 @@
             android:layout_margin="12dp"
             android:text="@string/bulk_send_action"
             android:textColor="@android:color/white"
-            app:backgroundTint="#20C45A"
+            app:backgroundTint="@color/miui_action_blue"
             app:cornerRadius="22dp" />
     </LinearLayout>
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

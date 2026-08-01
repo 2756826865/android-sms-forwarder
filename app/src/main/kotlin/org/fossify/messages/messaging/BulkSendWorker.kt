@@ -8,6 +8,7 @@ import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import kotlinx.coroutines.delay
 import org.fossify.messages.helpers.refreshConversations
+import org.fossify.messages.extensions.config
 import org.json.JSONArray
 
 class BulkSendWorker(
@@ -27,7 +28,9 @@ class BulkSendWorker(
                 subId = subId,
                 attachments = emptyList()
             )
-            if (index < numbers.lastIndex) delay(SEND_INTERVAL_MS)
+            if (index < numbers.lastIndex) {
+                delay(applicationContext.config.bulkSendDelaySeconds * 1_000L)
+            }
         }
         refreshConversations()
         return Result.success()
@@ -44,8 +47,6 @@ class BulkSendWorker(
         private const val KEY_BODY = "body"
         private const val KEY_SUB_ID = "sub_id"
         private const val KEY_NUMBERS = "numbers"
-        private const val SEND_INTERVAL_MS = 1_000L
-
         fun enqueue(context: Context, body: String, subId: Int, numbers: List<String>) {
             val request = OneTimeWorkRequestBuilder<BulkSendWorker>()
                 .setInputData(

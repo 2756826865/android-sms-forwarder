@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:id="@+id/compose_new_message" android:title="@string/main_plus_new_message" />
+    <item android:id="@+id/compose_bulk_send" android:title="@string/main_plus_bulk_send" />
+    <item android:id="@+id/compose_pushplus" android:title="@string/pushplus_forwarding" />
+    <item android:id="@+id/compose_settings" android:title="@string/settings" />
+    <item android:id="@+id/compose_about" android:title="@string/about" />
+</menu>

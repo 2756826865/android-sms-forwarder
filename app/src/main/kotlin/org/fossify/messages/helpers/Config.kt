@@ -115,6 +115,39 @@ class Config(context: Context) : BaseConfig(context) {
         get() = prefs.getBoolean("full_history_synced_v2", false)
         set(value) = prefs.edit().putBoolean("full_history_synced_v2", value).apply()
 
+    var showListAvatars: Boolean
+        get() = prefs.getBoolean("show_list_avatars", true)
+        set(value) = prefs.edit().putBoolean("show_list_avatars", value).apply()
+
+    var showLetterAvatars: Boolean
+        get() = prefs.getBoolean("show_letter_avatars", true)
+        set(value) = prefs.edit().putBoolean("show_letter_avatars", value).apply()
+
+    var bulkSendDelaySeconds: Int
+        get() = prefs.getInt("bulk_send_delay_seconds", 1).coerceIn(0, 5)
+        set(value) = prefs.edit().putInt("bulk_send_delay_seconds", value.coerceIn(0, 5)).apply()
+
+    var whitelistedNumbers: Set<String>
+        get() = prefs.getStringSet("whitelisted_numbers", emptySet()) ?: emptySet()
+        set(value) = prefs.edit().putStringSet("whitelisted_numbers", value).apply()
+
+    fun addWhitelistedNumber(number: String) {
+        whitelistedNumbers = whitelistedNumbers + number
+    }
+
+    fun removeWhitelistedNumber(number: String) {
+        whitelistedNumbers = whitelistedNumbers - number
+    }
+
+    fun isNumberWhitelisted(number: String): Boolean {
+        val normalized = number.filter { it.isDigit() || it == '+' }
+        return whitelistedNumbers.any { allowed ->
+            val normalizedAllowed = allowed.filter { it.isDigit() || it == '+' }
+            normalizedAllowed.isNotBlank() &&
+                (normalized == normalizedAllowed || normalized.startsWith(normalizedAllowed))
+        }
+    }
+
     var keyboardHeight: Int
         get() = prefs.getInt(SOFT_KEYBOARD_HEIGHT, context.getDefaultKeyboardHeight())
         set(keyboardHeight) = prefs.edit().putInt(SOFT_KEYBOARD_HEIGHT, keyboardHeight).apply()

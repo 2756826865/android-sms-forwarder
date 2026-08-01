@@ -9,7 +9,8 @@
     <org.fossify.commons.views.MyAppBarLayout
         android:id="@+id/main_appbar"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content">
+        android:layout_height="0dp"
+        android:visibility="gone">
 
         <com.google.android.material.appbar.MaterialToolbar
             android:id="@+id/main_menu"
@@ -41,9 +42,9 @@
                 android:background="@android:color/white"
                 android:orientation="vertical"
                 android:paddingStart="20dp"
-                android:paddingTop="10dp"
+                android:paddingTop="48dp"
                 android:paddingEnd="20dp"
-                android:paddingBottom="14dp">
+                android:paddingBottom="16dp">
 
                 <TextView
                     android:id="@+id/home_title"
@@ -67,8 +68,8 @@
                     android:inputType="text"
                     android:maxLines="1"
                     android:paddingHorizontal="18dp"
-                    android:textColor="#161616"
-                    android:textColorHint="#8A8A8A"
+                    android:textColor="#14252B"
+                    android:textColorHint="#7E9CA7"
                     android:textSize="17sp" />
             </LinearLayout>
 
@@ -194,7 +195,7 @@
         android:layout_margin="@dimen/activity_margin"
         android:src="@drawable/ic_plus_vector"
         android:tint="@android:color/white"
-        app:backgroundTint="#20C45A"
+        app:backgroundTint="@color/miui_fab_green"
         app:applyWindowInsets="true" />
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

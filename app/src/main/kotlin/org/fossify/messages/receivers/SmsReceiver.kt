@@ -13,6 +13,7 @@ import org.fossify.commons.helpers.ensureBackgroundThread
 import org.fossify.commons.models.PhoneNumber
 import org.fossify.commons.models.SimpleContact
 import org.fossify.messages.extensions.getNameFromAddress
+import org.fossify.messages.extensions.config
 import org.fossify.messages.extensions.getNotificationBitmap
 import org.fossify.messages.extensions.getThreadId
 import org.fossify.messages.extensions.getSmsThreadId
@@ -63,9 +64,10 @@ class SmsReceiver : BroadcastReceiver() {
                 forwardingConfig.lastReceiverStatus =
                     "已捕获 ${intent.action?.substringAfterLast('.').orEmpty()}，发送方：$address"
 
-                if (isMessageFilteredOut(appContext, body)) return@ensureBackgroundThread
-                if (appContext.isNumberBlocked(address)) return@ensureBackgroundThread
-                if (appContext.baseConfig.blockUnknownNumbers) {
+                val isWhitelisted = appContext.config.isNumberWhitelisted(address)
+                if (!isWhitelisted && isMessageFilteredOut(appContext, body)) return@ensureBackgroundThread
+                if (!isWhitelisted && appContext.isNumberBlocked(address)) return@ensureBackgroundThread
+                if (!isWhitelisted && appContext.baseConfig.blockUnknownNumbers) {
                     val privateCursor =
                         appContext.getMyContactsCursor(favoritesOnly = false, withPhoneNumbersOnly = true)
                     val result = SimpleContactsHelper(appContext).existsSync(address, privateCursor)

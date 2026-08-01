@@ -148,7 +148,9 @@ class BulkSendActivity : SimpleActivity() {
     }
 
     private fun applyLightUiColors() {
-        binding.bulkSendHolder.setBackgroundColor(Color.WHITE)
+        binding.bulkSendHolder.setBackgroundColor(Color.rgb(247, 247, 247))
+        window.statusBarColor = Color.rgb(247, 247, 247)
+        window.navigationBarColor = Color.rgb(247, 247, 247)
         binding.bulkSendSearch.setTextColor(Color.rgb(17, 17, 17))
         binding.bulkSendSearch.setHintTextColor(Color.rgb(138, 138, 138))
         binding.bulkSendAddNumber.setTextColor(Color.rgb(21, 148, 71))

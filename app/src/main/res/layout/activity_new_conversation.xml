@@ -25,7 +25,7 @@
         android:id="@+id/new_conversation_holder"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="@android:color/white"
+        android:background="@color/miui_page_background"
         app:layout_behavior="@string/appbar_scrolling_view_behavior">
 
         <TextView
@@ -33,19 +33,18 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginHorizontal="24dp"
-            android:layout_marginTop="16dp"
+            android:layout_marginTop="28dp"
             android:text="@string/new_conversation"
             android:textColor="#111111"
-            android:textSize="34sp"
-            android:textStyle="bold" />
+            android:textSize="35sp" />
 
         <org.fossify.commons.views.MyEditText
             android:id="@+id/new_conversation_address"
             android:layout_width="match_parent"
             android:layout_height="56dp"
             android:layout_below="@id/new_conversation_large_title"
-            android:layout_marginStart="@dimen/activity_margin"
-            android:layout_marginEnd="@dimen/activity_margin"
+            android:layout_marginStart="24dp"
+            android:layout_marginEnd="24dp"
             android:layout_toStartOf="@+id/new_conversation_confirm"
             android:background="@android:color/transparent"
             android:gravity="center_vertical"
@@ -53,7 +52,26 @@
             android:inputType="textCapWords"
             android:textColor="#111111"
             android:textColorHint="#8A8A8A"
-            android:textSize="18sp" />
+            android:textSize="19sp" />
+
+        <HorizontalScrollView
+            android:id="@+id/selected_recipients_scroll"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_below="@id/new_conversation_large_title"
+            android:layout_marginStart="128dp"
+            android:layout_marginTop="4dp"
+            android:layout_marginEnd="72dp"
+            android:overScrollMode="never"
+            android:scrollbars="none"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:id="@+id/selected_recipients_holder"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal" />
+        </HorizontalScrollView>
 
         <ImageView
             android:id="@+id/new_conversation_confirm"
@@ -109,9 +127,11 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_below="@+id/add_contact_divider"
-            android:layout_marginStart="@dimen/activity_margin"
+            android:layout_marginStart="24dp"
+            android:layout_marginTop="24dp"
             android:layout_marginBottom="@dimen/medium_margin"
             android:text="@string/suggestions"
+            android:textColor="@color/miui_section_text"
             android:textSize="@dimen/normal_text_size" />
 
         <HorizontalScrollView
@@ -138,11 +158,63 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:layout_below="@+id/suggestions_scrollview"
+            android:layout_above="@+id/new_conversation_composer"
             android:clipToPadding="false"
             android:layoutAnimation="@anim/layout_animation"
             android:overScrollMode="ifContentScrolls"
             android:scrollbars="none"
             app:layoutManager="org.fossify.commons.views.MyLinearLayoutManager" />
+
+        <LinearLayout
+            android:id="@+id/new_conversation_composer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_alignParentBottom="true"
+            android:background="@color/miui_page_background"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="20dp"
+            android:paddingTop="10dp"
+            android:paddingEnd="20dp"
+            android:paddingBottom="12dp">
+
+            <ImageView
+                android:id="@+id/new_conversation_add_attachment"
+                android:layout_width="52dp"
+                android:layout_height="52dp"
+                android:background="@drawable/message_action_background"
+                android:contentDescription="@string/attachment"
+                android:padding="15dp"
+                android:src="@drawable/ic_plus_vector" />
+
+            <org.fossify.commons.views.MyEditText
+                android:id="@+id/new_conversation_message"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="10dp"
+                android:layout_marginEnd="10dp"
+                android:layout_weight="1"
+                android:background="@drawable/message_input_background"
+                android:gravity="center_vertical"
+                android:hint="@string/type_a_message"
+                android:inputType="textCapSentences|textMultiLine"
+                android:maxLines="6"
+                android:minHeight="52dp"
+                android:paddingHorizontal="16dp"
+                android:textColor="@color/miui_primary_text"
+                android:textColorHint="#9A9A9A" />
+
+            <ImageButton
+                android:id="@+id/new_conversation_send"
+                android:layout_width="52dp"
+                android:layout_height="52dp"
+                android:background="@drawable/send_button_background"
+                android:contentDescription="@string/send_now"
+                android:enabled="false"
+                android:padding="14dp"
+                android:src="@drawable/ic_send_vector"
+                android:tint="@android:color/white" />
+        </LinearLayout>
 
         <com.reddit.indicatorfastscroll.FastScrollerView
             android:id="@+id/contacts_letter_fastscroller"

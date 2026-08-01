@@ -14,9 +14,11 @@ import android.graphics.Color
 import android.os.Bundle
 import android.provider.Telephony
 import android.text.TextUtils
+import android.widget.PopupMenu
 import androidx.appcompat.content.res.AppCompatResources
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import org.fossify.commons.dialogs.PermissionRequiredDialog
 import org.fossify.commons.extensions.adjustAlpha
 import org.fossify.commons.extensions.appLaunched
@@ -42,9 +44,6 @@ import org.fossify.commons.extensions.toast
 import org.fossify.commons.extensions.underlineText
 import org.fossify.commons.extensions.updateTextColors
 import org.fossify.commons.extensions.viewBinding
-import org.fossify.commons.helpers.LICENSE_EVENT_BUS
-import org.fossify.commons.helpers.LICENSE_INDICATOR_FAST_SCROLL
-import org.fossify.commons.helpers.LICENSE_SMS_MMS
 import org.fossify.commons.helpers.LOWER_ALPHA
 import org.fossify.commons.helpers.MyContactsContentProvider
 import org.fossify.commons.helpers.PERMISSION_READ_CONTACTS
@@ -53,7 +52,6 @@ import org.fossify.commons.helpers.PERMISSION_SEND_SMS
 import org.fossify.commons.helpers.SHORT_ANIMATION_DURATION
 import org.fossify.commons.helpers.ensureBackgroundThread
 import org.fossify.commons.helpers.isQPlus
-import org.fossify.commons.models.FAQItem
 import org.fossify.commons.models.Release
 import org.fossify.messages.BuildConfig
 import org.fossify.messages.R
@@ -105,9 +103,7 @@ class MainActivity : SimpleActivity() {
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
         appLaunched(BuildConfig.APPLICATION_ID)
-        setupOptionsMenu()
         setupHomeSearch()
-        refreshMenuItems()
 
         setupEdgeToEdge(padBottomImeAndSystem = listOf(binding.conversationsList))
 
@@ -124,7 +120,6 @@ class MainActivity : SimpleActivity() {
     override fun onResume() {
         super.onResume()
         updateMenuColors()
-        refreshMenuItems()
 
         getOrCreateConversationsAdapter().apply {
             if (storedTextColor != getProperTextColor()) {
@@ -142,8 +137,11 @@ class MainActivity : SimpleActivity() {
         binding.homeHeader.setBackgroundColor(Color.WHITE)
         binding.homeTitle.setTextColor(Color.rgb(17, 17, 17))
         binding.homeSearch.setTextColor(Color.rgb(22, 22, 22))
-        binding.homeSearch.setHintTextColor(Color.rgb(138, 138, 138))
+        binding.homeSearch.setHintTextColor(Color.rgb(126, 156, 167))
         binding.conversationsFab.backgroundTintList = ColorStateList.valueOf(Color.rgb(32, 196, 90))
+        window.statusBarColor = Color.rgb(42, 159, 203)
+        window.navigationBarColor = Color.WHITE
+        WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightStatusBars = true
         binding.searchHolder.setBackgroundColor(getProperBackgroundColor())
 
         val properPrimaryColor = getProperPrimaryColor()
@@ -175,24 +173,6 @@ class MainActivity : SimpleActivity() {
         }
     }
 
-    private fun setupOptionsMenu() {
-        binding.mainMenu.inflateMenu(R.menu.menu_main)
-        binding.mainMenu.title = ""
-        binding.mainMenu.setOnMenuItemClickListener { menuItem ->
-            when (menuItem.itemId) {
-                R.id.show_recycle_bin -> launchRecycleBin()
-                R.id.show_archived -> launchArchivedConversations()
-                R.id.bulk_send -> launchBulkSend()
-                R.id.pushplus_forwarding -> launchPushPlusSettings()
-                R.id.resync_messages -> resyncAllMessages()
-                R.id.settings -> launchSettings()
-                R.id.about -> launchAbout()
-                else -> return@setOnMenuItemClickListener false
-            }
-            return@setOnMenuItemClickListener true
-        }
-    }
-
     private fun setupHomeSearch() {
         binding.homeSearch.onTextChangeListener { text ->
             if (text.isNotBlank()) {
@@ -203,13 +183,6 @@ class MainActivity : SimpleActivity() {
                 binding.searchHolder.beGone()
                 searchTextChanged("", true)
             }
-        }
-    }
-
-    private fun refreshMenuItems() {
-        binding.mainMenu.menu.apply {
-            findItem(R.id.show_recycle_bin).isVisible = config.useRecycleBin
-            findItem(R.id.show_archived).isVisible = config.isArchiveAvailable
         }
     }
 
@@ -229,10 +202,7 @@ class MainActivity : SimpleActivity() {
         storedFontSize = config.fontSize
     }
 
-    private fun updateMenuColors() {
-        binding.mainMenu.setBackgroundColor(Color.WHITE)
-        binding.mainMenu.setTitleTextColor(Color.rgb(17, 17, 17))
-    }
+    private fun updateMenuColors() = Unit
 
     private fun loadMessages() {
         if (isQPlus()) {
@@ -309,7 +279,25 @@ class MainActivity : SimpleActivity() {
         }
 
         binding.conversationsFab.setOnClickListener {
-            launchNewConversation()
+            showComposeMenu()
+        }
+    }
+
+    private fun showComposeMenu() {
+        PopupMenu(this, binding.conversationsFab).apply {
+            menuInflater.inflate(R.menu.menu_compose, menu)
+            setOnMenuItemClickListener { item ->
+                when (item.itemId) {
+                    R.id.compose_new_message -> launchNewConversation()
+                    R.id.compose_bulk_send -> launchBulkSend()
+                    R.id.compose_pushplus -> launchPushPlusSettings()
+                    R.id.compose_settings -> launchSettings()
+                    R.id.compose_about -> launchAbout()
+                    else -> return@setOnMenuItemClickListener false
+                }
+                true
+            }
+            show()
         }
     }
 
@@ -672,49 +660,7 @@ class MainActivity : SimpleActivity() {
     }
 
     private fun launchAbout() {
-        val licenses = LICENSE_EVENT_BUS or LICENSE_SMS_MMS or LICENSE_INDICATOR_FAST_SCROLL
-
-        val faqItems = arrayListOf(
-            FAQItem(
-                title = R.string.faq_2_title,
-                text = R.string.faq_2_text
-            ),
-            FAQItem(
-                title = R.string.faq_3_title,
-                text = R.string.faq_3_text
-            ),
-            FAQItem(
-                title = R.string.faq_4_title,
-                text = R.string.faq_4_text
-            ),
-            FAQItem(
-                title = org.fossify.commons.R.string.faq_9_title_commons,
-                text = org.fossify.commons.R.string.faq_9_text_commons
-            )
-        )
-
-        if (!resources.getBoolean(org.fossify.commons.R.bool.hide_google_relations)) {
-            faqItems.add(
-                FAQItem(
-                    title = org.fossify.commons.R.string.faq_2_title_commons,
-                    text = org.fossify.commons.R.string.faq_2_text_commons
-                )
-            )
-            faqItems.add(
-                FAQItem(
-                    title = org.fossify.commons.R.string.faq_6_title_commons,
-                    text = org.fossify.commons.R.string.faq_6_text_commons
-                )
-            )
-        }
-
-        startAboutActivity(
-            appNameId = R.string.app_name,
-            licenseMask = licenses,
-            versionName = BuildConfig.VERSION_NAME,
-            faqItems = faqItems,
-            showFAQBeforeMail = true
-        )
+        startActivity(Intent(applicationContext, AboutActivity::class.java))
     }
 
     @Subscribe(threadMode = ThreadMode.MAIN)
