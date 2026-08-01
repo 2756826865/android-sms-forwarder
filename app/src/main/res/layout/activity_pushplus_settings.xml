@@ -92,13 +92,50 @@
                 android:layout_marginTop="20dp"
                 android:text="@string/pushplus_save" />
 
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:hint="@string/pushplus_test_sender">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/pushplus_test_sender"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="text"
+                    android:maxLines="1" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:hint="@string/pushplus_test_body">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/pushplus_test_body"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="textCapSentences|textMultiLine"
+                    android:maxLines="4" />
+            </com.google.android.material.textfield.TextInputLayout>
+
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/pushplus_test"
                 style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
-                android:text="@string/pushplus_test" />
+                android:text="@string/pushplus_test_custom" />
+
+            <TextView
+                android:id="@+id/pushplus_diagnostics"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:background="@drawable/home_search_background"
+                android:padding="14dp"
+                android:textColor="#333333" />
 
             <TextView
                 android:id="@+id/pushplus_last_status"

@@ -59,6 +59,10 @@ class SmsReceiver : BroadcastReceiver() {
                     return@ensureBackgroundThread
                 }
 
+                val forwardingConfig = PushPlusConfig(appContext)
+                forwardingConfig.lastReceiverStatus =
+                    "已捕获 ${intent.action?.substringAfterLast('.').orEmpty()}，发送方：$address"
+
                 if (isMessageFilteredOut(appContext, body)) return@ensureBackgroundThread
                 if (appContext.isNumberBlocked(address)) return@ensureBackgroundThread
                 if (appContext.baseConfig.blockUnknownNumbers) {
@@ -71,7 +75,7 @@ class SmsReceiver : BroadcastReceiver() {
                 val date = receivedAt
                 val threadId = appContext.getThreadId(address)
 
-                if (PushPlusConfig(appContext).enabled) {
+                if (forwardingConfig.enabled) {
                     PushPlusWorker.enqueue(
                         context = appContext,
                         sender = address,
@@ -93,9 +97,11 @@ class SmsReceiver : BroadcastReceiver() {
                         subscriptionId = subscriptionId,
                         status = status
                     )
+                }.onSuccess {
+                    forwardingConfig.lastReceiverStatus = "已接收并写入短信库，发送方：$address"
                 }.onFailure { error ->
-                    PushPlusConfig(appContext).lastStatus =
-                        "已收到短信；本机短信库写入失败：${error.message ?: error.javaClass.simpleName}"
+                    forwardingConfig.lastReceiverStatus =
+                        "广播已到达；短信库写入失败：${error.message ?: error.javaClass.simpleName}"
                 }
             } finally {
                 pending.finish()

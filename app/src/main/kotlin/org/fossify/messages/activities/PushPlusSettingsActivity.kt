@@ -1,6 +1,12 @@
 package org.fossify.messages.activities
 
+import android.Manifest
+import android.app.role.RoleManager
+import android.content.pm.PackageManager
 import android.os.Bundle
+import android.provider.Telephony
+import androidx.core.content.ContextCompat
+import org.fossify.commons.extensions.value
 import org.fossify.commons.extensions.toast
 import org.fossify.commons.extensions.updateTextColors
 import org.fossify.commons.extensions.viewBinding
@@ -27,13 +33,22 @@ class PushPlusSettingsActivity : SimpleActivity() {
         loadConfig()
 
         binding.pushplusSave.setOnClickListener {
-            if (saveConfig()) toast(R.string.pushplus_saved)
+            if (saveConfig()) {
+                updateDiagnostics()
+                toast(R.string.pushplus_saved)
+            }
         }
 
         binding.pushplusTest.setOnClickListener {
             if (saveConfig(requireToken = true)) {
-                PushPlusWorker.enqueueTest(applicationContext)
-                toast(R.string.pushplus_test_queued)
+                val sender = binding.pushplusTestSender.value.trim()
+                val body = binding.pushplusTestBody.value.trim()
+                if (sender.isBlank() || body.isBlank()) {
+                    toast(R.string.pushplus_test_fields_required)
+                } else {
+                    PushPlusWorker.enqueueTest(applicationContext, sender, body)
+                    toast(R.string.pushplus_test_queued)
+                }
             }
         }
     }
@@ -41,6 +56,7 @@ class PushPlusSettingsActivity : SimpleActivity() {
     override fun onResume() {
         super.onResume()
         updateLastStatus()
+        updateDiagnostics()
     }
 
     private fun loadConfig() = with(binding) {
@@ -50,7 +66,10 @@ class PushPlusSettingsActivity : SimpleActivity() {
         pushplusIncludeSender.isChecked = forwardingConfig.includeSender
         pushplusIncludeSim.isChecked = forwardingConfig.includeSim
         pushplusIncludeTime.isChecked = forwardingConfig.includeTime
+        pushplusTestSender.setText(getString(R.string.pushplus_test_sender_default))
+        pushplusTestBody.setText(getString(R.string.pushplus_test_body_default))
         updateLastStatus()
+        updateDiagnostics()
     }
 
     private fun saveConfig(requireToken: Boolean = false): Boolean {
@@ -73,4 +92,28 @@ class PushPlusSettingsActivity : SimpleActivity() {
         val status = forwardingConfig.lastStatus.ifBlank { getString(R.string.pushplus_status_never) }
         binding.pushplusLastStatus.text = getString(R.string.pushplus_last_status, status)
     }
+
+    private fun updateDiagnostics() {
+        val isDefaultSms = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            getSystemService(RoleManager::class.java)?.isRoleHeld(RoleManager.ROLE_SMS) == true
+        } else {
+            Telephony.Sms.getDefaultSmsPackage(this) == packageName
+        }
+        val canReceive = ContextCompat.checkSelfPermission(this, Manifest.permission.RECEIVE_SMS) ==
+            PackageManager.PERMISSION_GRANTED
+        val hasToken = forwardingConfig.getToken().isNotBlank()
+        val receiverStatus = forwardingConfig.lastReceiverStatus.ifBlank {
+            getString(R.string.pushplus_receiver_never)
+        }
+        binding.pushplusDiagnostics.text = getString(
+            R.string.pushplus_diagnostics,
+            mark(isDefaultSms),
+            mark(canReceive),
+            mark(forwardingConfig.enabled),
+            mark(hasToken),
+            receiverStatus
+        )
+    }
+
+    private fun mark(ok: Boolean) = if (ok) "✓" else "✕"
 }

@@ -14,6 +14,14 @@
     <string name="pushplus_include_time">正文包含接收时间</string>
     <string name="pushplus_save">保存配置</string>
     <string name="pushplus_test">发送测试消息</string>
+    <string name="pushplus_test_custom">发送自定义通道测试</string>
+    <string name="pushplus_test_sender">测试发送方</string>
+    <string name="pushplus_test_body">测试短信正文</string>
+    <string name="pushplus_test_sender_default">10086</string>
+    <string name="pushplus_test_body_default">这是一条短信转发兼容性测试消息</string>
+    <string name="pushplus_test_fields_required">请填写测试发送方和短信正文</string>
+    <string name="pushplus_receiver_never">尚未捕获真实短信广播</string>
+    <string name="pushplus_diagnostics">接收链路诊断\n%1$s 默认短信应用\n%2$s 接收短信权限\n%3$s 自动转发开关\n%4$s PushPlus Token\n\n最近接收：%5$s</string>
     <string name="pushplus_saved">配置已保存</string>
     <string name="pushplus_test_queued">测试消息已加入发送队列</string>
     <string name="pushplus_token_required">请先填写 PushPlus Token</string>

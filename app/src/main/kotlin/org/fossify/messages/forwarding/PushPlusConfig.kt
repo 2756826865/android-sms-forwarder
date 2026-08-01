@@ -38,6 +38,10 @@ class PushPlusConfig(context: Context) {
         get() = prefs.getString(KEY_LAST_STATUS, "").orEmpty()
         set(value) = prefs.edit().putString(KEY_LAST_STATUS, value).apply()
 
+    var lastReceiverStatus: String
+        get() = prefs.getString(KEY_LAST_RECEIVER_STATUS, "").orEmpty()
+        set(value) = prefs.edit().putString(KEY_LAST_RECEIVER_STATUS, value).apply()
+
     fun saveToken(token: String) {
         if (token.isBlank()) {
             prefs.edit().remove(KEY_TOKEN).apply()
@@ -57,6 +61,7 @@ class PushPlusConfig(context: Context) {
         private const val KEY_INCLUDE_SIM = "include_sim"
         private const val KEY_INCLUDE_TIME = "include_time"
         private const val KEY_LAST_STATUS = "last_status"
+        private const val KEY_LAST_RECEIVER_STATUS = "last_receiver_status"
     }
 }
 

@@ -129,12 +129,12 @@ class PushPlusWorker(
             WorkManager.getInstance(context).enqueueUniqueWork("pushplus-$uniqueId", ExistingWorkPolicy.KEEP, request)
         }
 
-        fun enqueueTest(context: Context) {
+        fun enqueueTest(context: Context, sender: String, body: String) {
             val request = OneTimeWorkRequestBuilder<PushPlusWorker>()
                 .setInputData(
                     workDataOf(
-                        KEY_SENDER to "测试消息",
-                        KEY_BODY to "短信转发已配置成功",
+                        KEY_SENDER to sender,
+                        KEY_BODY to body,
                         KEY_RECEIVED_AT to System.currentTimeMillis(),
                         KEY_IS_TEST to true
                     )
