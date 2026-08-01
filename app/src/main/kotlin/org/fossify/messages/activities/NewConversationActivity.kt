@@ -306,7 +306,12 @@ class NewConversationActivity : SimpleActivity() {
                 )
                 setPadding(18, 8, 12, 8)
                 compoundDrawablePadding = 6
-                setCompoundDrawablesWithIntrinsicBounds(0, 0, R.drawable.ic_cross_vector, 0)
+                setCompoundDrawablesWithIntrinsicBounds(
+                    0,
+                    0,
+                    org.fossify.commons.R.drawable.ic_cross_vector,
+                    0
+                )
                 setOnClickListener {
                     selectedRecipients.remove(number)
                     rebuildRecipientChips()
