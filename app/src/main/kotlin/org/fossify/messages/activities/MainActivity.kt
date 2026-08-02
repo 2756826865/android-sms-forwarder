@@ -14,7 +14,6 @@ import android.graphics.Color
 import android.os.Bundle
 import android.provider.Telephony
 import android.text.TextUtils
-import android.widget.PopupMenu
 import androidx.appcompat.content.res.AppCompatResources
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
@@ -42,7 +41,6 @@ import org.fossify.commons.extensions.openNotificationSettings
 import org.fossify.commons.extensions.onTextChangeListener
 import org.fossify.commons.extensions.toast
 import org.fossify.commons.extensions.underlineText
-import org.fossify.commons.extensions.updateTextColors
 import org.fossify.commons.extensions.viewBinding
 import org.fossify.commons.helpers.LOWER_ALPHA
 import org.fossify.commons.helpers.MyContactsContentProvider
@@ -68,6 +66,7 @@ import org.fossify.messages.extensions.getConversations
 import org.fossify.messages.extensions.getMessages
 import org.fossify.messages.extensions.insertOrUpdateConversation
 import org.fossify.messages.extensions.messagesDB
+import org.fossify.messages.extensions.markThreadMessagesRead
 import org.fossify.messages.extensions.syncThreadToLocal
 import org.fossify.messages.helpers.SEARCHED_MESSAGE_ID
 import org.fossify.messages.helpers.THREAD_ID
@@ -103,6 +102,9 @@ class MainActivity : SimpleActivity() {
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
         appLaunched(BuildConfig.APPLICATION_ID)
+        config.showListAvatars = true
+        config.showLetterAvatars = false
+        config.useRecycleBin = true
         setupHomeSearch()
 
         setupEdgeToEdge(padBottomImeAndSystem = listOf(binding.conversationsList))
@@ -133,18 +135,18 @@ class MainActivity : SimpleActivity() {
             updateDrafts()
         }
 
-        updateTextColors(binding.mainCoordinator)
         binding.homeHeader.setBackgroundColor(Color.WHITE)
         binding.homeTitle.setTextColor(Color.rgb(17, 17, 17))
-        binding.homeSearch.setTextColor(Color.rgb(22, 22, 22))
-        binding.homeSearch.setHintTextColor(Color.rgb(126, 156, 167))
-        binding.conversationsFab.backgroundTintList = ColorStateList.valueOf(Color.rgb(32, 196, 90))
-        window.statusBarColor = Color.rgb(42, 159, 203)
+        binding.homeSearch.setTextColor(Color.rgb(17, 17, 17))
+        binding.homeSearch.setHintTextColor(Color.rgb(141, 141, 141))
+        binding.conversationsFab.backgroundTintList = ColorStateList.valueOf(Color.rgb(25, 201, 90))
+        window.statusBarColor = Color.WHITE
         window.navigationBarColor = Color.WHITE
         WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightStatusBars = true
-        binding.searchHolder.setBackgroundColor(getProperBackgroundColor())
+        WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightNavigationBars = true
+        binding.searchHolder.setBackgroundColor(Color.WHITE)
 
-        val properPrimaryColor = getProperPrimaryColor()
+        val properPrimaryColor = Color.rgb(25, 201, 90)
         binding.noConversationsPlaceholder2.setTextColor(properPrimaryColor)
         binding.noConversationsPlaceholder2.underlineText()
         binding.conversationsFastscroller.updateColors(properPrimaryColor)
@@ -279,25 +281,25 @@ class MainActivity : SimpleActivity() {
         }
 
         binding.conversationsFab.setOnClickListener {
-            showComposeMenu()
+            launchNewConversation()
+        }
+        binding.homeSettings.setOnClickListener {
+            launchSettings()
+        }
+        binding.homeMarkAllRead.setOnClickListener {
+            markAllAsRead()
         }
     }
 
-    private fun showComposeMenu() {
-        PopupMenu(this, binding.conversationsFab).apply {
-            menuInflater.inflate(R.menu.menu_compose, menu)
-            setOnMenuItemClickListener { item ->
-                when (item.itemId) {
-                    R.id.compose_new_message -> launchNewConversation()
-                    R.id.compose_bulk_send -> launchBulkSend()
-                    R.id.compose_pushplus -> launchPushPlusSettings()
-                    R.id.compose_settings -> launchSettings()
-                    R.id.compose_about -> launchAbout()
-                    else -> return@setOnMenuItemClickListener false
-                }
-                true
+    private fun markAllAsRead() {
+        ensureBackgroundThread {
+            conversationsDB.getNonArchived()
+                .filterNot { it.read }
+                .forEach { markThreadMessagesRead(it.threadId) }
+            runOnUiThread {
+                getCachedConversations()
+                toast(R.string.all_messages_marked_read)
             }
-            show()
         }
     }
 

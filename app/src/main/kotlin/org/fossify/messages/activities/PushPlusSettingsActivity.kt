@@ -5,10 +5,11 @@ import android.app.role.RoleManager
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.provider.Telephony
+import android.graphics.Color
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import org.fossify.commons.extensions.value
 import org.fossify.commons.extensions.toast
-import org.fossify.commons.extensions.updateTextColors
 import org.fossify.commons.extensions.viewBinding
 import org.fossify.commons.helpers.NavigationIcon
 import org.fossify.messages.R
@@ -29,7 +30,6 @@ class PushPlusSettingsActivity : SimpleActivity() {
             topAppBar = binding.pushplusAppbar
         )
         setupTopAppBar(binding.pushplusAppbar, NavigationIcon.Arrow)
-        updateTextColors(binding.pushplusScrollview)
         loadConfig()
 
         binding.pushplusSave.setOnClickListener {
@@ -55,6 +55,10 @@ class PushPlusSettingsActivity : SimpleActivity() {
 
     override fun onResume() {
         super.onResume()
+        window.statusBarColor = Color.WHITE
+        window.navigationBarColor = Color.WHITE
+        WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightStatusBars = true
+        WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightNavigationBars = true
         updateLastStatus()
         updateDiagnostics()
     }

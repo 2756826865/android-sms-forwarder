@@ -119,6 +119,12 @@
             android:parentActivityName=".activities.MainActivity" />
 
         <activity
+            android:name=".activities.ForwardingChannelsActivity"
+            android:exported="false"
+            android:label="@string/forwarding_title"
+            android:parentActivityName=".activities.SettingsActivity" />
+
+        <activity
             android:name=".activities.SettingsActivity"
             android:configChanges="orientation"
             android:exported="true"

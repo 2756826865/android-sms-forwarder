@@ -1,12 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="miui_home_blue">#2A9FCB</color>
+    <color name="miui_home_blue">#F2F2F2</color>
     <color name="miui_action_blue">#348AF4</color>
-    <color name="miui_fab_green">#20C85B</color>
+    <color name="miui_fab_green">#19C95A</color>
     <color name="miui_page_background">#F7F7F7</color>
     <color name="miui_card_background">#FFFFFF</color>
     <color name="miui_primary_text">#111111</color>
-    <color name="miui_secondary_text">#777777</color>
+    <color name="miui_secondary_text">#666666</color>
+    <color name="miui_hint_text">#8D8D8D</color>
+    <color name="miui_timestamp_text">#8A8A8A</color>
+    <color name="miui_search_background">#F2F2F2</color>
     <color name="miui_section_text">#8B94A8</color>
     <color name="miui_divider">#ECECEC</color>
 </resources>

@@ -17,7 +17,6 @@ import org.fossify.commons.extensions.applyColorFilter
 import org.fossify.commons.extensions.beVisibleIf
 import org.fossify.commons.extensions.getTextSize
 import org.fossify.commons.extensions.setupViewBackground
-import org.fossify.commons.helpers.FontHelper
 import org.fossify.commons.helpers.SimpleContactsHelper
 import org.fossify.commons.helpers.ensureBackgroundThread
 import org.fossify.commons.views.MyRecyclerView
@@ -157,37 +156,36 @@ abstract class BaseConversationsAdapter(
 
             conversationAddress.apply {
                 text = conversation.title
-                setTextSize(TypedValue.COMPLEX_UNIT_PX, fontSize * 1.2f)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
             }
 
             conversationBodyShort.apply {
                 text = smsDraft ?: conversation.snippet
-                setTextSize(TypedValue.COMPLEX_UNIT_PX, fontSize * 0.9f)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
             }
 
             conversationDate.apply {
                 text = formatConversationDate(conversation.date)
 
-                setTextSize(TypedValue.COMPLEX_UNIT_PX, fontSize * 0.8f)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
             }
 
             val isUnread = !conversation.read
             unreadIndicator.beVisibleIf(isUnread)
             val style = if (isUnread) {
-                conversationBodyShort.alpha = 1f
                 if (conversation.isScheduled) Typeface.BOLD_ITALIC else Typeface.BOLD
             } else {
-                conversationBodyShort.alpha = 0.7f
                 if (conversation.isScheduled) Typeface.ITALIC else Typeface.NORMAL
             }
-            val customTypeface = FontHelper.getTypeface(activity)
-            conversationAddress.setTypeface(customTypeface, style)
-            conversationBodyShort.setTypeface(customTypeface, style)
-            conversationDate.setTypeface(customTypeface, style)
-
-            arrayListOf(conversationAddress, conversationBodyShort, conversationDate).forEach {
-                it.setTextColor(textColor)
-            }
+            conversationAddress.setTypeface(Typeface.create("sans-serif", style))
+            conversationBodyShort.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL))
+            conversationDate.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL))
+            conversationAddress.setTextColor(Color.rgb(17, 17, 17))
+            conversationBodyShort.setTextColor(Color.rgb(102, 102, 102))
+            conversationDate.setTextColor(Color.rgb(138, 138, 138))
+            conversationAddress.alpha = 1f
+            conversationBodyShort.alpha = 1f
+            conversationDate.alpha = 1f
 
             setupBadgeCount(unreadCountBadge, isUnread, conversation.unreadCount)
             conversationImage.beVisibleIf(activity.config.showListAvatars)
@@ -199,7 +197,7 @@ abstract class BaseConversationsAdapter(
             }
 
             if (activity.config.showListAvatars) {
-                if (!activity.config.showLetterAvatars && conversation.photoUri.isBlank()) {
+                if (conversation.photoUri.isBlank()) {
                     conversationImage.setImageResource(org.fossify.commons.R.drawable.ic_person_vector)
                     conversationImage.setBackgroundResource(R.drawable.miui_avatar_background)
                     conversationImage.setPadding(14, 14, 14, 14)

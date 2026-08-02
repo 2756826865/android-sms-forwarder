@@ -120,7 +120,7 @@ class Config(context: Context) : BaseConfig(context) {
         set(value) = prefs.edit().putBoolean("show_list_avatars", value).apply()
 
     var showLetterAvatars: Boolean
-        get() = prefs.getBoolean("show_letter_avatars", true)
+        get() = prefs.getBoolean("show_letter_avatars", false)
         set(value) = prefs.edit().putBoolean("show_letter_avatars", value).apply()
 
     var bulkSendDelaySeconds: Int
@@ -153,7 +153,7 @@ class Config(context: Context) : BaseConfig(context) {
         set(keyboardHeight) = prefs.edit().putInt(SOFT_KEYBOARD_HEIGHT, keyboardHeight).apply()
 
     var useRecycleBin: Boolean
-        get() = prefs.getBoolean(USE_RECYCLE_BIN, false)
+        get() = prefs.getBoolean(USE_RECYCLE_BIN, true)
         set(useRecycleBin) = prefs.edit().putBoolean(USE_RECYCLE_BIN, useRecycleBin).apply()
 
     var lastRecycleBinCheck: Long

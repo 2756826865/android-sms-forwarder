@@ -2,6 +2,64 @@
 
     <style name="AppTheme" parent="AppTheme.Base" />
 
+    <style name="SmsSettingsRow">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">68dp</item>
+        <item name="android:drawableEnd">@drawable/ic_chevron_right_vector</item>
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:foreground">?attr/selectableItemBackground</item>
+        <item name="android:gravity">center_vertical</item>
+        <item name="android:paddingHorizontal">20dp</item>
+        <item name="android:textColor">@color/miui_primary_text</item>
+        <item name="android:textSize">18sp</item>
+    </style>
+
+    <style name="SmsSettingsDivider">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">1dp</item>
+        <item name="android:layout_marginStart">20dp</item>
+        <item name="android:background">@color/miui_divider</item>
+    </style>
+
+    <style name="SmsForwardingRow">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">78dp</item>
+        <item name="android:foreground">?attr/selectableItemBackground</item>
+        <item name="android:gravity">center_vertical</item>
+        <item name="android:orientation">horizontal</item>
+        <item name="android:paddingHorizontal">20dp</item>
+    </style>
+
+    <style name="SmsForwardingTextColumn">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:orientation">vertical</item>
+    </style>
+
+    <style name="SmsForwardingTitle">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:textColor">@color/miui_primary_text</item>
+        <item name="android:textSize">18sp</item>
+    </style>
+
+    <style name="SmsForwardingSummary">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">2dp</item>
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:textColor">@color/miui_secondary_text</item>
+        <item name="android:textSize">13sp</item>
+    </style>
+
+    <style name="SmsForwardingChevron">
+        <item name="android:layout_width">20dp</item>
+        <item name="android:layout_height">20dp</item>
+        <item name="android:src">@drawable/ic_chevron_right_vector</item>
+    </style>
+
     <style name="roundedImageView" parent="">
         <item name="cornerFamily">rounded</item>
         <item name="cornerSize">@dimen/normal_margin</item>

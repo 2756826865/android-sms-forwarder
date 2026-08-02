@@ -30,7 +30,6 @@ import org.fossify.commons.extensions.normalizeString
 import org.fossify.commons.extensions.onTextChangeListener
 import org.fossify.commons.extensions.toast
 import org.fossify.commons.extensions.underlineText
-import org.fossify.commons.extensions.updateTextColors
 import org.fossify.commons.extensions.value
 import org.fossify.commons.extensions.viewBinding
 import org.fossify.commons.helpers.MyContactsContentProvider
@@ -68,8 +67,6 @@ class NewConversationActivity : SimpleActivity() {
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
         title = getString(R.string.new_conversation)
-        updateTextColors(binding.newConversationHolder)
-
         setupEdgeToEdge(padBottomImeAndSystem = listOf(binding.newConversationComposer))
         setupMaterialScrollListener(
             scrollingView = binding.contactsList,

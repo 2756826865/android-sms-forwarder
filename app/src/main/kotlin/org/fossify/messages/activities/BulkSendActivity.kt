@@ -10,7 +10,6 @@ import androidx.core.view.isVisible
 import org.fossify.commons.dialogs.ConfirmationDialog
 import org.fossify.commons.extensions.onTextChangeListener
 import org.fossify.commons.extensions.toast
-import org.fossify.commons.extensions.updateTextColors
 import org.fossify.commons.extensions.value
 import org.fossify.commons.extensions.viewBinding
 import org.fossify.commons.helpers.NavigationIcon
@@ -39,7 +38,6 @@ class BulkSendActivity : SimpleActivity() {
             topAppBar = binding.bulkSendAppbar
         )
         setupTopAppBar(binding.bulkSendAppbar, NavigationIcon.Arrow)
-        updateTextColors(binding.bulkSendHolder)
         applyLightUiColors()
         binding.bulkSendRecipients.adapter = adapter
 

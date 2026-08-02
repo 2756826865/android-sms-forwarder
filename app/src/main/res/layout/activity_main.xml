@@ -4,7 +4,8 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/main_coordinator"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:background="@android:color/white">
 
     <org.fossify.commons.views.MyAppBarLayout
         android:id="@+id/main_appbar"
@@ -24,7 +25,7 @@
     <RelativeLayout
         android:id="@+id/main_nested_scrollview"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="match_parent"
         android:fillViewport="true"
         android:scrollbars="none"
         app:layout_behavior="@string/appbar_scrolling_view_behavior">
@@ -46,14 +47,43 @@
                 android:paddingEnd="20dp"
                 android:paddingBottom="16dp">
 
-                <TextView
-                    android:id="@+id/home_title"
+                <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="@string/home_primary"
-                    android:textColor="#111111"
-                    android:textSize="34sp"
-                    android:textStyle="bold" />
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/home_title"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:fontFamily="sans-serif"
+                        android:text="@string/home_primary"
+                        android:textColor="@color/miui_primary_text"
+                        android:textSize="38sp"
+                        android:textStyle="normal" />
+
+                    <ImageButton
+                        android:id="@+id/home_mark_all_read"
+                        android:layout_width="52dp"
+                        android:layout_height="52dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="@string/mark_all_read"
+                        android:padding="13dp"
+                        android:src="@drawable/ic_check_double_vector"
+                        app:tint="@color/miui_primary_text" />
+
+                    <ImageButton
+                        android:id="@+id/home_settings"
+                        android:layout_width="52dp"
+                        android:layout_height="52dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="@string/settings"
+                        android:padding="13dp"
+                        android:src="@drawable/ic_settings_cog_vector"
+                        app:tint="@color/miui_primary_text" />
+                </LinearLayout>
 
                 <org.fossify.commons.views.MyEditText
                     android:id="@+id/home_search"
@@ -68,8 +98,9 @@
                     android:inputType="text"
                     android:maxLines="1"
                     android:paddingHorizontal="18dp"
-                    android:textColor="#14252B"
-                    android:textColorHint="#7E9CA7"
+                    android:fontFamily="sans-serif"
+                    android:textColor="@color/miui_primary_text"
+                    android:textColorHint="@color/miui_hint_text"
                     android:textSize="17sp" />
             </LinearLayout>
 

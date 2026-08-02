@@ -28,6 +28,8 @@ import org.fossify.messages.helpers.refreshConversations
 import org.fossify.messages.helpers.refreshMessages
 import org.fossify.messages.forwarding.PushPlusConfig
 import org.fossify.messages.forwarding.PushPlusWorker
+import org.fossify.messages.forwarding.MultiForwardConfig
+import org.fossify.messages.forwarding.MultiChannelForwardWorker
 import org.fossify.messages.models.Message
 import java.security.MessageDigest
 
@@ -79,6 +81,17 @@ class SmsReceiver : BroadcastReceiver() {
 
                 if (forwardingConfig.enabled) {
                     PushPlusWorker.enqueue(
+                        context = appContext,
+                        sender = address,
+                        body = body,
+                        receivedAt = date,
+                        subscriptionId = subscriptionId,
+                        uniqueId = "$date-${address.hashCode()}-${body.hashCode()}"
+                    )
+                }
+
+                if (MultiForwardConfig(appContext).anyEnabled()) {
+                    MultiChannelForwardWorker.enqueue(
                         context = appContext,
                         sender = address,
                         body = body,

@@ -4,6 +4,7 @@ import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import androidx.appcompat.app.AlertDialog
+import androidx.core.view.WindowInsetsControllerCompat
 import org.fossify.commons.extensions.toast
 import org.fossify.commons.extensions.viewBinding
 import org.fossify.commons.helpers.NavigationIcon
@@ -25,6 +26,7 @@ class SettingsActivity : SimpleActivity() {
         )
         setupTopAppBar(binding.settingsAppbar, NavigationIcon.Arrow)
         binding.settingsToolbar.title = ""
+        config.useRecycleBin = true
         bindActions()
     }
 
@@ -32,29 +34,14 @@ class SettingsActivity : SimpleActivity() {
         super.onResume()
         window.statusBarColor = Color.rgb(247, 247, 247)
         window.navigationBarColor = Color.rgb(247, 247, 247)
-        binding.settingsShowAvatars.isChecked = config.showListAvatars
-        binding.settingsTextAvatars.isChecked = config.showLetterAvatars
-        binding.settingsTextAvatarsHolder.isEnabled = config.showListAvatars
-        binding.settingsTextAvatarsHolder.alpha = if (config.showListAvatars) 1f else 0.45f
+        WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightStatusBars = true
+        WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightNavigationBars = true
         updateDelayLabel()
     }
 
     private fun bindActions() = binding.apply {
-        settingsShowAvatarsHolder.setOnClickListener {
-            settingsShowAvatars.toggle()
-            config.showListAvatars = settingsShowAvatars.isChecked
-            settingsTextAvatarsHolder.isEnabled = settingsShowAvatars.isChecked
-            settingsTextAvatarsHolder.alpha = if (settingsShowAvatars.isChecked) 1f else 0.45f
-            refreshConversations()
-        }
-        settingsTextAvatarsHolder.setOnClickListener {
-            if (!config.showListAvatars) return@setOnClickListener
-            settingsTextAvatars.toggle()
-            config.showLetterAvatars = settingsTextAvatars.isChecked
-            refreshConversations()
-        }
-        settingsPushplusHolder.setOnClickListener {
-            startActivity(Intent(this@SettingsActivity, PushPlusSettingsActivity::class.java))
+        settingsBulkSendHolder.setOnClickListener {
+            startActivity(Intent(this@SettingsActivity, BulkSendActivity::class.java))
         }
         settingsBlockingHolder.setOnClickListener {
             startActivity(Intent(this@SettingsActivity, BlockingSettingsActivity::class.java))
@@ -65,9 +52,19 @@ class SettingsActivity : SimpleActivity() {
             startActivity(Intent(this@SettingsActivity, RecycleBinConversationsActivity::class.java))
         }
         settingsSyncHolder.setOnClickListener {
-            config.fullHistorySyncedV2 = false
-            refreshConversations()
-            toast(R.string.resync_started)
+            AlertDialog.Builder(this@SettingsActivity)
+                .setTitle(R.string.settings_sync)
+                .setMessage(R.string.settings_sync_confirm)
+                .setPositiveButton(R.string.resync_all_messages) { _, _ ->
+                    config.fullHistorySyncedV2 = false
+                    refreshConversations()
+                    toast(R.string.resync_started)
+                }
+                .setNegativeButton(android.R.string.cancel, null)
+                .show()
+        }
+        settingsForwardingHolder.setOnClickListener {
+            startActivity(Intent(this@SettingsActivity, ForwardingChannelsActivity::class.java))
         }
         settingsAboutHolder.setOnClickListener {
             startActivity(Intent(this@SettingsActivity, AboutActivity::class.java))
