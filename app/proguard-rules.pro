@@ -51,3 +51,15 @@
     public static final void showModdedAppWarning(org.fossify.commons.activities.BaseSimpleActivity);
     public static final void showSideloadingDialog(android.app.Activity);
 }
+
+# Commons also ships a Compose variant of the same check. The Messages UI does
+# not use it, but Compose keep rules can otherwise retain its warning payload in
+# the release DEX. Treat both entry points as side-effect free so R8 discards the
+# unused check and its embedded message.
+-assumenosideeffects class org.fossify.commons.compose.extensions.ActivityExtensionsKt {
+    public static final void fakeVersionCheck(android.content.Context, kotlin.jvm.functions.Function0);
+}
+
+-assumenosideeffects class org.fossify.commons.compose.extensions.ComposeActivityExtensionsKt {
+    public static final void FakeVersionCheck(androidx.compose.runtime.Composer, int);
+}
