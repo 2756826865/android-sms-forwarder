@@ -1,15 +1,21 @@
 package org.fossify.messages.activities
 
+import android.app.AppOpsManager
 import android.app.role.RoleManager
 import android.content.ComponentName
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
 import android.graphics.Color
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
+import android.os.Process
 import android.provider.Settings
 import android.provider.Telephony
+import android.view.View
+import android.widget.Toast
 import org.fossify.commons.extensions.viewBinding
 import org.fossify.commons.helpers.NavigationIcon
 import org.fossify.messages.R
@@ -29,6 +35,8 @@ class DeviceCompatibilityActivity : SimpleActivity() {
         binding.compatibilityAutostart.setOnClickListener { openAutoStartSettings() }
         binding.compatibilityBattery.setOnClickListener { requestUnrestrictedBattery() }
         binding.compatibilityPermissions.setOnClickListener { openAppDetails() }
+        binding.compatibilityRefresh.setOnClickListener { refreshCompatibilityStatus() }
+        binding.compatibilityCopyFix.setOnClickListener { copyAdbRepairCommands() }
     }
 
     override fun onResume() {
@@ -41,20 +49,53 @@ class DeviceCompatibilityActivity : SimpleActivity() {
             Build.MODEL,
             Build.VERSION.RELEASE,
         )
+        refreshCompatibilityStatus()
+    }
+
+    private fun refreshCompatibilityStatus() {
         val roleReady = isDefaultSmsApp()
+        val routedPackage = getLegacySmsRoute()
+        val routeReady = routedPackage == packageName
+        val writeSmsReady = isWriteSmsAllowed()
         val powerManager = getSystemService(POWER_SERVICE) as PowerManager
         val batteryReady = powerManager.isIgnoringBatteryOptimizations(packageName)
+        val smsChainReady = roleReady && routeReady && writeSmsReady
         binding.compatibilityStatus.text = getString(
             R.string.compatibility_status,
             if (roleReady) getString(R.string.compatibility_ready) else getString(R.string.compatibility_not_ready),
+            routedPackage ?: getString(R.string.compatibility_unknown),
+            if (routeReady) getString(R.string.compatibility_ready) else getString(R.string.compatibility_not_ready),
+            if (writeSmsReady) getString(R.string.compatibility_allowed) else getString(R.string.compatibility_not_allowed),
             if (batteryReady) getString(R.string.compatibility_ready) else getString(R.string.compatibility_not_ready),
+            if (smsChainReady) getString(R.string.compatibility_chain_ready) else getString(R.string.compatibility_chain_split),
         )
+        binding.compatibilityCopyFix.visibility = if (smsChainReady) View.GONE else View.VISIBLE
     }
 
     private fun isDefaultSmsApp(): Boolean = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
         getSystemService(RoleManager::class.java)?.isRoleHeld(RoleManager.ROLE_SMS) == true
     } else {
         Telephony.Sms.getDefaultSmsPackage(this) == packageName
+    }
+
+    private fun getLegacySmsRoute(): String? = runCatching {
+        Settings.Secure.getString(contentResolver, SMS_DEFAULT_APPLICATION_KEY)
+    }.getOrNull()
+
+    private fun isWriteSmsAllowed(): Boolean = runCatching {
+        val appOps = getSystemService(AppOpsManager::class.java)
+        val mode = appOps?.checkOpNoThrow(WRITE_SMS_APP_OP, Process.myUid(), packageName)
+        mode == AppOpsManager.MODE_ALLOWED
+    }.getOrDefault(false)
+
+    private fun copyAdbRepairCommands() {
+        val commands = """
+            adb shell settings --user 0 put secure sms_default_application $packageName
+            adb shell appops set $packageName WRITE_SMS allow
+        """.trimIndent()
+        val clipboard = getSystemService(ClipboardManager::class.java)
+        clipboard?.setPrimaryClip(ClipData.newPlainText(getString(R.string.compatibility_adb_commands), commands))
+        Toast.makeText(this, R.string.compatibility_commands_copied, Toast.LENGTH_SHORT).show()
     }
 
     private fun requestDefaultSmsRole() {
@@ -123,5 +164,10 @@ class DeviceCompatibilityActivity : SimpleActivity() {
         startActivity(
             Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))
         )
+    }
+
+    private companion object {
+        const val SMS_DEFAULT_APPLICATION_KEY = "sms_default_application"
+        const val WRITE_SMS_APP_OP = "android:write_sms"
     }
 }
