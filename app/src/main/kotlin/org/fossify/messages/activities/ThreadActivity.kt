@@ -317,6 +317,7 @@ class ThreadActivity : SimpleActivity() {
 
         binding.messageHolder.root.setBackgroundColor(Color.WHITE)
         binding.shortCodeHolder.root.setBackgroundColor(Color.WHITE)
+        applyComposerColors()
     }
 
     override fun onPause() {
@@ -869,6 +870,7 @@ class ThreadActivity : SimpleActivity() {
         val textColor = getProperTextColor()
 
         binding.messageHolder.apply {
+            applyComposerColors()
             threadSendMessage.setTextColor(Color.WHITE)
             threadSendMessage.compoundDrawables.forEach {
                 it?.applyColorFilter(Color.WHITE)
@@ -1004,6 +1006,23 @@ class ThreadActivity : SimpleActivity() {
         } else {
             callback()
         }
+    }
+
+    private fun applyComposerColors() = binding.messageHolder.apply {
+        threadTypeMessage.background = AppCompatResources.getDrawable(
+            this@ThreadActivity,
+            R.drawable.message_input_background
+        )
+        threadAddAttachment.background = AppCompatResources.getDrawable(
+            this@ThreadActivity,
+            R.drawable.message_action_background
+        )
+        threadSendMessage.background = AppCompatResources.getDrawable(
+            this@ThreadActivity,
+            R.drawable.send_button_background
+        )
+        threadTypeMessage.setTextColor(Color.rgb(17, 17, 17))
+        threadTypeMessage.setHintTextColor(Color.rgb(141, 141, 141))
     }
 
     private fun hasOnlyScheduledMessages(): Boolean {
