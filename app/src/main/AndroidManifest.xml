@@ -223,6 +223,16 @@
                 android:value="Maintains reliable incoming SMS handling and user-configured forwarding on OEM Android builds" />
         </service>
 
+        <service
+            android:name=".services.IncomingSmsService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse"
+            android:stopWithTask="false">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Processes SMS_DELIVER serially before notification and forwarding" />
+        </service>
+
         <service android:name="com.android.mms.transaction.TransactionService" />
 
         <receiver android:name=".receivers.SmsStatusSentReceiver" />
@@ -582,3 +592,4 @@
         </activity-alias>
     </application>
 </manifest>
+
