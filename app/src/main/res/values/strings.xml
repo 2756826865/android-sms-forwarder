@@ -181,6 +181,8 @@
     <string name="about_version">版本 %1$s</string>
     <string name="about_repository">项目仓库</string>
     <string name="about_repository_url">github.com/2756826865/sms-forwarder-huawei</string>
+    <string name="about_coolapk">酷安主页</string>
+    <string name="about_coolapk_url">coolapk.com/u/3270136</string>
     <string name="about_common_questions_text">如何正常收发短信？\n请先将本应用设为系统默认短信应用，并允许短信、电话、联系人和通知权限。\n\n华为、荣耀、小米或 HyperOS 息屏后收不到消息怎么办？\n请在“后台运行与系统兼容”中依次开启自启动、允许后台活动、取消电池优化，并允许锁屏通知。应用会在开机、解锁和定期任务中自动补同步遗漏短信。\n\n为什么通知栏没有新短信提醒？\n请允许通知权限，并确认系统设置中“收到的短信”通知频道已开启。\n\n双卡名称或号码识别不正确怎么办？\n运营商可能不向 Android 提供本机号码。可在“短信转发功能”的转发显示中手动填写 SIM1、SIM2 名称和号码；实际发送仍按系统订阅卡执行。\n\n如何重新同步全部短信？\n进入“短信同步管理”，确认后重新读取系统短信库。短信很多时建议保持应用前台直至首次同步完成。\n\n短信转发支持哪些渠道？\n支持 PushPlus、钉钉群机器人、飞书群机器人、企业微信应用消息和电子邮箱。请先阅读免责声明，并妥善保管 Token、Webhook、密钥和邮箱密码。\n\n批量发送会收费吗？\n会按运营商短信资费计费。可设置立即或 1–5 秒发送间隔，降低短时间连续发送被限制的风险。\n\n如何定时发送？\n在设置中进入“定时发送”，或在新建短信时选择定时模式。请允许精确闹钟权限，发送前保持 SIM 可用。\n\n项目源码和版本在哪里？\n“关于”页面保留项目仓库、第三方许可和当前版本号。</string>
     <string name="about_known_issues_text">部分华为 EMUI / HarmonyOS、荣耀 MagicOS 与小米 MIUI / HyperOS 仍可能在用户未开启自启动或“无限制”电池策略时延迟后台任务。\n\n部分运营商与系统不会向应用提供 SIM 本机号码，需要手动填写。\n\n系统大批量短信库首次完整同步受设备性能影响，可能需要数分钟；同步期间建议保持应用在前台。\n\n定时发送的准点程度受精确闹钟权限、SIM 状态和运营商网络影响。</string>
     <string name="about_licenses_text">Fossify Messages · GPL-3.0\nEventBus · Apache-2.0\nandroid-smsmms · Apache-2.0\nIndicator Fast Scroll · Apache-2.0\nAndroidX / Material Components · Apache-2.0</string>
@@ -332,3 +334,4 @@
         https://github.com/FossifyOrg/Commons/tree/master/commons/src/main/res
     -->
 </resources>
+
