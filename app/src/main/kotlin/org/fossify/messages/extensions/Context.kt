@@ -558,297 +558,26 @@ fun Context.getMmsAttachment(id: Long): MessageAttachment {
         }
     }
 
-    return messageAttachment
-}
-
-fun Context.getLatestMMS(): Message? {
-    val sortOrder = "${Mms.DATE} DESC LIMIT 1"
-    return getMMS(sortOrder = sortOrder).firstOrNull()
-}
-
-fun Context.getMMS(messageUri: Uri): Message? {
-    return getMMS(uri = messageUri).firstOrNull()
-}
-
-fun Context.getThreadSnippet(threadId: Long): String {
-    val sortOrder = "${Mms.DATE} DESC LIMIT 1"
-    val latestMms = getMMS(threadId, sortOrder).firstOrNull()
-    var snippet = latestMms?.body ?: ""
-
-    val uri = Sms.CONTENT_URI
-    val projection = arrayOf(
-        Sms.BODY
-    )
-
-    val selection = "${Sms.THREAD_ID} = ? AND ${Sms.DATE} > ?"
-    val selectionArgs = arrayOf(
-        threadId.toString(),
-        latestMms?.date?.toString() ?: "0"
-    )
-    try {
-        val cursor = contentResolver.query(uri, projection, selection, selectionArgs, sortOrder)
-        cursor?.use {
-            if (cursor.moveToFirst()) {
-                snippet = cursor.getStringValue(Sms.BODY)
-            }
-        }
-    } catch (_: Exception) {
-    }
-    return snippet
-}
-
-fun Context.getMessageRecipientAddress(messageId: Long): String {
-    val uri = Sms.CONTENT_URI
-    val projection = arrayOf(
-        Sms.ADDRESS
-    )
-
-    val selection = "${Sms._ID} = ?"
-    val selectionArgs = arrayOf(messageId.toString())
-
-    try {
-        val cursor = contentResolver.query(uri, projection, selection, selectionArgs, null)
-        cursor?.use {
-            if (cursor.moveToFirst()) {
-                return cursor.getStringValue(Sms.ADDRESS)
-            }
-        }
-    } catch (_: Exception) {
-    }
-
-    return ""
-}
-
-fun Context.getThreadParticipants(
-    threadId: Long,
-    contactsMap: HashMap<Int, SimpleContact>?,
-): ArrayList<SimpleContact> {
-    val recipientIds = getThreadRecipientIds(threadId)
-    val phoneNumbers = getThreadPhoneNumbers(recipientIds)
-    MessagingCache.participantsCache.get(threadId, phoneNumbers)?.let {
-        return it
-    }
-
-    val participants = ArrayList<SimpleContact>()
-    recipientIds.zip(phoneNumbers).forEach { (addressId, number) ->
-        val cachedContact = contactsMap?.get(addressId)
-        val threadPhoneNumber = cachedContact
-            ?.phoneNumbers
-            ?.firstOrNull { it.normalizedNumber == number }
-        if (cachedContact != null && threadPhoneNumber != null) {
-            participants.add(
-                cachedContact.copy(
-                    phoneNumbers = arrayListOf(threadPhoneNumber.copy()),
-                    birthdays = ArrayList(cachedContact.birthdays),
-                    anniversaries = ArrayList(cachedContact.anniversaries)
-                )
-            )
-            return@forEach
-        }
-
-        val namePhoto = getNameAndPhotoFromPhoneNumber(number)
-        val name = namePhoto.name
-        val photoUri = namePhoto.photoUri ?: ""
-        val phoneNumber = PhoneNumber(number, 0, "", number)
-        val contact = SimpleContact(
-            rawId = addressId,
-            contactId = addressId,
-            name = name,
-            photoUri = photoUri,
-            phoneNumbers = arrayListOf(phoneNumber),
-            birthdays = ArrayList(),
-            anniversaries = ArrayList()
-        )
-        participants.add(contact)
-    }
-
-    MessagingCache.participantsCache.put(threadId, phoneNumbers, participants)
-    return participants
-}
-
-private fun Context.getThreadRecipientIds(threadId: Long): List<Int> {
-    val recipientIds = ArrayList<Int>()
-    queryCursor(
-        uri = "${MmsSms.CONTENT_CONVERSATIONS_URI}?simple=true".toUri(),
-        projection = arrayOf(ThreadsColumns.RECIPIENT_IDS),
-        selection = "${Mms._ID} = ?",
-        selectionArgs = arrayOf(threadId.toString()),
-        showErrors = true
-    ) { cursor ->
-        cursor.getStringValue(ThreadsColumns.RECIPIENT_IDS)
-            .split(" ")
-            .filter { it.areDigitsOnly() }
-            .forEach { recipientIds.add(it.toInt()) }
-    }
-
-    return recipientIds
-}
-
-fun Context.getThreadPhoneNumbers(recipientIds: List<Int>): ArrayList<String> {
-    val numbers = ArrayList<String>()
-    recipientIds.forEach {
-        numbers.add(getPhoneNumberFromAddressId(it))
-    }
-    return numbers
-}
-
-fun Context.getThreadContactNames(
-    phoneNumbers: List<String>,
-    privateContacts: ArrayList<SimpleContact>,
-): ArrayList<String> {
-    val names = ArrayList<String>()
-    phoneNumbers.forEach { number ->
-        val name = SimpleContactsHelper(this).getNameFromPhoneNumber(number)
-        if (name != number) {
-            names.add(name)
-        } else {
-            val privateContact = privateContacts.firstOrNull { it.doesHavePhoneNumber(number) }
-            if (privateContact == null) {
-                names.add(name)
-            } else {
-                names.add(privateContact.name)
-            }
-        }
-    }
-    return names
-}
-
-fun Context.getPhoneNumberFromAddressId(canonicalAddressId: Int): String {
-    val uri = Uri.withAppendedPath(MmsSms.CONTENT_URI, "canonical-addresses")
-    val projection = arrayOf(
-        Mms.Addr.ADDRESS
-    )
-
-    val selection = "${Mms._ID} = ?"
-    val selectionArgs = arrayOf(canonicalAddressId.toString())
-    try {
-        val cursor = contentResolver.query(uri, projection, selection, selectionArgs, null)
-        cursor?.use {
-            if (cursor.moveToFirst()) {
-                return cursor.getStringValue(Mms.Addr.ADDRESS)
-            }
-        }
-    } catch (e: Exception) {
-        showErrorToast(e)
-    }
-    return ""
-}
-
-fun Context.getSuggestedContacts(
-    privateContacts: ArrayList<SimpleContact>,
-): ArrayList<SimpleContact> {
-    val contacts = ArrayList<SimpleContact>()
-    val uri = Sms.CONTENT_URI
-    val projection = arrayOf(
-        Sms.ADDRESS
-    )
-
-    val sortOrder = "${Sms.DATE} DESC LIMIT 50"
-    val blockedNumbers = getBlockedNumbers()
-
-    queryCursor(uri, projection, null, null, sortOrder, showErrors = true) { cursor ->
-        val senderNumber = cursor.getStringValue(Sms.ADDRESS) ?: return@queryCursor
-        val namePhoto = getNameAndPhotoFromPhoneNumber(senderNumber)
-        var senderName = namePhoto.name
-        var photoUri = namePhoto.photoUri ?: ""
-        if (isNumberBlocked(senderNumber, blockedNumbers)) {
-            return@queryCursor
-        } else if (namePhoto.name == senderNumber) {
-            if (privateContacts.isNotEmpty()) {
-                val privateContact = privateContacts.firstOrNull {
-                    it.phoneNumbers.first().normalizedNumber == senderNumber
-                }
-                if (privateContact != null) {
-                    senderName = privateContact.name
-                    photoUri = privateContact.photoUri
-                } else {
-                    return@queryCursor
-                }
-            } else {
-                return@queryCursor
-            }
-        }
-
-        val phoneNumber = PhoneNumber(senderNumber, 0, "", senderNumber)
-        val contact = SimpleContact(
-            rawId = 0,
-            contactId = 0,
-            name = senderName,
-            photoUri = photoUri,
-            phoneNumbers = arrayListOf(phoneNumber),
-            birthdays = ArrayList(),
-            anniversaries = ArrayList()
-        )
-        if (!contacts.map { it.phoneNumbers.first().normalizedNumber.trimToComparableNumber() }
-                .contains(senderNumber.trimToComparableNumber())) {
-            contacts.add(contact)
-        }
-    }
-
-    return contacts
-}
-
-fun Context.getNameAndPhotoFromPhoneNumber(number: String): NamePhoto {
-    MessagingCache.namePhoto.get(number)?.let { return it }
-    if (!hasPermission(PERMISSION_READ_CONTACTS)) {
-        return NamePhoto(number, null)
-    }
-
-    val uri = Uri.withAppendedPath(PhoneLookup.CONTENT_FILTER_URI, Uri.encode(number))
-    val projection = arrayOf(
-        PhoneLookup.DISPLAY_NAME,
-        PhoneLookup.PHOTO_URI
-    )
-
-    val result = try {
-        val cursor = contentResolver.query(uri, projection, null, null, null)
-        cursor.use {
-            if (cursor?.moveToFirst() == true) {
-                val name = cursor.getStringValue(PhoneLookup.DISPLAY_NAME)
-                val photoUri = cursor.getStringValue(PhoneLookup.PHOTO_URI)
-                NamePhoto(name, photoUri)
-            } else {
-                NamePhoto(number, null)
-            }
-        }
-    } catch (_: Exception) {
-        NamePhoto(number, null)
-    }
-
-    MessagingCache.namePhoto.put(number, result)
-    return result
-}
-
-fun Context.insertNewSMS(
-    address: String,
-    subject: String,
-    body: String,
-    date: Long,
-    read: Int,
-    threadId: Long,
-    type: Int,
-    subscriptionId: Int,
-): Long {
-    val uri = Sms.CONTENT_URI
-    val contentValues = ContentValues().apply {
-        put(Sms.ADDRESS, address)
-        put(Sms.SUBJECT, subject)
+  …2188 tokens truncated… put(Sms.SUBJECT, subject)
         put(Sms.BODY, body)
         put(Sms.DATE, date)
+        put(Sms.DATE_SENT, dateSent)
         put(Sms.READ, read)
+        put(Sms.SEEN, 0)
         if (threadId > 0L) {
             put(Sms.THREAD_ID, threadId)
         }
-        put(Sms.TYPE, type)
-        put(Sms.SUBSCRIPTION_ID, subscriptionId)
+        if (subscriptionId >= 0) {
+            put(Sms.SUBSCRIPTION_ID, subscriptionId)
+        }
     }
 
-    return try {
-        val newUri = contentResolver.insert(uri, contentValues)
-        newUri?.lastPathSegment?.toLong() ?: 0L
-    } catch (_: Exception) {
-        0L
-    }
+    val newUri = contentResolver.insert(uri, contentValues)
+        ?: error("短信 Provider 返回了空 URI")
+    val insertedId = newUri.lastPathSegment?.toLongOrNull()
+        ?: error("短信 Provider 返回了无效 URI：$newUri")
+    check(insertedId > 0L) { "短信 Provider 返回了无效 ID：$insertedId" }
+    return insertedId
 }
 
 fun Context.getSmsThreadId(messageId: Long): Long {
@@ -1446,3 +1175,4 @@ fun Context.copyToUri(src: Uri, dst: Uri) {
         }
     }
 }
+
