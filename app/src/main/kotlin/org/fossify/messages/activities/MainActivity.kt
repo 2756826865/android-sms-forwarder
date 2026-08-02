@@ -12,6 +12,7 @@ import android.content.pm.ShortcutManager
 import android.graphics.drawable.Icon
 import android.graphics.drawable.LayerDrawable
 import android.graphics.Color
+import android.os.Build
 import android.os.Bundle
 import android.os.Process
 import android.provider.Settings
