@@ -36,6 +36,9 @@ class AboutActivity : SimpleActivity() {
         binding.aboutRepository.setOnClickListener {
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(PROJECT_REPOSITORY)))
         }
+        binding.aboutCoolapk.setOnClickListener {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(COOLAPK_PROFILE)))
+        }
         binding.aboutVersion.text = getString(R.string.about_version, BuildConfig.VERSION_NAME)
     }
 
@@ -51,5 +54,6 @@ class AboutActivity : SimpleActivity() {
     companion object {
         private const val PROJECT_REPOSITORY =
             "https://github.com/2756826865/sms-forwarder-huawei"
+        private const val COOLAPK_PROFILE = "https://www.coolapk.com/u/3270136"
     }
 }
