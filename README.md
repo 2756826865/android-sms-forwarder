@@ -9,11 +9,11 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/2756826865/sms-forwarder-huawei">项目地址</a>
+  <a href="https://github.com/2756826865/android-sms-forwarder">项目地址</a>
   ·
-  <a href="https://github.com/2756826865/sms-forwarder-huawei/releases/latest">下载最新版</a>
+  <a href="https://github.com/2756826865/android-sms-forwarder/releases/latest">下载最新版</a>
   ·
-  <a href="https://github.com/2756826865/sms-forwarder-huawei/issues">问题反馈</a>
+  <a href="https://github.com/2756826865/android-sms-forwarder/issues">问题反馈</a>
   ·
   <a href="CUSTOM_BUILD.md">构建说明</a>
 </p>
@@ -81,7 +81,7 @@ SMS_DELIVER
 
 ## 安装与首次设置
 
-1. 从 [Releases](https://github.com/2756826865/sms-forwarder-huawei/releases) 下载正式 APK。
+1. 从 [Releases](https://github.com/2756826865/android-sms-forwarder/releases) 下载正式 APK。
 2. 安装后按系统提示将本应用设置为默认短信应用。
 3. 允许短信、电话状态、联系人和通知权限。
 4. 进入“设置 → 后台运行与系统兼容”。
@@ -176,7 +176,7 @@ adb shell appops set com.android.mms WRITE_SMS allow
 
 ## 下载、签名与升级
 
-正式 APK 请从 [GitHub Releases](https://github.com/2756826865/sms-forwarder-huawei/releases) 下载。
+正式 APK 请从 [GitHub Releases](https://github.com/2756826865/android-sms-forwarder/releases) 下载。
 
 正式签名证书 SHA-256：
 
@@ -195,8 +195,8 @@ adb shell appops set com.android.mms WRITE_SMS allow
 - 可访问 Google Maven 与 Maven Central
 
 ```bash
-git clone https://github.com/2756826865/sms-forwarder-huawei.git
-cd sms-forwarder-huawei
+git clone https://github.com/2756826865/android-sms-forwarder.git
+cd android-sms-forwarder
 ./gradlew :app:assembleCoreDebug
 ```
 
@@ -251,7 +251,7 @@ app/build/outputs/apk/core/debug/
 
 ## 问题反馈
 
-请在 [GitHub Issues](https://github.com/2756826865/sms-forwarder-huawei/issues) 提供：
+请在 [GitHub Issues](https://github.com/2756826865/android-sms-forwarder/issues) 提供：
 
 - 手机品牌与型号。
 - Android、EMUI、HarmonyOS、MIUI 或 HyperOS 版本。
