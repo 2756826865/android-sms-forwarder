@@ -1,8 +1,72 @@
-### Reporting
-Before you report something, read the reporting rules [here](https://github.com/FossifyOrg/General-Discussion#how-do-i-suggest-an-improvement-ask-a-question-or-report-an-issue) please.
+# 参与贡献
 
-### Contributing as a developer
-Some instructions about code style and everything that has to be done to increase the chance of your code getting accepted can be found at the [General Discussion](https://github.com/FossifyOrg/General-Discussion#contribution-rules-for-developers) section. 
+感谢你愿意帮助改进 SMS Forwarder。本项目是基于 Fossify Messages 的独立 GPL-3.0 分支，重点维护 Android 短信收发、双卡、后台可靠性和多渠道转发。
 
-### Contributing as a non developer
-In case you just want to for example improve a translation, you can find the way of doing it [here](https://github.com/FossifyOrg/General-Discussion#how-can-i-suggest-an-edit-to-a-file).
+## 提交问题前
+
+请先完成以下检查：
+
+1. 使用 [Releases](https://github.com/2756826865/sms-forwarder-huawei/releases) 中最新正式版复现。
+2. 确认应用已经设为系统默认短信应用。
+3. 确认短信、联系人、电话状态和通知权限已经允许。
+4. 华为或小米设备确认自启动、后台活动和“不限制”电池策略已经开启。
+5. 搜索现有 [Issues](https://github.com/2756826865/sms-forwarder-huawei/issues)，避免重复提交。
+
+## Bug 报告应包含
+
+- 手机品牌和具体型号。
+- Android、EMUI、HarmonyOS、MIUI 或 HyperOS 版本。
+- 应用版本号和安装来源。
+- 单卡或双卡，以及问题涉及 SIM1 还是 SIM2。
+- 是否为默认短信应用、相关权限和通知渠道状态。
+- 可稳定复现的操作步骤、预期结果和实际结果。
+- 必要的截图或经过脱敏的日志。
+
+请勿上传真实短信正文、验证码、手机号码、联系人信息、PushPlus Token、Webhook、邮箱授权码、企业微信 Secret、签名文件或任何账号密码。
+
+## 功能建议
+
+提交功能建议时，请说明：
+
+- 要解决的具体使用问题。
+- 期望的操作流程和界面位置。
+- 是否影响默认短信角色、双卡、后台任务、通知或第三方转发。
+- 是否存在运营商费用、隐私、滥发或系统权限风险。
+
+涉及批量短信、自动转发和后台运行的功能，必须保留明确确认、频率限制和隐私提示，不能加入隐藏发送、绕过系统权限或规避运营商限制的实现。
+
+## 代码贡献
+
+1. 从 `main` 创建功能或修复分支。
+2. 只修改与本次任务有关的文件，不提交 JKS、`keystore.properties`、`local.properties`、Token、密码、构建缓存和 APK。
+3. Kotlin 和资源命名尽量保持现有项目风格。
+4. 修改短信数据库、广播、后台任务、双卡或通知逻辑时，必须考虑重复消息、进程终止、重启、断网和权限缺失。
+5. 修改 UI 时保持当前浅灰背景、白色卡片、黑色正文与绿色主操作色，不恢复 Fossify 推广、捐赠或社交入口。
+6. 提交前执行相关检查。
+
+```bash
+git diff --check
+./gradlew :app:assembleCoreDebug
+```
+
+正式 Release 由 GitHub Actions 构建和签名。不要生成或替换正式签名密钥。
+
+## Pull Request 说明
+
+Pull Request 应清楚写明：
+
+- 修改了什么以及修改原因。
+- 用户可见的行为变化。
+- 涉及的机型和系统版本。
+- 已完成的自动化检查和真机测试。
+- 仍未验证的边界情况。
+
+如果包含界面修改，请附修改前后截图。如果包含后台收信或转发修改，请说明前台、后台、息屏、断网恢复和重启后的测试结果。
+
+## 翻译与文档
+
+欢迎修正文案、常见问题、已知问题和设备适配说明。翻译应保持短信、SIM、权限和系统设置术语准确，不要把第三方服务描述成项目官方服务。
+
+## 许可证
+
+提交代码即表示你同意该贡献按照本项目的 [GNU GPL-3.0](LICENSE) 许可证发布。项目源自 [Fossify Messages](https://github.com/FossifyOrg/Messages)，贡献内容必须保持相应的开源义务和上游署名。

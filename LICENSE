@@ -1,162 +1,674 @@
-GNU 通用公共许可证
-第 3 版，2007 年 6 月 29 日
-版权所有 © 2007 自由软件基金会 https://fsf.org/
-允许任何人复制和分发本许可证文件的完整副本，但不得修改本文。
-前言
-GNU 通用公共许可证（GNU GPL）是面向软件及其他作品的自由著作权许可证（Copyleft）。
-绝大多数软件和实用作品的许可证旨在剥夺你分享、修改作品的自由。与之相反，GNU 通用公共许可证旨在保障你拥有分享、修改程序所有版本的自由 —— 确保软件对所有使用者保持自由。自由软件基金会在大部分自有软件中采用 GNU GPL；任何作者也可使用该许可证发布作品，你同样可以将它用于自己开发的程序。
-当我们谈及自由软件，指的是自由（freedom），而非价格。本通用公共许可证致力于保障以下权利：你有权分发自由软件副本（也可收取费用）；你能够获取源代码；你可以修改软件，或将部分代码用于新的自由程序；并且你明确知晓自己拥有上述权利。
-为保护你的权利，我们需要阻止他人剥夺这些权利，或是迫使你放弃权利。因此，如果你分发软件副本，或是修改软件，就负有相应责任：尊重其他人的自由。
-举例来说：无论免费还是收费，当你分发该程序副本时，必须将你获得的同等自由传递给接收者。你必须保证他们同样能够获取源代码，同时向其出示本许可证条款，使其知晓自身权利。
-开发者使用 GNU GPL 通过两步保障你的权利：
-对软件主张著作权；
-通过本许可证授予你复制、分发、修改软件的合法许可。
-为保护开发者与作者，GPL 明确声明：这份自由软件不提供任何担保。同时兼顾使用者与作者权益，GPL 要求修改后的版本标注变更信息，避免他人将修改产生的问题错误归咎于原作者。
-部分设备会限制用户安装、运行设备内部软件的修改版本，即便设备厂商本身具备该能力。这种行为从根本上违背保障用户修改软件自由的初衷。这类侵权行为大量出现在面向普通个人的消费产品领域，也是最无法容忍的场景。因此，本版 GPL 专门出台条款禁止此类行为。若未来该问题大量蔓延至其他领域，我们将在后续 GPL 版本中扩展相关条款，持续保护用户自由。
-最后，所有程序持续面临软件专利的威胁。各国不应允许专利限制通用计算机上软件的开发与使用。但对于存在软件专利制度的地区，我们希望避免一种风险：自由程序被专利约束，最终实质上变为专有软件。为防范该风险，GPL 规定：专利不能用来使程序丧失自由属性。
-复制、分发与修改的具体条款如下。
-条款与条件
-0. 定义
-本许可证：指 GNU 通用公共许可证第 3 版。
-著作权：同时包含适用于其他类型作品（例如半导体掩膜）的类似著作权法律。
-程序：指依据本许可证授权的任何可受著作权保护的作品。每位被许可方统称为你。被许可方与接收方可以是自然人或组织。
-修改作品：以需要获得著作权许可的方式复制、改编作品全部或部分内容（完整原样复制除外）。生成的作品称为原作品的修改版本，或基于原作品的衍生作品。
-受约束作品：未经修改的原程序，或是基于该程序创作的衍生作品。
-传播作品：实施任何行为，若未经许可，将依据著作权法直接或间接构成侵权；不包含在计算机上运行程序、修改私人持有的副本。传播行为包括复制、分发（无论是否修改）、向公众提供等；在部分国家还包含其他行为。
-转送作品：任意形式的传播，使第三方能够制作或获取副本。仅通过计算机网络与用户交互、不传输副本，不属于转送。
-交互式用户界面：若界面具备便捷且醒目的功能，满足以下两点，则视为展示适当法律声明：
-(1) 显示规范的著作权声明；
-(2) 告知用户本作品无担保（另行提供担保除外）、被许可人可依据本许可证转送作品，以及查看本许可证全文的方式。
-若界面提供菜单、命令列表等选项，列表内醒目位置放置相关条目即满足要求。
-1. 源代码
-作品的源代码：用于修改作品的首选形式。
-目标代码：源代码以外的任何形式的程序。
-标准接口：要么是公认标准组织定义的官方标准；针对特定编程语言接口时，指开发者之间广泛通用的接口。
-可执行程序的系统库：不属于程序主体，同时满足以下两点：
-(a) 随核心组件标准打包分发，但不属于该核心组件本身；
-(b) 仅用于使程序可在该核心组件上运行，或是实现公开提供源代码的标准接口。
-本文中的核心组件：程序运行操作系统必要核心部件（内核、窗口系统等）、编译程序所用编译器，或是运行程序的目标代码解释器。
-目标代码形式作品的对应源代码：生成、安装、运行该目标代码、修改作品所需的全部源代码，包含执行上述操作的脚本。
-但不包含：系统库；通用工具、现成自由程序 —— 它们未被修改，仅用于构建程序，不属于作品本身。
-示例：对应源代码包含程序源码配套接口定义文件；程序专门依赖的共享库、动态链接子程序源码（程序与子程序存在紧密数据通信、流程调用）。
-对应源代码无需包含用户能够依靠其余源码自动生成的内容。
-源代码形式的作品，其对应源代码即为自身。
-2. 基础许可
-本许可证授予的全部权利，在程序著作权保护期内有效；只要遵守条款，权利不可撤销。
-本许可证明确授予你无限制运行未修改程序的权利。
-运行受约束程序产生的输出内容，仅当输出内容本身构成受约束作品时，才受本许可证约束。
-本许可证认可著作权法赋予你的合理使用及其他同等权利。
-你可以制作、运行、传播受约束作品，但不对外转送，无需额外条件（前提是你的许可持续有效）。
-你可以将受约束作品转送他人，唯一目的是让对方仅为你进行修改，或是为你提供运行环境；前提是：对于你不拥有著作权的所有素材，转送时遵守本许可证条款。
-为你制作、运行作品的一方，必须仅代表你、在你的管控下开展工作，并且协议禁止其在合作范围之外复制你的受著作权保护素材。
-除此之外的任何转送行为，仅允许在下文规定条件下实施。不允许分许可；第 10 条说明分许可并无必要。
-3. 保护用户规避技术措施的合法权利
-任何受约束作品，不得被认定为符合 1996 年 12 月 20 日《世界知识产权组织版权条约》第 11 条义务相关法律、或同类法律定义下的有效技术保护措施。
-当你转送受约束作品时，你放弃禁止他人规避技术措施的法律权利；前提是规避行为是基于本许可证赋予的权利实施。同时你不得试图通过限制作品运行、修改，来强制用户遵守你或第三方禁止规避技术措施的法律主张。
-4. 转送未经修改的源码副本
-你可以以任意介质转送程序原始源代码完整副本，条件如下：
-在每份副本醒目、清晰标注著作权声明；
-完整保留所有声明：指明本许可证及第 7 条附加条款适用于该代码；
-完整保留无担保相关声明；
-向所有接收者随同程序提供一份本许可证副本。
-你可以对每份转送副本收取任意费用，也可免费分发；你可以有偿提供技术支持或担保服务。
-5. 转送修改后的源代码版本
-你可以转送基于本程序创作的衍生作品，或是从原程序生成衍生作品所需的修改代码，以源码形式按照第 4 条执行，同时必须全部满足以下条件：
-a) 作品显著标注：你已进行修改，并标明修改日期；
-b) 作品显著标注：作品依据本许可证以及第 7 条增加的附加条款发布；本要求修改第 4 条 “完整保留声明” 的规则；
-c) 你必须将整个作品整体依据本许可证向所有获取副本的人授权。因此本许可证（以及第 7 条有效附加条款）适用于整个作品及其所有组成部分，不受打包方式影响。本许可证不允许以其他许可证单独授权作品；但若你另行获得许可，则不否定该外部许可效力。
-d) 若作品具备交互式用户界面，界面必须展示适当法律声明；若原程序交互界面原本未展示法律声明，你的修改版本无需强制增加。
-将受约束作品与其他独立作品打包在同一存储介质中，若两者天然不存在扩展关系、没有融合为更大程序，并且打包合集不会限制用户单独使用各个作品的合法权利，则称为合集。
-受约束作品被纳入合集，不会导致本许可证适用于合集内其他独立作品。
-6. 转送非源代码形式（目标代码）
-你可以按照第 4、5 条转送目标代码形式的受约束作品，但必须同时提供机器可读的对应源代码（遵循本许可证），可选择以下任一方式：
-a) 将目标代码搭载在实体产品（实体分发介质）中交付；同时将对应源代码固化在软件交换通用耐用实体介质上一并交付。
-b) 将目标代码搭载在实体产品中交付；同时提供书面要约：要约有效期至少三年，且只要你持续提供该型号产品备件、客户支持就持续有效。任何持有目标代码的人，你二选一提供：
-1）软件通用耐用介质上的完整对应源代码，费用不超过介质寄送的合理成本；
-2）免费通过网络服务器获取对应源代码的访问途径。
-c) 零散分发目标代码副本，并附上上述提供源码的书面要约。此方式仅限非商业、偶尔分发场景，且你当初获取目标代码时本身附带该要约（符合 6b 条款）。
-d) 通过指定网络渠道提供目标代码（免费或收费），并且在同一渠道免费提供同等方式获取对应源代码的途径。不强制接收者同时下载源码。存放目标代码与源码可以使用不同服务器（由你或第三方运营），但必须清晰标注源码地址。无论源码托管在哪台服务器，你都有义务保证源码长期可获取。
-e) 使用点对点传输分发目标代码；同时告知所有节点公众可以依据 6d 条款免费获取目标代码与对应源代码。
-作为系统库、可以单独拆分、且源码不纳入对应源代码的目标代码部分，转送目标代码时无需附带。
-用户产品相关定义
-用户产品指二者其一：
-1）消费品：通常用于个人、家庭的有形实物；
-2）设计 / 制造后用于住宅内置的设备。
-判断是否属于消费品存在争议时，认定为消费品。
-针对特定用户收到的产品，“通常使用” 指该品类产品普遍用途，和使用者身份、实际使用场景无关。产品即便具备大量商用、工业用途，只要不是唯一主要用途，依然属于消费品。
-用户产品配套安装信息：在对应源代码基础上，在该用户产品上安装、运行修改版本受约束作品所需的一切方法、流程、授权密钥等信息。该信息必须保证：修改后的目标代码不会仅仅因为修改行为而无法正常运行。
-如果你依据本条，向他人转送搭载在用户产品中的目标代码，且交易永久或长期转移产品占有使用权；则随同提供对应源代码时，必须一并提供安装信息。
-例外：如果你与任何第三方都无法在该设备上安装修改后的目标代码（例如程序固化在只读 ROM），无需提供安装信息。
-提供安装信息不代表你需要持续提供修改版程序的售后、担保、更新服务。
-若修改程序本身严重影响网络运行、违反网络通信协议，服务商有权切断网络访问。
-依据本条提供的对应源代码、安装信息，格式必须公开标准化（并且存在公开源码实现），解压、读取、复制无需特殊密码密钥。
-7. 附加条款
-附加许可：为本许可证补充例外条件的条款。适用于整个程序的附加许可，在合法前提下视为本许可证的一部分。
-若附加许可仅适用于程序局部，该局部可以单独按照附加许可使用；但程序整体仍受本许可证约束。
-当你转送受约束作品副本时，可以自行选择移除副本上任意附加许可（部分附加许可写明修改作品时自动失效）。你可以为自己新增到受约束作品中的素材增设附加许可（前提是你拥有相应著作权授权）。
-不受本许可证其他条款限制，对于你新增到受约束作品中的素材，在素材著作权持有者允许的前提下，你可以增加以下类型附加条款：
-a）与第 15、16 条不同的免责声明或责任限制；
-b）要求保留特定合法声明、署名信息；
-c）禁止歪曲素材来源，或要求修改版本清晰标注与原版区分；
-d）限制使用许可方、作者名称进行宣传；
-e）放弃部分商标授权；
-f）要求转送素材的一方赔偿原作者与许可方，弥补合同带来的法律责任。
-其余限制性附加条款，在第 10 条定义下属于额外限制。
-如果你收到的程序附带本许可证，同时包含额外限制条款，你可以删除该限制。
-若一份许可证含有额外限制，但允许基于 GPL 重新授权转送，则你可以引入该许可证下的素材，前提是重新转送后该限制不再生效。
-如果你依据本条为受约束作品增设条款，你必须在相关源码文件中写明适用附加条款，或是标注条款获取位置。
-附加条款无论宽松或限制，可以独立成文，也可以写成例外条款；上述要求同等适用。
-8. 许可终止
-除本许可证明确允许的情形外，你不得传播、修改受约束作品。任何违规传播、修改行为均无效，自动终止你依据本许可证获得的全部权利（包含第 11 条第三段所述专利许可）。
-但是存在恢复机制：
-如果你停止全部违规行为：
-(a) 在著作权持有人未正式永久终止许可前，许可临时恢复；
-(b) 若著作权持有人在你停止违规后的 60 天内，没有以合理方式通知你违规，则许可永久恢复。
-此外：若著作权持有人以合理方式告知你违规，这是你首次收到该权利人的违规通知，并且你在收到通知 30 天内纠正违规行为，你的许可永久恢复。
-依据本条终止你的许可，不会影响已经从你手中获取副本的第三方许可效力。若你的许可终止且未永久恢复，你无权依据第 10 条获得同一素材的新许可。
-9. 获取副本不代表必须接受许可证
-接收、运行程序副本，不强制要求你接受本许可证。单纯通过点对点传输获取副本，也不构成接受许可。
-但是：只有本许可证赋予你传播、修改受约束作品的合法权利。如果你不接受本许可证，上述行为构成著作权侵权。
-因此，一旦你修改或传播受约束作品，即代表你接受本许可证约束。
-10. 下游接收方自动获得许可
-每当你转送受约束作品，接收方自动从原始许可方获得运行、修改、传播该作品的许可，许可条件为本许可证。你没有义务强制第三方遵守本许可证。
-主体交易：组织控制权转让、资产整体转让、组织拆分、企业合并等交易。
-若受约束作品因主体交易发生转送，交易各方获取作品副本时，自动继承转让方持有的全部许可；同时有权向转让方索取作品对应源代码（转让方拥有源码或可合理获取源码时）。
-你不得为本许可证赋予的权利增设额外限制。例如：不得针对本许可证授予的权利收取许可费、特许权使用费；不得提起诉讼（包括反诉）主张制作、使用、销售、导入该程序构成专利侵权。
-11. 专利条款
-贡献者：著作权持有者，授权他人依据本许可证使用程序或基于程序创作的衍生作品。对应的版本称为贡献者版本。
-贡献者核心专利权利要求：贡献者拥有或掌控（现有及未来取得）、实施本许可证允许的方式使用 / 销售贡献者版本即会侵权的所有专利权利；不包含仅在进一步修改程序后才会触发侵权的专利。本文中 “掌控” 包括签署符合本许可证要求的专利分许可协议。
-每位贡献者授予你一项全球、免费、非独占专利许可：允许你制作、使用、销售、进出口、运行、修改、传播该贡献者版本内容。
-下文所称专利许可：任何明示协议或承诺，承诺不起诉专利侵权（包括实施专利的许可、放弃侵权诉讼约定）。向一方授予专利许可，即达成不起诉该方专利侵权的约定。
-如果你转送受约束作品，且你明确知晓依赖某专利许可才能合法分发；同时对应源代码无法通过公开网络免费获取，则你必须选择以下任一方案：
-1）使对应源代码公开可获取；
-2）放弃该专利许可带来的保护；
-3）按照本许可证要求，将专利许可延伸授予下游接收者。
-“明确知晓依赖”：你清楚知道，若无该专利许可，你在目标国家分发作品、接收者在该国使用作品会侵犯你有理由相信有效的专利。
-若在同一交易中，你转送受约束作品，并向部分接收者授予专利许可，则这份专利许可自动延伸至所有获取该作品及其衍生作品的接收者。
-歧视性专利许可：许可范围不覆盖本许可证授予的全部权利、禁止行使相关权利，或是以放弃 GPL 权利作为许可前提。
-如果你和第三方软件分销商存在协议：按照你的分发规模向第三方付费；同时第三方向从你手中获取作品的人提供歧视性专利许可，则你不得转送受约束作品。例外：该协议或专利许可签署于 2007 年 3 月 28 日之前。
-本许可证任何内容，不得解读为排除、限制专利法下你可以主张的默示许可或侵权抗辩。
-12. 不得剥夺他人自由
-若法院裁定、合同或其他条件对你施加约束，且约束与本许可证冲突，不能免除你遵守 GPL 的义务。
-如果你无法同时履行本许可证义务与其他法律义务，结论是：你完全不得转送该作品。
-举例：如果你签订协议，要求你向下游分发者收取专利费，那么唯一同时满足协议与 GPL 的方式就是停止分发程序。
-13. 与 GNU Affero 通用公共许可证协同使用
-不受本许可证其他条款限制，你可以将受约束作品与 GNU AGPLv3 许可作品链接、合并为单一组合作品并转送。
-本许可证条款继续适用于原本属于 GPL 的部分；但 AGPL 第 13 条针对网络交互的特殊要求，将适用于整体合并作品。
-14. 许可证修订版本
-自由软件基金会会不定期发布 GNU 通用公共许可证修订版本。新版本精神与现有版本保持一致，但细节会调整以应对新问题。
-每个版本拥有独立版本号。
-若程序写明适用 “GNU GPL 第 X 版或后续任一版本”，你可以选择遵循 X 版或是基金会后续发布的任意新版条款。
-若程序未指定 GPL 版本，你可以选用基金会发布的任意历史版本。
-若程序指定代理方选择未来可用许可证版本，该代理公开声明采纳某版本后，你可以永久选用该版本。
-新版许可证可能增加额外权利，但不会给原作者、著作权持有者增设新义务。
-15. 无担保声明
-在法律允许的最大限度范围内，本程序不提供任何担保。
-除非书面另行约定，著作权持有人及相关第三方按 “现状” 提供程序，不作任何明示或默示担保，包括但不限于适销性、特定用途适用性的默示担保。
-程序的质量、性能全部风险由你自行承担。若程序出现故障，所有维修、调试成本由你承担。
-16. 责任限制
-除非法律强制要求或书面另行约定，任何著作权持有人、按照本许可证修改、分发程序的相关方，不对你承担任何损害赔偿责任；包括使用或无法使用程序造成的普通损失、特殊损失、附带损失、间接损失（不限于数据丢失、数据错误、第三方损失、程序与其他软件无法兼容等）。即便相关方事先知晓存在损失可能性，亦不承担责任。
-17. 第 15、16 条解释规则
-若上述无担保、责任限制条款依据当地法律无法生效，法院应当适用最接近 “完全免除和本程序相关民事责任” 的本地法律；除非你付费获取程序时附带担保或责任承诺。
-条款结束
+                    GNU GENERAL PUBLIC LICENSE
+                       Version 3, 29 June 2007
+
+ Copyright (C) 2007 Free Software Foundation, Inc. <https://fsf.org/>
+ Everyone is permitted to copy and distribute verbatim copies
+ of this license document, but changing it is not allowed.
+
+                            Preamble
+
+  The GNU General Public License is a free, copyleft license for
+software and other kinds of works.
+
+  The licenses for most software and other practical works are designed
+to take away your freedom to share and change the works.  By contrast,
+the GNU General Public License is intended to guarantee your freedom to
+share and change all versions of a program--to make sure it remains free
+software for all its users.  We, the Free Software Foundation, use the
+GNU General Public License for most of our software; it applies also to
+any other work released this way by its authors.  You can apply it to
+your programs, too.
+
+  When we speak of free software, we are referring to freedom, not
+price.  Our General Public Licenses are designed to make sure that you
+have the freedom to distribute copies of free software (and charge for
+them if you wish), that you receive source code or can get it if you
+want it, that you can change the software or use pieces of it in new
+free programs, and that you know you can do these things.
+
+  To protect your rights, we need to prevent others from denying you
+these rights or asking you to surrender the rights.  Therefore, you have
+certain responsibilities if you distribute copies of the software, or if
+you modify it: responsibilities to respect the freedom of others.
+
+  For example, if you distribute copies of such a program, whether
+gratis or for a fee, you must pass on to the recipients the same
+freedoms that you received.  You must make sure that they, too, receive
+or can get the source code.  And you must show them these terms so they
+know their rights.
+
+  Developers that use the GNU GPL protect your rights with two steps:
+(1) assert copyright on the software, and (2) offer you this License
+giving you legal permission to copy, distribute and/or modify it.
+
+  For the developers' and authors' protection, the GPL clearly explains
+that there is no warranty for this free software.  For both users' and
+authors' sake, the GPL requires that modified versions be marked as
+changed, so that their problems will not be attributed erroneously to
+authors of previous versions.
+
+  Some devices are designed to deny users access to install or run
+modified versions of the software inside them, although the manufacturer
+can do so.  This is fundamentally incompatible with the aim of
+protecting users' freedom to change the software.  The systematic
+pattern of such abuse occurs in the area of products for individuals to
+use, which is precisely where it is most unacceptable.  Therefore, we
+have designed this version of the GPL to prohibit the practice for those
+products.  If such problems arise substantially in other domains, we
+stand ready to extend this provision to those domains in future versions
+of the GPL, as needed to protect the freedom of users.
+
+  Finally, every program is threatened constantly by software patents.
+States should not allow patents to restrict development and use of
+software on general-purpose computers, but in those that do, we wish to
+avoid the special danger that patents applied to a free program could
+make it effectively proprietary.  To prevent this, the GPL assures that
+patents cannot be used to render the program non-free.
+
+  The precise terms and conditions for copying, distribution and
+modification follow.
+
+                       TERMS AND CONDITIONS
+
+  0. Definitions.
+
+  "This License" refers to version 3 of the GNU General Public License.
+
+  "Copyright" also means copyright-like laws that apply to other kinds of
+works, such as semiconductor masks.
+
+  "The Program" refers to any copyrightable work licensed under this
+License.  Each licensee is addressed as "you".  "Licensees" and
+"recipients" may be individuals or organizations.
+
+  To "modify" a work means to copy from or adapt all or part of the work
+in a fashion requiring copyright permission, other than the making of an
+exact copy.  The resulting work is called a "modified version" of the
+earlier work or a work "based on" the earlier work.
+
+  A "covered work" means either the unmodified Program or a work based
+on the Program.
+
+  To "propagate" a work means to do anything with it that, without
+permission, would make you directly or secondarily liable for
+infringement under applicable copyright law, except executing it on a
+computer or modifying a private copy.  Propagation includes copying,
+distribution (with or without modification), making available to the
+public, and in some countries other activities as well.
+
+  To "convey" a work means any kind of propagation that enables other
+parties to make or receive copies.  Mere interaction with a user through
+a computer network, with no transfer of a copy, is not conveying.
+
+  An interactive user interface displays "Appropriate Legal Notices"
+to the extent that it includes a convenient and prominently visible
+feature that (1) displays an appropriate copyright notice, and (2)
+tells the user that there is no warranty for the work (except to the
+extent that warranties are provided), that licensees may convey the
+work under this License, and how to view a copy of this License.  If
+the interface presents a list of user commands or options, such as a
+menu, a prominent item in the list meets this criterion.
+
+  1. Source Code.
+
+  The "source code" for a work means the preferred form of the work
+for making modifications to it.  "Object code" means any non-source
+form of a work.
+
+  A "Standard Interface" means an interface that either is an official
+standard defined by a recognized standards body, or, in the case of
+interfaces specified for a particular programming language, one that
+is widely used among developers working in that language.
+
+  The "System Libraries" of an executable work include anything, other
+than the work as a whole, that (a) is included in the normal form of
+packaging a Major Component, but which is not part of that Major
+Component, and (b) serves only to enable use of the work with that
+Major Component, or to implement a Standard Interface for which an
+implementation is available to the public in source code form.  A
+"Major Component", in this context, means a major essential component
+(kernel, window system, and so on) of the specific operating system
+(if any) on which the executable work runs, or a compiler used to
+produce the work, or an object code interpreter used to run it.
+
+  The "Corresponding Source" for a work in object code form means all
+the source code needed to generate, install, and (for an executable
+work) run the object code and to modify the work, including scripts to
+control those activities.  However, it does not include the work's
+System Libraries, or general-purpose tools or generally available free
+programs which are used unmodified in performing those activities but
+which are not part of the work.  For example, Corresponding Source
+includes interface definition files associated with source files for
+the work, and the source code for shared libraries and dynamically
+linked subprograms that the work is specifically designed to require,
+such as by intimate data communication or control flow between those
+subprograms and other parts of the work.
+
+  The Corresponding Source need not include anything that users
+can regenerate automatically from other parts of the Corresponding
+Source.
+
+  The Corresponding Source for a work in source code form is that
+same work.
+
+  2. Basic Permissions.
+
+  All rights granted under this License are granted for the term of
+copyright on the Program, and are irrevocable provided the stated
+conditions are met.  This License explicitly affirms your unlimited
+permission to run the unmodified Program.  The output from running a
+covered work is covered by this License only if the output, given its
+content, constitutes a covered work.  This License acknowledges your
+rights of fair use or other equivalent, as provided by copyright law.
+
+  You may make, run and propagate covered works that you do not
+convey, without conditions so long as your license otherwise remains
+in force.  You may convey covered works to others for the sole purpose
+of having them make modifications exclusively for you, or provide you
+with facilities for running those works, provided that you comply with
+the terms of this License in conveying all material for which you do
+not control copyright.  Those thus making or running the covered works
+for you must do so exclusively on your behalf, under your direction
+and control, on terms that prohibit them from making any copies of
+your copyrighted material outside their relationship with you.
+
+  Conveying under any other circumstances is permitted solely under
+the conditions stated below.  Sublicensing is not allowed; section 10
+makes it unnecessary.
+
+  3. Protecting Users' Legal Rights From Anti-Circumvention Law.
+
+  No covered work shall be deemed part of an effective technological
+measure under any applicable law fulfilling obligations under article
+11 of the WIPO copyright treaty adopted on 20 December 1996, or
+similar laws prohibiting or restricting circumvention of such
+measures.
+
+  When you convey a covered work, you waive any legal power to forbid
+circumvention of technological measures to the extent such circumvention
+is effected by exercising rights under this License with respect to
+the covered work, and you disclaim any intention to limit operation or
+modification of the work as a means of enforcing, against the work's
+users, your or third parties' legal rights to forbid circumvention of
+technological measures.
+
+  4. Conveying Verbatim Copies.
+
+  You may convey verbatim copies of the Program's source code as you
+receive it, in any medium, provided that you conspicuously and
+appropriately publish on each copy an appropriate copyright notice;
+keep intact all notices stating that this License and any
+non-permissive terms added in accord with section 7 apply to the code;
+keep intact all notices of the absence of any warranty; and give all
+recipients a copy of this License along with the Program.
+
+  You may charge any price or no price for each copy that you convey,
+and you may offer support or warranty protection for a fee.
+
+  5. Conveying Modified Source Versions.
+
+  You may convey a work based on the Program, or the modifications to
+produce it from the Program, in the form of source code under the
+terms of section 4, provided that you also meet all of these conditions:
+
+    a) The work must carry prominent notices stating that you modified
+    it, and giving a relevant date.
+
+    b) The work must carry prominent notices stating that it is
+    released under this License and any conditions added under section
+    7.  This requirement modifies the requirement in section 4 to
+    "keep intact all notices".
+
+    c) You must license the entire work, as a whole, under this
+    License to anyone who comes into possession of a copy.  This
+    License will therefore apply, along with any applicable section 7
+    additional terms, to the whole of the work, and all its parts,
+    regardless of how they are packaged.  This License gives no
+    permission to license the work in any other way, but it does not
+    invalidate such permission if you have separately received it.
+
+    d) If the work has interactive user interfaces, each must display
+    Appropriate Legal Notices; however, if the Program has interactive
+    interfaces that do not display Appropriate Legal Notices, your
+    work need not make them do so.
+
+  A compilation of a covered work with other separate and independent
+works, which are not by their nature extensions of the covered work,
+and which are not combined with it such as to form a larger program,
+in or on a volume of a storage or distribution medium, is called an
+"aggregate" if the compilation and its resulting copyright are not
+used to limit the access or legal rights of the compilation's users
+beyond what the individual works permit.  Inclusion of a covered work
+in an aggregate does not cause this License to apply to the other
+parts of the aggregate.
+
+  6. Conveying Non-Source Forms.
+
+  You may convey a covered work in object code form under the terms
+of sections 4 and 5, provided that you also convey the
+machine-readable Corresponding Source under the terms of this License,
+in one of these ways:
+
+    a) Convey the object code in, or embodied in, a physical product
+    (including a physical distribution medium), accompanied by the
+    Corresponding Source fixed on a durable physical medium
+    customarily used for software interchange.
+
+    b) Convey the object code in, or embodied in, a physical product
+    (including a physical distribution medium), accompanied by a
+    written offer, valid for at least three years and valid for as
+    long as you offer spare parts or customer support for that product
+    model, to give anyone who possesses the object code either (1) a
+    copy of the Corresponding Source for all the software in the
+    product that is covered by this License, on a durable physical
+    medium customarily used for software interchange, for a price no
+    more than your reasonable cost of physically performing this
+    conveying of source, or (2) access to copy the
+    Corresponding Source from a network server at no charge.
+
+    c) Convey individual copies of the object code with a copy of the
+    written offer to provide the Corresponding Source.  This
+    alternative is allowed only occasionally and noncommercially, and
+    only if you received the object code with such an offer, in accord
+    with subsection 6b.
+
+    d) Convey the object code by offering access from a designated
+    place (gratis or for a charge), and offer equivalent access to the
+    Corresponding Source in the same way through the same place at no
+    further charge.  You need not require recipients to copy the
+    Corresponding Source along with the object code.  If the place to
+    copy the object code is a network server, the Corresponding Source
+    may be on a different server (operated by you or a third party)
+    that supports equivalent copying facilities, provided you maintain
+    clear directions next to the object code saying where to find the
+    Corresponding Source.  Regardless of what server hosts the
+    Corresponding Source, you remain obligated to ensure that it is
+    available for as long as needed to satisfy these requirements.
+
+    e) Convey the object code using peer-to-peer transmission, provided
+    you inform other peers where the object code and Corresponding
+    Source of the work are being offered to the general public at no
+    charge under subsection 6d.
+
+  A separable portion of the object code, whose source code is excluded
+from the Corresponding Source as a System Library, need not be
+included in conveying the object code work.
+
+  A "User Product" is either (1) a "consumer product", which means any
+tangible personal property which is normally used for personal, family,
+or household purposes, or (2) anything designed or sold for incorporation
+into a dwelling.  In determining whether a product is a consumer product,
+doubtful cases shall be resolved in favor of coverage.  For a particular
+product received by a particular user, "normally used" refers to a
+typical or common use of that class of product, regardless of the status
+of the particular user or of the way in which the particular user
+actually uses, or expects or is expected to use, the product.  A product
+is a consumer product regardless of whether the product has substantial
+commercial, industrial or non-consumer uses, unless such uses represent
+the only significant mode of use of the product.
+
+  "Installation Information" for a User Product means any methods,
+procedures, authorization keys, or other information required to install
+and execute modified versions of a covered work in that User Product from
+a modified version of its Corresponding Source.  The information must
+suffice to ensure that the continued functioning of the modified object
+code is in no case prevented or interfered with solely because
+modification has been made.
+
+  If you convey an object code work under this section in, or with, or
+specifically for use in, a User Product, and the conveying occurs as
+part of a transaction in which the right of possession and use of the
+User Product is transferred to the recipient in perpetuity or for a
+fixed term (regardless of how the transaction is characterized), the
+Corresponding Source conveyed under this section must be accompanied
+by the Installation Information.  But this requirement does not apply
+if neither you nor any third party retains the ability to install
+modified object code on the User Product (for example, the work has
+been installed in ROM).
+
+  The requirement to provide Installation Information does not include a
+requirement to continue to provide support service, warranty, or updates
+for a work that has been modified or installed by the recipient, or for
+the User Product in which it has been modified or installed.  Access to a
+network may be denied when the modification itself materially and
+adversely affects the operation of the network or violates the rules and
+protocols for communication across the network.
+
+  Corresponding Source conveyed, and Installation Information provided,
+in accord with this section must be in a format that is publicly
+documented (and with an implementation available to the public in
+source code form), and must require no special password or key for
+unpacking, reading or copying.
+
+  7. Additional Terms.
+
+  "Additional permissions" are terms that supplement the terms of this
+License by making exceptions from one or more of its conditions.
+Additional permissions that are applicable to the entire Program shall
+be treated as though they were included in this License, to the extent
+that they are valid under applicable law.  If additional permissions
+apply only to part of the Program, that part may be used separately
+under those permissions, but the entire Program remains governed by
+this License without regard to the additional permissions.
+
+  When you convey a copy of a covered work, you may at your option
+remove any additional permissions from that copy, or from any part of
+it.  (Additional permissions may be written to require their own
+removal in certain cases when you modify the work.)  You may place
+additional permissions on material, added by you to a covered work,
+for which you have or can give appropriate copyright permission.
+
+  Notwithstanding any other provision of this License, for material you
+add to a covered work, you may (if authorized by the copyright holders of
+that material) supplement the terms of this License with terms:
+
+    a) Disclaiming warranty or limiting liability differently from the
+    terms of sections 15 and 16 of this License; or
+
+    b) Requiring preservation of specified reasonable legal notices or
+    author attributions in that material or in the Appropriate Legal
+    Notices displayed by works containing it; or
+
+    c) Prohibiting misrepresentation of the origin of that material, or
+    requiring that modified versions of such material be marked in
+    reasonable ways as different from the original version; or
+
+    d) Limiting the use for publicity purposes of names of licensors or
+    authors of the material; or
+
+    e) Declining to grant rights under trademark law for use of some
+    trade names, trademarks, or service marks; or
+
+    f) Requiring indemnification of licensors and authors of that
+    material by anyone who conveys the material (or modified versions of
+    it) with contractual assumptions of liability to the recipient, for
+    any liability that these contractual assumptions directly impose on
+    those licensors and authors.
+
+  All other non-permissive additional terms are considered "further
+restrictions" within the meaning of section 10.  If the Program as you
+received it, or any part of it, contains a notice stating that it is
+governed by this License along with a term that is a further
+restriction, you may remove that term.  If a license document contains
+a further restriction but permits relicensing or conveying under this
+License, you may add to a covered work material governed by the terms
+of that license document, provided that the further restriction does
+not survive such relicensing or conveying.
+
+  If you add terms to a covered work in accord with this section, you
+must place, in the relevant source files, a statement of the
+additional terms that apply to those files, or a notice indicating
+where to find the applicable terms.
+
+  Additional terms, permissive or non-permissive, may be stated in the
+form of a separately written license, or stated as exceptions;
+the above requirements apply either way.
+
+  8. Termination.
+
+  You may not propagate or modify a covered work except as expressly
+provided under this License.  Any attempt otherwise to propagate or
+modify it is void, and will automatically terminate your rights under
+this License (including any patent licenses granted under the third
+paragraph of section 11).
+
+  However, if you cease all violation of this License, then your
+license from a particular copyright holder is reinstated (a)
+provisionally, unless and until the copyright holder explicitly and
+finally terminates your license, and (b) permanently, if the copyright
+holder fails to notify you of the violation by some reasonable means
+prior to 60 days after the cessation.
+
+  Moreover, your license from a particular copyright holder is
+reinstated permanently if the copyright holder notifies you of the
+violation by some reasonable means, this is the first time you have
+received notice of violation of this License (for any work) from that
+copyright holder, and you cure the violation prior to 30 days after
+your receipt of the notice.
+
+  Termination of your rights under this section does not terminate the
+licenses of parties who have received copies or rights from you under
+this License.  If your rights have been terminated and not permanently
+reinstated, you do not qualify to receive new licenses for the same
+material under section 10.
+
+  9. Acceptance Not Required for Having Copies.
+
+  You are not required to accept this License in order to receive or
+run a copy of the Program.  Ancillary propagation of a covered work
+occurring solely as a consequence of using peer-to-peer transmission
+to receive a copy likewise does not require acceptance.  However,
+nothing other than this License grants you permission to propagate or
+modify any covered work.  These actions infringe copyright if you do
+not accept this License.  Therefore, by modifying or propagating a
+covered work, you indicate your acceptance of this License to do so.
+
+  10. Automatic Licensing of Downstream Recipients.
+
+  Each time you convey a covered work, the recipient automatically
+receives a license from the original licensors, to run, modify and
+propagate that work, subject to this License.  You are not responsible
+for enforcing compliance by third parties with this License.
+
+  An "entity transaction" is a transaction transferring control of an
+organization, or substantially all assets of one, or subdividing an
+organization, or merging organizations.  If propagation of a covered
+work results from an entity transaction, each party to that
+transaction who receives a copy of the work also receives whatever
+licenses to the work the party's predecessor in interest had or could
+give under the previous paragraph, plus a right to possession of the
+Corresponding Source of the work from the predecessor in interest, if
+the predecessor has it or can get it with reasonable efforts.
+
+  You may not impose any further restrictions on the exercise of the
+rights granted or affirmed under this License.  For example, you may
+not impose a license fee, royalty, or other charge for exercise of
+rights granted under this License, and you may not initiate litigation
+(including a cross-claim or counterclaim in a lawsuit) alleging that
+any patent claim is infringed by making, using, selling, offering for
+sale, or importing the Program or any portion of it.
+
+  11. Patents.
+
+  A "contributor" is a copyright holder who authorizes use under this
+License of the Program or a work on which the Program is based.  The
+work thus licensed is called the contributor's "contributor version".
+
+  A contributor's "essential patent claims" are all patent claims
+owned or controlled by the contributor, whether already acquired or
+hereafter acquired, that would be infringed by some manner, permitted
+by this License, of making, using, or selling its contributor version,
+but do not include claims that would be infringed only as a
+consequence of further modification of the contributor version.  For
+purposes of this definition, "control" includes the right to grant
+patent sublicenses in a manner consistent with the requirements of
+this License.
+
+  Each contributor grants you a non-exclusive, worldwide, royalty-free
+patent license under the contributor's essential patent claims, to
+make, use, sell, offer for sale, import and otherwise run, modify and
+propagate the contents of its contributor version.
+
+  In the following three paragraphs, a "patent license" is any express
+agreement or commitment, however denominated, not to enforce a patent
+(such as an express permission to practice a patent or covenant not to
+sue for patent infringement).  To "grant" such a patent license to a
+party means to make such an agreement or commitment not to enforce a
+patent against the party.
+
+  If you convey a covered work, knowingly relying on a patent license,
+and the Corresponding Source of the work is not available for anyone
+to copy, free of charge and under the terms of this License, through a
+publicly available network server or other readily accessible means,
+then you must either (1) cause the Corresponding Source to be so
+available, or (2) arrange to deprive yourself of the benefit of the
+patent license for this particular work, or (3) arrange, in a manner
+consistent with the requirements of this License, to extend the patent
+license to downstream recipients.  "Knowingly relying" means you have
+actual knowledge that, but for the patent license, your conveying the
+covered work in a country, or your recipient's use of the covered work
+in a country, would infringe one or more identifiable patents in that
+country that you have reason to believe are valid.
+
+  If, pursuant to or in connection with a single transaction or
+arrangement, you convey, or propagate by procuring conveyance of, a
+covered work, and grant a patent license to some of the parties
+receiving the covered work authorizing them to use, propagate, modify
+or convey a specific copy of the covered work, then the patent license
+you grant is automatically extended to all recipients of the covered
+work and works based on it.
+
+  A patent license is "discriminatory" if it does not include within
+the scope of its coverage, prohibits the exercise of, or is
+conditioned on the non-exercise of one or more of the rights that are
+specifically granted under this License.  You may not convey a covered
+work if you are a party to an arrangement with a third party that is
+in the business of distributing software, under which you make payment
+to the third party based on the extent of your activity of conveying
+the work, and under which the third party grants, to any of the
+parties who would receive the covered work from you, a discriminatory
+patent license (a) in connection with copies of the covered work
+conveyed by you (or copies made from those copies), or (b) primarily
+for and in connection with specific products or compilations that
+contain the covered work, unless you entered into that arrangement,
+or that patent license was granted, prior to 28 March 2007.
+
+  Nothing in this License shall be construed as excluding or limiting
+any implied license or other defenses to infringement that may
+otherwise be available to you under applicable patent law.
+
+  12. No Surrender of Others' Freedom.
+
+  If conditions are imposed on you (whether by court order, agreement or
+otherwise) that contradict the conditions of this License, they do not
+excuse you from the conditions of this License.  If you cannot convey a
+covered work so as to satisfy simultaneously your obligations under this
+License and any other pertinent obligations, then as a consequence you may
+not convey it at all.  For example, if you agree to terms that obligate you
+to collect a royalty for further conveying from those to whom you convey
+the Program, the only way you could satisfy both those terms and this
+License would be to refrain entirely from conveying the Program.
+
+  13. Use with the GNU Affero General Public License.
+
+  Notwithstanding any other provision of this License, you have
+permission to link or combine any covered work with a work licensed
+under version 3 of the GNU Affero General Public License into a single
+combined work, and to convey the resulting work.  The terms of this
+License will continue to apply to the part which is the covered work,
+but the special requirements of the GNU Affero General Public License,
+section 13, concerning interaction through a network will apply to the
+combination as such.
+
+  14. Revised Versions of this License.
+
+  The Free Software Foundation may publish revised and/or new versions of
+the GNU General Public License from time to time.  Such new versions will
+be similar in spirit to the present version, but may differ in detail to
+address new problems or concerns.
+
+  Each version is given a distinguishing version number.  If the
+Program specifies that a certain numbered version of the GNU General
+Public License "or any later version" applies to it, you have the
+option of following the terms and conditions either of that numbered
+version or of any later version published by the Free Software
+Foundation.  If the Program does not specify a version number of the
+GNU General Public License, you may choose any version ever published
+by the Free Software Foundation.
+
+  If the Program specifies that a proxy can decide which future
+versions of the GNU General Public License can be used, that proxy's
+public statement of acceptance of a version permanently authorizes you
+to choose that version for the Program.
+
+  Later license versions may give you additional or different
+permissions.  However, no additional obligations are imposed on any
+author or copyright holder as a result of your choosing to follow a
+later version.
+
+  15. Disclaimer of Warranty.
+
+  THERE IS NO WARRANTY FOR THE PROGRAM, TO THE EXTENT PERMITTED BY
+APPLICABLE LAW.  EXCEPT WHEN OTHERWISE STATED IN WRITING THE COPYRIGHT
+HOLDERS AND/OR OTHER PARTIES PROVIDE THE PROGRAM "AS IS" WITHOUT WARRANTY
+OF ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING, BUT NOT LIMITED TO,
+THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+PURPOSE.  THE ENTIRE RISK AS TO THE QUALITY AND PERFORMANCE OF THE PROGRAM
+IS WITH YOU.  SHOULD THE PROGRAM PROVE DEFECTIVE, YOU ASSUME THE COST OF
+ALL NECESSARY SERVICING, REPAIR OR CORRECTION.
+
+  16. Limitation of Liability.
+
+  IN NO EVENT UNLESS REQUIRED BY APPLICABLE LAW OR AGREED TO IN WRITING
+WILL ANY COPYRIGHT HOLDER, OR ANY OTHER PARTY WHO MODIFIES AND/OR CONVEYS
+THE PROGRAM AS PERMITTED ABOVE, BE LIABLE TO YOU FOR DAMAGES, INCLUDING ANY
+GENERAL, SPECIAL, INCIDENTAL OR CONSEQUENTIAL DAMAGES ARISING OUT OF THE
+USE OR INABILITY TO USE THE PROGRAM (INCLUDING BUT NOT LIMITED TO LOSS OF
+DATA OR DATA BEING RENDERED INACCURATE OR LOSSES SUSTAINED BY YOU OR THIRD
+PARTIES OR A FAILURE OF THE PROGRAM TO OPERATE WITH ANY OTHER PROGRAMS),
+EVEN IF SUCH HOLDER OR OTHER PARTY HAS BEEN ADVISED OF THE POSSIBILITY OF
+SUCH DAMAGES.
+
+  17. Interpretation of Sections 15 and 16.
+
+  If the disclaimer of warranty and limitation of liability provided
+above cannot be given local legal effect according to their terms,
+reviewing courts shall apply local law that most closely approximates
+an absolute waiver of all civil liability in connection with the
+Program, unless a warranty or assumption of liability accompanies a
+copy of the Program in return for a fee.
+
+                     END OF TERMS AND CONDITIONS
+
+            How to Apply These Terms to Your New Programs
+
+  If you develop a new program, and you want it to be of the greatest
+possible use to the public, the best way to achieve this is to make it
+free software which everyone can redistribute and change under these terms.
+
+  To do so, attach the following notices to the program.  It is safest
+to attach them to the start of each source file to most effectively
+state the exclusion of warranty; and each file should have at least
+the "copyright" line and a pointer to where the full notice is found.
+
+    <one line to give the program's name and a brief idea of what it does.>
+    Copyright (C) <year>  <name of author>
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+Also add information on how to contact you by electronic and paper mail.
+
+  If the program does terminal interaction, make it output a short
+notice like this when it starts in an interactive mode:
+
+    <program>  Copyright (C) <year>  <name of author>
+    This program comes with ABSOLUTELY NO WARRANTY; for details type `show w'.
+    This is free software, and you are welcome to redistribute it
+    under certain conditions; type `show c' for details.
+
+The hypothetical commands `show w' and `show c' should show the appropriate
+parts of the General Public License.  Of course, your program's commands
+might be different; for a GUI interface, you would use an "about box".
+
+  You should also get your employer (if you work as a programmer) or school,
+if any, to sign a "copyright disclaimer" for the program, if necessary.
+For more information on this, and how to apply and follow the GNU GPL, see
+<https://www.gnu.org/licenses/>.
+
+  The GNU General Public License does not permit incorporating your program
+into proprietary programs.  If your program is a subroutine library, you
+may consider it more useful to permit linking proprietary applications with
+the library.  If this is what you want to do, use the GNU Lesser General
+Public License instead of this License.  But first, please read
+<https://www.gnu.org/licenses/why-not-lgpl.html>.
