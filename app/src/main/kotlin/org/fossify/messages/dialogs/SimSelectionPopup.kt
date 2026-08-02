@@ -97,7 +97,7 @@ class SimSelectionPopup(
         val checkHolder = FrameLayout(context)
         if (selected) {
             checkHolder.addView(ImageView(context).apply {
-                setImageResource(R.drawable.ic_check_vector)
+                setImageResource(org.fossify.commons.R.drawable.ic_check_vector)
                 setColorFilter(Color.rgb(52, 138, 244))
             }, FrameLayout.LayoutParams(dp(28), dp(28), Gravity.CENTER))
         }

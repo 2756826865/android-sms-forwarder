@@ -37,7 +37,6 @@ import org.fossify.commons.extensions.toast
 import org.fossify.commons.extensions.underlineText
 import org.fossify.commons.extensions.value
 import org.fossify.commons.extensions.viewBinding
-import org.fossify.commons.extensions.isSPlus
 import org.fossify.commons.extensions.openRequestExactAlarmSettings
 import org.fossify.commons.dialogs.PermissionRequiredDialog
 import org.fossify.commons.helpers.MyContactsContentProvider
@@ -45,6 +44,7 @@ import org.fossify.commons.helpers.NavigationIcon
 import org.fossify.commons.helpers.PERMISSION_READ_CONTACTS
 import org.fossify.commons.helpers.SimpleContactsHelper
 import org.fossify.commons.helpers.ensureBackgroundThread
+import org.fossify.commons.helpers.isSPlus
 import org.fossify.commons.models.SimpleContact
 import org.fossify.commons.models.PhoneNumber
 import org.fossify.messages.BuildConfig
