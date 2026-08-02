@@ -37,6 +37,7 @@ class DeviceCompatibilityActivity : SimpleActivity() {
         binding.compatibilityPermissions.setOnClickListener { openAppDetails() }
         binding.compatibilityRefresh.setOnClickListener { refreshCompatibilityStatus() }
         binding.compatibilityCopyFix.setOnClickListener { copyAdbRepairCommands() }
+        binding.compatibilityProject.setOnClickListener { openProjectRepository() }
     }
 
     override fun onResume() {
@@ -123,6 +124,10 @@ class DeviceCompatibilityActivity : SimpleActivity() {
         val clipboard = getSystemService(ClipboardManager::class.java)
         clipboard?.setPrimaryClip(ClipData.newPlainText(getString(R.string.compatibility_adb_commands), commands))
         Toast.makeText(this, R.string.compatibility_commands_copied, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun openProjectRepository() {
+        launchOrFallback(Intent(Intent.ACTION_VIEW, Uri.parse(PROJECT_REPOSITORY_URL)))
     }
 
     private fun requestDefaultSmsRole() {
@@ -218,5 +223,6 @@ class DeviceCompatibilityActivity : SimpleActivity() {
         const val REQUEST_SMS_ROLE = 801
         const val REQUEST_LEGACY_DEFAULT_SMS = 802
         const val ROLE_STATE_SETTLE_DELAY_MS = 500L
+        const val PROJECT_REPOSITORY_URL = "https://github.com/2756826865/sms-forwarder-huawei"
     }
 }

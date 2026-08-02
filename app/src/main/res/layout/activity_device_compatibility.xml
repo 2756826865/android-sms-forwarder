@@ -77,6 +77,11 @@
                     android:id="@+id/compatibility_copy_fix"
                     style="@style/SmsSettingsRow"
                     android:text="@string/compatibility_copy_fix" />
+                <View style="@style/SmsSettingsDivider" />
+                <TextView
+                    android:id="@+id/compatibility_project"
+                    style="@style/SmsSettingsRow"
+                    android:text="@string/compatibility_project" />
             </LinearLayout>
             <TextView
                 android:id="@+id/compatibility_status"

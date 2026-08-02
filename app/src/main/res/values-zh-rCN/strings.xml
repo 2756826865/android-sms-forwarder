@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="compatibility_project">项目地址</string>
     <string name="about_repository">项目仓库</string>
     <string name="type_a_message">短信</string>
     <string name="message_not_sent_short">信息发送失败</string>

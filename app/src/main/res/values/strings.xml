@@ -139,6 +139,7 @@
     <string name="compatibility_permissions">应用权限与通知设置</string>
     <string name="compatibility_refresh">重新检测短信与后台状态</string>
     <string name="compatibility_copy_fix">复制华为 ADB 修复命令</string>
+    <string name="compatibility_project">项目地址</string>
     <string name="compatibility_adb_commands">华为短信兼容修复命令</string>
     <string name="compatibility_commands_copied">ADB 修复命令已复制</string>
     <string name="compatibility_ready">正常</string>
