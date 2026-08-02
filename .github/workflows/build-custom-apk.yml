@@ -3,10 +3,10 @@ name: Build custom APK
 on:
   workflow_dispatch:
   push:
-    branches: [main, agent/fix-screen-off-sms-v2]
+    branches: [main]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -23,6 +23,14 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
+
+      - name: Read application version
+        id: version
+        shell: bash
+        run: |
+          version="$(sed -n 's/^VERSION_NAME=//p' gradle.properties)"
+          test -n "$version"
+          echo "name=$version" >> "$GITHUB_OUTPUT"
 
       - name: Prepare release signing key
         env:
@@ -45,16 +53,40 @@ jobs:
           source_apk="$(find app/build/outputs/apk/core/release -maxdepth 1 -name '*.apk' -print -quit)"
           test -n "$source_apk"
           mkdir -p deliverables
-          cp "$source_apk" deliverables/SMS-Forwarder-1.0.1-release.apk
-          if unzip -p deliverables/SMS-Forwarder-1.0.1-release.apk 'classes*.dex' | strings | grep -Fq 'You are using a fake version'; then
+          apk="deliverables/SMS-Forwarder-${{ steps.version.outputs.name }}-release.apk"
+          cp "$source_apk" "$apk"
+          if unzip -p "$apk" 'classes*.dex' | strings | grep -Fq 'You are using a fake version'; then
             echo 'Blocked: upstream fake-version warning remains in release bytecode.' >&2
             exit 1
           fi
-          jarsigner -verify deliverables/SMS-Forwarder-1.0.1-release.apk
+          jarsigner -verify "$apk"
+          sha256sum "$apk" > "$apk.sha256"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: SMS-Forwarder-1.0.1-release
-          path: deliverables/SMS-Forwarder-1.0.1-release.apk
+          name: SMS-Forwarder-${{ steps.version.outputs.name }}-release
+          path: |
+            deliverables/SMS-Forwarder-${{ steps.version.outputs.name }}-release.apk
+            deliverables/SMS-Forwarder-${{ steps.version.outputs.name }}-release.apk.sha256
           if-no-files-found: error
+
+      - name: Publish GitHub Release
+        if: github.ref == 'refs/heads/main'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${{ steps.version.outputs.name }}"
+          tag="v$version"
+          apk="deliverables/SMS-Forwarder-$version-release.apk"
+          checksum="$apk.sha256"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $tag already exists; keeping the published assets unchanged."
+          else
+            gh release create "$tag" "$apk" "$checksum" \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title "短信转发器 $version" \
+              --generate-notes
+          fi
