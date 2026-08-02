@@ -43,7 +43,6 @@ import org.fossify.commons.extensions.shareTextIntent
 import org.fossify.commons.extensions.showErrorToast
 import org.fossify.commons.extensions.usableScreenSize
 import org.fossify.commons.helpers.FontHelper
-import org.fossify.commons.helpers.SimpleContactsHelper
 import org.fossify.commons.helpers.ensureBackgroundThread
 import org.fossify.commons.views.MyRecyclerView
 import org.fossify.messages.R
@@ -432,20 +431,29 @@ class ThreadAdapter(
             }
 
             if (!activity.isFinishing && !activity.isDestroyed) {
-                val contactLetterIcon = SimpleContactsHelper(activity).getContactLetterIcon(message.senderName)
-                val placeholder = contactLetterIcon.toDrawable(activity.resources)
+                if (message.senderPhotoUri.isBlank()) {
+                    threadMessageSenderPhoto.setImageResource(org.fossify.commons.R.drawable.ic_person_vector)
+                    threadMessageSenderPhoto.setBackgroundResource(R.drawable.miui_avatar_background)
+                    threadMessageSenderPhoto.setPadding(14, 14, 14, 14)
+                } else {
+                    threadMessageSenderPhoto.background = null
+                    threadMessageSenderPhoto.setPadding(0, 0, 0, 0)
+                    val placeholder = AppCompatResources.getDrawable(
+                        activity,
+                        org.fossify.commons.R.drawable.ic_person_vector,
+                    )
+                    val options = RequestOptions()
+                        .diskCacheStrategy(DiskCacheStrategy.RESOURCE)
+                        .error(placeholder)
+                        .centerCrop()
 
-                val options = RequestOptions()
-                    .diskCacheStrategy(DiskCacheStrategy.RESOURCE)
-                    .error(placeholder)
-                    .centerCrop()
-
-                Glide.with(activity)
-                    .load(message.senderPhotoUri)
-                    .placeholder(placeholder)
-                    .apply(options)
-                    .apply(RequestOptions.circleCropTransform())
-                    .into(threadMessageSenderPhoto)
+                    Glide.with(activity)
+                        .load(message.senderPhotoUri)
+                        .placeholder(placeholder)
+                        .apply(options)
+                        .apply(RequestOptions.circleCropTransform())
+                        .into(threadMessageSenderPhoto)
+                }
             }
         }
     }
