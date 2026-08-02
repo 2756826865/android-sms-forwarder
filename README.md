@@ -26,9 +26,6 @@ SMS Forwarder 既是可设置为系统默认应用的短信客户端，也是本
 
 当前重点适配仍能安装 Android APK 的华为 EMUI / HarmonyOS 4.x。项目同时使用 Android 标准短信、通知、默认应用和后台任务接口，兼容小米 MIUI / HyperOS 及其他 Android 系统；不同厂商的后台限制可能导致实际表现不同。
 
-<p align="center">
-  <img src="design/reference-main-screen.png" width="360" alt="短信主界面" />
-</p>
 
 ## 功能清单
 
