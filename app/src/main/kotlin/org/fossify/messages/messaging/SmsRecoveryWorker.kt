@@ -90,7 +90,7 @@ class SmsRecoveryWorker(
 
                     applicationContext.syncThreadToLocal(threadId)
                     repairedAny = true
-                    val uniqueId = "$date-${address.hashCode()}-${body.hashCode()}"
+                    val uniqueId = "sms-$id"
                     val pushPlus = PushPlusConfig(applicationContext)
                     if (pushPlus.enabled) {
                         PushPlusWorker.enqueue(applicationContext, address, body, date, subscriptionId, uniqueId)

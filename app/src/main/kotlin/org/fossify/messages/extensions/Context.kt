@@ -824,31 +824,36 @@ fun Context.insertNewSMS(
     subject: String,
     body: String,
     date: Long,
+    dateSent: Long = date,
     read: Int,
     threadId: Long,
     type: Int,
     subscriptionId: Int,
 ): Long {
-    val uri = Sms.CONTENT_URI
+    val uri = if (type == Sms.MESSAGE_TYPE_INBOX) Sms.Inbox.CONTENT_URI else Sms.CONTENT_URI
     val contentValues = ContentValues().apply {
         put(Sms.ADDRESS, address)
         put(Sms.SUBJECT, subject)
         put(Sms.BODY, body)
         put(Sms.DATE, date)
+        put(Sms.DATE_SENT, dateSent)
         put(Sms.READ, read)
+        put(Sms.SEEN, if (read == 0) 0 else 1)
         if (threadId > 0L) {
             put(Sms.THREAD_ID, threadId)
         }
         put(Sms.TYPE, type)
-        put(Sms.SUBSCRIPTION_ID, subscriptionId)
+        if (subscriptionId >= 0) {
+            put(Sms.SUBSCRIPTION_ID, subscriptionId)
+        }
     }
 
-    return try {
-        val newUri = contentResolver.insert(uri, contentValues)
-        newUri?.lastPathSegment?.toLong() ?: 0L
-    } catch (_: Exception) {
-        0L
-    }
+    val newUri = contentResolver.insert(uri, contentValues)
+        ?: error("短信 Provider 返回了空 URI")
+    val insertedId = newUri.lastPathSegment?.toLongOrNull()
+        ?: error("短信 Provider 返回了无效 URI：$newUri")
+    check(insertedId > 0L) { "短信 Provider 返回了无效 ID：$insertedId" }
+    return insertedId
 }
 
 fun Context.getSmsThreadId(messageId: Long): Long {

@@ -13,7 +13,6 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import org.fossify.messages.R
 import org.fossify.messages.activities.MainActivity
-import org.fossify.messages.messaging.SmsRecoveryWorker
 
 /**
  * Keeps the default-SMS process available on OEM builds that aggressively stop background apps.
@@ -55,7 +54,6 @@ class SmsKeepAliveService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        SmsRecoveryWorker.enqueueNow(applicationContext)
         return START_STICKY
     }
 
