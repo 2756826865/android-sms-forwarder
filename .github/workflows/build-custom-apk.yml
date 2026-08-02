@@ -3,7 +3,7 @@ name: Build custom APK
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, agent/fix-screen-off-sms]
 
 permissions:
   contents: read
