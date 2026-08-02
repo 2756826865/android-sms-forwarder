@@ -20,19 +20,6 @@
 
 > 本项目是独立维护的 GPL-3.0 开源分支，不是 Fossify 官方版本，也不隶属于华为、小米、PushPlus 或任何运营商、消息平台。
 
-## 项目信息
-
-| 项目 | 内容 |
-|---|---|
-| 项目地址 | <https://github.com/2756826865/sms-forwarder-huawei> |
-| 当前版本 | `1.0.1` |
-| versionCode | `1008` |
-| 正式包名 | `com.helyu.smsforwarder` |
-| 最低系统 | Android 8.0 / API 26 |
-| targetSdk / compileSdk | API 36 |
-| 开源许可 | GPL-3.0 |
-| 上游项目 | [Fossify Messages](https://github.com/FossifyOrg/Messages) |
-
 ## 项目定位
 
 SMS Forwarder 既是可设置为系统默认应用的短信客户端，也是本地运行的短信转发工具。它能够完成短信收发、会话管理、双卡选择、批量发送和定时发送，并把新短信转发到用户自行配置的第三方渠道。
