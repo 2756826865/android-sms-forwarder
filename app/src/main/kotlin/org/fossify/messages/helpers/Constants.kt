@@ -85,6 +85,7 @@ const val FILE_SIZE_2_MB = 2_097_152L
 
 const val MESSAGES_LIMIT = 50
 const val MAX_MESSAGE_LENGTH = 5000
+const val IS_SCHEDULE_MODE = "is_schedule_mode"
 
 // intent launch request codes
 const val PICK_PHOTO_INTENT = 42

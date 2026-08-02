@@ -15,8 +15,11 @@
             android:id="@+id/thread_toolbar"
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
-            android:background="@color/color_primary"
+            android:background="@android:color/white"
             app:menu="@menu/menu_thread"
+            app:navigationIconTint="@color/miui_primary_text"
+            app:titleCentered="true"
+            app:titleTextColor="@color/miui_primary_text"
             app:titleTextAppearance="@style/AppTheme.ActionBar.TitleTextStyle" />
 
     </org.fossify.commons.views.MyAppBarLayout>
@@ -25,6 +28,7 @@
         android:id="@+id/thread_holder"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:background="@android:color/white"
         android:fillViewport="true"
         android:scrollbars="none"
         app:layout_behavior="@string/appbar_scrolling_view_behavior">

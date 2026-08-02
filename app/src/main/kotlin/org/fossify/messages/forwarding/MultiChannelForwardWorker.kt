@@ -1,7 +1,6 @@
 package org.fossify.messages.forwarding
 
 import android.content.Context
-import android.telephony.SubscriptionManager
 import android.util.Base64
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
@@ -45,15 +44,15 @@ class MultiChannelForwardWorker(
         val body = inputData.getString(KEY_BODY).orEmpty()
         val receivedAt = inputData.getLong(KEY_RECEIVED_AT, System.currentTimeMillis())
         val subscriptionId = inputData.getInt(KEY_SUBSCRIPTION_ID, -1)
-        val title = if (sender.isBlank()) "新短信" else "新短信 · $sender"
-        val content = buildList {
-            if (sender.isNotBlank()) add("发送号码：$sender")
-            add(body)
-            if (subscriptionId >= 0) add(getSimDescription(subscriptionId))
-            val time = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
-                .format(Date(receivedAt))
-            add("接收时间：$time")
-        }.joinToString("\n")
+        val payload = ForwardingMessageFormatter.format(
+            context = applicationContext,
+            sender = sender,
+            body = body,
+            receivedAt = receivedAt,
+            subscriptionId = subscriptionId,
+        )
+        val title = payload.title
+        val content = payload.content
 
         val successes = mutableListOf<String>()
         val failures = mutableListOf<String>()
@@ -285,15 +284,6 @@ class MultiChannelForwardWorker(
             JSONObject(response)
         }
     }
-
-    @Suppress("MissingPermission")
-    private fun getSimDescription(subscriptionId: Int): String = runCatching {
-        val manager = applicationContext.getSystemService(SubscriptionManager::class.java)
-        val info = manager.getActiveSubscriptionInfo(subscriptionId)
-        val slot = info?.simSlotIndex?.plus(1)?.let { "SIM$it" } ?: "SIM"
-        val carrier = info?.carrierName?.toString().orEmpty()
-        listOf(slot, carrier).filter(String::isNotBlank).joinToString("_")
-    }.getOrDefault("SIM")
 
     companion object {
         private const val KEY_SENDER = "sender"

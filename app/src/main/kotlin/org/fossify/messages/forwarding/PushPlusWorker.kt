@@ -1,7 +1,6 @@
 package org.fossify.messages.forwarding
 
 import android.content.Context
-import android.telephony.SubscriptionManager
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
@@ -39,20 +38,20 @@ class PushPlusWorker(
         val body = inputData.getString(KEY_BODY).orEmpty()
         val receivedAt = inputData.getLong(KEY_RECEIVED_AT, System.currentTimeMillis())
         val subscriptionId = inputData.getInt(KEY_SUBSCRIPTION_ID, -1)
-        val title = listOf(config.titlePrefix, sender).filter { it.isNotBlank() }.joinToString(" ")
-            .ifBlank { "新短信" }
-        val content = buildList {
-            if (config.includeSender && sender.isNotBlank()) add("发送号码：$sender")
-            add(body)
-            if (config.includeSim && subscriptionId >= 0) add(getSimDescription(subscriptionId))
-            if (config.includeTime) {
-                val formatted = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date(receivedAt))
-                add("接收时间：$formatted")
-            }
-        }.joinToString("\n")
+        val payload = ForwardingMessageFormatter.format(
+            context = applicationContext,
+            sender = sender,
+            body = body,
+            receivedAt = receivedAt,
+            subscriptionId = subscriptionId,
+            titlePrefix = config.titlePrefix,
+            includeSender = config.includeSender,
+            includeSim = config.includeSim,
+            includeTime = config.includeTime,
+        )
 
         return try {
-            val response = postMessage(token, title, content)
+            val response = postMessage(token, payload.title, payload.content)
             val json = JSONObject(response)
             if (json.optInt("code") == 200) {
                 config.lastStatus = "发送成功：${SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault()).format(Date())}"
@@ -66,15 +65,6 @@ class PushPlusWorker(
             Result.retry()
         }
     }
-
-    @Suppress("MissingPermission")
-    private fun getSimDescription(subscriptionId: Int): String = runCatching {
-        val manager = applicationContext.getSystemService(SubscriptionManager::class.java)
-        val info = manager.getActiveSubscriptionInfo(subscriptionId)
-        val slot = info?.simSlotIndex?.plus(1)?.let { "SIM$it" } ?: "SIM"
-        val carrier = info?.carrierName?.toString().orEmpty()
-        listOf(slot, carrier).filter { it.isNotBlank() }.joinToString("_")
-    }.getOrDefault("SIM")
 
     private fun postMessage(token: String, title: String, content: String): String {
         val payload = JSONObject()

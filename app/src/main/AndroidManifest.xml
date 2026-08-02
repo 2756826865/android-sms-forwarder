@@ -113,6 +113,18 @@
             android:parentActivityName=".activities.MainActivity" />
 
         <activity
+            android:name=".activities.ScheduledMessagesActivity"
+            android:exported="false"
+            android:label="@string/scheduled_management"
+            android:parentActivityName=".activities.SettingsActivity" />
+
+        <activity
+            android:name=".activities.DeviceCompatibilityActivity"
+            android:exported="false"
+            android:label="@string/compatibility_title"
+            android:parentActivityName=".activities.SettingsActivity" />
+
+        <activity
             android:name=".activities.PushPlusSettingsActivity"
             android:exported="false"
             android:label="@string/pushplus_forwarding"

@@ -28,7 +28,6 @@ import org.fossify.commons.extensions.beGone
 import org.fossify.commons.extensions.beGoneIf
 import org.fossify.commons.extensions.beVisible
 import org.fossify.commons.extensions.beVisibleIf
-import org.fossify.commons.extensions.checkAppSideloading
 import org.fossify.commons.extensions.checkWhatsNew
 import org.fossify.commons.extensions.convertToBitmap
 import org.fossify.commons.extensions.fadeIn
@@ -114,9 +113,6 @@ class MainActivity : SimpleActivity() {
             loadMessages()
         }
 
-        if (checkAppSideloading()) {
-            return
-        }
     }
 
     override fun onResume() {
@@ -139,7 +135,7 @@ class MainActivity : SimpleActivity() {
         binding.homeTitle.setTextColor(Color.rgb(17, 17, 17))
         binding.homeSearch.setTextColor(Color.rgb(17, 17, 17))
         binding.homeSearch.setHintTextColor(Color.rgb(141, 141, 141))
-        binding.conversationsFab.backgroundTintList = ColorStateList.valueOf(Color.rgb(25, 201, 90))
+        binding.conversationsFab.backgroundTintList = ColorStateList.valueOf(Color.rgb(29, 206, 56))
         window.statusBarColor = Color.WHITE
         window.navigationBarColor = Color.WHITE
         WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightStatusBars = true

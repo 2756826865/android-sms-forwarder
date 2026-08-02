@@ -116,6 +116,7 @@ import org.fossify.messages.dialogs.GroupMessageSendDialog
 import org.fossify.messages.dialogs.InvalidNumberDialog
 import org.fossify.messages.dialogs.RenameConversationDialog
 import org.fossify.messages.dialogs.ScheduleMessageDialog
+import org.fossify.messages.dialogs.SimSelectionPopup
 import org.fossify.messages.extensions.clearExpiredScheduledMessages
 import org.fossify.messages.extensions.config
 import org.fossify.messages.extensions.conversationsDB
@@ -142,6 +143,7 @@ import org.fossify.messages.extensions.isImageMimeType
 import org.fossify.messages.extensions.launchConversationDetails
 import org.fossify.messages.extensions.markMessageRead
 import org.fossify.messages.extensions.markThreadMessagesRead
+import org.fossify.messages.extensions.moveConversationToRecycleBin
 import org.fossify.messages.extensions.markThreadMessagesUnread
 import org.fossify.messages.extensions.messagesDB
 import org.fossify.messages.extensions.moveMessageToRecycleBin
@@ -285,6 +287,9 @@ class ThreadActivity : SimpleActivity() {
             navigationIcon = NavigationIcon.Arrow,
             topBarColor = getProperBackgroundColor()
         )
+        binding.threadToolbar.setBackgroundColor(Color.WHITE)
+        binding.threadToolbar.setTitleTextColor(Color.rgb(17, 17, 17))
+        binding.threadHolder.setBackgroundColor(Color.WHITE)
 
         isActivityVisible = true
 
@@ -310,9 +315,8 @@ class ThreadActivity : SimpleActivity() {
             markThreadMessagesRead(threadId)
         }
 
-        val bottomBarColor = getBottomBarColor()
-        binding.messageHolder.root.setBackgroundColor(bottomBarColor)
-        binding.shortCodeHolder.root.setBackgroundColor(bottomBarColor)
+        binding.messageHolder.root.setBackgroundColor(Color.WHITE)
+        binding.shortCodeHolder.root.setBackgroundColor(Color.WHITE)
     }
 
     override fun onPause() {
@@ -872,8 +876,10 @@ class ThreadActivity : SimpleActivity() {
 
             confirmManageContacts.applyColorFilter(textColor)
             threadAddAttachment.applyColorFilter(textColor)
+            threadTypeMessage.setTextColor(Color.rgb(17, 17, 17))
+            threadTypeMessage.setHintTextColor(Color.rgb(141, 141, 141))
 
-            val properPrimaryColor = getProperPrimaryColor()
+            val properPrimaryColor = Color.rgb(29, 206, 56)
             threadMessagesFastscroller.updateColors(properPrimaryColor)
 
             threadCharacterCounter.beVisibleIf(config.showCharacterCounter)
@@ -1080,13 +1086,18 @@ class ThreadActivity : SimpleActivity() {
     @SuppressLint("MissingPermission")
     private fun setupSIMSelector() {
         val availableSIMs = subscriptionManagerCompat().activeSubscriptionInfoList ?: return
-        if (availableSIMs.size > 1) {
+        availableSIMCards.clear()
+        if (availableSIMs.isNotEmpty()) {
             availableSIMs.forEachIndexed { index, subscriptionInfo ->
-                var label = subscriptionInfo.displayName?.toString() ?: ""
-                if (subscriptionInfo.number?.isNotEmpty() == true) {
-                    label += " (${subscriptionInfo.number})"
-                }
-                val simCard = SIMCard(index + 1, subscriptionInfo.subscriptionId, label)
+                val label = subscriptionInfo.carrierName?.toString()
+                    ?.takeIf(String::isNotBlank)
+                    ?: subscriptionInfo.displayName?.toString().orEmpty()
+                val simCard = SIMCard(
+                    id = subscriptionInfo.simSlotIndex.takeIf { it >= 0 }?.plus(1) ?: index + 1,
+                    subscriptionId = subscriptionInfo.subscriptionId,
+                    label = label,
+                    phoneNumber = subscriptionInfo.number.orEmpty(),
+                )
                 availableSIMCards.add(simCard)
             }
 
@@ -1102,27 +1113,30 @@ class ThreadActivity : SimpleActivity() {
             }
 
             currentSIMCardIndex = getProperSimIndex(availableSIMs, numbers)
-            binding.messageHolder.threadSelectSimIcon.applyColorFilter(getProperTextColor())
+            binding.messageHolder.threadSelectSimIcon.applyColorFilter(Color.rgb(52, 138, 244))
             binding.messageHolder.threadSelectSimIcon.beVisible()
             binding.messageHolder.threadSelectSimNumber.beVisible()
 
             if (availableSIMCards.isNotEmpty()) {
-                binding.messageHolder.threadSelectSimIcon.setOnClickListener {
-                    currentSIMCardIndex = (currentSIMCardIndex + 1) % availableSIMCards.size
-                    val currentSIMCard = availableSIMCards[currentSIMCardIndex]
-                    @SuppressLint("SetTextI18n")
-                    binding.messageHolder.threadSelectSimNumber.text = currentSIMCard.id.toString()
-                    val currentSubscriptionId = currentSIMCard.subscriptionId
-                    numbers.forEach {
-                        config.saveUseSIMIdAtNumber(it, currentSubscriptionId)
-                    }
-                    toast(currentSIMCard.label)
+                val showSelector = {
+                    SimSelectionPopup(
+                        context = this,
+                        cards = availableSIMCards,
+                        selectedIndex = currentSIMCardIndex,
+                    ) { selectedIndex ->
+                        currentSIMCardIndex = selectedIndex
+                        val currentSIMCard = availableSIMCards[selectedIndex]
+                        binding.messageHolder.threadSelectSimNumber.text = currentSIMCard.id.toString()
+                        numbers.forEach {
+                            config.saveUseSIMIdAtNumber(it, currentSIMCard.subscriptionId)
+                        }
+                    }.show(binding.messageHolder.threadTypeMessage)
                 }
+                binding.messageHolder.threadSelectSimIcon.setOnClickListener { showSelector() }
+                binding.messageHolder.threadSelectSimNumber.setOnClickListener { showSelector() }
             }
 
-            binding.messageHolder.threadSelectSimNumber.setTextColor(
-                getProperTextColor().getContrastColor()
-            )
+            binding.messageHolder.threadSelectSimNumber.setTextColor(Color.WHITE)
             try {
                 @SuppressLint("SetTextI18n")
                 binding.messageHolder.threadSelectSimNumber.text =
@@ -1192,6 +1206,8 @@ class ThreadActivity : SimpleActivity() {
             ensureBackgroundThread {
                 if (isRecycleBin) {
                     emptyMessagesRecycleBinForConversation(threadId)
+                } else if (config.useRecycleBin) {
+                    moveConversationToRecycleBin(threadId)
                 } else {
                     deleteConversation(threadId)
                 }
@@ -1584,12 +1600,13 @@ class ThreadActivity : SimpleActivity() {
             if (threadTypeMessage.text!!.isNotEmpty() || (getAttachmentSelections().isNotEmpty() && !getAttachmentSelections().any { it.isPending })) {
                 threadSendMessage.isEnabled = true
                 threadSendMessage.isClickable = true
-                threadSendMessage.alpha = 0.9f
+                threadSendMessage.alpha = 1f
             } else {
                 threadSendMessage.isEnabled = false
                 threadSendMessage.isClickable = false
-                threadSendMessage.alpha = 0.4f
+                threadSendMessage.alpha = 1f
             }
+            updateSendButtonDrawable()
         }
 
         updateMessageType()
@@ -2047,7 +2064,10 @@ class ThreadActivity : SimpleActivity() {
             R.drawable.ic_send_vector
         }
         ResourcesCompat.getDrawable(resources, drawableResId, theme)?.apply {
-            applyColorFilter(Color.WHITE)
+            applyColorFilter(
+                if (binding.messageHolder.threadSendMessage.isEnabled) Color.WHITE
+                else Color.rgb(160, 160, 160)
+            )
             binding.messageHolder.threadSendMessage.setCompoundDrawablesWithIntrinsicBounds(
                 null, this, null, null
             )

@@ -188,22 +188,60 @@
                 android:padding="15dp"
                 android:src="@drawable/ic_plus_vector" />
 
-            <org.fossify.commons.views.MyEditText
-                android:id="@+id/new_conversation_message"
+            <FrameLayout
+                android:id="@+id/new_conversation_input_holder"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="10dp"
                 android:layout_marginEnd="10dp"
                 android:layout_weight="1"
                 android:background="@drawable/message_input_background"
-                android:gravity="center_vertical"
-                android:hint="@string/type_a_message"
-                android:inputType="textCapSentences|textMultiLine"
-                android:maxLines="6"
-                android:minHeight="52dp"
-                android:paddingHorizontal="16dp"
-                android:textColor="@color/miui_primary_text"
-                android:textColorHint="#9A9A9A" />
+                android:minHeight="52dp">
+
+                <org.fossify.commons.views.MyEditText
+                    android:id="@+id/new_conversation_message"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center_vertical"
+                    android:background="@android:color/transparent"
+                    android:gravity="center_vertical"
+                    android:hint="@string/type_a_message"
+                    android:inputType="textCapSentences|textMultiLine"
+                    android:maxLines="6"
+                    android:minHeight="52dp"
+                    android:paddingStart="18dp"
+                    android:paddingEnd="54dp"
+                    android:textColor="@color/miui_primary_text"
+                    android:textColorHint="@color/miui_hint_text" />
+
+                <FrameLayout
+                    android:id="@+id/new_conversation_sim_holder"
+                    android:layout_width="40dp"
+                    android:layout_height="match_parent"
+                    android:layout_gravity="end|center_vertical"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:visibility="gone">
+
+                    <ImageView
+                        android:id="@+id/new_conversation_sim_icon"
+                        android:layout_width="32dp"
+                        android:layout_height="32dp"
+                        android:layout_gravity="center"
+                        android:padding="2dp"
+                        android:src="@drawable/ic_sim_vector" />
+
+                    <TextView
+                        android:id="@+id/new_conversation_sim_number"
+                        android:layout_width="32dp"
+                        android:layout_height="32dp"
+                        android:layout_gravity="center"
+                        android:gravity="center"
+                        android:textColor="@android:color/white"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
+                </FrameLayout>
+            </FrameLayout>
 
             <ImageButton
                 android:id="@+id/new_conversation_send"
@@ -224,7 +262,8 @@
             android:layout_alignTop="@+id/contacts_list"
             android:layout_alignParentEnd="true"
             android:paddingTop="@dimen/big_margin"
-            android:paddingBottom="@dimen/big_margin" />
+            android:paddingBottom="@dimen/big_margin"
+            android:visibility="gone" />
 
         <com.reddit.indicatorfastscroll.FastScrollerThumbView
             android:id="@+id/contacts_letter_fastscroller_thumb"
@@ -233,7 +272,8 @@
             android:layout_alignTop="@+id/contacts_letter_fastscroller"
             android:layout_alignBottom="@+id/contacts_letter_fastscroller"
             android:layout_marginEnd="@dimen/activity_margin"
-            android:layout_toStartOf="@+id/contacts_letter_fastscroller" />
+            android:layout_toStartOf="@+id/contacts_letter_fastscroller"
+            android:visibility="gone" />
 
     </RelativeLayout>
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

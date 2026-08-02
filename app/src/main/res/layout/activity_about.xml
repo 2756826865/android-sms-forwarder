@@ -49,6 +49,8 @@
             <View android:layout_width="match_parent" android:layout_height="1dp" android:layout_marginStart="20dp" android:background="@color/miui_divider" />
             <TextView android:id="@+id/about_licenses" android:layout_width="match_parent" android:layout_height="66dp" android:drawableEnd="@drawable/ic_chevron_right_vector" android:foreground="?attr/selectableItemBackground" android:gravity="center_vertical" android:paddingHorizontal="20dp" android:text="@string/about_licenses" android:textColor="@color/miui_primary_text" android:textSize="18sp" />
             <View android:layout_width="match_parent" android:layout_height="1dp" android:layout_marginStart="20dp" android:background="@color/miui_divider" />
+            <TextView android:id="@+id/about_repository" android:layout_width="match_parent" android:layout_height="66dp" android:drawableEnd="@drawable/ic_chevron_right_vector" android:foreground="?attr/selectableItemBackground" android:gravity="center_vertical" android:paddingHorizontal="20dp" android:text="@string/about_repository" android:textColor="@color/miui_primary_text" android:textSize="18sp" />
+            <View android:layout_width="match_parent" android:layout_height="1dp" android:layout_marginStart="20dp" android:background="@color/miui_divider" />
             <TextView android:id="@+id/about_version" android:layout_width="match_parent" android:layout_height="76dp" android:gravity="center_vertical" android:paddingHorizontal="20dp" android:textColor="@color/miui_primary_text" android:textSize="18sp" />
         </LinearLayout>
     </LinearLayout>

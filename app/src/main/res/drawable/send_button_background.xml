@@ -2,7 +2,7 @@
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:state_enabled="true">
         <shape android:shape="oval">
-            <solid android:color="@color/miui_action_blue" />
+            <solid android:color="@color/miui_fab_green" />
         </shape>
     </item>
     <item>

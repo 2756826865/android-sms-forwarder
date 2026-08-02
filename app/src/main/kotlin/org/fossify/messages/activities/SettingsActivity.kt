@@ -43,6 +43,9 @@ class SettingsActivity : SimpleActivity() {
         settingsBulkSendHolder.setOnClickListener {
             startActivity(Intent(this@SettingsActivity, BulkSendActivity::class.java))
         }
+        settingsScheduledHolder.setOnClickListener {
+            startActivity(Intent(this@SettingsActivity, ScheduledMessagesActivity::class.java))
+        }
         settingsBlockingHolder.setOnClickListener {
             startActivity(Intent(this@SettingsActivity, BlockingSettingsActivity::class.java))
         }
@@ -65,6 +68,9 @@ class SettingsActivity : SimpleActivity() {
         }
         settingsForwardingHolder.setOnClickListener {
             startActivity(Intent(this@SettingsActivity, ForwardingChannelsActivity::class.java))
+        }
+        settingsCompatibilityHolder.setOnClickListener {
+            startActivity(Intent(this@SettingsActivity, DeviceCompatibilityActivity::class.java))
         }
         settingsAboutHolder.setOnClickListener {
             startActivity(Intent(this@SettingsActivity, AboutActivity::class.java))

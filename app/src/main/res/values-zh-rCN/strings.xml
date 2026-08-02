@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="type_a_message">输入信息…</string>
+    <string name="about_repository">项目仓库</string>
+    <string name="type_a_message">短信</string>
     <string name="message_not_sent_short">信息发送失败</string>
     <string name="message_not_sent_touch_retry">发送失败。触摸即可重试。</string>
     <string name="message_sending_error">您发送给“%s”的信息发送失败</string>

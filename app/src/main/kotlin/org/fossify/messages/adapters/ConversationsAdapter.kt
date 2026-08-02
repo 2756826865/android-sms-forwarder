@@ -23,6 +23,7 @@ import org.fossify.messages.extensions.dialNumber
 import org.fossify.messages.extensions.launchConversationDetails
 import org.fossify.messages.extensions.markThreadMessagesRead
 import org.fossify.messages.extensions.markThreadMessagesUnread
+import org.fossify.messages.extensions.moveConversationToRecycleBin
 import org.fossify.messages.extensions.renameConversation
 import org.fossify.messages.extensions.updateConversationArchivedStatus
 import org.fossify.messages.helpers.refreshConversations
@@ -209,7 +210,11 @@ class ConversationsAdapter(
         val conversationsToRemove =
             currentList.filter { selectedKeys.contains(it.hashCode()) } as ArrayList<Conversation>
         conversationsToRemove.forEach {
-            activity.deleteConversation(it.threadId)
+            if (activity.config.useRecycleBin) {
+                activity.moveConversationToRecycleBin(it.threadId)
+            } else {
+                activity.deleteConversation(it.threadId)
+            }
             activity.notificationManager.cancel(it.threadId.hashCode())
         }
 

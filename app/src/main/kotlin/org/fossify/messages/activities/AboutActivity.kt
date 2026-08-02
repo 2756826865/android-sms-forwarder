@@ -1,6 +1,8 @@
 package org.fossify.messages.activities
 
 import android.graphics.Color
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import androidx.appcompat.app.AlertDialog
 import org.fossify.commons.extensions.viewBinding
@@ -30,6 +32,9 @@ class AboutActivity : SimpleActivity() {
         binding.aboutLicenses.setOnClickListener {
             showText(R.string.about_licenses, R.string.about_licenses_text)
         }
+        binding.aboutRepository.setOnClickListener {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(PROJECT_REPOSITORY)))
+        }
         binding.aboutVersion.text = getString(R.string.about_version, BuildConfig.VERSION_NAME)
     }
 
@@ -39,5 +44,10 @@ class AboutActivity : SimpleActivity() {
             .setMessage(message)
             .setPositiveButton(android.R.string.ok, null)
             .show()
+    }
+
+    companion object {
+        private const val PROJECT_REPOSITORY =
+            "https://github.com/2756826865/sms-forwarder-huawei"
     }
 }

@@ -8,6 +8,6 @@
         android:topLeftRadius="@dimen/big_margin"
         android:topRightRadius="@dimen/big_margin" />
 
-    <solid android:color="@color/activated_item_foreground" />
+    <solid android:color="#E9E9E9" />
 
 </shape>

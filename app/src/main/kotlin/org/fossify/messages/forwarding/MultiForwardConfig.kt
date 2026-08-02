@@ -19,6 +19,24 @@ class MultiForwardConfig(context: Context) {
     var weComEnabled by booleanPreference(KEY_WECOM_ENABLED)
     var emailEnabled by booleanPreference(KEY_EMAIL_ENABLED)
 
+    var simOneLabel: String
+        get() = prefs.getString(KEY_SIM_ONE_LABEL, "").orEmpty()
+        set(value) = prefs.edit().putString(KEY_SIM_ONE_LABEL, value.trim()).apply()
+
+    var simTwoLabel: String
+        get() = prefs.getString(KEY_SIM_TWO_LABEL, "").orEmpty()
+        set(value) = prefs.edit().putString(KEY_SIM_TWO_LABEL, value.trim()).apply()
+
+    var templateMode: Int
+        get() = prefs.getInt(KEY_TEMPLATE_MODE, TEMPLATE_COMPACT).coerceIn(TEMPLATE_COMPACT, TEMPLATE_DETAILED)
+        set(value) = prefs.edit().putInt(KEY_TEMPLATE_MODE, value.coerceIn(TEMPLATE_COMPACT, TEMPLATE_DETAILED)).apply()
+
+    fun customSimLabel(slotIndex: Int): String = when (slotIndex) {
+        0 -> simOneLabel
+        1 -> simTwoLabel
+        else -> ""
+    }
+
     var emailPort: Int
         get() = prefs.getInt(KEY_EMAIL_PORT, 465).coerceIn(1, 65535)
         set(value) = prefs.edit().putInt(KEY_EMAIL_PORT, value.coerceIn(1, 65535)).apply()
@@ -111,6 +129,13 @@ class MultiForwardConfig(context: Context) {
         private const val KEY_EMAIL_PASSWORD = "email_password"
         private const val KEY_EMAIL_RECIPIENTS = "email_recipients"
         private const val KEY_LAST_STATUS = "last_status"
+        private const val KEY_SIM_ONE_LABEL = "sim_one_label"
+        private const val KEY_SIM_TWO_LABEL = "sim_two_label"
+        private const val KEY_TEMPLATE_MODE = "template_mode"
+
+        const val TEMPLATE_COMPACT = 0
+        const val TEMPLATE_STANDARD = 1
+        const val TEMPLATE_DETAILED = 2
     }
 }
 

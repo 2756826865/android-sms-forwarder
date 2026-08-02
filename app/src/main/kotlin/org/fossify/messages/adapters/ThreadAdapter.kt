@@ -459,8 +459,7 @@ class ThreadAdapter(
                 applyTo(threadMessageHolder)
             }
 
-            val primaryColor = activity.getProperPrimaryColor()
-            val contrastColor = primaryColor.getContrastColor()
+            val contrastColor = Color.WHITE
 
             threadMessageBody.apply {
                 updateLayoutParams<RelativeLayout.LayoutParams> {
@@ -469,7 +468,6 @@ class ThreadAdapter(
                 }
 
                 background = AppCompatResources.getDrawable(activity, R.drawable.item_sent_background)
-                background.applyColorFilter(primaryColor)
                 setTextColor(contrastColor)
                 setLinkTextColor(contrastColor)
 
@@ -595,12 +593,13 @@ class ThreadAdapter(
             }
             threadDateTime.setTextColor(textColor)
 
-            threadSimIcon.beVisibleIf(hasMultipleSIMCards)
-            threadSimNumber.beVisibleIf(hasMultipleSIMCards)
-            if (hasMultipleSIMCards) {
+            val showSim = hasMultipleSIMCards && dateTime.simID != "?"
+            threadSimIcon.beVisibleIf(showSim)
+            threadSimNumber.beVisibleIf(showSim)
+            if (showSim) {
                 threadSimNumber.text = dateTime.simID
-                threadSimNumber.setTextColor(textColor.getContrastColor())
-                threadSimIcon.applyColorFilter(textColor)
+                threadSimNumber.setTextColor(Color.WHITE)
+                threadSimIcon.applyColorFilter(Color.rgb(52, 138, 244))
             }
         }
     }

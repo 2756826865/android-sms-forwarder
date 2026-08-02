@@ -128,11 +128,12 @@
                     android:layout_height="wrap_content"
                     android:layout_centerHorizontal="true"
                     android:layout_marginTop="@dimen/bigger_margin"
-                    android:alpha="0.8"
+                    android:alpha="1"
                     android:gravity="center"
                     android:paddingLeft="@dimen/activity_margin"
                     android:paddingRight="@dimen/activity_margin"
                     android:text="@string/no_conversations_found"
+                    android:textColor="@color/miui_secondary_text"
                     android:textSize="@dimen/bigger_text_size"
                     android:textStyle="italic"
                     android:visibility="gone" />
@@ -182,11 +183,12 @@
                 android:layout_height="wrap_content"
                 android:layout_centerHorizontal="true"
                 android:layout_marginTop="@dimen/activity_margin"
-                android:alpha="0.8"
+                android:alpha="1"
                 android:gravity="center"
                 android:paddingStart="@dimen/activity_margin"
                 android:paddingEnd="@dimen/activity_margin"
                 android:text="@string/no_items_found"
+                android:textColor="@color/miui_secondary_text"
                 android:textSize="@dimen/bigger_text_size"
                 android:textStyle="italic" />
 
@@ -196,13 +198,14 @@
                 android:layout_height="wrap_content"
                 android:layout_below="@+id/search_placeholder"
                 android:layout_centerHorizontal="true"
-                android:alpha="0.8"
+                android:alpha="1"
                 android:gravity="center"
                 android:paddingStart="@dimen/activity_margin"
                 android:paddingTop="@dimen/medium_margin"
                 android:paddingEnd="@dimen/activity_margin"
                 android:paddingBottom="@dimen/medium_margin"
                 android:text="@string/type_2_characters"
+                android:textColor="@color/miui_secondary_text"
                 android:textSize="@dimen/bigger_text_size"
                 android:textStyle="italic" />
 
@@ -227,6 +230,8 @@
         android:src="@drawable/ic_plus_vector"
         android:tint="@android:color/white"
         app:backgroundTint="@color/miui_fab_green"
+        app:fabCustomSize="64dp"
+        app:shapeAppearanceOverlay="@style/CircularFabShape"
         app:applyWindowInsets="true" />
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

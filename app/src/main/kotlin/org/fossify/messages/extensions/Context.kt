@@ -69,6 +69,7 @@ import org.fossify.messages.messaging.MessagingUtils
 import org.fossify.messages.messaging.MessagingUtils.Companion.ADDRESS_SEPARATOR
 import org.fossify.messages.messaging.SmsSender
 import org.fossify.messages.messaging.scheduleMessage
+import org.fossify.messages.messaging.cancelScheduleSendPendingIntent
 import org.fossify.messages.models.Attachment
 import org.fossify.messages.models.Conversation
 import org.fossify.messages.models.Draft
@@ -904,6 +905,17 @@ fun Context.deleteConversation(threadId: Long) {
     }
 }
 
+fun Context.moveConversationToRecycleBin(threadId: Long) {
+    messagesDB.getNonRecycledThreadMessages(threadId).forEach { message ->
+        if (message.isScheduled) {
+            cancelScheduleSendPendingIntent(message.id)
+            deleteScheduledMessage(message.id)
+        } else {
+            moveMessageToRecycleBin(message.id)
+        }
+    }
+}
+
 fun Context.checkAndDeleteOldRecycleBinMessages(callback: (() -> Unit)? = null) {
     if (
         config.useRecycleBin
@@ -935,6 +947,10 @@ fun Context.emptyMessagesRecycleBinForConversation(threadId: Long) {
     val messages = messagesDB.getThreadMessagesFromRecycleBin(threadId)
     for (message in messages) {
         deleteMessage(message.id, message.isMMS)
+    }
+    if (messagesDB.getNonRecycledThreadMessages(threadId).isEmpty()) {
+        conversationsDB.deleteThreadId(threadId)
+        MessagingCache.participantsCache.remove(threadId)
     }
 }
 

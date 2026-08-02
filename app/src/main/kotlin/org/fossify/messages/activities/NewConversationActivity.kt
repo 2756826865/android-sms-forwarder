@@ -1,10 +1,15 @@
 package org.fossify.messages.activities
 
+import android.annotation.SuppressLint
+import android.app.AlarmManager
 import android.content.Intent
 import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
+import android.telephony.SmsManager
 import android.telephony.SubscriptionManager
+import android.provider.Telephony.Sms.MESSAGE_TYPE_QUEUED
+import android.provider.Telephony.Sms.STATUS_NONE
 import android.view.Gravity
 import android.view.ViewGroup
 import android.view.WindowManager
@@ -32,18 +37,29 @@ import org.fossify.commons.extensions.toast
 import org.fossify.commons.extensions.underlineText
 import org.fossify.commons.extensions.value
 import org.fossify.commons.extensions.viewBinding
+import org.fossify.commons.extensions.isSPlus
+import org.fossify.commons.extensions.openRequestExactAlarmSettings
+import org.fossify.commons.dialogs.PermissionRequiredDialog
 import org.fossify.commons.helpers.MyContactsContentProvider
 import org.fossify.commons.helpers.NavigationIcon
 import org.fossify.commons.helpers.PERMISSION_READ_CONTACTS
 import org.fossify.commons.helpers.SimpleContactsHelper
 import org.fossify.commons.helpers.ensureBackgroundThread
 import org.fossify.commons.models.SimpleContact
+import org.fossify.commons.models.PhoneNumber
+import org.fossify.messages.BuildConfig
 import org.fossify.messages.R
 import org.fossify.messages.adapters.ContactsAdapter
 import org.fossify.messages.databinding.ActivityNewConversationBinding
 import org.fossify.messages.databinding.ItemSuggestedContactBinding
+import org.fossify.messages.dialogs.SimSelectionPopup
+import org.fossify.messages.dialogs.ScheduleMessageDialog
+import org.fossify.messages.extensions.config
+import org.fossify.messages.extensions.createTemporaryThread
 import org.fossify.messages.extensions.getSuggestedContacts
 import org.fossify.messages.extensions.getThreadId
+import org.fossify.messages.extensions.subscriptionManagerCompat
+import org.fossify.messages.extensions.messagesDB
 import org.fossify.messages.helpers.SmsIntentParser
 import org.fossify.messages.helpers.THREAD_ATTACHMENT_URI
 import org.fossify.messages.helpers.THREAD_ATTACHMENT_URIS
@@ -51,8 +67,13 @@ import org.fossify.messages.helpers.THREAD_ID
 import org.fossify.messages.helpers.THREAD_NUMBER
 import org.fossify.messages.helpers.THREAD_TEXT
 import org.fossify.messages.helpers.THREAD_TITLE
+import org.fossify.messages.helpers.IS_SCHEDULE_MODE
+import org.fossify.messages.helpers.generateRandomId
 import org.fossify.messages.messaging.isShortCodeWithLetters
 import org.fossify.messages.messaging.BulkSendWorker
+import org.fossify.messages.messaging.scheduleMessage
+import org.fossify.messages.models.Message
+import org.fossify.messages.models.SIMCard
 import java.net.URLDecoder
 import java.util.Locale
 
@@ -60,12 +81,16 @@ class NewConversationActivity : SimpleActivity() {
     private var allContacts = ArrayList<SimpleContact>()
     private var privateContacts = ArrayList<SimpleContact>()
     private val selectedRecipients = linkedMapOf<String, String>()
+    private val availableSIMCards = arrayListOf<SIMCard>()
+    private var currentSIMCardIndex = 0
+    private var isScheduleMode = false
 
     private val binding by viewBinding(ActivityNewConversationBinding::inflate)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
+        isScheduleMode = intent.getBooleanExtra(IS_SCHEDULE_MODE, false)
         title = getString(R.string.new_conversation)
         setupEdgeToEdge(padBottomImeAndSystem = listOf(binding.newConversationComposer))
         setupMaterialScrollListener(
@@ -77,6 +102,12 @@ class NewConversationActivity : SimpleActivity() {
         binding.newConversationAddress.requestFocus()
         binding.newConversationMessage.onTextChangeListener { updateSendButton() }
         binding.newConversationSend.setOnClickListener { sendComposedMessage() }
+        binding.newConversationSend.setOnLongClickListener {
+            if (selectedRecipients.isNotEmpty() && binding.newConversationMessage.value.isNotBlank()) {
+                launchScheduleDialog()
+            }
+            true
+        }
         binding.newConversationAddAttachment.setOnClickListener {
             toast(R.string.attachments_in_thread)
         }
@@ -97,6 +128,7 @@ class NewConversationActivity : SimpleActivity() {
         binding.noContactsPlaceholder2.setTextColor(getProperPrimaryColor())
         binding.noContactsPlaceholder2.underlineText()
         binding.suggestionsLabel.setTextColor(Color.rgb(139, 148, 168))
+        setupSIMSelector()
     }
 
     private fun initContacts() {
@@ -331,7 +363,50 @@ class NewConversationActivity : SimpleActivity() {
     private fun updateSendButton() {
         binding.newConversationSend.isEnabled =
             selectedRecipients.isNotEmpty() && binding.newConversationMessage.value.isNotBlank()
-        binding.newConversationSend.alpha = if (binding.newConversationSend.isEnabled) 1f else 0.45f
+        binding.newConversationSend.alpha = 1f
+        binding.newConversationSend.setColorFilter(
+            if (binding.newConversationSend.isEnabled) Color.WHITE else Color.rgb(160, 160, 160)
+        )
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun setupSIMSelector() {
+        val active = runCatching { subscriptionManagerCompat().activeSubscriptionInfoList.orEmpty() }
+            .getOrDefault(emptyList())
+        availableSIMCards.clear()
+        active.forEachIndexed { index, info ->
+            availableSIMCards += SIMCard(
+                id = info.simSlotIndex.takeIf { it >= 0 }?.plus(1) ?: index + 1,
+                subscriptionId = info.subscriptionId,
+                label = info.carrierName?.toString()?.takeIf(String::isNotBlank)
+                    ?: info.displayName?.toString().orEmpty(),
+                phoneNumber = info.number.orEmpty(),
+            )
+        }
+        if (availableSIMCards.isEmpty()) {
+            binding.newConversationSimHolder.beGone()
+            return
+        }
+
+        val defaultSubId = SmsManager.getDefaultSmsSubscriptionId()
+        currentSIMCardIndex = availableSIMCards.indexOfFirst { it.subscriptionId == defaultSubId }
+            .takeIf { it >= 0 }
+            ?: 0
+        binding.newConversationSimIcon.applyColorFilter(Color.rgb(52, 138, 244))
+        binding.newConversationSimNumber.text = availableSIMCards[currentSIMCardIndex].id.toString()
+        binding.newConversationSimHolder.beVisible()
+        binding.newConversationSimHolder.setOnClickListener {
+            SimSelectionPopup(
+                context = this,
+                cards = availableSIMCards,
+                selectedIndex = currentSIMCardIndex,
+            ) { selectedIndex ->
+                currentSIMCardIndex = selectedIndex
+                val card = availableSIMCards[selectedIndex]
+                binding.newConversationSimNumber.text = card.id.toString()
+                selectedRecipients.keys.forEach { config.saveUseSIMIdAtNumber(it, card.subscriptionId) }
+            }.show(binding.newConversationInputHolder)
+        }
     }
 
     private fun sendComposedMessage() {
@@ -339,14 +414,86 @@ class NewConversationActivity : SimpleActivity() {
         when {
             selectedRecipients.isEmpty() -> toast(R.string.new_message_no_recipient)
             body.isBlank() -> toast(R.string.new_message_no_content)
+            isScheduleMode -> launchScheduleDialog()
             else -> {
                 BulkSendWorker.enqueue(
                     applicationContext,
                     body,
-                    SubscriptionManager.INVALID_SUBSCRIPTION_ID,
+                    availableSIMCards.getOrNull(currentSIMCardIndex)?.subscriptionId
+                        ?: SubscriptionManager.INVALID_SUBSCRIPTION_ID,
                     selectedRecipients.keys.toList()
                 )
                 toast(R.string.new_message_queued)
+                finish()
+            }
+        }
+    }
+
+    private fun launchScheduleDialog() {
+        askForExactAlarmPermissionIfNeeded {
+            ScheduleMessageDialog(this) { dateTime ->
+                if (dateTime != null) scheduleComposedMessage(dateTime.millis)
+            }
+        }
+    }
+
+    private fun askForExactAlarmPermissionIfNeeded(callback: () -> Unit) {
+        if (!isSPlus()) {
+            callback()
+            return
+        }
+        val alarmManager = getSystemService(ALARM_SERVICE) as AlarmManager
+        if (alarmManager.canScheduleExactAlarms()) {
+            callback()
+        } else {
+            PermissionRequiredDialog(
+                activity = this,
+                textId = org.fossify.commons.R.string.allow_alarm_scheduled_messages,
+                positiveActionCallback = { openRequestExactAlarmSettings(BuildConfig.APPLICATION_ID) },
+            )
+        }
+    }
+
+    private fun scheduleComposedMessage(sendAt: Long) {
+        val body = binding.newConversationMessage.value.trim()
+        val participants = ArrayList(selectedRecipients.map { (number, name) ->
+            SimpleContact(
+                rawId = 0,
+                contactId = 0,
+                name = name,
+                photoUri = "",
+                phoneNumbers = arrayListOf(
+                    PhoneNumber(value = number, type = 0, label = "", normalizedNumber = number)
+                ),
+                birthdays = arrayListOf(),
+                anniversaries = arrayListOf(),
+            )
+        })
+        val messageId = generateRandomId()
+        val message = Message(
+            id = messageId,
+            body = body,
+            type = MESSAGE_TYPE_QUEUED,
+            status = STATUS_NONE,
+            participants = participants,
+            date = (sendAt / 1000).toInt(),
+            read = true,
+            threadId = messageId,
+            isMMS = false,
+            attachment = null,
+            senderPhoneNumber = "",
+            senderName = "",
+            senderPhotoUri = "",
+            subscriptionId = availableSIMCards.getOrNull(currentSIMCardIndex)?.subscriptionId
+                ?: SubscriptionManager.INVALID_SUBSCRIPTION_ID,
+            isScheduled = true,
+        )
+        ensureBackgroundThread {
+            createTemporaryThread(message, message.threadId, null)
+            messagesDB.insertOrUpdate(message)
+            scheduleMessage(message)
+            runOnUiThread {
+                toast(R.string.scheduled_created)
                 finish()
             }
         }

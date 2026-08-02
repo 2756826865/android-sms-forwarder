@@ -52,6 +52,9 @@ class ForwardingChannelsActivity : SimpleActivity() {
         forwardingFeishuHolder.setOnClickListener { showFeishuDialog() }
         forwardingWecomHolder.setOnClickListener { showWeComDialog() }
         forwardingEmailHolder.setOnClickListener { showEmailDialog() }
+        forwardingSimOneHolder.setOnClickListener { showSimLabelDialog(0) }
+        forwardingSimTwoHolder.setOnClickListener { showSimLabelDialog(1) }
+        forwardingTemplateHolder.setOnClickListener { showTemplateDialog() }
         forwardingTest.setOnClickListener {
             val pushPlusEnabled = pushPlusConfig.enabled && pushPlusConfig.getToken().isNotBlank()
             if (!pushPlusEnabled && !multiConfig.anyEnabled()) {
@@ -68,6 +71,45 @@ class ForwardingChannelsActivity : SimpleActivity() {
             if (multiConfig.anyEnabled()) MultiChannelForwardWorker.enqueueTest(applicationContext)
             toast(R.string.forwarding_test_queued)
         }
+    }
+
+    private fun showSimLabelDialog(slotIndex: Int) {
+        val current = if (slotIndex == 0) multiConfig.simOneLabel else multiConfig.simTwoLabel
+        val editor = EditText(this).apply {
+            setText(current)
+            hint = getString(if (slotIndex == 0) R.string.forwarding_sim_one_hint else R.string.forwarding_sim_two_hint)
+            setTextColor(Color.rgb(17, 17, 17))
+            setHintTextColor(Color.rgb(120, 120, 120))
+            isSingleLine = true
+            setPadding(48, 16, 48, 8)
+        }
+        AlertDialog.Builder(this)
+            .setTitle(if (slotIndex == 0) R.string.forwarding_sim_one_label else R.string.forwarding_sim_two_label)
+            .setView(editor)
+            .setPositiveButton(R.string.forwarding_save) { _, _ ->
+                if (slotIndex == 0) multiConfig.simOneLabel = editor.text.toString()
+                else multiConfig.simTwoLabel = editor.text.toString()
+                updateSummaries()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun showTemplateDialog() {
+        val labels = arrayOf(
+            getString(R.string.forwarding_template_compact),
+            getString(R.string.forwarding_template_standard),
+            getString(R.string.forwarding_template_detailed),
+        )
+        AlertDialog.Builder(this)
+            .setTitle(R.string.forwarding_template)
+            .setSingleChoiceItems(labels, multiConfig.templateMode) { dialog, which ->
+                multiConfig.templateMode = which
+                updateSummaries()
+                dialog.dismiss()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
     }
 
     private fun showDingTalkDialog() {
@@ -199,6 +241,15 @@ class ForwardingChannelsActivity : SimpleActivity() {
         forwardingFeishuSummary.text = statusText(multiConfig.feishuWebhook().isNotBlank(), multiConfig.feishuEnabled)
         forwardingWecomSummary.text = statusText(multiConfig.weComCorpId().isNotBlank(), multiConfig.weComEnabled)
         forwardingEmailSummary.text = statusText(multiConfig.emailHost().isNotBlank(), multiConfig.emailEnabled)
+        forwardingSimOneSummary.text = multiConfig.simOneLabel.ifBlank { getString(R.string.forwarding_sim_system_default) }
+        forwardingSimTwoSummary.text = multiConfig.simTwoLabel.ifBlank { getString(R.string.forwarding_sim_system_default) }
+        forwardingTemplateSummary.text = getString(
+            when (multiConfig.templateMode) {
+                MultiForwardConfig.TEMPLATE_STANDARD -> R.string.forwarding_template_standard
+                MultiForwardConfig.TEMPLATE_DETAILED -> R.string.forwarding_template_detailed
+                else -> R.string.forwarding_template_compact
+            }
+        )
         val statuses = listOf(pushPlusConfig.lastStatus, multiConfig.lastStatus).filter(String::isNotBlank)
         forwardingLastStatus.text = getString(
             R.string.forwarding_last_status,
