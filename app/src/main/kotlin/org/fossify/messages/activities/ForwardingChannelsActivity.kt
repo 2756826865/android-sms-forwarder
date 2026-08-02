@@ -33,6 +33,7 @@ class ForwardingChannelsActivity : SimpleActivity() {
         setupTopAppBar(binding.forwardingAppbar, NavigationIcon.Arrow)
         binding.forwardingToolbar.title = ""
         bindActions()
+        enforceForwardingDisclaimer()
     }
 
     override fun onResume() {
@@ -55,6 +56,7 @@ class ForwardingChannelsActivity : SimpleActivity() {
         forwardingSimOneHolder.setOnClickListener { showSimLabelDialog(0) }
         forwardingSimTwoHolder.setOnClickListener { showSimLabelDialog(1) }
         forwardingTemplateHolder.setOnClickListener { showTemplateDialog() }
+        forwardingDisclaimerHolder.setOnClickListener { showForwardingDisclaimer(requireAcceptance = false) }
         forwardingTest.setOnClickListener {
             val pushPlusEnabled = pushPlusConfig.enabled && pushPlusConfig.getToken().isNotBlank()
             if (!pushPlusEnabled && !multiConfig.anyEnabled()) {
@@ -71,6 +73,44 @@ class ForwardingChannelsActivity : SimpleActivity() {
             if (multiConfig.anyEnabled()) MultiChannelForwardWorker.enqueueTest(applicationContext)
             toast(R.string.forwarding_test_queued)
         }
+    }
+
+    private fun enforceForwardingDisclaimer() {
+        if (!multiConfig.hasAcceptedDisclaimer()) {
+            showForwardingDisclaimer(requireAcceptance = true)
+        }
+    }
+
+    private fun showForwardingDisclaimer(requireAcceptance: Boolean) {
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(R.string.forwarding_disclaimer_title)
+            .setMessage(R.string.forwarding_disclaimer_body)
+            .setPositiveButton(
+                if (requireAcceptance) R.string.forwarding_disclaimer_accept else android.R.string.ok
+            ) { _, _ ->
+                if (requireAcceptance) {
+                    multiConfig.acceptCurrentDisclaimer()
+                    updateSummaries()
+                }
+            }
+            .apply {
+                if (requireAcceptance) {
+                    setNegativeButton(R.string.forwarding_disclaimer_decline) { _, _ -> finish() }
+                }
+            }
+            .create()
+
+        dialog.setCancelable(!requireAcceptance)
+        dialog.setCanceledOnTouchOutside(!requireAcceptance)
+        dialog.setOnCancelListener {
+            if (requireAcceptance) finish()
+        }
+        dialog.setOnShowListener {
+            val green = getColor(R.color.miui_fab_green)
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setTextColor(green)
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.setTextColor(Color.rgb(80, 80, 80))
+        }
+        dialog.show()
     }
 
     private fun showSimLabelDialog(slotIndex: Int) {

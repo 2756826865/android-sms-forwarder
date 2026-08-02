@@ -98,6 +98,11 @@
     <string name="forwarding_no_enabled">请至少启用一个转发渠道</string>
     <string name="forwarding_last_status">最近状态：%1$s</string>
     <string name="forwarding_privacy_note">凭据通过 Android Keystore 加密保存在本机。启用后，收到的短信正文会发送至所选第三方渠道。</string>
+    <string name="forwarding_disclaimer_title">短信转发使用声明</string>
+    <string name="forwarding_disclaimer_summary">已阅读并同意 · 点击查看</string>
+    <string name="forwarding_disclaimer_accept">我已阅读并同意</string>
+    <string name="forwarding_disclaimer_decline">不同意并退出</string>
+    <string name="forwarding_disclaimer_body">短信转发会将收到的短信内容、发送号码、SIM 标识及接收时间发送到您配置的第三方服务（PushPlus、钉钉、飞书、企业微信或电子邮箱）。短信可能包含验证码、账户信息和其他敏感内容。请仅配置由您本人控制且可信的接收端，并妥善保管 Token、Webhook、密钥和邮箱凭据。因第三方平台、网络、系统限制、配置错误或凭据泄露造成的延迟、丢失或信息泄露风险由使用者承担。请勿将本功能用于未经授权的监控、转发或其他违法用途。点击“我已阅读并同意”表示您理解并同意上述内容。</string>
     <string name="forwarding_display">转发显示</string>
     <string name="forwarding_sim_one_label">SIM1 自定义名称</string>
     <string name="forwarding_sim_two_label">SIM2 自定义名称</string>

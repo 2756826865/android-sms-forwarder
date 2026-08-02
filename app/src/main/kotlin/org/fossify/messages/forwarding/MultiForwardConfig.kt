@@ -31,6 +31,16 @@ class MultiForwardConfig(context: Context) {
         get() = prefs.getInt(KEY_TEMPLATE_MODE, TEMPLATE_COMPACT).coerceIn(TEMPLATE_COMPACT, TEMPLATE_DETAILED)
         set(value) = prefs.edit().putInt(KEY_TEMPLATE_MODE, value.coerceIn(TEMPLATE_COMPACT, TEMPLATE_DETAILED)).apply()
 
+    var acceptedDisclaimerVersion: Int
+        get() = prefs.getInt(KEY_ACCEPTED_DISCLAIMER_VERSION, 0)
+        set(value) = prefs.edit().putInt(KEY_ACCEPTED_DISCLAIMER_VERSION, value).apply()
+
+    fun hasAcceptedDisclaimer() = acceptedDisclaimerVersion >= CURRENT_DISCLAIMER_VERSION
+
+    fun acceptCurrentDisclaimer() {
+        acceptedDisclaimerVersion = CURRENT_DISCLAIMER_VERSION
+    }
+
     fun customSimLabel(slotIndex: Int): String = when (slotIndex) {
         0 -> simOneLabel
         1 -> simTwoLabel
@@ -132,6 +142,9 @@ class MultiForwardConfig(context: Context) {
         private const val KEY_SIM_ONE_LABEL = "sim_one_label"
         private const val KEY_SIM_TWO_LABEL = "sim_two_label"
         private const val KEY_TEMPLATE_MODE = "template_mode"
+        private const val KEY_ACCEPTED_DISCLAIMER_VERSION = "accepted_disclaimer_version"
+
+        const val CURRENT_DISCLAIMER_VERSION = 1
 
         const val TEMPLATE_COMPACT = 0
         const val TEMPLATE_STANDARD = 1
