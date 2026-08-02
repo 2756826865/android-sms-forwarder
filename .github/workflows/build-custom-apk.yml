@@ -24,19 +24,12 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Build optimized unsigned release APK
-        run: ./gradlew :app:assembleCoreRelease
-
-      - name: Collect local signing tool
-        run: |
-          mkdir -p app/build/signing-tool
-          cp "$(find "$ANDROID_HOME/build-tools" -path '*/lib/apksigner.jar' -type f | sort -V | tail -n 1)" app/build/signing-tool/apksigner.jar
+      - name: Build installable debug APK
+        run: ./gradlew :app:assembleCoreDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: sms-forwarder-unsigned-release
-          path: |
-            app/build/outputs/apk/core/release/*.apk
-            app/build/signing-tool/apksigner.jar
+          name: sms-forwarder-apk
+          path: app/build/outputs/apk/core/debug/*.apk
           if-no-files-found: error
