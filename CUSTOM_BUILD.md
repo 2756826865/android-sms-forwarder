@@ -2,18 +2,21 @@
 
 这是基于 Fossify Messages 的个人定制版本。它作为 Android 默认短信应用接收 `SMS_DELIVER`，同时兼容部分系统使用的 `SMS_RECEIVED` 广播，支持收件箱、发件箱、通讯录或手动号码、独立批量发送，并把新短信通过 PushPlus 微信公众号渠道转发。
 
-## 1.9.1-pushplus.4
+## 1.0.1（versionCode 1008）
 
-- 主页、新建短信、短信设置、骚扰拦截和关于页统一为参考图的浅灰底白卡片风格。
+- 主页、会话页、新建短信、短信设置、骚扰拦截和关于页统一为参考图的浅灰底、白卡片、绿色操作色风格。
 - 批量发送入口并入主页绿色“+”，发送间隔可设置为立即或 1–5 秒。
 - 关于页仅保留常见问题、已知问题、第三方许可和版本号。
 - 新增黑白名单统一入口；白名单号码优先放行。
+- 新增定时发送管理、最近删除、后台补偿同步和华为/小米兼容引导。
+- 转发支持 PushPlus、钉钉、飞书、企业微信应用消息和电子邮箱。
+- 正式 Release 已彻底移除 Fossify 假版本弹窗链路，并在流水线中扫描阻断回归。
 
 ## 使用方式
 
 1. 安装 APK，首次打开时将“短信转发”设为默认短信应用并授予短信、电话和通知权限。
-2. 主界面右上角菜单进入“PushPlus 短信转发”。
-3. 粘贴 PushPlus Token，打开“收到短信后自动推送”，保存配置。
+2. 主界面进入“设置 → 短信转发功能”。
+3. 配置 PushPlus 或其他转发渠道，打开自动转发并保存。
 4. 点击“发送测试消息”，在 PushPlus 微信公众号中确认测试消息。
 5. 使用另一台手机发送一条普通短信进行完整测试。
 
@@ -55,6 +58,6 @@
 app/build/outputs/apk/core/debug/
 ```
 
-仓库也包含 `.github/workflows/build-custom-apk.yml`。推送到自己的 GitHub 仓库后，可以手动运行 `Build custom APK`，并从 Actions 的 `sms-forwarder-apk` 构建产物中下载 APK。
+仓库也包含 `.github/workflows/build-custom-apk.yml`。推送到定制仓库 `main` 后会自动运行 `Build custom APK`，成功产物名为 `SMS-Forwarder-1.0.1-release`。完整的 Codex 接手、签名、验证和真机回归说明见 `CODEX-RUN.md`。
 
 本项目沿用 Fossify Messages 的 GPL-3.0 许可证。公开分发修改版时应同时提供对应源代码。
