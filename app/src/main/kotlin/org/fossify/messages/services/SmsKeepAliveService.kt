@@ -9,8 +9,8 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
-import androidx.core.app.ContextCompat
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import org.fossify.messages.R
 import org.fossify.messages.activities.MainActivity
 import org.fossify.messages.messaging.SmsRecoveryWorker

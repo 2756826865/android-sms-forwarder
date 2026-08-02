@@ -3,7 +3,6 @@ package org.fossify.messages.activities
 import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
-import android.provider.Settings
 import org.fossify.commons.extensions.viewBinding
 import org.fossify.commons.helpers.NavigationIcon
 import org.fossify.messages.R
@@ -26,7 +25,7 @@ class BlockingSettingsActivity : SimpleActivity() {
         binding.blockingSimOne.setOnClickListener { selectSim(first = true) }
         binding.blockingSimTwo.setOnClickListener { selectSim(first = false) }
         binding.blockingCalls.setOnClickListener {
-            runCatching { startActivity(Intent(Settings.ACTION_BLOCKED_NUMBER_SETTINGS)) }
+            runCatching { startActivity(Intent("android.settings.BLOCKED_NUMBER_SETTINGS")) }
                 .onFailure { openBlacklist() }
         }
         binding.blockingSms.setOnClickListener {
