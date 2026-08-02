@@ -132,6 +132,8 @@
     <string name="compatibility_title">后台运行与系统兼容</string>
     <string name="compatibility_device">%1$s %2$s · Android %3$s</string>
     <string name="compatibility_default_sms">设为默认短信应用</string>
+    <string name="compatibility_try_legacy_sms_switch">尝试兼容修复默认短信状态</string>
+    <string name="compatibility_legacy_sms_switch_unavailable">当前系统不支持旧版默认短信切换接口，请使用下方 ADB 修复命令</string>
     <string name="compatibility_autostart">自启动管理（华为 / 荣耀 / 小米）</string>
     <string name="compatibility_battery">电池与后台运行设置</string>
     <string name="compatibility_permissions">应用权限与通知设置</string>

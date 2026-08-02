@@ -52,6 +52,23 @@ class DeviceCompatibilityActivity : SimpleActivity() {
         refreshCompatibilityStatus()
     }
 
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        when (requestCode) {
+            REQUEST_SMS_ROLE -> binding.root.postDelayed({
+                refreshCompatibilityStatus()
+                if (isDefaultSmsApp() && !isSmsChainReady()) {
+                    requestLegacyDefaultSmsChange()
+                }
+            }, ROLE_STATE_SETTLE_DELAY_MS)
+
+            REQUEST_LEGACY_DEFAULT_SMS -> binding.root.postDelayed(
+                { refreshCompatibilityStatus() },
+                ROLE_STATE_SETTLE_DELAY_MS,
+            )
+        }
+    }
+
     private fun refreshCompatibilityStatus() {
         val roleReady = isDefaultSmsApp()
         val routedPackage = getLegacySmsRoute()
@@ -60,6 +77,13 @@ class DeviceCompatibilityActivity : SimpleActivity() {
         val powerManager = getSystemService(POWER_SERVICE) as PowerManager
         val batteryReady = powerManager.isIgnoringBatteryOptimizations(packageName)
         val smsChainReady = roleReady && routeReady && writeSmsReady
+        binding.compatibilityDefaultSms.text = getString(
+            if (roleReady && !smsChainReady) {
+                R.string.compatibility_try_legacy_sms_switch
+            } else {
+                R.string.compatibility_default_sms
+            }
+        )
         binding.compatibilityStatus.text = getString(
             R.string.compatibility_status,
             if (roleReady) getString(R.string.compatibility_ready) else getString(R.string.compatibility_not_ready),
@@ -88,6 +112,9 @@ class DeviceCompatibilityActivity : SimpleActivity() {
         mode == AppOpsManager.MODE_ALLOWED
     }.getOrDefault(false)
 
+    private fun isSmsChainReady(): Boolean =
+        isDefaultSmsApp() && getLegacySmsRoute() == packageName && isWriteSmsAllowed()
+
     private fun copyAdbRepairCommands() {
         val commands = """
             adb shell settings --user 0 put secure sms_default_application $packageName
@@ -99,13 +126,32 @@ class DeviceCompatibilityActivity : SimpleActivity() {
     }
 
     private fun requestDefaultSmsRole() {
-        val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            getSystemService(RoleManager::class.java)?.createRequestRoleIntent(RoleManager.ROLE_SMS)
-        } else {
-            Intent(Telephony.Sms.Intents.ACTION_CHANGE_DEFAULT)
-                .putExtra(Telephony.Sms.Intents.EXTRA_PACKAGE_NAME, packageName)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            if (isDefaultSmsApp()) {
+                if (!isSmsChainReady()) requestLegacyDefaultSmsChange()
+                return
+            }
+
+            val intent = getSystemService(RoleManager::class.java)
+                ?.createRequestRoleIntent(RoleManager.ROLE_SMS)
+            if (intent != null) {
+                runCatching { startActivityForResult(intent, REQUEST_SMS_ROLE) }
+                    .onFailure { openAppDetails() }
+            }
+            return
         }
-        if (intent != null) launchOrFallback(intent)
+
+        requestLegacyDefaultSmsChange()
+    }
+
+    @Suppress("DEPRECATION")
+    private fun requestLegacyDefaultSmsChange() {
+        val intent = Intent(Telephony.Sms.Intents.ACTION_CHANGE_DEFAULT)
+            .putExtra(Telephony.Sms.Intents.EXTRA_PACKAGE_NAME, packageName)
+        runCatching { startActivityForResult(intent, REQUEST_LEGACY_DEFAULT_SMS) }
+            .onFailure {
+                Toast.makeText(this, R.string.compatibility_legacy_sms_switch_unavailable, Toast.LENGTH_LONG).show()
+            }
     }
 
     private fun openAutoStartSettings() {
@@ -169,5 +215,8 @@ class DeviceCompatibilityActivity : SimpleActivity() {
     private companion object {
         const val SMS_DEFAULT_APPLICATION_KEY = "sms_default_application"
         const val WRITE_SMS_APP_OP = "android:write_sms"
+        const val REQUEST_SMS_ROLE = 801
+        const val REQUEST_LEGACY_DEFAULT_SMS = 802
+        const val ROLE_STATE_SETTLE_DELAY_MS = 500L
     }
 }

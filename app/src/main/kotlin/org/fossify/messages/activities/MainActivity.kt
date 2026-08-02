@@ -2,6 +2,7 @@ package org.fossify.messages.activities
 
 import android.annotation.SuppressLint
 import android.Manifest
+import android.app.AppOpsManager
 import android.app.role.RoleManager
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -12,6 +13,8 @@ import android.graphics.drawable.Icon
 import android.graphics.drawable.LayerDrawable
 import android.graphics.Color
 import android.os.Bundle
+import android.os.Process
+import android.provider.Settings
 import android.provider.Telephony
 import android.text.TextUtils
 import androidx.appcompat.content.res.AppCompatResources
@@ -85,6 +88,10 @@ class MainActivity : SimpleActivity() {
     override var isSearchBarEnabled = false
     
     private val MAKE_DEFAULT_APP_REQUEST = 1
+    private val LEGACY_DEFAULT_APP_REQUEST = 2
+    private val SMS_DEFAULT_APPLICATION_KEY = "sms_default_application"
+    private val WRITE_SMS_APP_OP = "android:write_sms"
+    private val ROLE_STATE_SETTLE_DELAY_MS = 500L
 
     private var storedTextColor = 0
     private var storedFontSize = 0
@@ -209,14 +216,49 @@ class MainActivity : SimpleActivity() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, resultData: Intent?) {
         super.onActivityResult(requestCode, resultCode, resultData)
-        if (requestCode == MAKE_DEFAULT_APP_REQUEST) {
-            if (resultCode == RESULT_OK) {
-                askPermissions()
-            } else {
-                finish()
+        when (requestCode) {
+            MAKE_DEFAULT_APP_REQUEST -> {
+                if (resultCode != RESULT_OK) {
+                    finish()
+                    return
+                }
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    binding.root.postDelayed({
+                        if (!isSmsChainReady() && launchLegacyDefaultSmsRequest()) {
+                            return@postDelayed
+                        }
+                        askPermissions()
+                    }, ROLE_STATE_SETTLE_DELAY_MS)
+                } else {
+                    askPermissions()
+                }
             }
+
+            LEGACY_DEFAULT_APP_REQUEST -> askPermissions()
         }
     }
+
+    private fun isSmsChainReady(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return true
+        val roleReady = getSystemService(RoleManager::class.java)?.isRoleHeld(RoleManager.ROLE_SMS) == true
+        val routeReady = runCatching {
+            Settings.Secure.getString(contentResolver, SMS_DEFAULT_APPLICATION_KEY) == packageName
+        }.getOrDefault(false)
+        val writeSmsReady = runCatching {
+            val appOps = getSystemService(AppOpsManager::class.java)
+            appOps?.checkOpNoThrow(WRITE_SMS_APP_OP, Process.myUid(), packageName) == AppOpsManager.MODE_ALLOWED
+        }.getOrDefault(false)
+        return roleReady && routeReady && writeSmsReady
+    }
+
+    @Suppress("DEPRECATION")
+    private fun launchLegacyDefaultSmsRequest(): Boolean = runCatching {
+        val intent = Intent(Telephony.Sms.Intents.ACTION_CHANGE_DEFAULT)
+            .putExtra(Telephony.Sms.Intents.EXTRA_PACKAGE_NAME, packageName)
+        startActivityForResult(intent, LEGACY_DEFAULT_APP_REQUEST)
+        true
+    }.getOrDefault(false)
 
     private fun storeStateVariables() {
         storedTextColor = getProperTextColor()
