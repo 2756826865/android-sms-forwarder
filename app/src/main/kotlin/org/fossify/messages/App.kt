@@ -40,7 +40,6 @@ class App : FossifyApp() {
             rescheduleAllScheduledMessages()
         }
         SmsRecoveryWorker.schedule(this)
-        SmsRecoveryWorker.enqueueNow(this)
         SmsKeepAliveService.ensureStarted(this)
     }
 

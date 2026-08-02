@@ -166,7 +166,7 @@ class IncomingSmsService : Service() {
             SmsRecoveryWorker.enqueueNow(applicationContext)
         }
 
-        val uniqueId = "$insertedMessageId-$fingerprint"
+        val uniqueId = "sms-$insertedMessageId"
         if (receiverStatus.enabled) {
             PushPlusWorker.enqueue(
                 this,
