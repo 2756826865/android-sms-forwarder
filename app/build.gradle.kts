@@ -24,8 +24,8 @@ fun hasSigningVars(): Boolean {
 }
 
 base {
-    val versionCode = project.property("VERSION_CODE").toString().toInt()
-    archivesName = "messages-$versionCode"
+    val versionName = project.property("VERSION_NAME").toString()
+    archivesName = "SMS-Forwarder-$versionName"
 }
 
 android {

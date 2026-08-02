@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.provider.Telephony
+import android.os.PowerManager
 import org.fossify.commons.extensions.baseConfig
 import org.fossify.commons.extensions.getMyContactsCursor
 import org.fossify.commons.extensions.isNumberBlocked
@@ -31,6 +32,8 @@ import org.fossify.messages.forwarding.PushPlusWorker
 import org.fossify.messages.forwarding.MultiForwardConfig
 import org.fossify.messages.forwarding.MultiChannelForwardWorker
 import org.fossify.messages.models.Message
+import org.fossify.messages.messaging.SmsRecoveryWorker
+import org.fossify.messages.services.SmsKeepAliveService
 import java.security.MessageDigest
 
 class SmsReceiver : BroadcastReceiver() {
@@ -38,6 +41,10 @@ class SmsReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val pending = goAsync()
         val appContext = context.applicationContext
+        SmsKeepAliveService.ensureStarted(appContext)
+        val wakeLock = (appContext.getSystemService(Context.POWER_SERVICE) as PowerManager)
+            .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "smsforwarder:incoming-sms")
+            .apply { acquire(60_000L) }
 
         ensureBackgroundThread {
             try {
@@ -67,6 +74,9 @@ class SmsReceiver : BroadcastReceiver() {
                     "已捕获 ${intent.action?.substringAfterLast('.').orEmpty()}，发送方：$address"
 
                 val isWhitelisted = appContext.config.isNumberWhitelisted(address)
+                if (!isWhitelisted && appContext.config.isNumberBlacklisted(address)) {
+                    return@ensureBackgroundThread
+                }
                 if (!isWhitelisted && isMessageFilteredOut(appContext, body)) return@ensureBackgroundThread
                 if (!isWhitelisted && appContext.isNumberBlocked(address)) return@ensureBackgroundThread
                 if (!isWhitelisted && appContext.baseConfig.blockUnknownNumbers) {
@@ -113,12 +123,14 @@ class SmsReceiver : BroadcastReceiver() {
                         status = status
                     )
                 }.onSuccess {
+                    SmsRecoveryWorker.markObserved(appContext, date)
                     forwardingConfig.lastReceiverStatus = "已接收并写入短信库，发送方：$address"
                 }.onFailure { error ->
                     forwardingConfig.lastReceiverStatus =
                         "广播已到达；短信库写入失败：${error.message ?: error.javaClass.simpleName}"
                 }
             } finally {
+                if (wakeLock.isHeld) wakeLock.release()
                 pending.finish()
             }
         }

@@ -24,12 +24,37 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Build installable debug APK
-        run: ./gradlew :app:assembleCoreDebug
+      - name: Prepare release signing key
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          test -n "$ANDROID_KEYSTORE_BASE64"
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/sms-forwarder-release.jks"
+
+      - name: Build signed release APK
+        env:
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+          SIGNING_STORE_FILE: ${{ runner.temp }}/sms-forwarder-release.jks
+          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+        run: ./gradlew :app:assembleCoreRelease
+
+      - name: Verify release and normalize filename
+        shell: bash
+        run: |
+          source_apk="$(find app/build/outputs/apk/core/release -maxdepth 1 -name '*.apk' -print -quit)"
+          test -n "$source_apk"
+          mkdir -p deliverables
+          cp "$source_apk" deliverables/SMS-Forwarder-1.0.1-release.apk
+          if unzip -p deliverables/SMS-Forwarder-1.0.1-release.apk 'classes*.dex' | strings | grep -Fq 'You are using a fake version'; then
+            echo 'Blocked: upstream fake-version warning remains in release bytecode.' >&2
+            exit 1
+          fi
+          jarsigner -verify deliverables/SMS-Forwarder-1.0.1-release.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: sms-forwarder-apk
-          path: app/build/outputs/apk/core/debug/*.apk
+          name: SMS-Forwarder-1.0.1-release
+          path: deliverables/SMS-Forwarder-1.0.1-release.apk
           if-no-files-found: error

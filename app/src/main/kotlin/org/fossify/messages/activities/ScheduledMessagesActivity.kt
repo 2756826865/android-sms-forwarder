@@ -19,6 +19,7 @@ import org.fossify.messages.extensions.getAddresses
 import org.fossify.messages.extensions.getThreadTitle
 import org.fossify.messages.extensions.messagesDB
 import org.fossify.messages.extensions.subscriptionManagerCompat
+import org.fossify.messages.extensions.showSmsStyled
 import org.fossify.messages.helpers.IS_SCHEDULE_MODE
 import org.fossify.messages.helpers.THREAD_ID
 import org.fossify.messages.helpers.THREAD_TITLE
@@ -114,7 +115,8 @@ class ScheduledMessagesActivity : SimpleActivity() {
                     2 -> cancel(message)
                 }
             }
-            .show()
+            .create()
+            .showSmsStyled()
     }
 
     private fun sendNow(message: Message) {
@@ -140,7 +142,8 @@ class ScheduledMessagesActivity : SimpleActivity() {
                 }
             }
             .setNegativeButton(android.R.string.cancel, null)
-            .show()
+            .create()
+            .showSmsStyled()
     }
 
     private fun removeScheduledMessage(message: Message) {

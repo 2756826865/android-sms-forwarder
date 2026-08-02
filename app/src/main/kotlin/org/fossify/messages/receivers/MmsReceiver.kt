@@ -30,6 +30,7 @@ class MmsReceiver : MmsReceivedReceiver() {
 
     override fun isAddressBlocked(context: Context, address: String): Boolean {
         if (context.config.isNumberWhitelisted(address)) return false
+        if (context.config.isNumberBlacklisted(address)) return true
         if (context.isNumberBlocked(address)) return true
         if (context.baseConfig.blockUnknownNumbers) {
             val privateCursor = context.getMyContactsCursor(favoritesOnly = false, withPhoneNumbersOnly = true)

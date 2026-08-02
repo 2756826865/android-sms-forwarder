@@ -10,6 +10,7 @@ import org.fossify.commons.extensions.viewBinding
 import org.fossify.commons.helpers.NavigationIcon
 import org.fossify.messages.R
 import org.fossify.messages.databinding.ActivitySettingsBinding
+import org.fossify.messages.extensions.showSmsStyled
 import org.fossify.messages.extensions.config
 import org.fossify.messages.helpers.refreshConversations
 
@@ -64,7 +65,8 @@ class SettingsActivity : SimpleActivity() {
                     toast(R.string.resync_started)
                 }
                 .setNegativeButton(android.R.string.cancel, null)
-                .show()
+                .create()
+                .showSmsStyled()
         }
         settingsForwardingHolder.setOnClickListener {
             startActivity(Intent(this@SettingsActivity, ForwardingChannelsActivity::class.java))
@@ -87,7 +89,8 @@ class SettingsActivity : SimpleActivity() {
                 dialog.dismiss()
             }
             .setNegativeButton(android.R.string.cancel, null)
-            .show()
+            .create()
+            .showSmsStyled()
     }
 
     private fun updateDelayLabel() {

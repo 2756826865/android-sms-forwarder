@@ -68,9 +68,9 @@
                 android:paddingVertical="4dp">
 
                 <TextView
-                    android:id="@+id/settings_bulk_send_holder"
+                    android:id="@+id/settings_forwarding_holder"
                     style="@style/SmsSettingsRow"
-                    android:text="@string/bulk_send" />
+                    android:text="@string/settings_forwarding" />
 
                 <View style="@style/SmsSettingsDivider" />
 
@@ -78,6 +78,13 @@
                     android:id="@+id/settings_scheduled_holder"
                     style="@style/SmsSettingsRow"
                     android:text="@string/scheduled_management" />
+
+                <View style="@style/SmsSettingsDivider" />
+
+                <TextView
+                    android:id="@+id/settings_bulk_send_holder"
+                    style="@style/SmsSettingsRow"
+                    android:text="@string/bulk_send" />
 
                 <View style="@style/SmsSettingsDivider" />
 
@@ -179,13 +186,6 @@
                         android:layout_height="20dp"
                         android:src="@drawable/ic_chevron_right_vector" />
                 </LinearLayout>
-
-                <View style="@style/SmsSettingsDivider" />
-
-                <TextView
-                    android:id="@+id/settings_forwarding_holder"
-                    style="@style/SmsSettingsRow"
-                    android:text="@string/settings_forwarding" />
 
                 <View style="@style/SmsSettingsDivider" />
 

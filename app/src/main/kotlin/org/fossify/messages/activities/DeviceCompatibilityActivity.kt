@@ -27,9 +27,7 @@ class DeviceCompatibilityActivity : SimpleActivity() {
         binding.compatibilityToolbar.title = ""
         binding.compatibilityDefaultSms.setOnClickListener { requestDefaultSmsRole() }
         binding.compatibilityAutostart.setOnClickListener { openAutoStartSettings() }
-        binding.compatibilityBattery.setOnClickListener {
-            launchOrFallback(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
-        }
+        binding.compatibilityBattery.setOnClickListener { requestUnrestrictedBattery() }
         binding.compatibilityPermissions.setOnClickListener { openAppDetails() }
     }
 
@@ -70,13 +68,51 @@ class DeviceCompatibilityActivity : SimpleActivity() {
     }
 
     private fun openAutoStartSettings() {
-        val xiaomiIntent = Intent().apply {
-            component = ComponentName(
-                "com.miui.securitycenter",
-                "com.miui.permcenter.autostart.AutoStartManagementActivity",
+        val candidates = when (Build.MANUFACTURER.lowercase()) {
+            "xiaomi", "redmi", "poco" -> listOf(
+                ComponentName(
+                    "com.miui.securitycenter",
+                    "com.miui.permcenter.autostart.AutoStartManagementActivity",
+                ),
+                ComponentName(
+                    "com.miui.securitycenter",
+                    "com.miui.powerkeeper.ui.HiddenAppsConfigActivity",
+                ),
             )
+
+            "huawei", "honor" -> listOf(
+                ComponentName(
+                    "com.huawei.systemmanager",
+                    "com.huawei.systemmanager.startupmgr.ui.StartupNormalAppListActivity",
+                ),
+                ComponentName(
+                    "com.huawei.systemmanager",
+                    "com.huawei.systemmanager.optimize.process.ProtectActivity",
+                ),
+                ComponentName(
+                    "com.hihonor.systemmanager",
+                    "com.hihonor.systemmanager.startupmgr.ui.StartupNormalAppListActivity",
+                ),
+            )
+
+            else -> emptyList()
         }
-        launchOrFallback(xiaomiIntent)
+        val launched = candidates.any { component ->
+            runCatching {
+                startActivity(Intent().apply { this.component = component })
+            }.isSuccess
+        }
+        if (!launched) openAppDetails()
+    }
+
+    private fun requestUnrestrictedBattery() {
+        val directRequest = Intent(
+            Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+            Uri.parse("package:$packageName"),
+        )
+        runCatching { startActivity(directRequest) }.onFailure {
+            launchOrFallback(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+        }
     }
 
     private fun launchOrFallback(intent: Intent) {

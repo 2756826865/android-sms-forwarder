@@ -607,7 +607,7 @@ class ThreadAdapter(
             if (showSim) {
                 threadSimNumber.text = dateTime.simID
                 threadSimNumber.setTextColor(Color.WHITE)
-                threadSimIcon.applyColorFilter(Color.rgb(52, 138, 244))
+                threadSimIcon.applyColorFilter(Color.rgb(29, 206, 56))
             }
         }
     }

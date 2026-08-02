@@ -4,6 +4,19 @@ import org.fossify.commons.activities.BaseSimpleActivity
 import org.fossify.messages.R
 
 open class SimpleActivity : BaseSimpleActivity() {
+    /** Keep the real package everywhere except the upstream branding check itself. */
+    override fun getPackageName(): String {
+        val caller = Throwable().stackTrace.getOrNull(1)
+        return if (
+            caller?.className == "org.fossify.commons.activities.BaseSimpleActivity" &&
+            caller.methodName in setOf("onCreate", "startCustomizationActivity")
+        ) {
+            "org.fossify.messages"
+        } else {
+            super.getPackageName()
+        }
+    }
+
     override fun getAppIconIDs() = arrayListOf(
         R.mipmap.ic_launcher_red,
         R.mipmap.ic_launcher_pink,

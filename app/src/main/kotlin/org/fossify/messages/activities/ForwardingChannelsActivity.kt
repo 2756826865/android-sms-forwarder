@@ -15,6 +15,8 @@ import org.fossify.commons.extensions.viewBinding
 import org.fossify.commons.helpers.NavigationIcon
 import org.fossify.messages.R
 import org.fossify.messages.databinding.ActivityForwardingChannelsBinding
+import org.fossify.messages.extensions.applySmsDialogColors
+import org.fossify.messages.extensions.showSmsStyled
 import org.fossify.messages.forwarding.MultiChannelForwardWorker
 import org.fossify.messages.forwarding.MultiForwardConfig
 import org.fossify.messages.forwarding.PushPlusConfig
@@ -111,28 +113,48 @@ class ForwardingChannelsActivity : SimpleActivity() {
             dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.setTextColor(Color.rgb(80, 80, 80))
         }
         dialog.show()
+        dialog.applySmsDialogColors()
     }
 
     private fun showSimLabelDialog(slotIndex: Int) {
-        val current = if (slotIndex == 0) multiConfig.simOneLabel else multiConfig.simTwoLabel
-        val editor = EditText(this).apply {
-            setText(current)
+        val labelEditor = EditText(this).apply {
+            setText(if (slotIndex == 0) multiConfig.simOneLabel else multiConfig.simTwoLabel)
             hint = getString(if (slotIndex == 0) R.string.forwarding_sim_one_hint else R.string.forwarding_sim_two_hint)
             setTextColor(Color.rgb(17, 17, 17))
             setHintTextColor(Color.rgb(120, 120, 120))
             isSingleLine = true
-            setPadding(48, 16, 48, 8)
+        }
+        val numberEditor = EditText(this).apply {
+            setText(if (slotIndex == 0) multiConfig.simOneNumber else multiConfig.simTwoNumber)
+            hint = getString(R.string.forwarding_sim_number_hint)
+            inputType = InputType.TYPE_CLASS_PHONE
+            setTextColor(Color.rgb(17, 17, 17))
+            setHintTextColor(Color.rgb(120, 120, 120))
+            isSingleLine = true
+        }
+        val padding = (20 * resources.displayMetrics.density).toInt()
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(padding, padding / 2, padding, 0)
+            addView(labelEditor, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            addView(numberEditor, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         }
         AlertDialog.Builder(this)
             .setTitle(if (slotIndex == 0) R.string.forwarding_sim_one_label else R.string.forwarding_sim_two_label)
-            .setView(editor)
+            .setView(container)
             .setPositiveButton(R.string.forwarding_save) { _, _ ->
-                if (slotIndex == 0) multiConfig.simOneLabel = editor.text.toString()
-                else multiConfig.simTwoLabel = editor.text.toString()
+                if (slotIndex == 0) {
+                    multiConfig.simOneLabel = labelEditor.text.toString()
+                    multiConfig.simOneNumber = numberEditor.text.toString()
+                } else {
+                    multiConfig.simTwoLabel = labelEditor.text.toString()
+                    multiConfig.simTwoNumber = numberEditor.text.toString()
+                }
                 updateSummaries()
             }
             .setNegativeButton(android.R.string.cancel, null)
-            .show()
+            .create()
+            .showSmsStyled()
     }
 
     private fun showTemplateDialog() {
@@ -149,7 +171,8 @@ class ForwardingChannelsActivity : SimpleActivity() {
                 dialog.dismiss()
             }
             .setNegativeButton(android.R.string.cancel, null)
-            .show()
+            .create()
+            .showSmsStyled()
     }
 
     private fun showDingTalkDialog() {
@@ -272,7 +295,8 @@ class ForwardingChannelsActivity : SimpleActivity() {
                 updateSummaries()
             }
             .setNegativeButton(android.R.string.cancel, null)
-            .show()
+            .create()
+            .showSmsStyled()
     }
 
     private fun updateSummaries() = binding.apply {
@@ -281,8 +305,8 @@ class ForwardingChannelsActivity : SimpleActivity() {
         forwardingFeishuSummary.text = statusText(multiConfig.feishuWebhook().isNotBlank(), multiConfig.feishuEnabled)
         forwardingWecomSummary.text = statusText(multiConfig.weComCorpId().isNotBlank(), multiConfig.weComEnabled)
         forwardingEmailSummary.text = statusText(multiConfig.emailHost().isNotBlank(), multiConfig.emailEnabled)
-        forwardingSimOneSummary.text = multiConfig.simOneLabel.ifBlank { getString(R.string.forwarding_sim_system_default) }
-        forwardingSimTwoSummary.text = multiConfig.simTwoLabel.ifBlank { getString(R.string.forwarding_sim_system_default) }
+        forwardingSimOneSummary.text = simSummary(multiConfig.simOneLabel, multiConfig.simOneNumber)
+        forwardingSimTwoSummary.text = simSummary(multiConfig.simTwoLabel, multiConfig.simTwoNumber)
         forwardingTemplateSummary.text = getString(
             when (multiConfig.templateMode) {
                 MultiForwardConfig.TEMPLATE_STANDARD -> R.string.forwarding_template_standard
@@ -295,6 +319,11 @@ class ForwardingChannelsActivity : SimpleActivity() {
             R.string.forwarding_last_status,
             statuses.joinToString("\n").ifBlank { getString(R.string.forwarding_status_never) }
         )
+    }
+
+    private fun simSummary(label: String, number: String): String {
+        if (label.isBlank() && number.isBlank()) return getString(R.string.forwarding_sim_system_default)
+        return listOf(label, number).filter(String::isNotBlank).joinToString(" · ")
     }
 
     private fun statusText(configured: Boolean, enabled: Boolean) = getString(

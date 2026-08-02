@@ -10,6 +10,7 @@ import org.fossify.commons.helpers.NavigationIcon
 import org.fossify.messages.BuildConfig
 import org.fossify.messages.R
 import org.fossify.messages.databinding.ActivityAboutBinding
+import org.fossify.messages.extensions.showSmsStyled
 
 class AboutActivity : SimpleActivity() {
     private val binding by viewBinding(ActivityAboutBinding::inflate)
@@ -43,7 +44,8 @@ class AboutActivity : SimpleActivity() {
             .setTitle(title)
             .setMessage(message)
             .setPositiveButton(android.R.string.ok, null)
-            .show()
+            .create()
+            .showSmsStyled()
     }
 
     companion object {

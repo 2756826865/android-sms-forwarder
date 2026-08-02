@@ -58,7 +58,7 @@ class SimSelectionPopup(
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(20), dp(10), dp(16), dp(10))
             background = GradientDrawable().apply {
-                setColor(if (selected) Color.rgb(235, 243, 255) else Color.WHITE)
+                setColor(if (selected) Color.rgb(235, 250, 239) else Color.WHITE)
             }
             setOnClickListener { onClick() }
         }
@@ -72,7 +72,7 @@ class SimSelectionPopup(
             setTextColor(if (selected) Color.WHITE else Color.BLACK)
             background = GradientDrawable().apply {
                 cornerRadius = dp(8).toFloat()
-                setColor(if (selected) Color.rgb(52, 138, 244) else Color.rgb(235, 235, 235))
+                setColor(if (selected) Color.rgb(29, 206, 56) else Color.rgb(235, 235, 235))
             }
         }
         row.addView(badge, LinearLayout.LayoutParams(dp(42), dp(42)).apply { marginEnd = dp(18) })
@@ -85,12 +85,12 @@ class SimSelectionPopup(
             text = card.label.ifBlank { context.getString(R.string.sim_card_number, card.id) }
             textSize = 18f
             typeface = Typeface.DEFAULT_BOLD
-            setTextColor(if (selected) Color.rgb(52, 138, 244) else Color.rgb(17, 17, 17))
+            setTextColor(if (selected) Color.rgb(20, 156, 49) else Color.rgb(17, 17, 17))
         })
         labels.addView(TextView(context).apply {
             text = card.phoneNumber.ifBlank { context.getString(R.string.sim_number_unavailable) }
             textSize = 15f
-            setTextColor(if (selected) Color.rgb(52, 138, 244) else Color.rgb(100, 100, 100))
+            setTextColor(if (selected) Color.rgb(20, 156, 49) else Color.rgb(100, 100, 100))
         })
         row.addView(labels, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
 
@@ -98,7 +98,7 @@ class SimSelectionPopup(
         if (selected) {
             checkHolder.addView(ImageView(context).apply {
                 setImageResource(org.fossify.commons.R.drawable.ic_check_vector)
-                setColorFilter(Color.rgb(52, 138, 244))
+                setColorFilter(Color.rgb(29, 206, 56))
             }, FrameLayout.LayoutParams(dp(28), dp(28), Gravity.CENTER))
         }
         row.addView(checkHolder, LinearLayout.LayoutParams(dp(42), dp(42)))

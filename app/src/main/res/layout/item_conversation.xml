@@ -103,7 +103,7 @@
         android:textDirection="locale"
         android:textSize="@dimen/list_tertiary_text_size"
         app:layout_constraintBottom_toBottomOf="@id/conversation_address"
-        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/conversation_selection_indicator"
         app:layout_constraintTop_toTopOf="@id/conversation_address"
         tools:text="13:30" />
 
@@ -132,5 +132,17 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="@id/conversation_body_short"
         tools:text="42"
+        tools:visibility="visible" />
+
+    <ImageView
+        android:id="@+id/conversation_selection_indicator"
+        android:layout_width="28dp"
+        android:layout_height="28dp"
+        android:layout_marginStart="10dp"
+        android:padding="6dp"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
         tools:visibility="visible" />
 </androidx.constraintlayout.widget.ConstraintLayout>

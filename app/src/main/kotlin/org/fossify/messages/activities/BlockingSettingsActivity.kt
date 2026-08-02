@@ -3,8 +3,7 @@ package org.fossify.messages.activities
 import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
-import org.fossify.commons.activities.ManageBlockedNumbersActivity
-import org.fossify.commons.extensions.getBlockedNumbers
+import android.provider.Settings
 import org.fossify.commons.extensions.viewBinding
 import org.fossify.commons.helpers.NavigationIcon
 import org.fossify.messages.R
@@ -26,11 +25,14 @@ class BlockingSettingsActivity : SimpleActivity() {
 
         binding.blockingSimOne.setOnClickListener { selectSim(first = true) }
         binding.blockingSimTwo.setOnClickListener { selectSim(first = false) }
-        binding.blockingCalls.setOnClickListener { openBlockedNumbers() }
+        binding.blockingCalls.setOnClickListener {
+            runCatching { startActivity(Intent(Settings.ACTION_BLOCKED_NUMBER_SETTINGS)) }
+                .onFailure { openBlacklist() }
+        }
         binding.blockingSms.setOnClickListener {
             startActivity(Intent(this, ManageBlockedKeywordsActivity::class.java))
         }
-        binding.blockingBlacklist.setOnClickListener { openBlockedNumbers() }
+        binding.blockingBlacklist.setOnClickListener { openBlacklist() }
         binding.blockingWhitelist.setOnClickListener {
             startActivity(Intent(this, ManageWhitelistActivity::class.java))
         }
@@ -38,12 +40,13 @@ class BlockingSettingsActivity : SimpleActivity() {
 
     override fun onResume() {
         super.onResume()
-        binding.blockingBlacklistCount.text = getString(R.string.number_count, getBlockedNumbers().size)
+        binding.blockingBlacklistCount.text =
+            getString(R.string.number_count, config.blacklistedNumbers.size)
         binding.blockingWhitelistCount.text = getString(R.string.number_count, config.whitelistedNumbers.size)
     }
 
-    private fun openBlockedNumbers() {
-        startActivity(Intent(this, ManageBlockedNumbersActivity::class.java))
+    private fun openBlacklist() {
+        startActivity(Intent(this, ManageBlacklistActivity::class.java))
     }
 
     private fun selectSim(first: Boolean) {

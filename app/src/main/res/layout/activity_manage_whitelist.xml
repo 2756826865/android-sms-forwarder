@@ -16,7 +16,7 @@
         android:paddingHorizontal="20dp"
         app:layout_behavior="@string/appbar_scrolling_view_behavior">
 
-        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginStart="8dp" android:layout_marginTop="18dp" android:layout_marginBottom="24dp" android:text="@string/whitelist_title" android:textColor="@color/miui_primary_text" android:textSize="36sp" />
+        <TextView android:id="@+id/whitelist_title_text" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginStart="8dp" android:layout_marginTop="18dp" android:layout_marginBottom="24dp" android:text="@string/whitelist_title" android:textColor="@color/miui_primary_text" android:textSize="36sp" />
 
         <FrameLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:background="@drawable/settings_card_background">
             <ListView android:id="@+id/whitelist_list" android:layout_width="match_parent" android:layout_height="match_parent" android:divider="@color/miui_divider" android:dividerHeight="1dp" android:paddingVertical="8dp" />

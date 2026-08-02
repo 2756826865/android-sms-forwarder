@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="miui_home_blue">#F2F2F2</color>
-    <color name="miui_action_blue">#348AF4</color>
+    <color name="miui_action_blue">#1DCE38</color>
     <color name="miui_fab_green">#1DCE38</color>
     <color name="miui_page_background">#F7F7F7</color>
     <color name="miui_card_background">#FFFFFF</color>

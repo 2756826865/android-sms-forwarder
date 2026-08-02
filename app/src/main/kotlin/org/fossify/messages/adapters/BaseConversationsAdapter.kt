@@ -34,6 +34,7 @@ abstract class BaseConversationsAdapter(
     recyclerView: MyRecyclerView,
     onRefresh: () -> Unit,
     itemClick: (Any) -> Unit,
+    private val itemLongClick: ((View, Conversation) -> Unit)? = null,
 ) : MyRecyclerViewListAdapter<Conversation>(
     activity = activity,
     recyclerView = recyclerView,
@@ -120,7 +121,17 @@ abstract class BaseConversationsAdapter(
         ) { itemView, _ ->
             setupView(itemView, conversation)
         }
+        if (itemLongClick != null && actMode == null) {
+            holder.itemView.setOnLongClickListener {
+                itemLongClick.invoke(it, conversation)
+                true
+            }
+        }
         bindViewHolder(holder)
+    }
+
+    override fun onBindViewHolder(holder: ViewHolder, position: Int, payloads: MutableList<Any>) {
+        onBindViewHolder(holder, position)
     }
 
     override fun getItemId(position: Int) = getItem(position).threadId
@@ -152,7 +163,19 @@ abstract class BaseConversationsAdapter(
             )
             pinIndicator.applyColorFilter(textColor)
 
-            conversationFrame.isSelected = selectedKeys.contains(conversation.hashCode())
+            val isSelected = selectedKeys.contains(conversation.hashCode())
+            conversationFrame.isSelected = isSelected
+            conversationFrame.setBackgroundColor(
+                if (isSelected) Color.rgb(246, 246, 246) else Color.WHITE
+            )
+            conversationSelectionIndicator.beVisibleIf(actMode != null)
+            conversationSelectionIndicator.setImageResource(
+                if (isSelected) org.fossify.commons.R.drawable.ic_check_vector else 0
+            )
+            conversationSelectionIndicator.setColorFilter(Color.WHITE)
+            conversationSelectionIndicator.setBackgroundResource(
+                if (isSelected) R.drawable.selection_circle_checked else R.drawable.selection_circle_unchecked
+            )
 
             conversationAddress.apply {
                 text = conversation.title

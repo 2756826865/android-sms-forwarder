@@ -8,6 +8,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.OutOfQuotaPolicy
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
@@ -310,6 +311,7 @@ class MultiChannelForwardWorker(
                 )
                 .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
                 .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 10, TimeUnit.SECONDS)
+                .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
                 .build()
             WorkManager.getInstance(context)
                 .enqueueUniqueWork("multi-forward-$uniqueId", ExistingWorkPolicy.KEEP, request)

@@ -182,6 +182,7 @@ import org.fossify.messages.helpers.THREAD_NUMBER
 import org.fossify.messages.helpers.THREAD_TEXT
 import org.fossify.messages.helpers.THREAD_TITLE
 import org.fossify.messages.helpers.generateRandomId
+import org.fossify.messages.forwarding.MultiForwardConfig
 import org.fossify.messages.helpers.refreshConversations
 import org.fossify.messages.helpers.refreshMessages
 import org.fossify.messages.messaging.cancelScheduleSendPendingIntent
@@ -1105,17 +1106,20 @@ class ThreadActivity : SimpleActivity() {
     @SuppressLint("MissingPermission")
     private fun setupSIMSelector() {
         val availableSIMs = subscriptionManagerCompat().activeSubscriptionInfoList ?: return
+        val simDisplayConfig = MultiForwardConfig(applicationContext)
         availableSIMCards.clear()
         if (availableSIMs.isNotEmpty()) {
             availableSIMs.forEachIndexed { index, subscriptionInfo ->
-                val label = subscriptionInfo.carrierName?.toString()
+                val slotIndex = subscriptionInfo.simSlotIndex.takeIf { it >= 0 } ?: index
+                val systemLabel = subscriptionInfo.carrierName?.toString()
                     ?.takeIf(String::isNotBlank)
                     ?: subscriptionInfo.displayName?.toString().orEmpty()
                 val simCard = SIMCard(
-                    id = subscriptionInfo.simSlotIndex.takeIf { it >= 0 }?.plus(1) ?: index + 1,
+                    id = slotIndex + 1,
                     subscriptionId = subscriptionInfo.subscriptionId,
-                    label = label,
-                    phoneNumber = subscriptionInfo.number.orEmpty(),
+                    label = simDisplayConfig.customSimLabel(slotIndex).ifBlank { systemLabel },
+                    phoneNumber = simDisplayConfig.customSimNumber(slotIndex)
+                        .ifBlank { subscriptionInfo.number.orEmpty() },
                 )
                 availableSIMCards.add(simCard)
             }
@@ -1132,7 +1136,7 @@ class ThreadActivity : SimpleActivity() {
             }
 
             currentSIMCardIndex = getProperSimIndex(availableSIMs, numbers)
-            binding.messageHolder.threadSelectSimIcon.applyColorFilter(Color.rgb(52, 138, 244))
+            binding.messageHolder.threadSelectSimIcon.applyColorFilter(Color.rgb(29, 206, 56))
             binding.messageHolder.threadSelectSimIcon.beVisible()
             binding.messageHolder.threadSelectSimNumber.beVisible()
 

@@ -10,10 +10,13 @@
     <uses-permission android:name="android.permission.RECEIVE_MMS" />
     <uses-permission android:name="android.provider.Telephony.SMS_RECEIVED" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.READ_SYNC_SETTINGS" />
@@ -169,19 +172,10 @@
             android:parentActivityName=".activities.BlockingSettingsActivity" />
 
         <activity
-            android:name="org.fossify.commons.activities.CustomizationActivity"
-            android:configChanges="orientation"
+            android:name=".activities.ManageBlacklistActivity"
             android:exported="false"
-            android:label="@string/customize_colors"
-            android:parentActivityName=".activities.SettingsActivity" />
-
-        <activity
-            android:name="org.fossify.commons.activities.ManageBlockedNumbersActivity"
-            android:configChanges="orientation"
-            android:exported="false"
-            android:label="@string/blocked_numbers"
-            android:parentActivityName=".activities.SettingsActivity"
-            tools:replace="android:label" />
+            android:label="@string/blacklist_numbers"
+            android:parentActivityName=".activities.BlockingSettingsActivity" />
 
         <activity
             android:name=".activities.ManageBlockedKeywordsActivity"
@@ -217,6 +211,16 @@
                 <data android:scheme="mms" />
                 <data android:scheme="mmsto" />
             </intent-filter>
+        </service>
+
+        <service
+            android:name=".services.SmsKeepAliveService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse"
+            android:stopWithTask="false">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Maintains reliable incoming SMS handling and user-configured forwarding on OEM Android builds" />
         </service>
 
         <service android:name="com.android.mms.transaction.TransactionService" />
@@ -297,6 +301,8 @@
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
                 <action android:name="android.intent.action.TIME_SET" />
                 <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.USER_PRESENT" />
+                <action android:name="android.intent.action.SCREEN_ON" />
             </intent-filter>
         </receiver>
 

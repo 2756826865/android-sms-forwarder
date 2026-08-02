@@ -44,3 +44,10 @@
 -keepclassmembers,allowobfuscation class ezvcard.parameter.* extends ezvcard.parameter.MediaTypeParameter {
     <init>(java.lang.String, java.lang.String, java.lang.String);
 }
+
+# The app is an independently signed GPL fork. Strip upstream branding warnings
+# and their hard-coded payload from minified production builds.
+-assumenosideeffects class org.fossify.commons.extensions.ActivityKt {
+    public static final void showModdedAppWarning(org.fossify.commons.activities.BaseSimpleActivity);
+    public static final void showSideloadingDialog(android.app.Activity);
+}

@@ -71,6 +71,7 @@ import org.fossify.messages.helpers.IS_SCHEDULE_MODE
 import org.fossify.messages.helpers.generateRandomId
 import org.fossify.messages.messaging.isShortCodeWithLetters
 import org.fossify.messages.messaging.BulkSendWorker
+import org.fossify.messages.forwarding.MultiForwardConfig
 import org.fossify.messages.messaging.scheduleMessage
 import org.fossify.messages.models.Message
 import org.fossify.messages.models.SIMCard
@@ -373,14 +374,17 @@ class NewConversationActivity : SimpleActivity() {
     private fun setupSIMSelector() {
         val active = runCatching { subscriptionManagerCompat().activeSubscriptionInfoList.orEmpty() }
             .getOrDefault(emptyList())
+        val simDisplayConfig = MultiForwardConfig(applicationContext)
         availableSIMCards.clear()
         active.forEachIndexed { index, info ->
+            val slotIndex = info.simSlotIndex.takeIf { it >= 0 } ?: index
+            val systemLabel = info.carrierName?.toString()?.takeIf(String::isNotBlank)
+                ?: info.displayName?.toString().orEmpty()
             availableSIMCards += SIMCard(
-                id = info.simSlotIndex.takeIf { it >= 0 }?.plus(1) ?: index + 1,
+                id = slotIndex + 1,
                 subscriptionId = info.subscriptionId,
-                label = info.carrierName?.toString()?.takeIf(String::isNotBlank)
-                    ?: info.displayName?.toString().orEmpty(),
-                phoneNumber = info.number.orEmpty(),
+                label = simDisplayConfig.customSimLabel(slotIndex).ifBlank { systemLabel },
+                phoneNumber = simDisplayConfig.customSimNumber(slotIndex).ifBlank { info.number.orEmpty() },
             )
         }
         if (availableSIMCards.isEmpty()) {
@@ -392,7 +396,7 @@ class NewConversationActivity : SimpleActivity() {
         currentSIMCardIndex = availableSIMCards.indexOfFirst { it.subscriptionId == defaultSubId }
             .takeIf { it >= 0 }
             ?: 0
-        binding.newConversationSimIcon.applyColorFilter(Color.rgb(52, 138, 244))
+        binding.newConversationSimIcon.applyColorFilter(Color.rgb(29, 206, 56))
         binding.newConversationSimNumber.text = availableSIMCards[currentSIMCardIndex].id.toString()
         binding.newConversationSimHolder.beVisible()
         binding.newConversationSimHolder.setOnClickListener {

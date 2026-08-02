@@ -3,6 +3,7 @@ package org.fossify.messages.adapters
 import android.content.Intent
 import android.text.TextUtils
 import android.view.Menu
+import android.view.View
 import org.fossify.commons.dialogs.ConfirmationDialog
 import org.fossify.commons.dialogs.FeatureLockedDialog
 import org.fossify.commons.extensions.addBlockedNumber
@@ -34,11 +35,14 @@ class ConversationsAdapter(
     activity: SimpleActivity,
     recyclerView: MyRecyclerView,
     onRefresh: () -> Unit,
-    itemClick: (Any) -> Unit
-) : BaseConversationsAdapter(activity, recyclerView, onRefresh, itemClick) {
+    itemClick: (Any) -> Unit,
+    itemLongClick: ((View, Conversation) -> Unit)? = null,
+    private val selectionChanged: ((Boolean, Int) -> Unit)? = null,
+) : BaseConversationsAdapter(activity, recyclerView, onRefresh, itemClick, itemLongClick) {
     override fun getActionMenuId() = R.menu.cab_conversations
 
     override fun prepareActionMode(menu: Menu) {
+        selectionChanged?.invoke(true, selectedKeys.size)
         val selectedItems = getSelectedItems()
         val isSingleSelection = isOneItemSelected()
         val selectedConversation = selectedItems.firstOrNull() ?: return
@@ -63,6 +67,40 @@ class ConversationsAdapter(
             checkPinBtnVisibility(this)
         }
     }
+
+    override fun onActionModeCreated() {
+        activity.findViewById<View>(androidx.appcompat.R.id.action_mode_bar)?.visibility = View.GONE
+        notifyDataSetChanged()
+        selectionChanged?.invoke(true, selectedKeys.size)
+    }
+
+    override fun onActionModeDestroyed() {
+        activity.findViewById<View>(androidx.appcompat.R.id.action_mode_bar)?.visibility = View.VISIBLE
+        notifyDataSetChanged()
+        selectionChanged?.invoke(false, 0)
+    }
+
+    fun startSelection(conversation: Conversation) {
+        val position = currentList.indexOfFirst { it.threadId == conversation.threadId }
+        if (position < 0) return
+        if (actMode == null) activity.startActionMode(actModeCallback)
+        toggleItemSelection(true, position, true)
+    }
+
+    fun performSingleAction(conversation: Conversation, actionId: Int) {
+        startSelection(conversation)
+        actionItemPressed(actionId)
+    }
+
+    fun toggleSelectedReadState() {
+        if (getSelectedItems().any { !it.read }) markAsRead() else markAsUnread()
+    }
+
+    fun deleteSelected() = askConfirmDelete()
+
+    fun selectAllConversations() = selectAll()
+
+    fun selectedHasUnread() = getSelectedItems().any { !it.read }
 
     override fun actionItemPressed(id: Int) {
         val selectedItems = getSelectedItems()

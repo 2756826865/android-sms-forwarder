@@ -11,12 +11,18 @@ import org.fossify.commons.helpers.PERMISSION_READ_CONTACTS
 import org.fossify.commons.helpers.ensureBackgroundThread
 import org.fossify.messages.extensions.rescheduleAllScheduledMessages
 import org.fossify.messages.helpers.MessagingCache
+import org.fossify.messages.messaging.SmsRecoveryWorker
+import org.fossify.messages.services.SmsKeepAliveService
 
 class App : FossifyApp() {
     override val isAppLockFeatureAvailable = true
 
     override fun onCreate() {
         super.onCreate()
+        getSharedPreferences("Prefs", MODE_PRIVATE)
+            .edit()
+            .remove("app_sideloading_status")
+            .apply()
         if (hasPermission(PERMISSION_READ_CONTACTS)) {
             listOf(
                 ContactsContract.Contacts.CONTENT_URI,
@@ -33,6 +39,9 @@ class App : FossifyApp() {
         ensureBackgroundThread {
             rescheduleAllScheduledMessages()
         }
+        SmsRecoveryWorker.schedule(this)
+        SmsRecoveryWorker.enqueueNow(this)
+        SmsKeepAliveService.ensureStarted(this)
     }
 
     private val contactsObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {

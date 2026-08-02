@@ -148,6 +148,27 @@ class Config(context: Context) : BaseConfig(context) {
         }
     }
 
+    var blacklistedNumbers: Set<String>
+        get() = prefs.getStringSet("blacklisted_numbers", emptySet()) ?: emptySet()
+        set(value) = prefs.edit().putStringSet("blacklisted_numbers", value).apply()
+
+    fun addBlacklistedNumber(number: String) {
+        blacklistedNumbers = blacklistedNumbers + number
+    }
+
+    fun removeBlacklistedNumber(number: String) {
+        blacklistedNumbers = blacklistedNumbers - number
+    }
+
+    fun isNumberBlacklisted(number: String): Boolean {
+        val normalized = number.filter { it.isDigit() || it == '+' }
+        return blacklistedNumbers.any { blocked ->
+            val normalizedBlocked = blocked.filter { it.isDigit() || it == '+' }
+            normalizedBlocked.isNotBlank() &&
+                (normalized == normalizedBlocked || normalized.startsWith(normalizedBlocked))
+        }
+    }
+
     var keyboardHeight: Int
         get() = prefs.getInt(SOFT_KEYBOARD_HEIGHT, context.getDefaultKeyboardHeight())
         set(keyboardHeight) = prefs.edit().putInt(SOFT_KEYBOARD_HEIGHT, keyboardHeight).apply()

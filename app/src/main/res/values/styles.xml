@@ -1,6 +1,17 @@
 <resources>
 
-    <style name="AppTheme" parent="AppTheme.Base" />
+    <style name="AppTheme" parent="AppTheme.Base">
+        <item name="android:alertDialogTheme">@style/SmsAlertDialogTheme</item>
+        <item name="alertDialogTheme">@style/SmsAlertDialogTheme</item>
+        <item name="colorAccent">@color/miui_fab_green</item>
+    </style>
+
+    <style name="SmsAlertDialogTheme" parent="ThemeOverlay.AppCompat.Dialog.Alert">
+        <item name="android:textColorPrimary">@color/miui_primary_text</item>
+        <item name="android:textColorSecondary">@color/miui_secondary_text</item>
+        <item name="android:colorAccent">@color/miui_fab_green</item>
+        <item name="colorAccent">@color/miui_fab_green</item>
+    </style>
 
     <style name="SmsSettingsRow">
         <item name="android:layout_width">match_parent</item>

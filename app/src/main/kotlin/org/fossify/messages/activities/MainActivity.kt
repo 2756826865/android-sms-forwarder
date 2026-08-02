@@ -55,6 +55,7 @@ import org.fossify.messages.R
 import org.fossify.messages.adapters.ConversationsAdapter
 import org.fossify.messages.adapters.SearchResultsAdapter
 import org.fossify.messages.databinding.ActivityMainBinding
+import org.fossify.messages.dialogs.ConversationActionsPopup
 import org.fossify.messages.extensions.checkAndDeleteOldRecycleBinMessages
 import org.fossify.messages.extensions.clearAllMessagesIfNeeded
 import org.fossify.messages.extensions.clearExpiredScheduledMessages
@@ -75,6 +76,7 @@ import org.fossify.messages.models.Conversation
 import org.fossify.messages.models.Events
 import org.fossify.messages.models.Message
 import org.fossify.messages.models.SearchResult
+import org.fossify.messages.messaging.SmsRecoveryWorker
 import org.greenrobot.eventbus.EventBus
 import org.greenrobot.eventbus.Subscribe
 import org.greenrobot.eventbus.ThreadMode
@@ -88,6 +90,7 @@ class MainActivity : SimpleActivity() {
     private var storedFontSize = 0
     private var lastSearchedText = ""
     private var bus: EventBus? = null
+    private var isConversationSelectionMode = false
 
     private val binding by viewBinding(ActivityMainBinding::inflate)
     private val receiveSmsPermissionLauncher = registerForActivityResult(
@@ -105,8 +108,11 @@ class MainActivity : SimpleActivity() {
         config.showLetterAvatars = false
         config.useRecycleBin = true
         setupHomeSearch()
+        setupSelectionActions()
 
-        setupEdgeToEdge(padBottomImeAndSystem = listOf(binding.conversationsList))
+        setupEdgeToEdge(
+            padBottomImeAndSystem = listOf(binding.conversationsList, binding.selectionBottomBar)
+        )
 
         checkAndDeleteOldRecycleBinMessages()
         clearAllMessagesIfNeeded {
@@ -117,6 +123,7 @@ class MainActivity : SimpleActivity() {
 
     override fun onResume() {
         super.onResume()
+        SmsRecoveryWorker.enqueueNow(this)
         updateMenuColors()
 
         getOrCreateConversationsAdapter().apply {
@@ -162,7 +169,10 @@ class MainActivity : SimpleActivity() {
     }
 
     override fun onBackPressedCompat(): Boolean {
-        return if (binding.homeSearch.text?.isNotEmpty() == true) {
+        return if (isConversationSelectionMode) {
+            getOrCreateConversationsAdapter().finishActMode()
+            true
+        } else if (binding.homeSearch.text?.isNotEmpty() == true) {
             binding.homeSearch.setText("")
             true
         } else {
@@ -181,6 +191,19 @@ class MainActivity : SimpleActivity() {
                 binding.searchHolder.beGone()
                 searchTextChanged("", true)
             }
+        }
+    }
+
+    private fun setupSelectionActions() = binding.apply {
+        selectionClose.setOnClickListener { getOrCreateConversationsAdapter().finishActMode() }
+        selectionSelectAll.setOnClickListener {
+            getOrCreateConversationsAdapter().selectAllConversations()
+        }
+        selectionMarkRead.setOnClickListener {
+            getOrCreateConversationsAdapter().toggleSelectedReadState()
+        }
+        selectionDelete.setOnClickListener {
+            getOrCreateConversationsAdapter().deleteSelected()
         }
     }
 
@@ -411,7 +434,13 @@ class MainActivity : SimpleActivity() {
                 activity = this,
                 recyclerView = binding.conversationsList,
                 onRefresh = { notifyDatasetChanged() },
-                itemClick = { handleConversationClick(it) }
+                itemClick = { handleConversationClick(it) },
+                itemLongClick = { anchor, conversation ->
+                    showConversationActions(anchor, conversation)
+                },
+                selectionChanged = { active, count ->
+                    updateConversationSelectionUi(active, count)
+                },
             )
 
             binding.conversationsList.adapter = currAdapter
@@ -420,6 +449,53 @@ class MainActivity : SimpleActivity() {
             }
         }
         return currAdapter as ConversationsAdapter
+    }
+
+    private fun showConversationActions(anchor: android.view.View, conversation: Conversation) {
+        val pinned = config.pinnedConversations.contains(conversation.threadId.toString())
+        ConversationActionsPopup(this, conversation, pinned) { action ->
+            val adapter = getOrCreateConversationsAdapter()
+            when (action) {
+                ConversationActionsPopup.ACTION_READ -> adapter.performSingleAction(
+                    conversation,
+                    if (conversation.read) R.id.cab_mark_as_unread else R.id.cab_mark_as_read,
+                )
+
+                ConversationActionsPopup.ACTION_PIN -> adapter.performSingleAction(
+                    conversation,
+                    if (pinned) R.id.cab_unpin_conversation else R.id.cab_pin_conversation,
+                )
+
+                ConversationActionsPopup.ACTION_DELETE ->
+                    adapter.performSingleAction(conversation, R.id.cab_delete)
+
+                ConversationActionsPopup.ACTION_MULTI -> adapter.startSelection(conversation)
+            }
+        }.show(anchor)
+    }
+
+    private fun updateConversationSelectionUi(active: Boolean, count: Int) = binding.apply {
+        isConversationSelectionMode = active
+        homeNormalTopRow.beGoneIf(active)
+        selectionTopRow.beVisibleIf(active)
+        selectionTitle.beVisibleIf(active)
+        selectionBottomBar.beVisibleIf(active)
+        selectionTitle.text = getString(R.string.selected_conversations, count)
+        conversationsFab.beGoneIf(active)
+        if (!active) conversationsFab.beVisible()
+        selectionMarkRead.text = getString(
+            if (count > 0 && getOrCreateConversationsAdapter().selectedHasUnread()) {
+                R.string.mark_as_read
+            } else {
+                R.string.mark_as_unread
+            }
+        )
+        conversationsList.setPadding(
+            conversationsList.paddingLeft,
+            conversationsList.paddingTop,
+            conversationsList.paddingRight,
+            if (active) (88 * resources.displayMetrics.density).toInt() else 0,
+        )
     }
 
     private fun setupConversations(

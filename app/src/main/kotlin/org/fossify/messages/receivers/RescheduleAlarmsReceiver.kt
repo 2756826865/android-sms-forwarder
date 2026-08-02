@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.Intent
 import org.fossify.commons.helpers.ensureBackgroundThread
 import org.fossify.messages.extensions.rescheduleAllScheduledMessages
+import org.fossify.messages.messaging.SmsRecoveryWorker
+import org.fossify.messages.services.SmsKeepAliveService
 
 /**
  * Reschedules alarms after boot/package updates.
@@ -13,8 +15,14 @@ class RescheduleAlarmsReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val pendingResult = goAsync()
         ensureBackgroundThread {
-            context.rescheduleAllScheduledMessages()
-            pendingResult.finish()
+            try {
+                context.rescheduleAllScheduledMessages()
+                SmsRecoveryWorker.schedule(context)
+                SmsRecoveryWorker.enqueueNow(context)
+                SmsKeepAliveService.ensureStarted(context)
+            } finally {
+                pendingResult.finish()
+            }
         }
     }
 }

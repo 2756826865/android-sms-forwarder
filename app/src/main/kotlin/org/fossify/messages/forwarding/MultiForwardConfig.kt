@@ -27,6 +27,14 @@ class MultiForwardConfig(context: Context) {
         get() = prefs.getString(KEY_SIM_TWO_LABEL, "").orEmpty()
         set(value) = prefs.edit().putString(KEY_SIM_TWO_LABEL, value.trim()).apply()
 
+    var simOneNumber: String
+        get() = prefs.getString(KEY_SIM_ONE_NUMBER, "").orEmpty()
+        set(value) = prefs.edit().putString(KEY_SIM_ONE_NUMBER, value.trim()).apply()
+
+    var simTwoNumber: String
+        get() = prefs.getString(KEY_SIM_TWO_NUMBER, "").orEmpty()
+        set(value) = prefs.edit().putString(KEY_SIM_TWO_NUMBER, value.trim()).apply()
+
     var templateMode: Int
         get() = prefs.getInt(KEY_TEMPLATE_MODE, TEMPLATE_COMPACT).coerceIn(TEMPLATE_COMPACT, TEMPLATE_DETAILED)
         set(value) = prefs.edit().putInt(KEY_TEMPLATE_MODE, value.coerceIn(TEMPLATE_COMPACT, TEMPLATE_DETAILED)).apply()
@@ -44,6 +52,12 @@ class MultiForwardConfig(context: Context) {
     fun customSimLabel(slotIndex: Int): String = when (slotIndex) {
         0 -> simOneLabel
         1 -> simTwoLabel
+        else -> ""
+    }
+
+    fun customSimNumber(slotIndex: Int): String = when (slotIndex) {
+        0 -> simOneNumber
+        1 -> simTwoNumber
         else -> ""
     }
 
@@ -141,6 +155,8 @@ class MultiForwardConfig(context: Context) {
         private const val KEY_LAST_STATUS = "last_status"
         private const val KEY_SIM_ONE_LABEL = "sim_one_label"
         private const val KEY_SIM_TWO_LABEL = "sim_two_label"
+        private const val KEY_SIM_ONE_NUMBER = "sim_one_number"
+        private const val KEY_SIM_TWO_NUMBER = "sim_two_number"
         private const val KEY_TEMPLATE_MODE = "template_mode"
         private const val KEY_ACCEPTED_DISCLAIMER_VERSION = "accepted_disclaimer_version"
 
