@@ -39,6 +39,9 @@ jobs:
           test -n "$ANDROID_KEYSTORE_BASE64"
           echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/sms-forwarder-release.jks"
 
+      - name: Fix gradlew permissions
+        run: chmod +x gradlew
+
       - name: Build signed release APK
         env:
           SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
