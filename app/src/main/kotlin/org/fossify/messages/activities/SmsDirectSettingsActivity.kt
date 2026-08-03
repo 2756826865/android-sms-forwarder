@@ -1,4 +1,4 @@
-﻿package org.fossify.messages.activities
+package org.fossify.messages.activities
 
 import android.graphics.Color
 import android.net.ConnectivityManager
