@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
@@ -31,58 +31,22 @@
             android:padding="16dp">
 
             <com.google.android.material.switchmaterial.SwitchMaterial
-                android:id="@+id/wecom_enabled"
+                android:id="@+id/wecom_bot_enabled"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="启用企业微信转发"
+                android:text="启用企业微信应用消息转发"
                 android:textColor="#111111" />
 
             <com.google.android.material.textfield.TextInputLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
-                android:hint="CorpId">
+                android:hint="Webhook 地址">
                 <com.google.android.material.textfield.TextInputEditText
-                    android:id="@+id/wecom_corp_id"
+                    android:id="@+id/wecom_bot_webhook"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:inputType="text" />
-            </com.google.android.material.textfield.TextInputLayout>
-
-            <com.google.android.material.textfield.TextInputLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:hint="AgentId">
-                <com.google.android.material.textfield.TextInputEditText
-                    android:id="@+id/wecom_agent_id"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:inputType="number" />
-            </com.google.android.material.textfield.TextInputLayout>
-
-            <com.google.android.material.textfield.TextInputLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:hint="Secret">
-                <com.google.android.material.textfield.TextInputEditText
-                    android:id="@+id/wecom_secret"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:inputType="text" />
-            </com.google.android.material.textfield.TextInputLayout>
-
-            <com.google.android.material.textfield.TextInputLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:hint="接收对象（可选，留空则发送给所有人）">
-                <com.google.android.material.textfield.TextInputEditText
-                    android:id="@+id/wecom_to_user"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:inputType="text" />
+                    android:inputType="textUri" />
             </com.google.android.material.textfield.TextInputLayout>
 
             <View
@@ -105,7 +69,7 @@
                 android:layout_marginTop="8dp"
                 android:hint="测试发送方">
                 <com.google.android.material.textfield.TextInputEditText
-                    android:id="@+id/wecom_test_sender"
+                    android:id="@+id/wecom_bot_test_sender"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:inputType="phone" />
@@ -117,7 +81,7 @@
                 android:layout_marginTop="8dp"
                 android:hint="测试短信正文">
                 <com.google.android.material.textfield.TextInputEditText
-                    android:id="@+id/wecom_test_body"
+                    android:id="@+id/wecom_bot_test_body"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:inputType="textMultiLine"
@@ -125,7 +89,7 @@
             </com.google.android.material.textfield.TextInputLayout>
 
             <com.google.android.material.button.MaterialButton
-                android:id="@+id/wecom_test"
+                android:id="@+id/wecom_bot_test"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
@@ -133,15 +97,12 @@
                 android:backgroundTint="#159447" />
 
             <com.google.android.material.button.MaterialButton
-                android:id="@+id/wecom_save"
+                android:id="@+id/wecom_bot_save"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
                 android:text="保存配置"
                 android:backgroundTint="#111111" />
-        </LinearLayout>
-    </androidx.core.widget.NestedScrollView>
-</androidx.coordinatorlayout.widget.CoordinatorLayout>
 
             <View
                 android:layout_width="match_parent"
@@ -156,3 +117,5 @@
                 android:textColor="#999999"
                 android:textSize="11sp" />
         </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+</androidx.coordinatorlayout.widget.CoordinatorLayout>
