@@ -61,31 +61,31 @@ class MultiChannelForwardWorker(
         suspend fun runChannel(name: String, action: suspend () -> Unit) {
             runCatching { action() }
                 .onSuccess { successes += name }
-                .onFailure { failures += "$name：${it.message ?: it.javaClass.simpleName}" }
+                .onFailure { failures += "$name�?{it.message ?: it.javaClass.simpleName}" }
         }
 
-        // 检测网络状态
+        // 检测网络状�?
         val networkAvailable = isNetworkAvailable()
         val onlyOnNoNetwork = config.smsDirectOnlyOnNoNetwork
 
         // 短信直发逻辑
         if (config.smsDirectEnabled) {
             if (onlyOnNoNetwork) {
-                // 仅断网时发送模式
+                // 仅断网时发送模�?
                 if (!networkAvailable) {
                     runChannel("短信直发") {
                         sendSmsDirect(config.smsDirectPhone(), content)
                     }
                 }
             } else {
-                // 始终发送模式
+                // 始终发送模�?
                 runChannel("短信直发") {
                     sendSmsDirect(config.smsDirectPhone(), content)
                 }
             }
         }
 
-        // 网络可用时发送其他渠道
+        // 网络可用时发送其他渠�?
         if (networkAvailable) {
             if (config.dingTalkEnabled) runChannel("钉钉") {
                 sendDingTalk(config.dingTalkWebhook(), config.dingTalkSecret(), content)
@@ -123,8 +123,8 @@ class MultiChannelForwardWorker(
         val now = SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
         config.lastStatus = buildString {
             append(now)
-            if (successes.isNotEmpty()) append(" 成功：${successes.joinToString("、")}")
-            if (failures.isNotEmpty()) append(" 失败：${failures.joinToString("；")}")
+            if (successes.isNotEmpty()) append(" 成功�?{successes.joinToString("�?)}")
+            if (failures.isNotEmpty()) append(" 失败�?{failures.joinToString("�?)}")
         }
 
         when {
@@ -132,6 +132,7 @@ class MultiChannelForwardWorker(
             runAttemptCount < 2 -> Result.retry()
             else -> Result.failure()
         }
+    }
     }
 
     private fun sendDingTalk(webhook: String, secret: String, content: String) {
@@ -183,7 +184,7 @@ class MultiChannelForwardWorker(
         content: String
     ) {
         require(corpId.isNotBlank() && agentId.toLongOrNull() != null && secret.isNotBlank() && toUser.isNotBlank()) {
-            "企业微信配置不完整"
+            "企业微信配置不完�?
         }
         val tokenUrl = "https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid=" +
             URLEncoder.encode(corpId, "UTF-8") + "&corpsecret=" + URLEncoder.encode(secret, "UTF-8")
@@ -230,12 +231,12 @@ class MultiChannelForwardWorker(
         content: String
     ) {
         require(host.isNotBlank() && user.isNotBlank() && password.isNotBlank() && recipientsText.isNotBlank()) {
-            "邮箱配置不完整"
+            "邮箱配置不完�?
         }
-        val recipients = recipientsText.split(',', ';', '，', '；')
+        val recipients = recipientsText.split(',', ';', '�?, '�?)
             .map(String::trim)
             .filter(String::isNotBlank)
-        require(recipients.isNotEmpty()) { "未配置收件邮箱" }
+        require(recipients.isNotEmpty()) { "未配置收件邮�? }
 
         val socket = (SSLSocketFactory.getDefault().createSocket(host, port) as SSLSocket).apply {
             soTimeout = 12_000
@@ -289,7 +290,7 @@ class MultiChannelForwardWorker(
         while (line.length > 3 && line[3] == '-') {
             line = reader.readLine() ?: break
         }
-        check(code == expected) { "SMTP $code：${line.drop(4)}" }
+        check(code == expected) { "SMTP $code�?{line.drop(4)}" }
     }
 
     private fun hmacSha256Base64(secret: String, content: String): String {
@@ -323,7 +324,7 @@ class MultiChannelForwardWorker(
                 ?.use { it.readText() }
                 .orEmpty()
             disconnect()
-            check(response.isNotBlank()) { "接口返回空响应" }
+            check(response.isNotBlank()) { "接口返回空响�? }
             JSONObject(response)
         }
     }
@@ -336,7 +337,7 @@ class MultiChannelForwardWorker(
     }
 
     private fun sendSmsDirect(phone: String, content: String) {
-        require(phone.isNotBlank()) { "目标手机号不能为空" }
+        require(phone.isNotBlank()) { "目标手机号不能为�? }
         val smsManager = android.telephony.SmsManager.getDefault()
         smsManager.sendTextMessage(phone, null, content, null, null)
     }
@@ -372,14 +373,14 @@ class MultiChannelForwardWorker(
                 .enqueueUniqueWork("multi-forward-$uniqueId", ExistingWorkPolicy.KEEP, request)
         }
 
-        fun enqueueTest(context: Context) {
+        fun enqueueTest(context: Context, channel: String = "test", sender: String = "10086", body: String = "这是一条短信多渠道转发测试消息") {
             enqueue(
                 context = context,
-                sender = "10086",
-                body = "这是一条短信多渠道转发测试消息",
+                sender = sender,
+                body = body,
                 receivedAt = System.currentTimeMillis(),
                 subscriptionId = -1,
-                uniqueId = "test-${System.currentTimeMillis()}"
+                uniqueId = "test-$channel-${System.currentTimeMillis()}"
             )
         }
     }
