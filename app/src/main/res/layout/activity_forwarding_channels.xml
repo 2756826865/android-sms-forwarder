@@ -112,6 +112,18 @@
                 <View style="@style/SmsSettingsDivider" />
 
                 <LinearLayout
+                    android:id="@+id/forwarding_wecom_bot_holder"
+                    style="@style/SmsForwardingRow">
+                    <LinearLayout style="@style/SmsForwardingTextColumn">
+                        <TextView style="@style/SmsForwardingTitle" android:text="@string/forwarding_wecom_bot" />
+                        <TextView android:id="@+id/forwarding_wecom_bot_summary" style="@style/SmsForwardingSummary" />
+                    </LinearLayout>
+                    <ImageView style="@style/SmsForwardingChevron" />
+                </LinearLayout>
+
+                <View style="@style/SmsSettingsDivider" />
+
+                <LinearLayout
                     android:id="@+id/forwarding_email_holder"
                     style="@style/SmsForwardingRow">
                     <LinearLayout style="@style/SmsForwardingTextColumn">

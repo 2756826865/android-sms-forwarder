@@ -54,6 +54,7 @@ class ForwardingChannelsActivity : SimpleActivity() {
         forwardingDingtalkHolder.setOnClickListener { showDingTalkDialog() }
         forwardingFeishuHolder.setOnClickListener { showFeishuDialog() }
         forwardingWecomHolder.setOnClickListener { showWeComDialog() }
+        forwardingWecomBotHolder.setOnClickListener { showWeComBotDialog() }
         forwardingEmailHolder.setOnClickListener { showEmailDialog() }
         forwardingSimOneHolder.setOnClickListener { showSimLabelDialog(0) }
         forwardingSimTwoHolder.setOnClickListener { showSimLabelDialog(1) }
@@ -224,6 +225,20 @@ class ForwardingChannelsActivity : SimpleActivity() {
         }
     }
 
+    private fun showWeComBotDialog() {
+        showConfigDialog(
+            title = getString(R.string.forwarding_wecom_bot),
+            enabled = multiConfig.weComBotEnabled,
+            fields = listOf(
+                Field(getString(R.string.forwarding_webhook), multiConfig.weComBotWebhook())
+            )
+        ) { enabled, values ->
+            multiConfig.saveWeComBot(values[0])
+            multiConfig.weComBotEnabled = enabled && values[0].isNotBlank() && values[0].startsWith("https://")
+            !enabled || multiConfig.weComBotEnabled
+        }
+    }
+
     private fun showEmailDialog() {
         showConfigDialog(
             title = getString(R.string.forwarding_email),
@@ -304,6 +319,7 @@ class ForwardingChannelsActivity : SimpleActivity() {
         forwardingDingtalkSummary.text = statusText(multiConfig.dingTalkWebhook().isNotBlank(), multiConfig.dingTalkEnabled)
         forwardingFeishuSummary.text = statusText(multiConfig.feishuWebhook().isNotBlank(), multiConfig.feishuEnabled)
         forwardingWecomSummary.text = statusText(multiConfig.weComCorpId().isNotBlank(), multiConfig.weComEnabled)
+        forwardingWecomBotSummary.text = statusText(multiConfig.weComBotWebhook().isNotBlank(), multiConfig.weComBotEnabled)
         forwardingEmailSummary.text = statusText(multiConfig.emailHost().isNotBlank(), multiConfig.emailEnabled)
         forwardingSimOneSummary.text = simSummary(multiConfig.simOneLabel, multiConfig.simOneNumber)
         forwardingSimTwoSummary.text = simSummary(multiConfig.simTwoLabel, multiConfig.simTwoNumber)

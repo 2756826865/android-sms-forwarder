@@ -77,6 +77,7 @@
     <string name="forwarding_dingtalk">钉钉群机器人</string>
     <string name="forwarding_feishu">飞书群机器人</string>
     <string name="forwarding_wecom">企业微信应用消息</string>
+    <string name="forwarding_wecom_bot">企业微信群机器人</string>
     <string name="forwarding_email">电子邮箱（SMTP SSL）</string>
     <string name="forwarding_configured_enabled">已配置 · 已启用</string>
     <string name="forwarding_configured_disabled">已配置 · 未启用</string>

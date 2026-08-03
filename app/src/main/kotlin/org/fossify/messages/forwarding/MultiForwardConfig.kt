@@ -17,6 +17,7 @@ class MultiForwardConfig(context: Context) {
     var dingTalkEnabled by booleanPreference(KEY_DINGTALK_ENABLED)
     var feishuEnabled by booleanPreference(KEY_FEISHU_ENABLED)
     var weComEnabled by booleanPreference(KEY_WECOM_ENABLED)
+    var weComBotEnabled by booleanPreference(KEY_WECOM_BOT_ENABLED)
     var emailEnabled by booleanPreference(KEY_EMAIL_ENABLED)
 
     var simOneLabel: String
@@ -97,6 +98,12 @@ class MultiForwardConfig(context: Context) {
     fun weComSecret() = getSecret(KEY_WECOM_SECRET)
     fun weComToUser() = getSecret(KEY_WECOM_TO_USER)
 
+    fun saveWeComBot(webhook: String) {
+        saveSecret(KEY_WECOM_BOT_WEBHOOK, webhook)
+    }
+
+    fun weComBotWebhook() = getSecret(KEY_WECOM_BOT_WEBHOOK)
+
     fun saveEmail(host: String, port: Int, user: String, password: String, recipients: String) {
         saveSecret(KEY_EMAIL_HOST, host)
         emailPort = port
@@ -110,7 +117,7 @@ class MultiForwardConfig(context: Context) {
     fun emailPassword() = getSecret(KEY_EMAIL_PASSWORD)
     fun emailRecipients() = getSecret(KEY_EMAIL_RECIPIENTS)
 
-    fun anyEnabled() = dingTalkEnabled || feishuEnabled || weComEnabled || emailEnabled
+    fun anyEnabled() = dingTalkEnabled || feishuEnabled || weComEnabled || weComBotEnabled || emailEnabled
 
     private fun booleanPreference(key: String) = object : kotlin.properties.ReadWriteProperty<Any?, Boolean> {
         override fun getValue(thisRef: Any?, property: kotlin.reflect.KProperty<*>) =
@@ -146,6 +153,8 @@ class MultiForwardConfig(context: Context) {
         private const val KEY_WECOM_AGENT_ID = "wecom_agent_id"
         private const val KEY_WECOM_SECRET = "wecom_secret"
         private const val KEY_WECOM_TO_USER = "wecom_to_user"
+        private const val KEY_WECOM_BOT_ENABLED = "wecom_bot_enabled"
+        private const val KEY_WECOM_BOT_WEBHOOK = "wecom_bot_webhook"
         private const val KEY_EMAIL_ENABLED = "email_enabled"
         private const val KEY_EMAIL_HOST = "email_host"
         private const val KEY_EMAIL_PORT = "email_port"

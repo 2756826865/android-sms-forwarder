@@ -79,6 +79,9 @@ class MultiChannelForwardWorker(
                 content
             )
         }
+        if (config.weComBotEnabled) runChannel("企业微信群机器人") {
+            sendWeComBot(config.weComBotWebhook(), content)
+        }
         if (config.emailEnabled) runChannel("邮箱") {
             sendEmail(
                 config.emailHost(),
@@ -175,6 +178,19 @@ class MultiChannelForwardWorker(
         )
         check(result.optInt("errcode", -1) == 0) {
             result.optString("errmsg", "企业微信接口拒绝请求")
+        }
+    }
+
+    private fun sendWeComBot(webhook: String, content: String) {
+        requireHttps(webhook)
+        val result = postJson(
+            webhook,
+            JSONObject()
+                .put("msgtype", "text")
+                .put("text", JSONObject().put("content", content))
+        )
+        check(result.optInt("errcode", -1) == 0) {
+            result.optString("errmsg", "企业微信群机器人请求失败")
         }
     }
 
