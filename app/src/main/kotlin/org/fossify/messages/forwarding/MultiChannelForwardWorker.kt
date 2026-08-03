@@ -85,46 +85,44 @@ class MultiChannelForwardWorker(
             }
         }
 
-        // 网络可用时发送其他渠�?
+        // 网络可用时发送其他渠道
         if (networkAvailable) {
             if (config.dingTalkEnabled) runChannel("钉钉") {
                 sendDingTalk(config.dingTalkWebhook(), config.dingTalkSecret(), content)
             }
-        if (config.feishuEnabled) runChannel("飞书") {
-            sendFeishu(config.feishuWebhook(), config.feishuSecret(), content)
-        }
-        if (config.weComEnabled) runChannel("企业微信") {
-            sendWeCom(
-                config.weComCorpId(),
-                config.weComAgentId(),
-                config.weComSecret(),
-                config.weComToUser(),
-                content
-            )
-        }
-        if (config.weComBotEnabled) runChannel("企业微信群机器人") {
-            sendWeComBot(config.weComBotWebhook(), content)
-        }
-        if (config.emailEnabled) runChannel("邮箱") {
-            sendEmail(
-                config.emailHost(),
-                config.emailPort,
-                config.emailUser(),
-                config.emailPassword(),
-                config.emailRecipients(),
-                title,
-                content
-            )
-        }
-        if (config.smsDirectEnabled) runChannel("短信直发") {
-            sendSmsDirect(config.smsDirectPhone(), content)
+            if (config.feishuEnabled) runChannel("飞书") {
+                sendFeishu(config.feishuWebhook(), config.feishuSecret(), content)
+            }
+            if (config.weComEnabled) runChannel("企业微信") {
+                sendWeCom(
+                    config.weComCorpId(),
+                    config.weComAgentId(),
+                    config.weComSecret(),
+                    config.weComToUser(),
+                    content
+                )
+            }
+            if (config.weComBotEnabled) runChannel("企业微信群机器人") {
+                sendWeComBot(config.weComBotWebhook(), content)
+            }
+            if (config.emailEnabled) runChannel("邮箱") {
+                sendEmail(
+                    config.emailHost(),
+                    config.emailPort,
+                    config.emailUser(),
+                    config.emailPassword(),
+                    config.emailRecipients(),
+                    title,
+                    content
+                )
+            }
         }
 
         val now = SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
         config.lastStatus = buildString {
             append(now)
-            if (successes.isNotEmpty()) append(" 成功�?{successes.joinToString("�?)}")
-            if (failures.isNotEmpty()) append(" 失败�?{failures.joinToString("�?)}")
+            if (successes.isNotEmpty()) append(" 成功：${successes.joinToString("、")}")
+            if (failures.isNotEmpty()) append(" 失败：${failures.joinToString("；")}")
         }
 
         when {
@@ -132,7 +130,6 @@ class MultiChannelForwardWorker(
             runAttemptCount < 2 -> Result.retry()
             else -> Result.failure()
         }
-    }
     }
 
     private fun sendDingTalk(webhook: String, secret: String, content: String) {
@@ -184,7 +181,7 @@ class MultiChannelForwardWorker(
         content: String
     ) {
         require(corpId.isNotBlank() && agentId.toLongOrNull() != null && secret.isNotBlank() && toUser.isNotBlank()) {
-            "企业微信配置不完�?
+            "企业微信配置不完整"
         }
         val tokenUrl = "https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid=" +
             URLEncoder.encode(corpId, "UTF-8") + "&corpsecret=" + URLEncoder.encode(secret, "UTF-8")
@@ -231,12 +228,12 @@ class MultiChannelForwardWorker(
         content: String
     ) {
         require(host.isNotBlank() && user.isNotBlank() && password.isNotBlank() && recipientsText.isNotBlank()) {
-            "邮箱配置不完�?
+            "邮箱配置不完整"
         }
-        val recipients = recipientsText.split(',', ';', '�?, '�?)
+        val recipients = recipientsText.split(',', ';')
             .map(String::trim)
             .filter(String::isNotBlank)
-        require(recipients.isNotEmpty()) { "未配置收件邮�? }
+        require(recipients.isNotEmpty()) { "未配置收件邮箱" }
 
         val socket = (SSLSocketFactory.getDefault().createSocket(host, port) as SSLSocket).apply {
             soTimeout = 12_000
@@ -290,7 +287,7 @@ class MultiChannelForwardWorker(
         while (line.length > 3 && line[3] == '-') {
             line = reader.readLine() ?: break
         }
-        check(code == expected) { "SMTP $code�?{line.drop(4)}" }
+        check(code == expected) { "SMTP $code ${line.drop(4)}" }
     }
 
     private fun hmacSha256Base64(secret: String, content: String): String {
@@ -324,7 +321,7 @@ class MultiChannelForwardWorker(
                 ?.use { it.readText() }
                 .orEmpty()
             disconnect()
-            check(response.isNotBlank()) { "接口返回空响�? }
+            check(response.isNotBlank()) { "接口返回空响应" }
             JSONObject(response)
         }
     }
@@ -337,7 +334,7 @@ class MultiChannelForwardWorker(
     }
 
     private fun sendSmsDirect(phone: String, content: String) {
-        require(phone.isNotBlank()) { "目标手机号不能为�? }
+        require(phone.isNotBlank()) { "目标手机号不能为空" }
         val smsManager = android.telephony.SmsManager.getDefault()
         smsManager.sendTextMessage(phone, null, content, null, null)
     }
