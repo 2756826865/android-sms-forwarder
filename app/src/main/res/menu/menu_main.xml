@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    tools:ignore="AppCompatResource,AlwaysShowAction">
+    <item
+        android:id="@+id/show_recycle_bin"
+        android:showAsAction="never"
+        android:title="@string/show_the_recycle_bin"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/show_archived"
+        android:showAsAction="never"
+        android:title="@string/show_archived_conversations"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/pushplus_forwarding"
+        android:icon="@drawable/ic_send_vector"
+        android:showAsAction="never"
+        android:title="@string/pushplus_forwarding"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/resync_messages"
+        android:showAsAction="never"
+        android:title="@string/resync_all_messages"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/settings"
+        android:icon="@drawable/ic_settings_cog_vector"
+        android:showAsAction="always"
+        android:title="@string/settings"
+        app:showAsAction="always" />
+    <item
+        android:id="@+id/about"
+        android:icon="@drawable/ic_info_vector"
+        android:showAsAction="never"
+        android:title="@string/about"
+        app:showAsAction="never" />
+</menu>

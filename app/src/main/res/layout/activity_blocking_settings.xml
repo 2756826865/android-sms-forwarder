@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/miui_page_background">
+
+    <org.fossify.commons.views.MyAppBarLayout android:id="@+id/blocking_appbar" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@color/miui_page_background">
+        <com.google.android.material.appbar.MaterialToolbar android:id="@+id/blocking_toolbar" android:layout_width="match_parent" android:layout_height="?attr/actionBarSize" android:background="@color/miui_page_background" app:navigationIconTint="@color/miui_primary_text" app:title="" />
+    </org.fossify.commons.views.MyAppBarLayout>
+
+    <androidx.core.widget.NestedScrollView
+        android:id="@+id/blocking_scrollview"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fillViewport="true"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior">
+
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingHorizontal="20dp" android:paddingBottom="28dp">
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginStart="8dp" android:layout_marginTop="18dp" android:layout_marginBottom="26dp" android:text="@string/blocking_settings" android:textColor="@color/miui_primary_text" android:textSize="36sp" />
+
+            <LinearLayout android:layout_width="match_parent" android:layout_height="58dp" android:orientation="horizontal">
+                <TextView android:id="@+id/blocking_sim_one" android:layout_width="0dp" android:layout_height="match_parent" android:layout_marginEnd="6dp" android:layout_weight="1" android:background="@drawable/miui_segment_selected_background" android:gravity="center" android:text="@string/sim_card_one" android:textColor="@color/miui_primary_text" android:textSize="17sp" android:textStyle="bold" />
+                <TextView android:id="@+id/blocking_sim_two" android:layout_width="0dp" android:layout_height="match_parent" android:layout_marginStart="6dp" android:layout_weight="1" android:background="@drawable/miui_segment_background" android:gravity="center" android:text="@string/sim_card_two" android:textColor="@color/miui_secondary_text" android:textSize="17sp" />
+            </LinearLayout>
+
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="26dp" android:background="@drawable/settings_card_background" android:orientation="vertical" android:paddingVertical="4dp">
+                <TextView android:id="@+id/blocking_calls" android:layout_width="match_parent" android:layout_height="68dp" android:drawableEnd="@drawable/ic_chevron_right_vector" android:foreground="?attr/selectableItemBackground" android:gravity="center_vertical" android:paddingHorizontal="20dp" android:text="@string/call_blocking" android:textColor="@color/miui_primary_text" android:textSize="19sp" />
+                <View android:layout_width="match_parent" android:layout_height="1dp" android:layout_marginStart="20dp" android:background="@color/miui_divider" />
+                <TextView android:id="@+id/blocking_sms" android:layout_width="match_parent" android:layout_height="68dp" android:drawableEnd="@drawable/ic_chevron_right_vector" android:foreground="?attr/selectableItemBackground" android:gravity="center_vertical" android:paddingHorizontal="20dp" android:text="@string/sms_blocking" android:textColor="@color/miui_primary_text" android:textSize="19sp" />
+            </LinearLayout>
+
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginStart="8dp" android:layout_marginTop="26dp" android:layout_marginBottom="8dp" android:text="@string/list_management" android:textColor="@color/miui_section_text" android:textSize="15sp" />
+
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/settings_card_background" android:orientation="vertical" android:paddingVertical="4dp">
+                <LinearLayout android:id="@+id/blocking_blacklist" android:layout_width="match_parent" android:layout_height="92dp" android:foreground="?attr/selectableItemBackground" android:gravity="center_vertical" android:orientation="horizontal" android:paddingHorizontal="20dp">
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/blacklist_numbers" android:textColor="@color/miui_primary_text" android:textSize="19sp" />
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="@string/blacklist_summary" android:textColor="@color/miui_secondary_text" android:textSize="13sp" />
+                    </LinearLayout>
+                    <TextView android:id="@+id/blocking_blacklist_count" android:layout_width="wrap_content" android:layout_height="wrap_content" android:drawableEnd="@drawable/ic_chevron_right_vector" android:drawablePadding="8dp" android:textColor="@color/miui_secondary_text" android:textSize="15sp" />
+                </LinearLayout>
+                <View android:layout_width="match_parent" android:layout_height="1dp" android:layout_marginStart="20dp" android:background="@color/miui_divider" />
+                <LinearLayout android:id="@+id/blocking_whitelist" android:layout_width="match_parent" android:layout_height="92dp" android:foreground="?attr/selectableItemBackground" android:gravity="center_vertical" android:orientation="horizontal" android:paddingHorizontal="20dp">
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/whitelist_numbers" android:textColor="@color/miui_primary_text" android:textSize="19sp" />
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="@string/whitelist_summary" android:textColor="@color/miui_secondary_text" android:textSize="13sp" />
+                    </LinearLayout>
+                    <TextView android:id="@+id/blocking_whitelist_count" android:layout_width="wrap_content" android:layout_height="wrap_content" android:drawableEnd="@drawable/ic_chevron_right_vector" android:drawablePadding="8dp" android:textColor="@color/miui_secondary_text" android:textSize="15sp" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginStart="8dp" android:layout_marginTop="26dp" android:layout_marginBottom="8dp" android:text="@string/settings_other" android:textColor="@color/miui_section_text" android:textSize="15sp" />
+            <LinearLayout android:layout_width="match_parent" android:layout_height="68dp" android:background="@drawable/settings_card_background" android:gravity="center_vertical" android:orientation="horizontal" android:paddingHorizontal="20dp">
+                <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="@string/blocking_notifications" android:textColor="@color/miui_primary_text" android:textSize="19sp" />
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/blocking_notifications_all" android:textColor="@color/miui_secondary_text" android:textSize="15sp" />
+            </LinearLayout>
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/miui_page_background">
+
+    <org.fossify.commons.views.MyAppBarLayout android:id="@+id/whitelist_appbar" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@color/miui_page_background">
+        <com.google.android.material.appbar.MaterialToolbar android:id="@+id/whitelist_toolbar" android:layout_width="match_parent" android:layout_height="?attr/actionBarSize" android:background="@color/miui_page_background" app:navigationIconTint="@color/miui_primary_text" app:title="" />
+    </org.fossify.commons.views.MyAppBarLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:paddingHorizontal="20dp"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior">
+
+        <TextView android:id="@+id/whitelist_title_text" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginStart="8dp" android:layout_marginTop="18dp" android:layout_marginBottom="24dp" android:text="@string/whitelist_title" android:textColor="@color/miui_primary_text" android:textSize="36sp" />
+
+        <FrameLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:background="@drawable/settings_card_background">
+            <ListView android:id="@+id/whitelist_list" android:layout_width="match_parent" android:layout_height="match_parent" android:divider="@color/miui_divider" android:dividerHeight="1dp" android:paddingVertical="8dp" />
+            <TextView android:id="@+id/whitelist_empty" android:layout_width="match_parent" android:layout_height="match_parent" android:gravity="center" android:text="@string/whitelist_empty" android:textColor="@color/miui_secondary_text" android:textSize="16sp" />
+        </FrameLayout>
+    </LinearLayout>
+
+    <org.fossify.commons.views.MyFloatingActionButton
+        android:id="@+id/whitelist_fab"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_margin="20dp"
+        android:src="@drawable/ic_plus_vector"
+        android:tint="@android:color/white"
+        app:backgroundTint="@color/miui_fab_green"
+        app:applyWindowInsets="true" />
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

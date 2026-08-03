@@ -1,0 +1,326 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/main_coordinator"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@android:color/white">
+
+    <org.fossify.commons.views.MyAppBarLayout
+        android:id="@+id/main_appbar"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:visibility="gone">
+
+        <com.google.android.material.appbar.MaterialToolbar
+            android:id="@+id/main_menu"
+            android:layout_width="match_parent"
+            android:layout_height="?attr/actionBarSize"
+            android:background="@android:color/white"
+            app:titleTextColor="#111111" />
+
+    </org.fossify.commons.views.MyAppBarLayout>
+
+    <RelativeLayout
+        android:id="@+id/main_nested_scrollview"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fillViewport="true"
+        android:scrollbars="none"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior">
+
+        <RelativeLayout
+            android:id="@+id/main_coordinator_wrapper"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent">
+
+            <LinearLayout
+                android:id="@+id/home_header"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_alignParentTop="true"
+                android:background="@android:color/white"
+                android:orientation="vertical"
+                android:paddingStart="20dp"
+                android:paddingTop="48dp"
+                android:paddingEnd="20dp"
+                android:paddingBottom="16dp">
+
+                <LinearLayout
+                    android:id="@+id/selection_top_row"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:visibility="gone">
+
+                    <ImageButton
+                        android:id="@+id/selection_close"
+                        android:layout_width="52dp"
+                        android:layout_height="52dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="@android:string/cancel"
+                        android:padding="13dp"
+                        android:src="@drawable/ic_cross_vector"
+                        app:tint="@color/miui_primary_text" />
+
+                    <Space
+                        android:layout_width="0dp"
+                        android:layout_height="1dp"
+                        android:layout_weight="1" />
+
+                    <ImageButton
+                        android:id="@+id/selection_select_all"
+                        android:layout_width="52dp"
+                        android:layout_height="52dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="@string/bulk_send_select_all"
+                        android:padding="12dp"
+                        android:src="@drawable/ic_select_all_vector"
+                        app:tint="@color/miui_primary_text" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/selection_title"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:layout_marginTop="10dp"
+                    android:fontFamily="sans-serif"
+                    android:textColor="@color/miui_primary_text"
+                    android:textSize="38sp"
+                    android:visibility="gone"
+                    tools:text="已选择 3 项"
+                    tools:visibility="visible" />
+
+                <LinearLayout
+                    android:id="@+id/home_normal_top_row"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/home_title"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:fontFamily="sans-serif"
+                        android:text="@string/home_primary"
+                        android:textColor="@color/miui_primary_text"
+                        android:textSize="38sp"
+                        android:textStyle="normal" />
+
+                    <ImageButton
+                        android:id="@+id/home_mark_all_read"
+                        android:layout_width="52dp"
+                        android:layout_height="52dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="@string/mark_all_read"
+                        android:padding="13dp"
+                        android:src="@drawable/ic_check_double_vector"
+                        app:tint="@color/miui_primary_text" />
+
+                    <ImageButton
+                        android:id="@+id/home_settings"
+                        android:layout_width="52dp"
+                        android:layout_height="52dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="@string/settings"
+                        android:padding="13dp"
+                        android:src="@drawable/ic_settings_cog_vector"
+                        app:tint="@color/miui_primary_text" />
+                </LinearLayout>
+
+                <org.fossify.commons.views.MyEditText
+                    android:id="@+id/home_search"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:layout_marginTop="14dp"
+                    android:background="@drawable/home_search_background"
+                    android:drawableStart="@drawable/ic_search_vector"
+                    android:drawablePadding="12dp"
+                    android:hint="@string/home_search_sms"
+                    android:imeOptions="actionSearch"
+                    android:inputType="text"
+                    android:maxLines="1"
+                    android:paddingHorizontal="18dp"
+                    android:fontFamily="sans-serif"
+                    android:textColor="@color/miui_primary_text"
+                    android:textColorHint="@color/miui_hint_text"
+                    android:textSize="17sp" />
+            </LinearLayout>
+
+            <RelativeLayout
+                android:id="@+id/main_holder"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_below="@id/home_header">
+
+                <com.google.android.material.progressindicator.LinearProgressIndicator
+                    android:id="@+id/conversations_progress_bar"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_alignParentTop="true"
+                    android:indeterminate="true"
+                    android:visibility="gone"
+                    app:hideAnimationBehavior="outward"
+                    app:showAnimationBehavior="inward"
+                    app:showDelay="250"
+                    tools:visibility="visible" />
+
+                <org.fossify.commons.views.MyTextView
+                    android:id="@+id/no_conversations_placeholder"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_centerHorizontal="true"
+                    android:layout_marginTop="@dimen/bigger_margin"
+                    android:alpha="1"
+                    android:gravity="center"
+                    android:paddingLeft="@dimen/activity_margin"
+                    android:paddingRight="@dimen/activity_margin"
+                    android:text="@string/no_conversations_found"
+                    android:textColor="@color/miui_secondary_text"
+                    android:textSize="@dimen/bigger_text_size"
+                    android:textStyle="italic"
+                    android:visibility="gone" />
+
+                <org.fossify.commons.views.MyTextView
+                    android:id="@+id/no_conversations_placeholder_2"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_below="@+id/no_conversations_placeholder"
+                    android:layout_centerHorizontal="true"
+                    android:background="@drawable/ripple_all_corners"
+                    android:gravity="center"
+                    android:padding="@dimen/activity_margin"
+                    android:text="@string/start_conversation"
+                    android:textSize="@dimen/bigger_text_size"
+                    android:visibility="gone" />
+
+                <com.qtalk.recyclerviewfastscroller.RecyclerViewFastScroller
+                    android:id="@+id/conversations_fastscroller"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content">
+
+                    <org.fossify.commons.views.MyRecyclerView
+                        android:id="@+id/conversations_list"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:clipToPadding="false"
+                        android:layoutAnimation="@anim/layout_animation"
+                        android:overScrollMode="ifContentScrolls"
+                        android:scrollbars="none"
+                        app:layoutManager="org.fossify.commons.views.MyLinearLayoutManager" />
+
+                </com.qtalk.recyclerviewfastscroller.RecyclerViewFastScroller>
+            </RelativeLayout>
+
+        <RelativeLayout
+            android:id="@+id/search_holder"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_below="@id/home_header"
+            android:alpha="0"
+            android:visibility="gone">
+
+            <org.fossify.commons.views.MyTextView
+                android:id="@+id/search_placeholder"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_centerHorizontal="true"
+                android:layout_marginTop="@dimen/activity_margin"
+                android:alpha="1"
+                android:gravity="center"
+                android:paddingStart="@dimen/activity_margin"
+                android:paddingEnd="@dimen/activity_margin"
+                android:text="@string/no_items_found"
+                android:textColor="@color/miui_secondary_text"
+                android:textSize="@dimen/bigger_text_size"
+                android:textStyle="italic" />
+
+            <org.fossify.commons.views.MyTextView
+                android:id="@+id/search_placeholder_2"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_below="@+id/search_placeholder"
+                android:layout_centerHorizontal="true"
+                android:alpha="1"
+                android:gravity="center"
+                android:paddingStart="@dimen/activity_margin"
+                android:paddingTop="@dimen/medium_margin"
+                android:paddingEnd="@dimen/activity_margin"
+                android:paddingBottom="@dimen/medium_margin"
+                android:text="@string/type_2_characters"
+                android:textColor="@color/miui_secondary_text"
+                android:textSize="@dimen/bigger_text_size"
+                android:textStyle="italic" />
+
+            <org.fossify.commons.views.MyRecyclerView
+                android:id="@+id/search_results_list"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:clipToPadding="false"
+                android:scrollbars="vertical"
+                app:layoutManager="org.fossify.commons.views.MyLinearLayoutManager" />
+
+        </RelativeLayout>
+        </RelativeLayout>
+    </RelativeLayout>
+
+    <org.fossify.commons.views.MyFloatingActionButton
+        android:id="@+id/conversations_fab"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_margin="@dimen/activity_margin"
+        android:src="@drawable/ic_plus_vector"
+        android:tint="@android:color/white"
+        app:backgroundTint="@color/miui_fab_green"
+        app:fabCustomSize="64dp"
+        app:shapeAppearanceOverlay="@style/CircularFabShape"
+        app:applyWindowInsets="true" />
+
+    <LinearLayout
+        android:id="@+id/selection_bottom_bar"
+        android:layout_width="match_parent"
+        android:layout_height="80dp"
+        android:layout_gravity="bottom"
+        android:background="@android:color/white"
+        android:elevation="12dp"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:paddingHorizontal="42dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/selection_mark_read"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:drawableTop="@drawable/ic_check_vector"
+            android:drawablePadding="3dp"
+            android:fontFamily="sans-serif"
+            android:gravity="center"
+            android:text="@string/mark_as_read"
+            android:textColor="@color/miui_primary_text"
+            android:textSize="14sp"
+            app:drawableTint="@color/miui_primary_text" />
+
+        <TextView
+            android:id="@+id/selection_delete"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:drawableTop="@drawable/ic_delete_vector"
+            android:drawablePadding="3dp"
+            android:fontFamily="sans-serif"
+            android:gravity="center"
+            android:text="@string/delete"
+            android:textColor="@color/miui_primary_text"
+            android:textSize="14sp"
+            app:drawableTint="@color/miui_primary_text" />
+    </LinearLayout>
+
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

@@ -1,0 +1,92 @@
+name: Build custom APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Read application version
+        id: version
+        shell: bash
+        run: |
+          version="$(sed -n 's/^VERSION_NAME=//p' gradle.properties)"
+          test -n "$version"
+          echo "name=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare release signing key
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          test -n "$ANDROID_KEYSTORE_BASE64"
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/sms-forwarder-release.jks"
+
+      - name: Build signed release APK
+        env:
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+          SIGNING_STORE_FILE: ${{ runner.temp }}/sms-forwarder-release.jks
+          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+        run: ./gradlew :app:assembleCoreRelease
+
+      - name: Verify release and normalize filename
+        shell: bash
+        run: |
+          source_apk="$(find app/build/outputs/apk/core/release -maxdepth 1 -name '*.apk' -print -quit)"
+          test -n "$source_apk"
+          mkdir -p deliverables
+          apk="deliverables/SMS-Forwarder-${{ steps.version.outputs.name }}-release.apk"
+          cp "$source_apk" "$apk"
+          if unzip -p "$apk" 'classes*.dex' | strings | grep -Fq 'You are using a fake version'; then
+            echo 'Blocked: upstream fake-version warning remains in release bytecode.' >&2
+            exit 1
+          fi
+          jarsigner -verify "$apk"
+          sha256sum "$apk" > "$apk.sha256"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: SMS-Forwarder-${{ steps.version.outputs.name }}-release
+          path: |
+            deliverables/SMS-Forwarder-${{ steps.version.outputs.name }}-release.apk
+            deliverables/SMS-Forwarder-${{ steps.version.outputs.name }}-release.apk.sha256
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        if: github.ref == 'refs/heads/main'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${{ steps.version.outputs.name }}"
+          tag="v$version"
+          apk="deliverables/SMS-Forwarder-$version-release.apk"
+          checksum="$apk.sha256"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $tag already exists; keeping the published assets unchanged."
+          else
+            gh release create "$tag" "$apk" "$checksum" \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title "短信转发器 $version" \
+              --generate-notes
+          fi

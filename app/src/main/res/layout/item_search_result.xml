@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/search_result_holder"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="?attr/selectableItemBackground"
+    android:minHeight="@dimen/two_line_list_item_min_height"
+    android:paddingStart="@dimen/activity_margin"
+    android:paddingTop="@dimen/medium_margin"
+    android:paddingEnd="@dimen/activity_margin"
+    android:paddingBottom="@dimen/medium_margin">
+
+    <ImageView
+        android:id="@+id/search_result_image"
+        android:layout_width="@dimen/list_icon_size_medium"
+        android:layout_height="@dimen/list_icon_size_medium"
+        app:layout_constraintBottom_toBottomOf="@id/search_result_snippet"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="@id/search_result_title"
+        tools:src="@mipmap/ic_launcher" />
+
+    <TextView
+        android:id="@+id/search_result_title"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="@dimen/activity_margin"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:textSize="@dimen/list_primary_text_size"
+        app:layout_constraintBottom_toTopOf="@id/search_result_snippet"
+        app:layout_constraintEnd_toStartOf="@id/search_result_date"
+        app:layout_constraintStart_toEndOf="@id/search_result_image"
+        app:layout_constraintTop_toTopOf="parent"
+        tools:text="John" />
+
+    <TextView
+        android:id="@+id/search_result_snippet"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/activity_margin"
+        android:alpha="0.7"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:textSize="@dimen/list_secondary_text_size"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toEndOf="@id/search_result_image"
+        app:layout_constraintTop_toBottomOf="@id/search_result_title"
+        tools:text="Hey buddy!" />
+
+    <TextView
+        android:id="@+id/search_result_date"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:alpha="0.7"
+        android:textSize="@dimen/list_tertiary_text_size"
+        app:layout_constraintBottom_toBottomOf="@id/search_result_title"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="@id/search_result_title"
+        tools:text="08/02/2021" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

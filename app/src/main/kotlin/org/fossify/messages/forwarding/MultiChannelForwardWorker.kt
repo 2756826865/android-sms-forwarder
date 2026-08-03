@@ -1,0 +1,386 @@
+package org.fossify.messages.forwarding
+
+import android.content.Context
+import android.util.Base64
+import androidx.work.BackoffPolicy
+import androidx.work.Constraints
+import androidx.work.CoroutineWorker
+import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.OutOfQuotaPolicy
+import androidx.work.WorkManager
+import androidx.work.WorkerParameters
+import androidx.work.workDataOf
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import java.io.BufferedReader
+import java.io.BufferedWriter
+import java.io.InputStreamReader
+import java.io.OutputStreamWriter
+import java.net.HttpURLConnection
+import java.net.URL
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.concurrent.TimeUnit
+import javax.crypto.Mac
+import javax.crypto.spec.SecretKeySpec
+import javax.net.ssl.SSLSocket
+import javax.net.ssl.SSLSocketFactory
+
+class MultiChannelForwardWorker(
+    appContext: Context,
+    params: WorkerParameters
+) : CoroutineWorker(appContext, params) {
+
+    override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
+        val config = MultiForwardConfig(applicationContext)
+        if (!config.anyEnabled()) return@withContext Result.success()
+
+        val sender = inputData.getString(KEY_SENDER).orEmpty()
+        val body = inputData.getString(KEY_BODY).orEmpty()
+        val receivedAt = inputData.getLong(KEY_RECEIVED_AT, System.currentTimeMillis())
+        val subscriptionId = inputData.getInt(KEY_SUBSCRIPTION_ID, -1)
+        val payload = ForwardingMessageFormatter.format(
+            context = applicationContext,
+            sender = sender,
+            body = body,
+            receivedAt = receivedAt,
+            subscriptionId = subscriptionId,
+        )
+        val title = payload.title
+        val content = payload.content
+
+        val successes = mutableListOf<String>()
+        val failures = mutableListOf<String>()
+
+        suspend fun runChannel(name: String, action: suspend () -> Unit) {
+            runCatching { action() }
+                .onSuccess { successes += name }
+                .onFailure { failures += "$name：${it.message ?: it.javaClass.simpleName}" }
+        }
+
+        // 检测网络状态
+        val networkAvailable = isNetworkAvailable()
+        val onlyOnNoNetwork = config.smsDirectOnlyOnNoNetwork
+
+        // 短信直发逻辑
+        if (config.smsDirectEnabled) {
+            if (onlyOnNoNetwork) {
+                // 仅断网时发送模式
+                if (!networkAvailable) {
+                    runChannel("短信直发") {
+                        sendSmsDirect(config.smsDirectPhone(), content)
+                    }
+                }
+            } else {
+                // 始终发送模式
+                runChannel("短信直发") {
+                    sendSmsDirect(config.smsDirectPhone(), content)
+                }
+            }
+        }
+
+        // 网络可用时发送其他渠道
+        if (networkAvailable) {
+            if (config.dingTalkEnabled) runChannel("钉钉") {
+                sendDingTalk(config.dingTalkWebhook(), config.dingTalkSecret(), content)
+            }
+        if (config.feishuEnabled) runChannel("飞书") {
+            sendFeishu(config.feishuWebhook(), config.feishuSecret(), content)
+        }
+        if (config.weComEnabled) runChannel("企业微信") {
+            sendWeCom(
+                config.weComCorpId(),
+                config.weComAgentId(),
+                config.weComSecret(),
+                config.weComToUser(),
+                content
+            )
+        }
+        if (config.weComBotEnabled) runChannel("企业微信群机器人") {
+            sendWeComBot(config.weComBotWebhook(), content)
+        }
+        if (config.emailEnabled) runChannel("邮箱") {
+            sendEmail(
+                config.emailHost(),
+                config.emailPort,
+                config.emailUser(),
+                config.emailPassword(),
+                config.emailRecipients(),
+                title,
+                content
+            )
+        }
+        if (config.smsDirectEnabled) runChannel("短信直发") {
+            sendSmsDirect(config.smsDirectPhone(), content)
+        }
+
+        val now = SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
+        config.lastStatus = buildString {
+            append(now)
+            if (successes.isNotEmpty()) append(" 成功：${successes.joinToString("、")}")
+            if (failures.isNotEmpty()) append(" 失败：${failures.joinToString("；")}")
+        }
+
+        when {
+            failures.isEmpty() -> Result.success()
+            runAttemptCount < 2 -> Result.retry()
+            else -> Result.failure()
+        }
+    }
+
+    private fun sendDingTalk(webhook: String, secret: String, content: String) {
+        requireHttps(webhook)
+        val timestamp = System.currentTimeMillis()
+        val signedUrl = if (secret.isBlank()) {
+            webhook
+        } else {
+            val sign = hmacSha256Base64(secret, "$timestamp\n$secret")
+            val separator = if (webhook.contains('?')) '&' else '?'
+            "$webhook${separator}timestamp=$timestamp&sign=${URLEncoder.encode(sign, "UTF-8")}"
+        }
+        val result = postJson(
+            signedUrl,
+            JSONObject()
+                .put("msgtype", "text")
+                .put("text", JSONObject().put("content", content))
+        )
+        check(result.optInt("errcode", -1) == 0) {
+            result.optString("errmsg", "钉钉接口拒绝请求")
+        }
+    }
+
+    private fun sendFeishu(webhook: String, secret: String, content: String) {
+        requireHttps(webhook)
+        val payload = JSONObject()
+            .put("msg_type", "text")
+            .put("content", JSONObject().put("text", content))
+        if (secret.isNotBlank()) {
+            val timestamp = System.currentTimeMillis() / 1000
+            val stringToSign = "$timestamp\n$secret"
+            val mac = Mac.getInstance("HmacSHA256")
+            mac.init(SecretKeySpec(stringToSign.toByteArray(StandardCharsets.UTF_8), "HmacSHA256"))
+            val sign = Base64.encodeToString(mac.doFinal(ByteArray(0)), Base64.NO_WRAP)
+            payload.put("timestamp", timestamp.toString()).put("sign", sign)
+        }
+        val result = postJson(webhook, payload)
+        val code = if (result.has("StatusCode")) result.optInt("StatusCode", -1) else result.optInt("code", -1)
+        check(code == 0) {
+            result.optString("msg", result.optString("StatusMessage", "飞书接口拒绝请求"))
+        }
+    }
+
+    private fun sendWeCom(
+        corpId: String,
+        agentId: String,
+        secret: String,
+        toUser: String,
+        content: String
+    ) {
+        require(corpId.isNotBlank() && agentId.toLongOrNull() != null && secret.isNotBlank() && toUser.isNotBlank()) {
+            "企业微信配置不完整"
+        }
+        val tokenUrl = "https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid=" +
+            URLEncoder.encode(corpId, "UTF-8") + "&corpsecret=" + URLEncoder.encode(secret, "UTF-8")
+        val tokenResult = getJson(tokenUrl)
+        check(tokenResult.optInt("errcode", -1) == 0) {
+            tokenResult.optString("errmsg", "获取企业微信 access_token 失败")
+        }
+        val token = tokenResult.optString("access_token")
+        val result = postJson(
+            "https://qyapi.weixin.qq.com/cgi-bin/message/send?access_token=" +
+                URLEncoder.encode(token, "UTF-8"),
+            JSONObject()
+                .put("touser", toUser)
+                .put("msgtype", "text")
+                .put("agentid", agentId.toLong())
+                .put("text", JSONObject().put("content", content))
+                .put("safe", 0)
+        )
+        check(result.optInt("errcode", -1) == 0) {
+            result.optString("errmsg", "企业微信接口拒绝请求")
+        }
+    }
+
+    private fun sendWeComBot(webhook: String, content: String) {
+        requireHttps(webhook)
+        val result = postJson(
+            webhook,
+            JSONObject()
+                .put("msgtype", "text")
+                .put("text", JSONObject().put("content", content))
+        )
+        check(result.optInt("errcode", -1) == 0) {
+            result.optString("errmsg", "企业微信群机器人请求失败")
+        }
+    }
+
+    private fun sendEmail(
+        host: String,
+        port: Int,
+        user: String,
+        password: String,
+        recipientsText: String,
+        subject: String,
+        content: String
+    ) {
+        require(host.isNotBlank() && user.isNotBlank() && password.isNotBlank() && recipientsText.isNotBlank()) {
+            "邮箱配置不完整"
+        }
+        val recipients = recipientsText.split(',', ';', '，', '；')
+            .map(String::trim)
+            .filter(String::isNotBlank)
+        require(recipients.isNotEmpty()) { "未配置收件邮箱" }
+
+        val socket = (SSLSocketFactory.getDefault().createSocket(host, port) as SSLSocket).apply {
+            soTimeout = 12_000
+            enabledProtocols = enabledProtocols.filter { it == "TLSv1.2" || it == "TLSv1.3" }.toTypedArray()
+            startHandshake()
+        }
+        socket.use {
+            val reader = BufferedReader(InputStreamReader(it.inputStream, StandardCharsets.UTF_8))
+            val writer = BufferedWriter(OutputStreamWriter(it.outputStream, StandardCharsets.UTF_8))
+            expectSmtp(reader, 220)
+            smtpCommand(writer, reader, "EHLO android-sms-forwarder", 250)
+            smtpCommand(writer, reader, "AUTH LOGIN", 334)
+            smtpCommand(writer, reader, Base64.encodeToString(user.toByteArray(), Base64.NO_WRAP), 334)
+            smtpCommand(writer, reader, Base64.encodeToString(password.toByteArray(), Base64.NO_WRAP), 235)
+            smtpCommand(writer, reader, "MAIL FROM:<$user>", 250)
+            recipients.forEach { smtpCommand(writer, reader, "RCPT TO:<$it>", 250) }
+            smtpCommand(writer, reader, "DATA", 354)
+
+            val encodedSubject = Base64.encodeToString(subject.toByteArray(StandardCharsets.UTF_8), Base64.NO_WRAP)
+            val encodedBody = java.util.Base64.getMimeEncoder(76, "\r\n".toByteArray())
+                .encodeToString(content.toByteArray(StandardCharsets.UTF_8))
+            writer.write("From: <$user>\r\n")
+            writer.write("To: ${recipients.joinToString(", ")}\r\n")
+            writer.write("Subject: =?UTF-8?B?$encodedSubject?=\r\n")
+            writer.write("MIME-Version: 1.0\r\n")
+            writer.write("Content-Type: text/plain; charset=UTF-8\r\n")
+            writer.write("Content-Transfer-Encoding: base64\r\n\r\n")
+            writer.write(encodedBody)
+            writer.write("\r\n.\r\n")
+            writer.flush()
+            expectSmtp(reader, 250)
+            smtpCommand(writer, reader, "QUIT", 221)
+        }
+    }
+
+    private fun smtpCommand(
+        writer: BufferedWriter,
+        reader: BufferedReader,
+        command: String,
+        expected: Int
+    ) {
+        writer.write(command)
+        writer.write("\r\n")
+        writer.flush()
+        expectSmtp(reader, expected)
+    }
+
+    private fun expectSmtp(reader: BufferedReader, expected: Int) {
+        var line = reader.readLine() ?: error("SMTP 服务器无响应")
+        val code = line.take(3).toIntOrNull() ?: error("SMTP 响应无效")
+        while (line.length > 3 && line[3] == '-') {
+            line = reader.readLine() ?: break
+        }
+        check(code == expected) { "SMTP $code：${line.drop(4)}" }
+    }
+
+    private fun hmacSha256Base64(secret: String, content: String): String {
+        val mac = Mac.getInstance("HmacSHA256")
+        mac.init(SecretKeySpec(secret.toByteArray(StandardCharsets.UTF_8), "HmacSHA256"))
+        return Base64.encodeToString(mac.doFinal(content.toByteArray(StandardCharsets.UTF_8)), Base64.NO_WRAP)
+    }
+
+    private fun requireHttps(url: String) {
+        require(url.startsWith("https://")) { "Webhook 必须使用 HTTPS" }
+    }
+
+    private fun getJson(url: String) = requestJson(url, "GET", null)
+
+    private fun postJson(url: String, payload: JSONObject) = requestJson(url, "POST", payload)
+
+    private fun requestJson(url: String, method: String, payload: JSONObject?): JSONObject {
+        val connection = URL(url).openConnection() as HttpURLConnection
+        return connection.run {
+            requestMethod = method
+            connectTimeout = 10_000
+            readTimeout = 12_000
+            setRequestProperty("Accept", "application/json")
+            if (payload != null) {
+                doOutput = true
+                setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                outputStream.bufferedWriter(StandardCharsets.UTF_8).use { it.write(payload.toString()) }
+            }
+            val response = (if (responseCode in 200..299) inputStream else errorStream)
+                ?.bufferedReader(StandardCharsets.UTF_8)
+                ?.use { it.readText() }
+                .orEmpty()
+            disconnect()
+            check(response.isNotBlank()) { "接口返回空响应" }
+            JSONObject(response)
+        }
+    }
+
+    private fun isNetworkAvailable(): Boolean {
+        val connectivityManager = applicationContext.getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+        val network = connectivityManager.activeNetwork ?: return false
+        val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
+        return capabilities.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+    }
+
+    private fun sendSmsDirect(phone: String, content: String) {
+        require(phone.isNotBlank()) { "目标手机号不能为空" }
+        val smsManager = android.telephony.SmsManager.getDefault()
+        smsManager.sendTextMessage(phone, null, content, null, null)
+    }
+
+    companion object {
+        private const val KEY_SENDER = "sender"
+        private const val KEY_BODY = "body"
+        private const val KEY_RECEIVED_AT = "received_at"
+        private const val KEY_SUBSCRIPTION_ID = "subscription_id"
+
+        fun enqueue(
+            context: Context,
+            sender: String,
+            body: String,
+            receivedAt: Long,
+            subscriptionId: Int,
+            uniqueId: String
+        ) {
+            val request = OneTimeWorkRequestBuilder<MultiChannelForwardWorker>()
+                .setInputData(
+                    workDataOf(
+                        KEY_SENDER to sender,
+                        KEY_BODY to body,
+                        KEY_RECEIVED_AT to receivedAt,
+                        KEY_SUBSCRIPTION_ID to subscriptionId
+                    )
+                )
+                .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.NOT_REQUIRED).build())
+                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 10, TimeUnit.SECONDS)
+                .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+                .build()
+            WorkManager.getInstance(context)
+                .enqueueUniqueWork("multi-forward-$uniqueId", ExistingWorkPolicy.KEEP, request)
+        }
+
+        fun enqueueTest(context: Context) {
+            enqueue(
+                context = context,
+                sender = "10086",
+                body = "这是一条短信多渠道转发测试消息",
+                receivedAt = System.currentTimeMillis(),
+                subscriptionId = -1,
+                uniqueId = "test-${System.currentTimeMillis()}"
+            )
+        }
+    }
+}

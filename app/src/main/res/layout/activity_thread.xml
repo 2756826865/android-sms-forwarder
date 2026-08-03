@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/thread_coordinator"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <org.fossify.commons.views.MyAppBarLayout
+        android:id="@+id/thread_appbar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <com.google.android.material.appbar.MaterialToolbar
+            android:id="@+id/thread_toolbar"
+            android:layout_width="match_parent"
+            android:layout_height="?attr/actionBarSize"
+            android:background="@android:color/white"
+            app:menu="@menu/menu_thread"
+            app:navigationIconTint="@color/miui_primary_text"
+            app:titleCentered="true"
+            app:titleTextColor="@color/miui_primary_text"
+            app:titleTextAppearance="@style/AppTheme.ActionBar.TitleTextStyle" />
+
+    </org.fossify.commons.views.MyAppBarLayout>
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/thread_holder"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@android:color/white"
+        android:fillViewport="true"
+        android:scrollbars="none"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior">
+
+        <include
+            layout="@layout/divider"
+            app:layout_constraintTop_toTopOf="parent" />
+
+        <RelativeLayout
+            android:id="@+id/thread_add_contacts"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:visibility="gone"
+            app:layout_constraintTop_toTopOf="parent"
+            tools:visibility="visible">
+
+            <LinearLayout
+                android:id="@+id/selected_contacts"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_margin="@dimen/activity_margin"
+                android:orientation="vertical" />
+
+            <ImageView
+                android:id="@+id/confirm_manage_contacts"
+                android:layout_width="@dimen/normal_icon_size"
+                android:layout_height="@dimen/normal_icon_size"
+                android:layout_alignParentEnd="true"
+                android:layout_marginStart="@dimen/medium_margin"
+                android:layout_marginTop="@dimen/normal_margin"
+                android:layout_marginEnd="@dimen/medium_margin"
+                android:background="?selectableItemBackgroundBorderless"
+                android:padding="@dimen/small_margin"
+                android:src="@drawable/ic_check_vector" />
+
+            <View
+                android:id="@+id/message_divider_one"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/divider_height"
+                android:layout_below="@+id/selected_contacts"
+                android:background="@color/divider_grey"
+                android:importantForAccessibility="no" />
+
+            <org.fossify.commons.views.MyAutoCompleteTextView
+                android:id="@+id/add_contact_or_number"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/normal_icon_size"
+                android:layout_below="@+id/message_divider_one"
+                android:layout_marginStart="@dimen/activity_margin"
+                android:layout_marginEnd="@dimen/activity_margin"
+                android:layout_toStartOf="@+id/confirm_inserted_number"
+                android:background="@android:color/transparent"
+                android:completionThreshold="2"
+                android:gravity="center_vertical"
+                android:hint="@string/add_contact_or_number"
+                android:inputType="textCapWords"
+                android:textSize="@dimen/big_text_size" />
+
+            <ImageView
+                android:id="@+id/confirm_inserted_number"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:layout_alignTop="@+id/add_contact_or_number"
+                android:layout_alignBottom="@+id/add_contact_or_number"
+                android:layout_alignParentEnd="true"
+                android:layout_marginStart="@dimen/medium_margin"
+                android:layout_marginEnd="@dimen/medium_margin"
+                android:background="?selectableItemBackgroundBorderless"
+                android:contentDescription="@string/confirm_selection"
+                android:paddingStart="@dimen/medium_margin"
+                android:paddingEnd="@dimen/medium_margin"
+                android:src="@drawable/ic_check_vector"
+                android:visibility="gone" />
+
+            <View
+                android:id="@+id/message_divider_two"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/divider_height"
+                android:layout_below="@+id/add_contact_or_number"
+                android:background="@color/divider_grey"
+                android:importantForAccessibility="no" />
+
+        </RelativeLayout>
+
+        <com.qtalk.recyclerviewfastscroller.RecyclerViewFastScroller
+            android:id="@+id/thread_messages_fastscroller"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            app:layout_constraintBottom_toTopOf="@id/short_code_holder"
+            app:layout_constraintTop_toBottomOf="@id/thread_add_contacts"
+            app:supportSwipeToRefresh="true">
+
+            <org.fossify.commons.views.MyRecyclerView
+                android:id="@+id/thread_messages_list"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:clipToPadding="false"
+                android:overScrollMode="ifContentScrolls"
+                android:paddingTop="@dimen/big_margin"
+                android:paddingBottom="@dimen/medium_margin"
+                android:scrollbars="none"
+                app:layoutManager="org.fossify.commons.views.MyLinearLayoutManager"
+                app:stackFromEnd="true"
+                tools:itemCount="3"
+                tools:listitem="@layout/item_message" />
+
+        </com.qtalk.recyclerviewfastscroller.RecyclerViewFastScroller>
+
+        <org.fossify.commons.views.MyFloatingActionButton
+            android:id="@+id/scroll_to_bottom_fab"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_margin="@dimen/activity_margin"
+            android:src="@drawable/ic_arrow_down_vector"
+            android:visibility="invisible"
+            app:fabSize="mini"
+            app:layout_constraintBottom_toBottomOf="@id/thread_messages_fastscroller"
+            app:layout_constraintEnd_toEndOf="@id/thread_messages_fastscroller"
+            tools:ignore="ContentDescription" />
+
+        <include
+            android:id="@+id/short_code_holder"
+            layout="@layout/layout_invalid_short_code_info"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:visibility="gone"
+            app:layout_constraintBottom_toTopOf="@id/message_holder"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/thread_messages_fastscroller"
+            tools:visibility="visible" />
+
+        <include
+            android:id="@+id/message_holder"
+            layout="@layout/layout_thread_send_message_holder"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent" />
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+</androidx.coordinatorlayout.widget.CoordinatorLayout>
