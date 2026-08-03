@@ -123,8 +123,8 @@ class MultiChannelForwardWorker(
         val now = SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
         config.lastStatus = buildString {
             append(now)
-            if (successes.isNotEmpty()) append(" 成功�?{successes.joinToString("�?)}")
-            if (failures.isNotEmpty()) append(" 失败�?{failures.joinToString("�?)}")
+            if (successes.isNotEmpty()) append(" 成功：${successes.joinToString("、")}")
+            if (failures.isNotEmpty()) append(" 失败：${failures.joinToString("；")}")
         }
 
         when {
