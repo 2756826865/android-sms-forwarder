@@ -31,7 +31,7 @@
             android:padding="16dp">
 
             <com.google.android.material.switchmaterial.SwitchMaterial
-                android:id="@+id/wecom_bot_enabled"
+                android:id="@+id/email_enabled"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="启用电子邮箱转发"
@@ -40,15 +40,58 @@
             <com.google.android.material.textfield.TextInputLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                android:hint="Webhook 地址">
+                android:layout_marginTop="8dp"
+                android:hint="SMTP 服务器">
                 <com.google.android.material.textfield.TextInputEditText
-                    android:id="@+id/wecom_bot_webhook"
+                    android:id="@+id/email_host"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:inputType="textUri" />
+                    android:inputType="text" />
             </com.google.android.material.textfield.TextInputLayout>
-
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:hint="端口">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/email_port"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="number" />
+            </com.google.android.material.textfield.TextInputLayout>
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:hint="账号">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/email_user"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="text" />
+            </com.google.android.material.textfield.TextInputLayout>
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:hint="密码/授权码">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/email_password"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="text" />
+            </com.google.android.material.textfield.TextInputLayout>
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:hint="收件人邮箱">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/email_recipients"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="text" />
+            </com.google.android.material.textfield.TextInputLayout>
             <View
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
@@ -69,7 +112,7 @@
                 android:layout_marginTop="8dp"
                 android:hint="测试发送方">
                 <com.google.android.material.textfield.TextInputEditText
-                    android:id="@+id/wecom_bot_test_sender"
+                    android:id="@+id/email_test_sender"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:inputType="phone" />
@@ -81,7 +124,7 @@
                 android:layout_marginTop="8dp"
                 android:hint="测试短信正文">
                 <com.google.android.material.textfield.TextInputEditText
-                    android:id="@+id/wecom_bot_test_body"
+                    android:id="@+id/email_test_body"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:inputType="textMultiLine"
@@ -89,7 +132,7 @@
             </com.google.android.material.textfield.TextInputLayout>
 
             <com.google.android.material.button.MaterialButton
-                android:id="@+id/wecom_bot_test"
+                android:id="@+id/email_test"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
@@ -97,7 +140,7 @@
                 android:backgroundTint="#159447" />
 
             <com.google.android.material.button.MaterialButton
-                android:id="@+id/wecom_bot_save"
+                android:id="@+id/email_save"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
