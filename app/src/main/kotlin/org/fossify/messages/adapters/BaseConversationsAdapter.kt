@@ -166,7 +166,9 @@ abstract class BaseConversationsAdapter(
             val isSelected = selectedKeys.contains(conversation.hashCode())
             conversationFrame.isSelected = isSelected
             conversationFrame.setBackgroundColor(
-                if (isSelected) Color.rgb(246, 246, 246) else Color.WHITE
+                activity.getColor(
+                    if (isSelected) R.color.miui_selected_background else R.color.miui_card_background
+                )
             )
             conversationSelectionIndicator.beVisibleIf(actMode != null)
             conversationSelectionIndicator.setImageResource(
@@ -189,8 +191,7 @@ abstract class BaseConversationsAdapter(
 
             conversationDate.apply {
                 text = formatConversationDate(conversation.date)
-
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
             }
 
             val isUnread = !conversation.read
@@ -203,9 +204,9 @@ abstract class BaseConversationsAdapter(
             conversationAddress.setTypeface(Typeface.create("sans-serif", style))
             conversationBodyShort.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL))
             conversationDate.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL))
-            conversationAddress.setTextColor(Color.rgb(17, 17, 17))
-            conversationBodyShort.setTextColor(Color.rgb(102, 102, 102))
-            conversationDate.setTextColor(Color.rgb(138, 138, 138))
+            conversationAddress.setTextColor(activity.getColor(R.color.miui_primary_text))
+            conversationBodyShort.setTextColor(activity.getColor(R.color.miui_secondary_text))
+            conversationDate.setTextColor(activity.getColor(R.color.miui_timestamp_text))
             conversationAddress.alpha = 1f
             conversationBodyShort.alpha = 1f
             conversationDate.alpha = 1f
@@ -247,9 +248,8 @@ abstract class BaseConversationsAdapter(
                     count == 0 -> ""
                     else -> count.toString()
                 }
-                val badgeColor = Color.rgb(32, 196, 90)
-                setTextColor(Color.WHITE)
-                background?.applyColorFilter(badgeColor)
+                setTextColor(activity.getColor(android.R.color.white))
+                setBackgroundResource(R.drawable.unread_badge_background)
             }
         }
     }

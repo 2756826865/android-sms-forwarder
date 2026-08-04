@@ -3,6 +3,7 @@ package org.fossify.messages.activities
 import android.annotation.SuppressLint
 import android.Manifest
 import android.app.AppOpsManager
+import android.app.NotificationManager
 import android.app.role.RoleManager
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -11,7 +12,6 @@ import android.content.pm.ShortcutInfo
 import android.content.pm.ShortcutManager
 import android.graphics.drawable.Icon
 import android.graphics.drawable.LayerDrawable
-import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import android.os.Process
@@ -93,6 +93,7 @@ class MainActivity : SimpleActivity() {
     private val SMS_DEFAULT_APPLICATION_KEY = "sms_default_application"
     private val WRITE_SMS_APP_OP = "android:write_sms"
     private val ROLE_STATE_SETTLE_DELAY_MS = 500L
+    private val DEFAULT_SMS_LOST_NOTIFICATION_ID = 19082
 
     private var storedTextColor = 0
     private var storedFontSize = 0
@@ -117,9 +118,12 @@ class MainActivity : SimpleActivity() {
         config.useRecycleBin = true
         setupHomeSearch()
         setupSelectionActions()
+        setupBottomNavigation()
 
         setupEdgeToEdge(
-            padBottomImeAndSystem = listOf(binding.conversationsList, binding.selectionBottomBar)
+            padTopSystem = listOf(binding.homeHeader),
+            padBottomSystem = listOf(binding.homeBottomNavigation, binding.selectionBottomBar),
+            padBottomImeAndSystem = listOf(binding.homeSearch),
         )
 
         checkAndDeleteOldRecycleBinMessages()
@@ -131,8 +135,13 @@ class MainActivity : SimpleActivity() {
 
     override fun onResume() {
         super.onResume()
+        if (Telephony.Sms.getDefaultSmsPackage(this) == packageName) {
+            getSystemService(NotificationManager::class.java)
+                ?.cancel(DEFAULT_SMS_LOST_NOTIFICATION_ID)
+        }
         SmsRecoveryWorker.enqueueNow(this)
         updateMenuColors()
+        selectPrimaryNavigation()
 
         getOrCreateConversationsAdapter().apply {
             if (storedTextColor != getProperTextColor()) {
@@ -146,18 +155,23 @@ class MainActivity : SimpleActivity() {
             updateDrafts()
         }
 
-        binding.homeHeader.setBackgroundColor(Color.WHITE)
-        binding.homeTitle.setTextColor(Color.rgb(17, 17, 17))
-        binding.homeSearch.setTextColor(Color.rgb(17, 17, 17))
-        binding.homeSearch.setHintTextColor(Color.rgb(141, 141, 141))
-        binding.conversationsFab.backgroundTintList = ColorStateList.valueOf(Color.rgb(29, 206, 56))
-        window.statusBarColor = Color.WHITE
-        window.navigationBarColor = Color.WHITE
+        val pageColor = ContextCompat.getColor(this, R.color.miui_card_background)
+        val properPrimaryColor = ContextCompat.getColor(this, R.color.miui_action_blue)
+        binding.homeHeader.setBackgroundColor(pageColor)
+        binding.homeTitle.setTextColor(ContextCompat.getColor(this, R.color.miui_primary_text))
+        binding.homeSearch.setTextColor(ContextCompat.getColor(this, R.color.miui_primary_text))
+        binding.homeSearch.setHintTextColor(ContextCompat.getColor(this, R.color.miui_hint_text))
+        binding.conversationsFab.backgroundTintList = ColorStateList.valueOf(
+            ContextCompat.getColor(this, R.color.home_fab_light_green)
+        )
+        binding.conversationsFab.imageTintList = ColorStateList.valueOf(
+            ContextCompat.getColor(this, android.R.color.white)
+        )
+        window.statusBarColor = pageColor
+        window.navigationBarColor = pageColor
         WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightStatusBars = true
         WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightNavigationBars = true
-        binding.searchHolder.setBackgroundColor(Color.WHITE)
-
-        val properPrimaryColor = Color.rgb(25, 201, 90)
+        binding.searchHolder.setBackgroundColor(pageColor)
         binding.noConversationsPlaceholder2.setTextColor(properPrimaryColor)
         binding.noConversationsPlaceholder2.underlineText()
         binding.conversationsFastscroller.updateColors(properPrimaryColor)
@@ -213,6 +227,38 @@ class MainActivity : SimpleActivity() {
         selectionDelete.setOnClickListener {
             getOrCreateConversationsAdapter().deleteSelected()
         }
+    }
+
+    private fun setupBottomNavigation() {
+        binding.homeNavPrimary.contentDescription = getString(R.string.bottom_nav_primary_description)
+        binding.homeNavForward.contentDescription = getString(R.string.bottom_nav_forward_description)
+        binding.homeNavSettings.contentDescription = getString(R.string.bottom_nav_settings_description)
+        binding.homeNavPrimary.setOnClickListener {
+            binding.homeSearch.setText("")
+            binding.conversationsList.stopScroll()
+            binding.conversationsList.scrollToPosition(0)
+            selectPrimaryNavigation()
+        }
+        binding.homeNavForward.setOnClickListener {
+            binding.homeNavPrimary.isSelected = false
+            binding.homeNavForward.isSelected = true
+            binding.homeNavSettings.isSelected = false
+            hideKeyboard()
+            startActivity(Intent(this, ForwardingChannelsActivity::class.java))
+        }
+        binding.homeNavSettings.setOnClickListener {
+            binding.homeNavPrimary.isSelected = false
+            binding.homeNavForward.isSelected = false
+            binding.homeNavSettings.isSelected = true
+            hideKeyboard()
+            launchSettings()
+        }
+    }
+
+    private fun selectPrimaryNavigation() {
+        binding.homeNavPrimary.isSelected = true
+        binding.homeNavForward.isSelected = false
+        binding.homeNavSettings.isSelected = false
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, resultData: Intent?) {
@@ -523,9 +569,14 @@ class MainActivity : SimpleActivity() {
         selectionTopRow.beVisibleIf(active)
         selectionTitle.beVisibleIf(active)
         selectionBottomBar.beVisibleIf(active)
+        homeBottomNavigation.beGoneIf(active)
         selectionTitle.text = getString(R.string.selected_conversations, count)
         conversationsFab.beGoneIf(active)
-        if (!active) conversationsFab.beVisible()
+        if (!active) {
+            conversationsFab.beVisible()
+            homeBottomNavigation.beVisible()
+            selectPrimaryNavigation()
+        }
         selectionMarkRead.text = getString(
             if (count > 0 && getOrCreateConversationsAdapter().selectedHasUnread()) {
                 R.string.mark_as_read
@@ -537,7 +588,11 @@ class MainActivity : SimpleActivity() {
             conversationsList.paddingLeft,
             conversationsList.paddingTop,
             conversationsList.paddingRight,
-            if (active) (88 * resources.displayMetrics.density).toInt() else 0,
+            if (active) {
+                resources.getDimensionPixelSize(R.dimen.selection_content_bottom_padding)
+            } else {
+                resources.getDimensionPixelSize(R.dimen.home_content_bottom_padding)
+            },
         )
     }
 
@@ -576,10 +631,13 @@ class MainActivity : SimpleActivity() {
     private fun showOrHideProgress(show: Boolean) {
         if (show) {
             binding.conversationsProgressBar.show()
+            binding.conversationsFastscroller.beGone()
+            binding.noConversationsPlaceholder2.beGone()
             binding.noConversationsPlaceholder.beVisible()
             binding.noConversationsPlaceholder.text = getString(R.string.loading_messages)
         } else {
             binding.conversationsProgressBar.hide()
+            binding.conversationsFastscroller.beVisible()
             binding.noConversationsPlaceholder.beGone()
         }
     }

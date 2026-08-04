@@ -90,8 +90,13 @@ class SmsDirectSettingsActivity : SimpleActivity() {
 
     private fun sendSmsDirect(phone: String, message: String) {
         try {
+            val normalized = phone.trim()
+            if (normalized.isEmpty()) {
+                toast("目标手机号不能为空")
+                return
+            }
             val smsManager = android.telephony.SmsManager.getDefault()
-            smsManager.sendTextMessage(phone, null, message, null, null)
+            smsManager.sendTextMessage(normalized, null, message, null, null)
         } catch (e: Exception) {
             toast("短信发送失败: ${e.message}")
         }

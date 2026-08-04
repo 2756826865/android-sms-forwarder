@@ -5,15 +5,14 @@
     android:id="@+id/conversation_frame"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginBottom="@dimen/tiny_margin"
+    android:background="@color/miui_card_background"
     android:clickable="true"
     android:focusable="true"
-    android:minHeight="78dp"
-    android:background="@android:color/white"
-    android:paddingStart="@dimen/activity_margin"
-    android:paddingTop="@dimen/medium_margin"
-    android:paddingEnd="@dimen/activity_margin"
-    android:paddingBottom="@dimen/medium_margin">
+    android:minHeight="@dimen/conversation_min_height"
+    android:paddingStart="@dimen/home_horizontal_margin"
+    android:paddingTop="@dimen/conversation_vertical_padding"
+    android:paddingEnd="@dimen/home_horizontal_margin"
+    android:paddingBottom="@dimen/conversation_vertical_padding">
 
     <View
         android:id="@+id/unread_indicator"
@@ -28,9 +27,9 @@
 
     <ImageView
         android:id="@+id/conversation_image"
-        android:layout_width="52dp"
-        android:layout_height="52dp"
-        android:layout_marginStart="14dp"
+        android:layout_width="@dimen/conversation_avatar_size"
+        android:layout_height="@dimen/conversation_avatar_size"
+        android:layout_marginStart="12dp"
         app:layout_constraintBottom_toBottomOf="@id/conversation_body_short"
         app:layout_constraintStart_toEndOf="@id/unread_indicator"
         app:layout_constraintTop_toTopOf="@id/conversation_address"
@@ -122,10 +121,12 @@
 
     <org.fossify.commons.views.MyTextView
         android:id="@+id/unread_count_badge"
-        android:layout_width="@dimen/small_icon_size"
-        android:layout_height="@dimen/small_icon_size"
-        android:background="@drawable/circle_background"
+        android:layout_width="wrap_content"
+        android:layout_height="@dimen/unread_badge_min_size"
+        android:minWidth="@dimen/unread_badge_min_size"
+        android:background="@drawable/unread_badge_background"
         android:gravity="center"
+        android:paddingHorizontal="6dp"
         android:textSize="@dimen/list_tertiary_text_size"
         android:visibility="gone"
         app:layout_constraintBottom_toBottomOf="@id/conversation_body_short"

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/miui_unread_badge" />
+    <corners android:radius="10dp" />
+    <padding android:left="6dp" android:top="1dp" android:right="6dp" android:bottom="1dp" />
+</shape>

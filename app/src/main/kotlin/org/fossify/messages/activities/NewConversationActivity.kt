@@ -68,6 +68,7 @@ import org.fossify.messages.helpers.THREAD_NUMBER
 import org.fossify.messages.helpers.THREAD_TEXT
 import org.fossify.messages.helpers.THREAD_TITLE
 import org.fossify.messages.helpers.IS_SCHEDULE_MODE
+import org.fossify.messages.helpers.OPEN_THREAD_ATTACHMENT_PICKER
 import org.fossify.messages.helpers.generateRandomId
 import org.fossify.messages.messaging.isShortCodeWithLetters
 import org.fossify.messages.messaging.BulkSendWorker
@@ -110,8 +111,9 @@ class NewConversationActivity : SimpleActivity() {
             true
         }
         binding.newConversationAddAttachment.setOnClickListener {
-            toast(R.string.attachments_in_thread)
+            openAttachmentForRecipient()
         }
+        updateSendButton()
 
         // READ_CONTACTS permission is not mandatory, but without it we won't be able to show any suggestions during typing
         handlePermission(PERMISSION_READ_CONTACTS) {
@@ -317,25 +319,27 @@ class NewConversationActivity : SimpleActivity() {
         if (normalized.isBlank() || selectedRecipients.containsKey(normalized)) return
         selectedRecipients[normalized] = name.ifBlank { normalized }
         binding.newConversationAddress.setText("")
-        binding.newConversationAddress.hint = getString(R.string.recipient_label)
         rebuildRecipientChips()
         updateSendButton()
     }
 
     private fun rebuildRecipientChips() {
         binding.selectedRecipientsHolder.removeAllViews()
+        val density = resources.displayMetrics.density
         selectedRecipients.forEach { (number, name) ->
             val chip = TextView(this).apply {
                 text = name.ifBlank { number }
                 textSize = 16f
                 setTextColor(Color.rgb(17, 17, 17))
                 gravity = Gravity.CENTER
+                isSingleLine = true
+                minHeight = (40 * density).toInt()
                 background = AppCompatResources.getDrawable(
                     this@NewConversationActivity,
                     R.drawable.suggested_chip_background
                 )
-                setPadding(18, 8, 12, 8)
-                compoundDrawablePadding = 6
+                setPadding((14 * density).toInt(), 0, (10 * density).toInt(), 0)
+                compoundDrawablePadding = (4 * density).toInt()
                 setCompoundDrawablesWithIntrinsicBounds(
                     0,
                     0,
@@ -356,9 +360,10 @@ class NewConversationActivity : SimpleActivity() {
             binding.selectedRecipientsHolder.addView(chip)
         }
         binding.selectedRecipientsScroll.beVisibleIf(selectedRecipients.isNotEmpty())
-        if (selectedRecipients.isEmpty()) {
-            binding.newConversationAddress.hint = getString(R.string.add_contact_or_number)
-        }
+        binding.newConversationAddress.hint = getString(
+            if (selectedRecipients.isEmpty()) R.string.add_contact_or_number else R.string.continue_add_recipient
+        )
+        binding.newConversationAddress.requestFocus()
     }
 
     private fun updateSendButton() {
@@ -368,6 +373,32 @@ class NewConversationActivity : SimpleActivity() {
         binding.newConversationSend.setColorFilter(
             if (binding.newConversationSend.isEnabled) Color.WHITE else Color.rgb(160, 160, 160)
         )
+        updateAttachmentButton()
+    }
+
+    private fun updateAttachmentButton() {
+        val hasSingleRecipient = selectedRecipients.size == 1
+        binding.newConversationAddAttachment.alpha = if (hasSingleRecipient) 1f else 0.65f
+        binding.newConversationAddAttachment.applyColorFilter(
+            getColor(if (hasSingleRecipient) R.color.miui_action_blue else R.color.miui_secondary_text)
+        )
+    }
+
+    private fun openAttachmentForRecipient() {
+        when (selectedRecipients.size) {
+            0 -> toast(R.string.attachment_select_one_recipient)
+            1 -> {
+                val (number, name) = selectedRecipients.entries.first()
+                launchThreadActivity(
+                    phoneNumber = number,
+                    name = name,
+                    body = binding.newConversationMessage.value,
+                    openAttachmentPicker = true,
+                )
+                finish()
+            }
+            else -> toast(R.string.attachments_in_thread)
+        }
     }
 
     @SuppressLint("MissingPermission")
@@ -503,7 +534,12 @@ class NewConversationActivity : SimpleActivity() {
         }
     }
 
-    private fun launchThreadActivity(phoneNumber: String, name: String, body: String = "") {
+    private fun launchThreadActivity(
+        phoneNumber: String,
+        name: String,
+        body: String = "",
+        openAttachmentPicker: Boolean = false,
+    ) {
         hideKeyboard()
         val numbers = phoneNumber.split(";").toSet()
         val number = if (numbers.size == 1) phoneNumber else Gson().toJson(numbers)
@@ -512,6 +548,7 @@ class NewConversationActivity : SimpleActivity() {
             putExtra(THREAD_TITLE, name)
             putExtra(THREAD_TEXT, body.ifEmpty { intent.getStringExtra(Intent.EXTRA_TEXT) })
             putExtra(THREAD_NUMBER, number)
+            putExtra(OPEN_THREAD_ATTACHMENT_PICKER, openAttachmentPicker)
 
             if (intent.action == Intent.ACTION_SEND && intent.extras?.containsKey(Intent.EXTRA_STREAM) == true) {
                 val uri = intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)

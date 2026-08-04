@@ -14,4 +14,27 @@
     <dimen name="attachment_button_height">96dp</dimen>
     <dimen name="attachment_button_width">90dp</dimen>
     <dimen name="default_keyboard_height">250dp</dimen>
+
+    <dimen name="home_horizontal_margin">20dp</dimen>
+    <dimen name="home_title_size">34sp</dimen>
+    <dimen name="home_action_size">48dp</dimen>
+    <dimen name="home_search_height">52dp</dimen>
+    <dimen name="home_search_radius">26dp</dimen>
+    <dimen name="conversation_avatar_size">52dp</dimen>
+    <dimen name="conversation_min_height">82dp</dimen>
+    <dimen name="conversation_vertical_padding">12dp</dimen>
+    <dimen name="unread_badge_min_size">20dp</dimen>
+    <dimen name="bottom_nav_height">64dp</dimen>
+    <dimen name="home_bottom_nav_bottom_margin">16dp</dimen>
+    <dimen name="home_bottom_nav_inner_padding">3dp</dimen>
+    <dimen name="home_bottom_nav_slot_width">72dp</dimen>
+    <dimen name="home_bottom_nav_item_width">64dp</dimen>
+    <dimen name="home_bottom_nav_item_height">54dp</dimen>
+    <dimen name="home_content_bottom_padding">132dp</dimen>
+    <dimen name="home_fab_size">52dp</dimen>
+    <dimen name="home_fab_bottom_margin">118dp</dimen>
+    <dimen name="selection_content_bottom_padding">88dp</dimen>
+    <dimen name="bulk_content_margin">16dp</dimen>
+    <dimen name="bulk_title_size">35sp</dimen>
+    <dimen name="bulk_field_radius">18dp</dimen>
 </resources>

@@ -10,6 +10,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:background="@color/miui_page_background">
+
         <com.google.android.material.appbar.MaterialToolbar
             android:id="@+id/compatibility_toolbar"
             android:layout_width="match_parent"
@@ -23,75 +24,209 @@
         android:id="@+id/compatibility_scrollview"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:fillViewport="true"
         android:paddingBottom="28dp"
         app:layout_behavior="@string/appbar_scrolling_view_behavior">
+
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:paddingHorizontal="20dp">
+
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="8dp"
                 android:layout_marginTop="18dp"
-                android:layout_marginBottom="12dp"
                 android:text="@string/compatibility_title"
                 android:textColor="@color/miui_primary_text"
-                android:textSize="28sp" />
+                android:textSize="28sp"
+                android:textStyle="bold" />
+
             <TextView
                 android:id="@+id/compatibility_device"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginHorizontal="8dp"
-                android:layout_marginBottom="20dp"
+                android:layout_marginTop="4dp"
+                android:layout_marginBottom="16dp"
                 android:textColor="@color/miui_secondary_text"
                 android:textSize="14sp" />
+
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:background="@drawable/settings_card_background"
                 android:orientation="vertical"
-                android:paddingVertical="4dp">
-                <TextView android:id="@+id/compatibility_default_sms" style="@style/SmsSettingsRow" android:text="@string/compatibility_default_sms" />
-                <View style="@style/SmsSettingsDivider" />
-                <TextView android:id="@+id/compatibility_autostart" style="@style/SmsSettingsRow" android:text="@string/compatibility_autostart" />
-                <View style="@style/SmsSettingsDivider" />
-                <TextView android:id="@+id/compatibility_battery" style="@style/SmsSettingsRow" android:text="@string/compatibility_battery" />
-                <View style="@style/SmsSettingsDivider" />
-                <TextView android:id="@+id/compatibility_permissions" style="@style/SmsSettingsRow" android:text="@string/compatibility_permissions" />
+                android:padding="20dp">
+
+                <TextView
+                    android:text="@string/compatibility_health_center"
+                    android:textColor="@color/miui_secondary_text"
+                    android:textSize="13sp"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+
+                <TextView
+                    android:id="@+id/compatibility_health_title"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="5dp"
+                    android:textColor="@color/miui_primary_text"
+                    android:textSize="24sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/compatibility_health_count"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:textColor="@color/miui_secondary_text"
+                    android:textSize="14sp" />
+
+                <ProgressBar
+                    android:id="@+id/compatibility_health_progress"
+                    style="?android:attr/progressBarStyleHorizontal"
+                    android:layout_width="match_parent"
+                    android:layout_height="8dp"
+                    android:layout_marginTop="14dp"
+                    android:max="4"
+                    android:progress="0" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/compatibility_continue_fix"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:text="@string/compatibility_continue_fix"
+                    android:textAllCaps="false"
+                    app:backgroundTint="@color/miui_action_blue" />
             </LinearLayout>
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                android:background="@drawable/settings_card_background"
-                android:orientation="vertical"
-                android:paddingVertical="4dp">
-                <TextView
-                    android:id="@+id/compatibility_refresh"
-                    style="@style/SmsSettingsRow"
-                    android:text="@string/compatibility_refresh" />
-                <View style="@style/SmsSettingsDivider" />
-                <TextView
-                    android:id="@+id/compatibility_copy_fix"
-                    style="@style/SmsSettingsRow"
-                    android:text="@string/compatibility_copy_fix" />
-                <View style="@style/SmsSettingsDivider" />
-                <TextView
-                    android:id="@+id/compatibility_project"
-                    style="@style/SmsSettingsRow"
-                    android:text="@string/compatibility_project" />
-            </LinearLayout>
+
             <TextView
-                android:id="@+id/compatibility_status"
+                style="@style/CompatibilitySectionTitle"
+                android:text="@string/compatibility_key_checks" />
+
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginHorizontal="8dp"
-                android:layout_marginTop="18dp"
+                android:background="@drawable/settings_card_background"
+                android:orientation="vertical">
+
+                <LinearLayout android:id="@+id/compatibility_default_sms" style="@style/CompatibilityCheckRow">
+                    <LinearLayout style="@style/SmsForwardingTextColumn">
+                        <TextView style="@style/SmsForwardingTitle" android:text="@string/compatibility_default_sms_title" />
+                        <TextView android:id="@+id/compatibility_default_sms_summary" style="@style/SmsForwardingSummary" android:text="@string/compatibility_default_sms_summary" />
+                    </LinearLayout>
+                    <TextView android:id="@+id/compatibility_default_sms_status" style="@style/CompatibilityStatusText" />
+                </LinearLayout>
+                <View style="@style/SmsSettingsDivider" />
+
+                <LinearLayout android:id="@+id/compatibility_permissions" style="@style/CompatibilityCheckRow">
+                    <LinearLayout style="@style/SmsForwardingTextColumn">
+                        <TextView style="@style/SmsForwardingTitle" android:text="@string/compatibility_sms_permission_title" />
+                        <TextView android:id="@+id/compatibility_permissions_summary" style="@style/SmsForwardingSummary" android:text="@string/compatibility_sms_permission_summary" />
+                    </LinearLayout>
+                    <TextView android:id="@+id/compatibility_permissions_status" style="@style/CompatibilityStatusText" />
+                </LinearLayout>
+                <View style="@style/SmsSettingsDivider" />
+
+                <LinearLayout android:id="@+id/compatibility_notifications" style="@style/CompatibilityCheckRow">
+                    <LinearLayout style="@style/SmsForwardingTextColumn">
+                        <TextView style="@style/SmsForwardingTitle" android:text="@string/compatibility_notification_title" />
+                        <TextView android:id="@+id/compatibility_notifications_summary" style="@style/SmsForwardingSummary" android:text="@string/compatibility_notification_summary" />
+                    </LinearLayout>
+                    <TextView android:id="@+id/compatibility_notifications_status" style="@style/CompatibilityStatusText" />
+                </LinearLayout>
+                <View style="@style/SmsSettingsDivider" />
+
+                <LinearLayout android:id="@+id/compatibility_battery" style="@style/CompatibilityCheckRow">
+                    <LinearLayout style="@style/SmsForwardingTextColumn">
+                        <TextView style="@style/SmsForwardingTitle" android:text="@string/compatibility_battery_title" />
+                        <TextView style="@style/SmsForwardingSummary" android:text="@string/compatibility_battery_summary" />
+                    </LinearLayout>
+                    <TextView android:id="@+id/compatibility_battery_status" style="@style/CompatibilityStatusText" />
+                </LinearLayout>
+                <View style="@style/SmsSettingsDivider" />
+
+                <LinearLayout android:id="@+id/compatibility_autostart" style="@style/CompatibilityCheckRow">
+                    <LinearLayout style="@style/SmsForwardingTextColumn">
+                        <TextView style="@style/SmsForwardingTitle" android:text="@string/compatibility_autostart_title" />
+                        <TextView style="@style/SmsForwardingSummary" android:text="@string/compatibility_autostart_summary" />
+                    </LinearLayout>
+                    <TextView android:id="@+id/compatibility_autostart_status" style="@style/CompatibilityStatusText" android:text="@string/compatibility_manual_check" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <TextView style="@style/CompatibilitySectionTitle" android:text="@string/compatibility_brand_advice_title" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/settings_card_background"
+                android:orientation="vertical"
+                android:padding="20dp">
+                <TextView
+                    android:id="@+id/compatibility_brand_title"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/miui_primary_text"
+                    android:textSize="18sp"
+                    android:textStyle="bold" />
+                <TextView
+                    android:id="@+id/compatibility_brand_advice"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:textColor="@color/miui_secondary_text"
+                    android:textSize="14sp"
+                    android:lineSpacingExtra="3dp" />
+            </LinearLayout>
+
+            <TextView style="@style/CompatibilitySectionTitle" android:text="@string/compatibility_tools_title" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/settings_card_background"
+                android:orientation="vertical">
+                <TextView android:id="@+id/compatibility_refresh" style="@style/SmsSettingsRow" android:text="@string/compatibility_refresh" />
+                <View style="@style/SmsSettingsDivider" />
+                <TextView android:id="@+id/compatibility_test_notification" style="@style/SmsSettingsRow" android:text="@string/compatibility_test_notification" />
+                <View style="@style/SmsSettingsDivider" />
+                <TextView android:id="@+id/compatibility_copy_report" style="@style/SmsSettingsRow" android:text="@string/compatibility_copy_report" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/compatibility_advanced_toggle"
+                style="@style/CompatibilitySectionTitle"
+                android:drawableEnd="@drawable/ic_chevron_right_vector"
+                android:drawablePadding="8dp"
+                android:foreground="?attr/selectableItemBackground"
+                android:paddingVertical="12dp"
+                android:text="@string/compatibility_advanced_show" />
+
+            <LinearLayout
+                android:id="@+id/compatibility_advanced_content"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
                 android:layout_marginBottom="28dp"
-                android:textColor="@color/miui_secondary_text"
-                android:textSize="14sp" />
+                android:background="@drawable/settings_card_background"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <TextView
+                    android:id="@+id/compatibility_status"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:padding="20dp"
+                    android:textColor="@color/miui_secondary_text"
+                    android:textIsSelectable="true"
+                    android:textSize="14sp" />
+                <View style="@style/SmsSettingsDivider" />
+                <TextView android:id="@+id/compatibility_copy_fix" style="@style/SmsSettingsRow" android:text="@string/compatibility_copy_fix" />
+                <View style="@style/SmsSettingsDivider" />
+                <TextView android:id="@+id/compatibility_project" style="@style/SmsSettingsRow" android:text="@string/compatibility_project" />
+            </LinearLayout>
         </LinearLayout>
     </androidx.core.widget.NestedScrollView>
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

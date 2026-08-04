@@ -2,6 +2,9 @@ package org.fossify.messages.activities
 
 import android.graphics.Color
 import android.os.Bundle
+import android.view.View
+import android.widget.AdapterView
+import android.widget.ArrayAdapter
 import org.fossify.commons.extensions.value
 import org.fossify.commons.extensions.toast
 import org.fossify.commons.extensions.viewBinding
@@ -20,6 +23,7 @@ class EmailSettingsActivity : SimpleActivity() {
         setupEdgeToEdge(padBottomImeAndSystem = listOf(binding.emailScrollview))
         setupMaterialScrollListener(binding.emailScrollview, binding.emailAppbar)
         setupTopAppBar(binding.emailAppbar, NavigationIcon.Arrow)
+        setupSecuritySelector()
         loadConfig()
 
         binding.emailSave.setOnClickListener {
@@ -50,6 +54,8 @@ class EmailSettingsActivity : SimpleActivity() {
         emailEnabled.isChecked = forwardingConfig.emailEnabled
         emailHost.setText(forwardingConfig.emailHost())
         emailPort.setText(forwardingConfig.emailPort.toString())
+        emailSecurity.setSelection(forwardingConfig.emailSecurity, false)
+        updateSecurityHint(forwardingConfig.emailSecurity)
         emailUser.setText(forwardingConfig.emailUser())
         emailPassword.setText(forwardingConfig.emailPassword())
         emailRecipients.setText(forwardingConfig.emailRecipients())
@@ -57,9 +63,38 @@ class EmailSettingsActivity : SimpleActivity() {
         emailTestBody.setText("这是一条邮箱转发测试消息")
     }
 
+    private fun setupSecuritySelector() {
+        binding.emailSecurity.adapter = ArrayAdapter.createFromResource(
+            this,
+            org.fossify.messages.R.array.email_security_options,
+            org.fossify.messages.R.layout.item_email_security_spinner,
+        ).apply {
+            setDropDownViewResource(org.fossify.messages.R.layout.item_email_security_spinner_dropdown)
+        }
+        binding.emailSecurity.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                updateSecurityHint(position)
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+        }
+    }
+
+    private fun updateSecurityHint(security: Int) {
+        binding.emailSecurityHint.setText(
+            if (security == MultiForwardConfig.EMAIL_SECURITY_STARTTLS) {
+                org.fossify.messages.R.string.forwarding_email_security_starttls_hint
+            } else {
+                org.fossify.messages.R.string.forwarding_email_security_ssl_hint
+            }
+        )
+    }
+
     private fun saveConfig(requireConfig: Boolean = false): Boolean {
         val host = binding.emailHost.text?.toString().orEmpty().trim()
-        val port = binding.emailPort.text?.toString().orEmpty().trim().toIntOrNull() ?: 465
+        val security = binding.emailSecurity.selectedItemPosition
+        val defaultPort = if (security == MultiForwardConfig.EMAIL_SECURITY_STARTTLS) 587 else 465
+        val port = binding.emailPort.text?.toString().orEmpty().trim().toIntOrNull() ?: defaultPort
         val user = binding.emailUser.text?.toString().orEmpty().trim()
         val password = binding.emailPassword.text?.toString().orEmpty().trim()
         val recipients = binding.emailRecipients.text?.toString().orEmpty().trim()
@@ -68,7 +103,7 @@ class EmailSettingsActivity : SimpleActivity() {
             return false
         }
         forwardingConfig.emailEnabled = binding.emailEnabled.isChecked
-        forwardingConfig.saveEmail(host, port, user, password, recipients)
+        forwardingConfig.saveEmail(host, port, user, password, recipients, security)
         return true
     }
 }

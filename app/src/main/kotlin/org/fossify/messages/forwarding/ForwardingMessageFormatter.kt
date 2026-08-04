@@ -23,9 +23,13 @@ object ForwardingMessageFormatter {
         includeTime: Boolean = true,
     ): ForwardingPayload {
         val config = MultiForwardConfig(context)
-        val contactName = runCatching {
+        val contactName = try {
             SimpleContactsHelper(context).getNameFromPhoneNumber(sender)
-        }.getOrNull()?.takeIf { it.isNotBlank() && it != sender }
+        } catch (_: NumberFormatException) {
+            null
+        } catch (_: Exception) {
+            null
+        }?.takeIf { it.isNotBlank() && it != sender }
         val senderTitle = contactName ?: sender.ifBlank { "新短信" }
         val sim = if (includeSim && subscriptionId >= 0) {
             getSimDescription(context, config, subscriptionId)

@@ -34,10 +34,14 @@ class BulkRecipientsAdapter(
         fun bind(recipient: BulkRecipient) = with(binding) {
             bulkRecipientName.text = recipient.name.ifBlank { recipient.number }
             bulkRecipientNumber.text = recipient.number
-            bulkRecipientCheckbox.isChecked = recipient.number in selectedNumbers
+            val isSelected = recipient.number in selectedNumbers
+            bulkRecipientCheckbox.isChecked = isSelected
+            root.isSelected = isSelected
             root.setOnClickListener {
                 if (!selectedNumbers.add(recipient.number)) selectedNumbers.remove(recipient.number)
-                bulkRecipientCheckbox.isChecked = recipient.number in selectedNumbers
+                val selected = recipient.number in selectedNumbers
+                bulkRecipientCheckbox.isChecked = selected
+                root.isSelected = selected
                 onSelectionChanged()
             }
         }

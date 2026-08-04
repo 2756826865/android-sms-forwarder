@@ -1,11 +1,14 @@
 package org.fossify.messages.activities
 
+import android.Manifest
 import android.app.AlarmManager
+import android.content.pm.PackageManager
 import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import android.view.View
 import androidx.appcompat.app.AlertDialog
+import androidx.core.content.ContextCompat
 import org.fossify.commons.extensions.getTimeFormat
 import org.fossify.commons.extensions.viewBinding
 import org.fossify.commons.helpers.NavigationIcon
@@ -84,13 +87,18 @@ class ScheduledMessagesActivity : SimpleActivity() {
         }
     }
 
-    private fun simLabel(message: Message): String = if (message.subscriptionId >= 0) {
-        runCatching {
+    private fun simLabel(message: Message): String {
+        if (message.subscriptionId < 0) return getString(R.string.bulk_send_default_sim)
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            return "SIM"
+        }
+
+        return runCatching {
             val info = subscriptionManagerCompat().getActiveSubscriptionInfo(message.subscriptionId)
             info?.simSlotIndex?.plus(1)?.let { "SIM$it" } ?: "SIM"
         }.getOrDefault("SIM")
-    } else {
-        getString(R.string.bulk_send_default_sim)
     }
 
     private fun openMessage(message: Message) {
