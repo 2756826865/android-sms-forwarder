@@ -8,6 +8,7 @@
 /captures
 keystore.jks
 keystore.properties
+sms-forwarder-release.jks
 fastlane/fastlane.json
 fastlane/report.xml
 .kotlin/

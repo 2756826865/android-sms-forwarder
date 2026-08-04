@@ -9,6 +9,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.provider.Telephony
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import org.fossify.messages.R
@@ -60,7 +61,6 @@ class SmsKeepAliveService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     private fun createChannel() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val manager = getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(
             NotificationChannel(
@@ -81,12 +81,19 @@ class SmsKeepAliveService : Service() {
         private const val NOTIFICATION_ID = 19081
 
         fun ensureStarted(context: Context) {
+            if (Telephony.Sms.getDefaultSmsPackage(context) != context.packageName) return
             runCatching {
                 ContextCompat.startForegroundService(
                     context.applicationContext,
                     Intent(context.applicationContext, SmsKeepAliveService::class.java),
                 )
             }
+        }
+
+        fun stop(context: Context) {
+            context.applicationContext.stopService(
+                Intent(context.applicationContext, SmsKeepAliveService::class.java)
+            )
         }
     }
 }

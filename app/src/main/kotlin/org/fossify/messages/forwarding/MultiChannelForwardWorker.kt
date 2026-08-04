@@ -17,9 +17,8 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.BufferedWriter
-import java.io.InputStreamReader
-import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
+import java.net.Socket
 import java.net.URL
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
@@ -39,7 +38,14 @@ class MultiChannelForwardWorker(
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         val config = MultiForwardConfig(applicationContext)
-        if (!config.anyEnabled()) return@withContext Result.success()
+        val targetChannel = inputData.getString(KEY_TARGET_CHANNEL).orEmpty()
+        if (targetChannel.isBlank() && !config.anyEnabled()) return@withContext Result.success()
+
+        fun shouldRun(channel: String, enabled: Boolean): Boolean = when (targetChannel) {
+            "" -> enabled
+            CHANNEL_ALL -> enabled
+            else -> targetChannel == channel
+        }
 
         val sender = inputData.getString(KEY_SENDER).orEmpty()
         val body = inputData.getString(KEY_BODY).orEmpty()
@@ -69,7 +75,7 @@ class MultiChannelForwardWorker(
         val onlyOnNoNetwork = config.smsDirectOnlyOnNoNetwork
 
         // 短信直发逻辑
-        if (config.smsDirectEnabled) {
+        if (shouldRun(CHANNEL_SMS_DIRECT, config.smsDirectEnabled)) {
             if (onlyOnNoNetwork) {
                 // 仅断网时发送模�?
                 if (!networkAvailable) {
@@ -85,39 +91,38 @@ class MultiChannelForwardWorker(
             }
         }
 
-        // 网络可用时发送其他渠�?
+        // 网络可用时发送其他渠道
         if (networkAvailable) {
-            if (config.dingTalkEnabled) runChannel("钉钉") {
+            if (shouldRun(CHANNEL_DINGTALK, config.dingTalkEnabled)) runChannel("钉钉") {
                 sendDingTalk(config.dingTalkWebhook(), config.dingTalkSecret(), content)
             }
-        if (config.feishuEnabled) runChannel("飞书") {
-            sendFeishu(config.feishuWebhook(), config.feishuSecret(), content)
-        }
-        if (config.weComEnabled) runChannel("企业微信") {
-            sendWeCom(
-                config.weComCorpId(),
-                config.weComAgentId(),
-                config.weComSecret(),
-                config.weComToUser(),
-                content
-            )
-        }
-        if (config.weComBotEnabled) runChannel("企业微信群机器人") {
-            sendWeComBot(config.weComBotWebhook(), content)
-        }
-        if (config.emailEnabled) runChannel("邮箱") {
-            sendEmail(
-                config.emailHost(),
-                config.emailPort,
-                config.emailUser(),
-                config.emailPassword(),
-                config.emailRecipients(),
-                title,
-                content
-            )
-        }
-        if (config.smsDirectEnabled) runChannel("短信直发") {
-            sendSmsDirect(config.smsDirectPhone(), content)
+            if (shouldRun(CHANNEL_FEISHU, config.feishuEnabled)) runChannel("飞书") {
+                sendFeishu(config.feishuWebhook(), config.feishuSecret(), content)
+            }
+            if (shouldRun(CHANNEL_WECOM, config.weComEnabled)) runChannel("企业微信") {
+                sendWeCom(
+                    config.weComCorpId(),
+                    config.weComAgentId(),
+                    config.weComSecret(),
+                    config.weComToUser(),
+                    content
+                )
+            }
+            if (shouldRun(CHANNEL_WECOM_BOT, config.weComBotEnabled)) runChannel("企业微信群机器人") {
+                sendWeComBot(config.weComBotWebhook(), content)
+            }
+            if (shouldRun(CHANNEL_EMAIL, config.emailEnabled)) runChannel("邮箱") {
+                sendEmail(
+                    config.emailHost(),
+                    config.emailPort,
+                    config.emailSecurity,
+                    config.emailUser(),
+                    config.emailPassword(),
+                    config.emailRecipients(),
+                    title,
+                    content
+                )
+            }
         }
 
         val now = SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
@@ -132,7 +137,6 @@ class MultiChannelForwardWorker(
             runAttemptCount < 2 -> Result.retry()
             else -> Result.failure()
         }
-    }
     }
 
     private fun sendDingTalk(webhook: String, secret: String, content: String) {
@@ -184,7 +188,7 @@ class MultiChannelForwardWorker(
         content: String
     ) {
         require(corpId.isNotBlank() && agentId.toLongOrNull() != null && secret.isNotBlank() && toUser.isNotBlank()) {
-            "企业微信配置不完�?
+            "企业微信配置不完整"
         }
         val tokenUrl = "https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid=" +
             URLEncoder.encode(corpId, "UTF-8") + "&corpsecret=" + URLEncoder.encode(secret, "UTF-8")
@@ -224,52 +228,103 @@ class MultiChannelForwardWorker(
     private fun sendEmail(
         host: String,
         port: Int,
+        security: Int,
         user: String,
         password: String,
         recipientsText: String,
         subject: String,
-        content: String
+        content: String,
     ) {
         require(host.isNotBlank() && user.isNotBlank() && password.isNotBlank() && recipientsText.isNotBlank()) {
-            "邮箱配置不完�?
+            "邮箱配置不完整"
         }
-        val recipients = recipientsText.split(',', ';', '�?, '�?)
+        val recipients = recipientsText.split(',', ';')
             .map(String::trim)
             .filter(String::isNotBlank)
-        require(recipients.isNotEmpty()) { "未配置收件邮�? }
+        require(recipients.isNotEmpty()) { "未配置收件邮箱" }
 
-        val socket = (SSLSocketFactory.getDefault().createSocket(host, port) as SSLSocket).apply {
-            soTimeout = 12_000
-            enabledProtocols = enabledProtocols.filter { it == "TLSv1.2" || it == "TLSv1.3" }.toTypedArray()
-            startHandshake()
+        if (security == MultiForwardConfig.EMAIL_SECURITY_STARTTLS) {
+            sendEmailStartTls(host, port, user, password, recipients, subject, content)
+        } else {
+            createTlsSocket(host, port).use { socket ->
+                expectSmtp(socket.inputStream.bufferedReader(StandardCharsets.UTF_8), 220)
+                runSmtpSession(socket, user, password, recipients, subject, content)
+            }
         }
-        socket.use {
-            val reader = BufferedReader(InputStreamReader(it.inputStream, StandardCharsets.UTF_8))
-            val writer = BufferedWriter(OutputStreamWriter(it.outputStream, StandardCharsets.UTF_8))
+    }
+
+    private fun sendEmailStartTls(
+        host: String,
+        port: Int,
+        user: String,
+        password: String,
+        recipients: List<String>,
+        subject: String,
+        content: String,
+    ) {
+        Socket(host, port).use { plainSocket ->
+            plainSocket.soTimeout = SMTP_TIMEOUT_MS
+            val reader = plainSocket.inputStream.bufferedReader(StandardCharsets.UTF_8)
+            val writer = plainSocket.outputStream.bufferedWriter(StandardCharsets.UTF_8)
             expectSmtp(reader, 220)
             smtpCommand(writer, reader, "EHLO android-sms-forwarder", 250)
-            smtpCommand(writer, reader, "AUTH LOGIN", 334)
-            smtpCommand(writer, reader, Base64.encodeToString(user.toByteArray(), Base64.NO_WRAP), 334)
-            smtpCommand(writer, reader, Base64.encodeToString(password.toByteArray(), Base64.NO_WRAP), 235)
-            smtpCommand(writer, reader, "MAIL FROM:<$user>", 250)
-            recipients.forEach { smtpCommand(writer, reader, "RCPT TO:<$it>", 250) }
-            smtpCommand(writer, reader, "DATA", 354)
+            smtpCommand(writer, reader, "STARTTLS", 220)
 
-            val encodedSubject = Base64.encodeToString(subject.toByteArray(StandardCharsets.UTF_8), Base64.NO_WRAP)
-            val encodedBody = java.util.Base64.getMimeEncoder(76, "\r\n".toByteArray())
-                .encodeToString(content.toByteArray(StandardCharsets.UTF_8))
-            writer.write("From: <$user>\r\n")
-            writer.write("To: ${recipients.joinToString(", ")}\r\n")
-            writer.write("Subject: =?UTF-8?B?$encodedSubject?=\r\n")
-            writer.write("MIME-Version: 1.0\r\n")
-            writer.write("Content-Type: text/plain; charset=UTF-8\r\n")
-            writer.write("Content-Transfer-Encoding: base64\r\n\r\n")
-            writer.write(encodedBody)
-            writer.write("\r\n.\r\n")
-            writer.flush()
-            expectSmtp(reader, 250)
-            smtpCommand(writer, reader, "QUIT", 221)
+            val tlsSocket = (SSLSocketFactory.getDefault() as SSLSocketFactory)
+                .createSocket(plainSocket, host, port, true) as SSLSocket
+            configureTls(tlsSocket)
+            tlsSocket.use {
+                runSmtpSession(it, user, password, recipients, subject, content)
+            }
         }
+    }
+
+    private fun runSmtpSession(
+        socket: Socket,
+        user: String,
+        password: String,
+        recipients: List<String>,
+        subject: String,
+        content: String,
+    ) {
+        val reader = socket.inputStream.bufferedReader(StandardCharsets.UTF_8)
+        val writer = socket.outputStream.bufferedWriter(StandardCharsets.UTF_8)
+        smtpCommand(writer, reader, "EHLO android-sms-forwarder", 250)
+        smtpCommand(writer, reader, "AUTH LOGIN", 334)
+        smtpCommand(writer, reader, Base64.encodeToString(user.toByteArray(), Base64.NO_WRAP), 334)
+        smtpCommand(writer, reader, Base64.encodeToString(password.toByteArray(), Base64.NO_WRAP), 235)
+        smtpCommand(writer, reader, "MAIL FROM:<$user>", 250)
+        recipients.forEach { smtpCommand(writer, reader, "RCPT TO:<$it>", 250) }
+        smtpCommand(writer, reader, "DATA", 354)
+
+        val encodedSubject = Base64.encodeToString(subject.toByteArray(StandardCharsets.UTF_8), Base64.NO_WRAP)
+        val encodedBody = java.util.Base64.getMimeEncoder(76, "\r\n".toByteArray())
+            .encodeToString(content.toByteArray(StandardCharsets.UTF_8))
+        writer.write("From: <$user>\r\n")
+        writer.write("To: ${recipients.joinToString(", ")}\r\n")
+        writer.write("Subject: =?UTF-8?B?$encodedSubject?=\r\n")
+        writer.write("MIME-Version: 1.0\r\n")
+        writer.write("Content-Type: text/plain; charset=UTF-8\r\n")
+        writer.write("Content-Transfer-Encoding: base64\r\n\r\n")
+        writer.write(encodedBody)
+        writer.write("\r\n.\r\n")
+        writer.flush()
+        expectSmtp(reader, 250)
+        smtpCommand(writer, reader, "QUIT", 221)
+    }
+
+    private fun createTlsSocket(host: String, port: Int): SSLSocket =
+        (SSLSocketFactory.getDefault().createSocket(host, port) as SSLSocket).also(::configureTls)
+
+    private fun configureTls(socket: SSLSocket) {
+        socket.soTimeout = SMTP_TIMEOUT_MS
+        socket.enabledProtocols = socket.enabledProtocols
+            .filter { it == "TLSv1.2" || it == "TLSv1.3" }
+            .toTypedArray()
+        socket.sslParameters = socket.sslParameters.apply {
+            endpointIdentificationAlgorithm = "HTTPS"
+        }
+        socket.startHandshake()
     }
 
     private fun smtpCommand(
@@ -290,7 +345,7 @@ class MultiChannelForwardWorker(
         while (line.length > 3 && line[3] == '-') {
             line = reader.readLine() ?: break
         }
-        check(code == expected) { "SMTP $code�?{line.drop(4)}" }
+        check(code == expected) { "SMTP $code ${line.drop(4)}" }
     }
 
     private fun hmacSha256Base64(secret: String, content: String): String {
@@ -324,7 +379,7 @@ class MultiChannelForwardWorker(
                 ?.use { it.readText() }
                 .orEmpty()
             disconnect()
-            check(response.isNotBlank()) { "接口返回空响�? }
+            check(response.isNotBlank()) { "接口返回空响应" }
             JSONObject(response)
         }
     }
@@ -337,9 +392,11 @@ class MultiChannelForwardWorker(
     }
 
     private fun sendSmsDirect(phone: String, content: String) {
-        require(phone.isNotBlank()) { "目标手机号不能为�? }
+        require(phone.isNotBlank()) { "目标手机号不能为空" }
+        val normalized = phone.trim()
+        require(normalized.isNotEmpty()) { "目标手机号格式无效" }
         val smsManager = android.telephony.SmsManager.getDefault()
-        smsManager.sendTextMessage(phone, null, content, null, null)
+        smsManager.sendTextMessage(normalized, null, content, null, null)
     }
 
     companion object {
@@ -347,6 +404,16 @@ class MultiChannelForwardWorker(
         private const val KEY_BODY = "body"
         private const val KEY_RECEIVED_AT = "received_at"
         private const val KEY_SUBSCRIPTION_ID = "subscription_id"
+        private const val KEY_TARGET_CHANNEL = "target_channel"
+
+        private const val CHANNEL_ALL = "test"
+        private const val CHANNEL_DINGTALK = "dingtalk"
+        private const val CHANNEL_FEISHU = "feishu"
+        private const val CHANNEL_WECOM = "wecom"
+        private const val CHANNEL_WECOM_BOT = "wecom_bot"
+        private const val CHANNEL_EMAIL = "email"
+        private const val CHANNEL_SMS_DIRECT = "sms_direct"
+        private const val SMTP_TIMEOUT_MS = 12_000
 
         fun enqueue(
             context: Context,
@@ -354,7 +421,8 @@ class MultiChannelForwardWorker(
             body: String,
             receivedAt: Long,
             subscriptionId: Int,
-            uniqueId: String
+            uniqueId: String,
+            targetChannel: String = "",
         ) {
             val request = OneTimeWorkRequestBuilder<MultiChannelForwardWorker>()
                 .setInputData(
@@ -362,7 +430,8 @@ class MultiChannelForwardWorker(
                         KEY_SENDER to sender,
                         KEY_BODY to body,
                         KEY_RECEIVED_AT to receivedAt,
-                        KEY_SUBSCRIPTION_ID to subscriptionId
+                        KEY_SUBSCRIPTION_ID to subscriptionId,
+                        KEY_TARGET_CHANNEL to targetChannel,
                     )
                 )
                 .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.NOT_REQUIRED).build())
@@ -380,7 +449,8 @@ class MultiChannelForwardWorker(
                 body = body,
                 receivedAt = System.currentTimeMillis(),
                 subscriptionId = -1,
-                uniqueId = "test-$channel-${System.currentTimeMillis()}"
+                uniqueId = "test-$channel-${System.currentTimeMillis()}",
+                targetChannel = channel,
             )
         }
     }

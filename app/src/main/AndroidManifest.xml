@@ -285,6 +285,15 @@
         </receiver>
 
         <receiver
+            android:name=".receivers.DefaultSmsAppChangedReceiver"
+            android:exported="true"
+            android:permission="android.permission.BROADCAST_SMS">
+            <intent-filter>
+                <action android:name="android.provider.action.DEFAULT_SMS_PACKAGE_CHANGED" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
             android:name="com.android.mms.transaction.PushReceiver"
             android:exported="true"
             android:permission="android.permission.BROADCAST_WAP_PUSH">

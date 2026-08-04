@@ -71,6 +71,37 @@
         <item name="android:src">@drawable/ic_chevron_right_vector</item>
     </style>
 
+    <style name="CompatibilitySectionTitle">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginStart">8dp</item>
+        <item name="android:layout_marginTop">22dp</item>
+        <item name="android:layout_marginBottom">10dp</item>
+        <item name="android:textColor">@color/miui_section_text</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <style name="CompatibilityCheckRow">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">88dp</item>
+        <item name="android:foreground">?attr/selectableItemBackground</item>
+        <item name="android:gravity">center_vertical</item>
+        <item name="android:orientation">horizontal</item>
+        <item name="android:paddingHorizontal">20dp</item>
+    </style>
+
+    <style name="CompatibilityStatusText">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginStart">12dp</item>
+        <item name="android:gravity">end</item>
+        <item name="android:maxWidth">88dp</item>
+        <item name="android:textColor">@color/miui_secondary_text</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
     <style name="roundedImageView" parent="">
         <item name="cornerFamily">rounded</item>
         <item name="cornerSize">@dimen/normal_margin</item>

@@ -2,42 +2,47 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="?selectableItemBackground"
+    android:layout_marginVertical="4dp"
+    android:background="@drawable/bulk_recipient_background"
     android:gravity="center_vertical"
-    android:minHeight="64dp"
+    android:minHeight="72dp"
     android:orientation="horizontal"
-    android:paddingHorizontal="16dp"
-    android:paddingVertical="8dp">
+    android:paddingHorizontal="14dp"
+    android:paddingVertical="10dp">
 
     <CheckBox
         android:id="@+id/bulk_recipient_checkbox"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:buttonTint="@color/home_bottom_nav_tint"
         android:clickable="false"
-        android:focusable="false" />
+        android:focusable="false"
+        android:gravity="center" />
 
     <LinearLayout
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginStart="12dp"
+        android:layout_marginStart="8dp"
         android:layout_weight="1"
         android:orientation="vertical">
-
         <TextView
             android:id="@+id/bulk_recipient_name"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:ellipsize="end"
             android:maxLines="1"
-            android:textColor="#151515"
-            android:textSize="16sp" />
+            android:textColor="@color/miui_primary_text"
+            android:textSize="17sp"
+            android:textStyle="bold" />
 
         <TextView
             android:id="@+id/bulk_recipient_number"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:alpha="0.7"
+            android:layout_marginTop="3dp"
+            android:ellipsize="end"
             android:maxLines="1"
-            android:textColor="#606060"
+            android:textColor="@color/miui_secondary_text"
             android:textSize="14sp" />
     </LinearLayout>
 </LinearLayout>

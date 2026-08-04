@@ -72,6 +72,19 @@ class MultiForwardConfig(context: Context) {
         get() = prefs.getInt(KEY_EMAIL_PORT, 465).coerceIn(1, 65535)
         set(value) = prefs.edit().putInt(KEY_EMAIL_PORT, value.coerceIn(1, 65535)).apply()
 
+    var emailSecurity: Int
+        get() = if (prefs.contains(KEY_EMAIL_SECURITY)) {
+            prefs.getInt(KEY_EMAIL_SECURITY, EMAIL_SECURITY_SSL)
+                .coerceIn(EMAIL_SECURITY_SSL, EMAIL_SECURITY_STARTTLS)
+        } else if (emailPort == 587) {
+            EMAIL_SECURITY_STARTTLS
+        } else {
+            EMAIL_SECURITY_SSL
+        }
+        set(value) = prefs.edit()
+            .putInt(KEY_EMAIL_SECURITY, value.coerceIn(EMAIL_SECURITY_SSL, EMAIL_SECURITY_STARTTLS))
+            .apply()
+
     var lastStatus: String
         get() = prefs.getString(KEY_LAST_STATUS, "").orEmpty()
         set(value) = prefs.edit().putString(KEY_LAST_STATUS, value).apply()
@@ -110,9 +123,17 @@ class MultiForwardConfig(context: Context) {
 
     fun weComBotWebhook() = getSecret(KEY_WECOM_BOT_WEBHOOK)
 
-    fun saveEmail(host: String, port: Int, user: String, password: String, recipients: String) {
+    fun saveEmail(
+        host: String,
+        port: Int,
+        user: String,
+        password: String,
+        recipients: String,
+        security: Int = if (port == 587) EMAIL_SECURITY_STARTTLS else EMAIL_SECURITY_SSL,
+    ) {
         saveSecret(KEY_EMAIL_HOST, host)
         emailPort = port
+        emailSecurity = security
         saveSecret(KEY_EMAIL_USER, user)
         saveSecret(KEY_EMAIL_PASSWORD, password)
         saveSecret(KEY_EMAIL_RECIPIENTS, recipients)
@@ -170,6 +191,7 @@ class MultiForwardConfig(context: Context) {
         private const val KEY_EMAIL_ENABLED = "email_enabled"
         private const val KEY_EMAIL_HOST = "email_host"
         private const val KEY_EMAIL_PORT = "email_port"
+        private const val KEY_EMAIL_SECURITY = "email_security"
         private const val KEY_EMAIL_USER = "email_user"
         private const val KEY_EMAIL_PASSWORD = "email_password"
         private const val KEY_EMAIL_RECIPIENTS = "email_recipients"
@@ -186,6 +208,9 @@ class MultiForwardConfig(context: Context) {
         private const val KEY_ACCEPTED_DISCLAIMER_VERSION = "accepted_disclaimer_version"
 
         const val CURRENT_DISCLAIMER_VERSION = 1
+
+        const val EMAIL_SECURITY_SSL = 0
+        const val EMAIL_SECURITY_STARTTLS = 1
 
         const val TEMPLATE_COMPACT = 0
         const val TEMPLATE_STANDARD = 1

@@ -59,6 +59,33 @@
                     android:layout_height="wrap_content"
                     android:inputType="number" />
             </com.google.android.material.textfield.TextInputLayout>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="@string/forwarding_email_security"
+                android:textColor="#666666"
+                android:textSize="13sp" />
+
+            <Spinner
+                android:id="@+id/email_security"
+                android:layout_width="match_parent"
+                android:layout_height="52dp"
+                android:background="@drawable/email_security_spinner_background"
+                android:contentDescription="@string/forwarding_email_security_description"
+                android:popupBackground="@color/miui_card_background"
+                android:popupElevation="8dp"
+                android:paddingHorizontal="12dp" />
+
+            <TextView
+                android:id="@+id/email_security_hint"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingHorizontal="4dp"
+                android:textColor="#777777"
+                android:textSize="12sp" />
+
             <com.google.android.material.textfield.TextInputLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"

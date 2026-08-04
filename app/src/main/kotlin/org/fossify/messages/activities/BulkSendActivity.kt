@@ -1,7 +1,6 @@
 package org.fossify.messages.activities
 
 import android.annotation.SuppressLint
-import android.graphics.Color
 import android.os.Bundle
 import android.telephony.SmsMessage
 import android.telephony.SubscriptionManager
@@ -21,6 +20,8 @@ import org.fossify.messages.databinding.ActivityBulkSendBinding
 import org.fossify.messages.extensions.subscriptionManagerCompat
 import org.fossify.messages.messaging.BulkSendWorker
 import org.fossify.messages.models.BulkRecipient
+import android.net.Uri
+import androidx.activity.result.contract.ActivityResultContracts
 
 class BulkSendActivity : SimpleActivity() {
     private val binding by viewBinding(ActivityBulkSendBinding::inflate)
@@ -28,6 +29,11 @@ class BulkSendActivity : SimpleActivity() {
     private val selectedNumbers = linkedSetOf<String>()
     private val adapter = BulkRecipientsAdapter(selectedNumbers, ::updateSelectedCount)
     private var simOptions = emptyList<SimOption>()
+    private val fileImportLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let { importNumbersFromFile(it) }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -46,6 +52,7 @@ class BulkSendActivity : SimpleActivity() {
             updateManualNumberAction(it)
         }
         binding.bulkSendAddNumber.setOnClickListener { addManualNumber() }
+        binding.bulkSendImportFile.setOnClickListener { openFilePicker() }
         binding.bulkSendSelectAll.setOnClickListener {
             val visible = adapter.visibleNumbers()
             if (selectedNumbers.size + visible.count { it !in selectedNumbers } > MAX_RECIPIENTS) {
@@ -130,6 +137,81 @@ class BulkSendActivity : SimpleActivity() {
         return compact
     }
 
+    private fun openFilePicker() {
+        fileImportLauncher.launch(arrayOf("text/plain", "text/csv", "text/*"))
+    }
+
+    private fun importNumbersFromFile(uri: Uri) {
+        try {
+            val imported = mutableListOf<BulkRecipient>()
+            var skipped = 0
+
+            contentResolver.openInputStream(uri)?.bufferedReader()?.useLines { lines ->
+                var isFirstLine = true
+                lines.forEach { line ->
+                    val trimmed = line.trim()
+                    if (trimmed.isBlank()) return@forEach
+
+                    if (isFirstLine) {
+                        isFirstLine = false
+                        val lower = trimmed.lowercase()
+                        if (lower.contains("name") || lower.contains("phone") ||
+                            lower.contains("姓名") || lower.contains("号码") ||
+                            lower.contains("number")) {
+                            return@forEach
+                        }
+                    }
+
+                    val (name, number) = parseImportLine(trimmed)
+                    val normalized = normalizeManualNumber(number)
+
+                    if (normalized == null || allRecipients.any { it.number == normalized }) {
+                        skipped++
+                        return@forEach
+                    }
+
+                    imported.add(BulkRecipient(name, normalized))
+                }
+            }
+
+            if (imported.isEmpty()) {
+                toast(R.string.bulk_send_import_empty)
+            } else {
+                val availableSlots = MAX_RECIPIENTS - selectedNumbers.size
+                val toAdd = imported.take(availableSlots)
+                val overflowSkipped = imported.size - toAdd.size
+                val totalSkipped = skipped + overflowSkipped
+
+                if (overflowSkipped > 0) {
+                    toast(getString(R.string.bulk_send_too_many, MAX_RECIPIENTS))
+                }
+
+                toAdd.forEach { recipient ->
+                    allRecipients.add(0, recipient)
+                    selectedNumbers.add(recipient.number)
+                }
+
+                applyFilter(binding.bulkSendSearch.value)
+                updateSelectedCount()
+                toast(getString(R.string.bulk_send_import_result, toAdd.size, totalSkipped))
+            }
+        } catch (e: Exception) {
+            toast(getString(R.string.bulk_send_import_error, e.message ?: "Unknown error"))
+        }
+    }
+
+    private fun parseImportLine(line: String): Pair<String, String> {
+        return if (line.contains(",")) {
+            val parts = line.split(",", limit = 2)
+            val name = parts[0].trim().ifBlank { getString(R.string.bulk_send_imported) }
+            val number = parts[1].trim()
+            Pair(name, number)
+        } else {
+            val number = line.trim()
+            Pair(getString(R.string.bulk_send_imported), number)
+        }
+    }
+
     @SuppressLint("MissingPermission")
     private fun loadSimOptions() {
         val active = runCatching { subscriptionManagerCompat().activeSubscriptionInfoList.orEmpty() }.getOrDefault(emptyList())
@@ -146,17 +228,18 @@ class BulkSendActivity : SimpleActivity() {
     }
 
     private fun applyLightUiColors() {
-        binding.bulkSendHolder.setBackgroundColor(Color.rgb(247, 247, 247))
-        window.statusBarColor = Color.rgb(247, 247, 247)
-        window.navigationBarColor = Color.rgb(247, 247, 247)
-        binding.bulkSendSearch.setTextColor(Color.rgb(17, 17, 17))
-        binding.bulkSendSearch.setHintTextColor(Color.rgb(138, 138, 138))
-        binding.bulkSendAddNumber.setTextColor(Color.rgb(21, 148, 71))
-        binding.bulkSendSelectAll.setTextColor(Color.rgb(34, 34, 34))
-        binding.bulkSendClear.setTextColor(Color.rgb(34, 34, 34))
-        binding.bulkSendSelectedCount.setTextColor(Color.rgb(85, 85, 85))
-        binding.bulkSendBody.setTextColor(Color.rgb(17, 17, 17))
-        binding.bulkSendBody.setHintTextColor(Color.rgb(119, 119, 119))
+        val pageColor = getColor(R.color.miui_page_background)
+        binding.bulkSendHolder.setBackgroundColor(pageColor)
+        window.statusBarColor = pageColor
+        window.navigationBarColor = pageColor
+        binding.bulkSendSearch.setTextColor(getColor(R.color.miui_primary_text))
+        binding.bulkSendSearch.setHintTextColor(getColor(R.color.miui_hint_text))
+        binding.bulkSendAddNumber.setTextColor(getColor(R.color.miui_action_blue))
+        binding.bulkSendSelectAll.setTextColor(getColor(R.color.miui_primary_text))
+        binding.bulkSendClear.setTextColor(getColor(R.color.miui_primary_text))
+        binding.bulkSendSelectedCount.setTextColor(getColor(R.color.miui_secondary_text))
+        binding.bulkSendBody.setTextColor(getColor(R.color.miui_primary_text))
+        binding.bulkSendBody.setHintTextColor(getColor(R.color.miui_hint_text))
     }
 
     private fun confirmSend() {

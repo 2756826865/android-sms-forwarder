@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_selected="true">
+        <shape><solid android:color="@color/miui_selected_background" /><corners android:radius="14dp" /></shape>
+    </item>
+    <item><shape><solid android:color="@color/miui_card_background" /><corners android:radius="14dp" /></shape></item>
+</selector>

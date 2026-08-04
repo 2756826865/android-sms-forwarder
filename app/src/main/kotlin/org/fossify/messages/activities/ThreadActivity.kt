@@ -177,6 +177,7 @@ import org.fossify.messages.helpers.PICK_VIDEO_INTENT
 import org.fossify.messages.helpers.SEARCHED_MESSAGE_ID
 import org.fossify.messages.helpers.THREAD_ATTACHMENT_URI
 import org.fossify.messages.helpers.THREAD_ATTACHMENT_URIS
+import org.fossify.messages.helpers.OPEN_THREAD_ATTACHMENT_PICKER
 import org.fossify.messages.helpers.THREAD_ID
 import org.fossify.messages.helpers.THREAD_NUMBER
 import org.fossify.messages.helpers.THREAD_TEXT
@@ -970,6 +971,11 @@ class ThreadActivity : SimpleActivity() {
                         .hide(WindowInsetsCompat.Type.ime())
                 }
                 binding.messageHolder.threadTypeMessage.requestApplyInsets()
+            }
+
+            if (intent.getBooleanExtra(OPEN_THREAD_ATTACHMENT_PICKER, false)) {
+                intent.removeExtra(OPEN_THREAD_ATTACHMENT_PICKER)
+                threadAddAttachment.performClick()
             }
 
             if (intent.extras?.containsKey(THREAD_ATTACHMENT_URI) == true) {

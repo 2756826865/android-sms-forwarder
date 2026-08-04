@@ -4,14 +4,12 @@ import android.graphics.Color
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Bundle
-import android.widget.Toast
-import org.fossify.commons.extensions.value
 import org.fossify.commons.extensions.toast
+import org.fossify.commons.extensions.value
 import org.fossify.commons.extensions.viewBinding
 import org.fossify.commons.helpers.NavigationIcon
 import org.fossify.messages.databinding.ActivitySmsDirectSettingsBinding
 import org.fossify.messages.forwarding.MultiForwardConfig
-import org.fossify.messages.messaging.SmsSender
 
 class SmsDirectSettingsActivity : SimpleActivity() {
     private val binding by viewBinding(ActivitySmsDirectSettingsBinding::inflate)
@@ -92,7 +90,13 @@ class SmsDirectSettingsActivity : SimpleActivity() {
 
     private fun sendSmsDirect(phone: String, message: String) {
         try {
-            SmsSender.sendSms(this, phone, message, null)
+            val normalized = phone.trim()
+            if (normalized.isEmpty()) {
+                toast("目标手机号不能为空")
+                return
+            }
+            val smsManager = android.telephony.SmsManager.getDefault()
+            smsManager.sendTextMessage(normalized, null, message, null, null)
         } catch (e: Exception) {
             toast("短信发送失败: ${e.message}")
         }
