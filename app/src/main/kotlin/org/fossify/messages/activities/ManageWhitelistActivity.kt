@@ -1,6 +1,5 @@
 package org.fossify.messages.activities
 
-import android.graphics.Color
 import android.os.Bundle
 import android.text.InputType
 import android.view.View
@@ -12,6 +11,7 @@ import org.fossify.commons.extensions.viewBinding
 import org.fossify.commons.helpers.NavigationIcon
 import org.fossify.messages.R
 import org.fossify.messages.databinding.ActivityManageWhitelistBinding
+import org.fossify.messages.extensions.applyMiuiPageChrome
 import org.fossify.messages.extensions.config
 import org.fossify.messages.extensions.showSmsStyled
 
@@ -24,8 +24,7 @@ class ManageWhitelistActivity : SimpleActivity() {
         setupEdgeToEdge(padBottomImeAndSystem = listOf(binding.whitelistList))
         setupTopAppBar(binding.whitelistAppbar, NavigationIcon.Arrow)
         binding.whitelistToolbar.title = ""
-        window.statusBarColor = Color.rgb(247, 247, 247)
-        window.navigationBarColor = Color.rgb(247, 247, 247)
+        applyMiuiPageChrome()
         binding.whitelistFab.setOnClickListener { showAddDialog() }
         binding.whitelistList.setOnItemLongClickListener { _, _, position, _ ->
             val number = currentNumbers().getOrNull(position) ?: return@setOnItemLongClickListener true

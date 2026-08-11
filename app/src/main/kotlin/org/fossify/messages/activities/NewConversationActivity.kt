@@ -54,6 +54,7 @@ import org.fossify.messages.databinding.ActivityNewConversationBinding
 import org.fossify.messages.databinding.ItemSuggestedContactBinding
 import org.fossify.messages.dialogs.SimSelectionPopup
 import org.fossify.messages.dialogs.ScheduleMessageDialog
+import org.fossify.messages.extensions.applyWhitePageChrome
 import org.fossify.messages.extensions.config
 import org.fossify.messages.extensions.createTemporaryThread
 import org.fossify.messages.extensions.getSuggestedContacts
@@ -126,8 +127,7 @@ class NewConversationActivity : SimpleActivity() {
         setupTopAppBar(binding.newConversationAppbar, NavigationIcon.Arrow)
         binding.newConversationToolbar.title = ""
         binding.newConversationToolbar.setBackgroundColor(Color.WHITE)
-        window.statusBarColor = Color.WHITE
-        window.navigationBarColor = Color.WHITE
+        applyWhitePageChrome()
         binding.noContactsPlaceholder2.setTextColor(getProperPrimaryColor())
         binding.noContactsPlaceholder2.underlineText()
         binding.suggestionsLabel.setTextColor(Color.rgb(139, 148, 168))

@@ -11,6 +11,8 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
+import org.fossify.messages.messaging.SimSendResolver
+
 class MultiForwardConfig(context: Context) {
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
@@ -21,6 +23,41 @@ class MultiForwardConfig(context: Context) {
     var emailEnabled by booleanPreference(KEY_EMAIL_ENABLED)
     var smsDirectEnabled by booleanPreference(KEY_SMS_DIRECT_ENABLED)
     var smsDirectOnlyOnNoNetwork by booleanPreference(KEY_SMS_DIRECT_ONLY_ON_NO_NETWORK)
+    var barkEnabled by booleanPreference(KEY_BARK_ENABLED)
+    var barkAllowHttp by booleanPreference(KEY_BARK_ALLOW_HTTP)
+    var gotifyEnabled by booleanPreference(KEY_GOTIFY_ENABLED)
+    var gotifyAllowHttp by booleanPreference(KEY_GOTIFY_ALLOW_HTTP)
+    var dingTalkRemoteControlEnabled by booleanPreference(KEY_DINGTALK_REMOTE_CONTROL_ENABLED)
+
+    var dingTalkRemoteSendSimMode: Int
+        get() = prefs.getInt(KEY_DINGTALK_REMOTE_SEND_SIM, SimSendMode.DEFAULT).let { mode ->
+            when (mode) {
+                SimSendMode.SIM1, SimSendMode.SIM2, SimSendMode.DEFAULT -> mode
+                else -> SimSendMode.DEFAULT
+            }
+        }
+        set(value) = prefs.edit().putInt(
+            KEY_DINGTALK_REMOTE_SEND_SIM,
+            when (value) {
+                SimSendMode.SIM1, SimSendMode.SIM2, SimSendMode.DEFAULT -> value
+                else -> SimSendMode.DEFAULT
+            },
+        ).apply()
+
+    var dingTalkRemoteConnectionStatus: String
+        get() = prefs.getString(KEY_DINGTALK_REMOTE_STATUS, "").orEmpty()
+        set(value) = prefs.edit().putString(KEY_DINGTALK_REMOTE_STATUS, value).apply()
+
+    fun appendDingTalkRemoteLog(message: String) {
+        val now = java.text.SimpleDateFormat("MM-dd HH:mm:ss", java.util.Locale.getDefault())
+            .format(java.util.Date())
+        val line = "$now $message"
+        val current = prefs.getString(KEY_DINGTALK_REMOTE_LOGS, "").orEmpty().lines().filter(String::isNotBlank)
+        val logs = (listOf(line) + current).take(30).joinToString("\n")
+        prefs.edit().putString(KEY_DINGTALK_REMOTE_LOGS, logs).putString(KEY_DINGTALK_REMOTE_STATUS, line).apply()
+    }
+
+    fun dingTalkRemoteLogs(): String = prefs.getString(KEY_DINGTALK_REMOTE_LOGS, "").orEmpty()
 
     var simOneLabel: String
         get() = prefs.getString(KEY_SIM_ONE_LABEL, "").orEmpty()
@@ -105,6 +142,30 @@ class MultiForwardConfig(context: Context) {
     fun feishuWebhook() = getSecret(KEY_FEISHU_WEBHOOK)
     fun feishuSecret() = getSecret(KEY_FEISHU_SECRET)
 
+    fun saveBark(serverUrl: String, deviceKey: String) {
+        saveSecret(KEY_BARK_SERVER_URL, serverUrl)
+        saveSecret(KEY_BARK_DEVICE_KEY, deviceKey)
+    }
+
+    fun barkServerUrl() = getSecret(KEY_BARK_SERVER_URL)
+    fun barkDeviceKey() = getSecret(KEY_BARK_DEVICE_KEY)
+
+    fun saveGotify(serverUrl: String, token: String) {
+        saveSecret(KEY_GOTIFY_SERVER_URL, serverUrl)
+        saveSecret(KEY_GOTIFY_TOKEN, token)
+    }
+
+    fun gotifyServerUrl() = getSecret(KEY_GOTIFY_SERVER_URL)
+    fun gotifyToken() = getSecret(KEY_GOTIFY_TOKEN)
+
+    fun saveDingTalkRemoteControl(clientId: String, clientSecret: String) {
+        saveSecret(KEY_DINGTALK_REMOTE_CLIENT_ID, clientId)
+        saveSecret(KEY_DINGTALK_REMOTE_CLIENT_SECRET, clientSecret)
+    }
+
+    fun dingTalkRemoteClientId() = getSecret(KEY_DINGTALK_REMOTE_CLIENT_ID)
+    fun dingTalkRemoteClientSecret() = getSecret(KEY_DINGTALK_REMOTE_CLIENT_SECRET)
+
     fun saveWeCom(corpId: String, agentId: String, secret: String, toUser: String) {
         saveSecret(KEY_WECOM_CORP_ID, corpId)
         saveSecret(KEY_WECOM_AGENT_ID, agentId)
@@ -150,7 +211,20 @@ class MultiForwardConfig(context: Context) {
 
     fun smsDirectPhone() = getSecret(KEY_SMS_DIRECT_PHONE)
 
-    fun anyEnabled() = dingTalkEnabled || feishuEnabled || weComEnabled || weComBotEnabled || emailEnabled || smsDirectEnabled
+    fun anyEnabled() = dingTalkEnabled || feishuEnabled || weComEnabled || weComBotEnabled ||
+        emailEnabled || smsDirectEnabled || barkEnabled || gotifyEnabled
+
+    fun enabledChannelIds(includePushPlus: Boolean = false): Set<String> = buildSet {
+        if (includePushPlus) add(ForwardingChannels.PUSHPLUS)
+        if (dingTalkEnabled) add(ForwardingChannels.DINGTALK)
+        if (feishuEnabled) add(ForwardingChannels.FEISHU)
+        if (weComEnabled) add(ForwardingChannels.WECOM)
+        if (weComBotEnabled) add(ForwardingChannels.WECOM_BOT)
+        if (emailEnabled) add(ForwardingChannels.EMAIL)
+        if (smsDirectEnabled) add(ForwardingChannels.SMS_DIRECT)
+        if (barkEnabled) add(ForwardingChannels.BARK)
+        if (gotifyEnabled) add(ForwardingChannels.GOTIFY)
+    }
 
     private fun booleanPreference(key: String) = object : kotlin.properties.ReadWriteProperty<Any?, Boolean> {
         override fun getValue(thisRef: Any?, property: kotlin.reflect.KProperty<*>) =
@@ -198,6 +272,20 @@ class MultiForwardConfig(context: Context) {
         private const val KEY_SMS_DIRECT_ENABLED = "sms_direct_enabled"
         private const val KEY_SMS_DIRECT_PHONE = "sms_direct_phone"
         private const val KEY_SMS_DIRECT_ONLY_ON_NO_NETWORK = "sms_direct_only_on_no_network"
+        private const val KEY_BARK_ENABLED = "bark_enabled"
+        private const val KEY_BARK_SERVER_URL = "bark_server_url"
+        private const val KEY_BARK_DEVICE_KEY = "bark_device_key"
+        private const val KEY_BARK_ALLOW_HTTP = "bark_allow_http"
+        private const val KEY_GOTIFY_ENABLED = "gotify_enabled"
+        private const val KEY_GOTIFY_SERVER_URL = "gotify_server_url"
+        private const val KEY_GOTIFY_TOKEN = "gotify_token"
+        private const val KEY_GOTIFY_ALLOW_HTTP = "gotify_allow_http"
+        private const val KEY_DINGTALK_REMOTE_CONTROL_ENABLED = "dingtalk_remote_control_enabled"
+        private const val KEY_DINGTALK_REMOTE_CLIENT_ID = "dingtalk_remote_client_id"
+        private const val KEY_DINGTALK_REMOTE_CLIENT_SECRET = "dingtalk_remote_client_secret"
+        private const val KEY_DINGTALK_REMOTE_SEND_SIM = "dingtalk_remote_send_sim"
+        private const val KEY_DINGTALK_REMOTE_STATUS = "dingtalk_remote_status"
+        private const val KEY_DINGTALK_REMOTE_LOGS = "dingtalk_remote_logs"
         private const val KEY_LAST_STATUS = "last_status"
         private const val KEY_SIM_ONE_LABEL = "sim_one_label"
         private const val KEY_SIM_TWO_LABEL = "sim_two_label"
@@ -218,6 +306,13 @@ class MultiForwardConfig(context: Context) {
         const val TEMPLATE_EMOJI = 3
         const val TEMPLATE_CUSTOM = 4
     }
+}
+
+/** Alias for [SimSendResolver] modes used in DingTalk remote settings UI. */
+object SimSendMode {
+    const val DEFAULT = SimSendResolver.MODE_DEFAULT
+    const val SIM1 = SimSendResolver.MODE_SIM1
+    const val SIM2 = SimSendResolver.MODE_SIM2
 }
 
 private object ForwardingCipher {

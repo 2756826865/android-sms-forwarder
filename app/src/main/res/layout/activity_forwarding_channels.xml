@@ -144,6 +144,75 @@
                     </LinearLayout>
                     <ImageView style="@style/SmsForwardingChevron" />
                 </LinearLayout>
+
+                <View style="@style/SmsSettingsDivider" />
+
+                <LinearLayout android:id="@+id/forwarding_bark_holder" style="@style/SmsForwardingRow">
+                    <LinearLayout style="@style/SmsForwardingTextColumn">
+                        <TextView style="@style/SmsForwardingTitle" android:text="@string/forwarding_bark" />
+                        <TextView android:id="@+id/forwarding_bark_summary" style="@style/SmsForwardingSummary" />
+                    </LinearLayout>
+                    <ImageView style="@style/SmsForwardingChevron" />
+                </LinearLayout>
+
+                <View style="@style/SmsSettingsDivider" />
+
+                <LinearLayout android:id="@+id/forwarding_gotify_holder" style="@style/SmsForwardingRow">
+                    <LinearLayout style="@style/SmsForwardingTextColumn">
+                        <TextView style="@style/SmsForwardingTitle" android:text="@string/forwarding_gotify" />
+                        <TextView android:id="@+id/forwarding_gotify_summary" style="@style/SmsForwardingSummary" />
+                    </LinearLayout>
+                    <ImageView style="@style/SmsForwardingChevron" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_marginTop="24dp"
+                android:layout_marginBottom="8dp"
+                android:text="@string/forwarding_rules_section"
+                android:textColor="@color/miui_section_text"
+                android:textSize="15sp" />
+
+            <LinearLayout
+                android:id="@+id/forwarding_rules_holder"
+                style="@style/SmsForwardingRow"
+                android:background="@drawable/settings_card_background">
+                <LinearLayout style="@style/SmsForwardingTextColumn">
+                    <TextView style="@style/SmsForwardingTitle" android:text="@string/forwarding_rules_title" />
+                    <TextView android:id="@+id/forwarding_rules_summary" style="@style/SmsForwardingSummary" />
+                </LinearLayout>
+                <ImageView style="@style/SmsForwardingChevron" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_marginTop="24dp"
+                android:layout_marginBottom="8dp"
+                android:text="@string/remote_forwarding_section"
+                android:textColor="@color/miui_section_text"
+                android:textSize="15sp" />
+
+            <LinearLayout
+                android:id="@+id/forwarding_remote_forwarding_holder"
+                style="@style/SmsForwardingRow"
+                android:background="@drawable/settings_card_background">
+
+                <LinearLayout style="@style/SmsForwardingTextColumn">
+                    <TextView
+                        style="@style/SmsForwardingTitle"
+                        android:text="@string/remote_forwarding_title" />
+
+                    <TextView
+                        android:id="@+id/forwarding_remote_forwarding_summary"
+                        style="@style/SmsForwardingSummary" />
+                </LinearLayout>
+
+                <ImageView style="@style/SmsForwardingChevron" />
             </LinearLayout>
 
             <TextView

@@ -31,6 +31,7 @@ import org.fossify.commons.helpers.NavigationIcon
 import org.fossify.messages.BuildConfig
 import org.fossify.messages.R
 import org.fossify.messages.databinding.ActivityDeviceCompatibilityBinding
+import org.fossify.messages.extensions.applyMiuiPageChrome
 import org.fossify.messages.helpers.NOTIFICATION_CHANNEL_ID
 
 class DeviceCompatibilityActivity : SimpleActivity() {
@@ -77,8 +78,7 @@ class DeviceCompatibilityActivity : SimpleActivity() {
 
     override fun onResume() {
         super.onResume()
-        window.statusBarColor = Color.rgb(247, 247, 247)
-        window.navigationBarColor = Color.rgb(247, 247, 247)
+        applyMiuiPageChrome()
         binding.compatibilityDevice.text = getString(
             R.string.compatibility_device,
             Build.MANUFACTURER,

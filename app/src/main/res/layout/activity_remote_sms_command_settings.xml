@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/miui_page_background">
+
+    <org.fossify.commons.views.MyAppBarLayout
+        android:id="@+id/remote_sms_appbar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/miui_page_background">
+
+        <com.google.android.material.appbar.MaterialToolbar
+            android:layout_width="match_parent"
+            android:layout_height="?attr/actionBarSize"
+            android:background="@color/miui_page_background"
+            app:navigationIconTint="#111111"
+            app:title="@string/remote_sms_title"
+            app:titleTextColor="#111111" />
+    </org.fossify.commons.views.MyAppBarLayout>
+
+    <androidx.core.widget.NestedScrollView
+        android:id="@+id/remote_sms_scrollview"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <com.google.android.material.switchmaterial.SwitchMaterial
+                android:id="@+id/remote_sms_enabled"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/remote_sms_enable"
+                android:textColor="#111111" />
+
+            <TextView
+                style="@style/SmsChannelHelperText"
+                android:layout_marginTop="8dp"
+                android:text="@string/remote_sms_format_hint" />
+
+            <TextView
+                style="@style/SmsChannelFieldLabel"
+                android:text="@string/remote_sms_examples_title" />
+
+            <TextView
+                style="@style/SmsSettingsLogBox"
+                android:layout_marginTop="6dp"
+                android:text="@string/remote_sms_examples_body"
+                android:textColor="@color/miui_primary_text" />
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:hint="@string/remote_sms_authorized_hint">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/remote_sms_authorized"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="textMultiLine"
+                    android:minLines="4" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <View style="@style/SmsChannelDivider" />
+
+            <TextView
+                style="@style/SmsChannelSectionTitle"
+                android:text="@string/remote_sms_section_receipt" />
+
+            <com.google.android.material.switchmaterial.SwitchMaterial
+                android:id="@+id/remote_sms_receipt_enabled"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/remote_sms_receipt_enable"
+                android:textColor="#111111" />
+
+            <com.google.android.material.switchmaterial.SwitchMaterial
+                android:id="@+id/remote_sms_receipt_delivered"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="@string/remote_sms_receipt_delivered"
+                android:textColor="#111111" />
+
+            <TextView
+                style="@style/SmsChannelHelperText"
+                android:layout_marginTop="8dp"
+                android:text="@string/remote_sms_receipt_scope_hint" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/remote_sms_receipt_channels"
+                style="@style/SmsChannelSecondaryButton"
+                android:text="@string/remote_sms_receipt_channels" />
+
+            <TextView
+                android:id="@+id/remote_sms_receipt_channels_summary"
+                style="@style/SmsChannelHelperText"
+                android:layout_marginTop="6dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/remote_sms_save"
+                style="@style/SmsChannelSaveButton"
+                android:layout_marginTop="16dp"
+                android:text="@string/channel_save_config" />
+
+            <View style="@style/SmsChannelDivider" />
+
+            <TextView
+                style="@style/SmsChannelSectionTitle"
+                android:text="@string/remote_sms_section_log" />
+
+            <TextView
+                android:id="@+id/remote_sms_status"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:textColor="#111111"
+                android:textSize="14sp" />
+
+            <TextView
+                android:id="@+id/remote_sms_logs"
+                style="@style/SmsSettingsLogBox"
+                android:layout_marginTop="8dp" />
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

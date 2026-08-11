@@ -149,6 +149,7 @@ dependencies {
     implementation(libs.androidx.constraintlayout)
     implementation(libs.androidx.documentfile)
     implementation(libs.androidx.work.runtime)
+    implementation(libs.okhttp)
     implementation(libs.androidx.lifecycle.process)
     implementation(libs.ez.vcard)
     implementation(libs.kotlinx.serialization.json)

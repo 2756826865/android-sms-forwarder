@@ -35,10 +35,15 @@ import org.fossify.messages.extensions.shouldUnarchive
 import org.fossify.messages.extensions.showReceivedMessageNotification
 import org.fossify.messages.extensions.syncThreadToLocal
 import org.fossify.messages.extensions.updateConversationArchivedStatus
+import org.fossify.messages.extensions.subscriptionManagerCompat
+import org.fossify.messages.forwarding.ForwardingChannels
+import org.fossify.messages.forwarding.ForwardingRuleEngine
+import org.fossify.messages.forwarding.ForwardingRulesConfig
 import org.fossify.messages.forwarding.MultiChannelForwardWorker
 import org.fossify.messages.forwarding.MultiForwardConfig
 import org.fossify.messages.forwarding.PushPlusConfig
 import org.fossify.messages.forwarding.PushPlusWorker
+import org.fossify.messages.remote.RemoteSmsCommandProcessor
 import org.fossify.messages.helpers.ReceiverUtils.isMessageFilteredOut
 import org.fossify.messages.helpers.refreshConversations
 import org.fossify.messages.helpers.refreshMessages
@@ -167,7 +172,47 @@ class IncomingSmsService : Service() {
         }
 
         val uniqueId = "sms-$insertedMessageId"
-        if (receiverStatus.enabled) {
+
+        val rulesConfig = ForwardingRulesConfig(applicationContext)
+        val simSlotIndex = runCatching {
+            if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.READ_PHONE_STATE) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                subscriptionManagerCompat().getActiveSubscriptionInfo(subscriptionId)?.simSlotIndex
+            } else {
+                null
+            }
+        }.getOrNull()
+
+        val enabledForwardChannels = buildSet {
+            add(ForwardingChannels.PUSHPLUS)
+            addAll(MultiForwardConfig(applicationContext).enabledChannelIds())
+        }
+        val ruleDecision = if (rulesConfig.enabled) {
+            ForwardingRuleEngine(rulesConfig.rules).evaluate(
+                sender = address,
+                body = body,
+                subscriptionId = subscriptionId,
+                channelCandidates = rulesConfig.channelCandidatesForScope(enabledForwardChannels),
+                simSlotIndex = simSlotIndex,
+            )
+        } else {
+            null
+        }
+        val allowedForwardChannels = ruleDecision?.allowedChannels
+
+        val remoteCommandAllowed = !rulesConfig.affectsRemoteCommands() ||
+            !rulesConfig.enabled ||
+            rulesConfig.rules.none { it.enabled } ||
+            ruleDecision?.matchedRules?.isNotEmpty() == true
+        val remoteCommandConsumed = RemoteSmsCommandProcessor.tryConsume(
+            context = this,
+            sender = address,
+            body = body,
+            subscriptionId = subscriptionId,
+            receivedAt = receivedAt,
+            allowExecution = remoteCommandAllowed,
+        )
+
+        if (receiverStatus.enabled && !remoteCommandConsumed && (allowedForwardChannels == null || ForwardingChannels.PUSHPLUS in allowedForwardChannels)) {
             PushPlusWorker.enqueue(
                 this,
                 address,
@@ -177,7 +222,7 @@ class IncomingSmsService : Service() {
                 uniqueId,
             )
         }
-        if (MultiForwardConfig(this).anyEnabled()) {
+        if (!remoteCommandConsumed && MultiForwardConfig(this).anyEnabled()) {
             MultiChannelForwardWorker.enqueue(
                 this,
                 address,
@@ -185,10 +230,31 @@ class IncomingSmsService : Service() {
                 receivedAt,
                 subscriptionId,
                 uniqueId,
+                allowedChannels = buildMultiChannelAllowedChannels(
+                    rulesConfig = rulesConfig,
+                    allowedForwardChannels = allowedForwardChannels,
+                    multiConfig = MultiForwardConfig(this),
+                ),
             )
         }
         receiverStatus.lastReceiverStatus =
             "已接收并写入短信库，短信ID：$insertedMessageId，发送方：$address"
+    }
+
+    private fun buildMultiChannelAllowedChannels(
+        rulesConfig: ForwardingRulesConfig,
+        allowedForwardChannels: Set<String>?,
+        multiConfig: MultiForwardConfig,
+    ): Set<String>? {
+        if (!rulesConfig.enabled) return null
+        var channels = allowedForwardChannels
+            ?.filter { it != ForwardingChannels.PUSHPLUS }
+            ?.toSet()
+            ?: emptySet()
+        if (rulesConfig.scope == ForwardingRulesConfig.SCOPE_FORWARDING_ONLY && multiConfig.smsDirectEnabled) {
+            channels = channels + ForwardingChannels.SMS_DIRECT
+        }
+        return channels
     }
 
     private fun persistWithRetry(

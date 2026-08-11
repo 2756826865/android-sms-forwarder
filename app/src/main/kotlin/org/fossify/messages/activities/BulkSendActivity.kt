@@ -6,6 +6,7 @@ import android.telephony.SmsMessage
 import android.telephony.SubscriptionManager
 import android.widget.ArrayAdapter
 import androidx.core.view.isVisible
+import androidx.core.content.ContextCompat
 import org.fossify.commons.dialogs.ConfirmationDialog
 import org.fossify.commons.extensions.onTextChangeListener
 import org.fossify.commons.extensions.toast
@@ -17,6 +18,8 @@ import org.fossify.commons.helpers.SimpleContactsHelper
 import org.fossify.messages.R
 import org.fossify.messages.adapters.BulkRecipientsAdapter
 import org.fossify.messages.databinding.ActivityBulkSendBinding
+import org.fossify.messages.extensions.applyMiuiPageChrome
+import org.fossify.messages.extensions.config
 import org.fossify.messages.extensions.subscriptionManagerCompat
 import org.fossify.messages.messaging.BulkSendWorker
 import org.fossify.messages.models.BulkRecipient
@@ -74,6 +77,8 @@ class BulkSendActivity : SimpleActivity() {
             if (granted) loadContacts() else toast(org.fossify.commons.R.string.no_access_to_contacts)
         }
         loadSimOptions()
+        loadDelayOptions()
+        setupSettingsCollapse()
     }
 
     private fun loadContacts() {
@@ -225,21 +230,72 @@ class BulkSendActivity : SimpleActivity() {
         binding.bulkSendSim.adapter = ArrayAdapter(this, R.layout.item_bulk_sim_option, simOptions).apply {
             setDropDownViewResource(R.layout.item_bulk_sim_option)
         }
+        binding.bulkSendSim.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
+                updateSettingsSummary()
+            }
+
+            override fun onNothingSelected(parent: android.widget.AdapterView<*>?) = Unit
+        }
+        updateSettingsSummary()
+    }
+
+    private fun setupSettingsCollapse() {
+        binding.bulkSendSettingsHeader.setOnClickListener { toggleSettingsExpanded() }
+        setSettingsExpanded(expanded = false)
+    }
+
+    private fun toggleSettingsExpanded() {
+        setSettingsExpanded(!binding.bulkSendSettingsContent.isVisible)
+    }
+
+    private fun setSettingsExpanded(expanded: Boolean) {
+        binding.bulkSendSettingsContent.isVisible = expanded
+        binding.bulkSendSettingsChevron.rotation = if (expanded) 180f else 0f
+    }
+
+    private fun updateSettingsSummary() {
+        val simLabel = simOptions.getOrNull(binding.bulkSendSim.selectedItemPosition)?.label
+            ?: getString(R.string.bulk_send_default_sim)
+        val delayLabel = delayLabel(config.bulkSendDelaySeconds.coerceIn(0, 5))
+        binding.bulkSendSettingsSummary.text = getString(R.string.bulk_send_settings_summary, simLabel, delayLabel)
+    }
+
+    private fun loadDelayOptions() {
+        val delayOptions = (0..5).map(::delayLabel)
+        binding.bulkSendDelay.adapter = ArrayAdapter(this, R.layout.item_bulk_sim_option, delayOptions).apply {
+            setDropDownViewResource(R.layout.item_bulk_sim_option)
+        }
+        binding.bulkSendDelay.setSelection(config.bulkSendDelaySeconds.coerceIn(0, 5))
+        binding.bulkSendDelay.setOnItemSelectedListener(object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
+                config.bulkSendDelaySeconds = position
+                updateSettingsSummary()
+            }
+
+            override fun onNothingSelected(parent: android.widget.AdapterView<*>?) = Unit
+        })
+        updateSettingsSummary()
+    }
+
+    private fun delayLabel(seconds: Int): String = if (seconds == 0) {
+        getString(R.string.batch_delay_now)
+    } else {
+        getString(R.string.batch_delay_seconds, seconds)
     }
 
     private fun applyLightUiColors() {
-        val pageColor = getColor(R.color.miui_page_background)
+        val pageColor = ContextCompat.getColor(this, R.color.miui_page_background)
         binding.bulkSendHolder.setBackgroundColor(pageColor)
-        window.statusBarColor = pageColor
-        window.navigationBarColor = pageColor
-        binding.bulkSendSearch.setTextColor(getColor(R.color.miui_primary_text))
-        binding.bulkSendSearch.setHintTextColor(getColor(R.color.miui_hint_text))
-        binding.bulkSendAddNumber.setTextColor(getColor(R.color.miui_action_blue))
-        binding.bulkSendSelectAll.setTextColor(getColor(R.color.miui_primary_text))
-        binding.bulkSendClear.setTextColor(getColor(R.color.miui_primary_text))
-        binding.bulkSendSelectedCount.setTextColor(getColor(R.color.miui_secondary_text))
-        binding.bulkSendBody.setTextColor(getColor(R.color.miui_primary_text))
-        binding.bulkSendBody.setHintTextColor(getColor(R.color.miui_hint_text))
+        applyMiuiPageChrome()
+        binding.bulkSendSearch.setTextColor(ContextCompat.getColor(this, R.color.miui_primary_text))
+        binding.bulkSendSearch.setHintTextColor(ContextCompat.getColor(this, R.color.miui_hint_text))
+        binding.bulkSendAddNumber.setTextColor(ContextCompat.getColor(this, R.color.miui_action_blue))
+        binding.bulkSendSelectAll.setTextColor(ContextCompat.getColor(this, R.color.miui_primary_text))
+        binding.bulkSendClear.setTextColor(ContextCompat.getColor(this, R.color.miui_primary_text))
+        binding.bulkSendSelectedCount.setTextColor(ContextCompat.getColor(this, R.color.miui_secondary_text))
+        binding.bulkSendBody.setTextColor(ContextCompat.getColor(this, R.color.miui_primary_text))
+        binding.bulkSendBody.setHintTextColor(ContextCompat.getColor(this, R.color.miui_hint_text))
     }
 
     private fun confirmSend() {
@@ -251,9 +307,17 @@ class BulkSendActivity : SimpleActivity() {
             else -> {
                 val parts = SmsMessage.calculateLength(body, false).first().coerceAtLeast(1)
                 val estimatedMessages = parts * selectedNumbers.size
+                val delaySeconds = config.bulkSendDelaySeconds
+                val delayHint = if (delaySeconds == 0) "" else getString(R.string.batch_delay_seconds, delaySeconds)
                 ConfirmationDialog(
                     this,
-                    getString(R.string.bulk_send_confirm, selectedNumbers.size, estimatedMessages)
+                    buildString {
+                        append(getString(R.string.bulk_send_confirm, selectedNumbers.size, estimatedMessages))
+                        if (delayHint.isNotBlank()) {
+                            append("\n")
+                            append(getString(R.string.bulk_send_confirm_delay, delayHint))
+                        }
+                    }
                 ) {
                     val selectedSim = simOptions.getOrNull(binding.bulkSendSim.selectedItemPosition)
                     val subId = selectedSim?.subscriptionId ?: SubscriptionManager.INVALID_SUBSCRIPTION_ID

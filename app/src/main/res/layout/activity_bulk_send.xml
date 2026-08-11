@@ -15,7 +15,9 @@
             android:layout_height="?attr/actionBarSize"
             android:background="@color/miui_page_background"
             app:navigationIconTint="@color/miui_primary_text"
-            app:title="" />
+            app:title="@string/bulk_send"
+            app:titleCentered="true"
+            app:titleTextColor="@color/miui_primary_text" />
     </org.fossify.commons.views.MyAppBarLayout>
 
     <LinearLayout
@@ -26,21 +28,12 @@
         android:orientation="vertical"
         app:layout_behavior="@string/appbar_scrolling_view_behavior">
 
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginHorizontal="@dimen/home_horizontal_margin"
-            android:layout_marginTop="8dp"
-            android:layout_marginBottom="16dp"
-            android:text="@string/bulk_send"
-            android:textColor="@color/miui_primary_text"
-            android:textSize="@dimen/bulk_title_size" />
-
         <org.fossify.commons.views.MyEditText
             android:id="@+id/bulk_send_search"
             android:layout_width="match_parent"
             android:layout_height="@dimen/home_search_height"
             android:layout_marginHorizontal="@dimen/bulk_content_margin"
+            android:layout_marginTop="12dp"
             android:background="@drawable/home_search_background"
             android:drawableStart="@drawable/ic_search_vector"
             android:drawablePadding="10dp"
@@ -118,6 +111,111 @@
             android:textColor="@color/miui_secondary_text"
             android:textStyle="bold" />
 
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="@dimen/bulk_content_margin"
+            android:layout_marginTop="2dp"
+            android:layout_marginBottom="4dp"
+            android:background="@drawable/bulk_field_background"
+            android:orientation="vertical">
+
+            <LinearLayout
+                android:id="@+id/bulk_send_settings_header"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:foreground="?attr/selectableItemBackground"
+                android:gravity="center_vertical"
+                android:minHeight="52dp"
+                android:orientation="horizontal"
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="10dp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/bulk_send_settings"
+                        android:textColor="@color/miui_primary_text"
+                        android:textSize="16sp" />
+
+                    <TextView
+                        android:id="@+id/bulk_send_settings_summary"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:textColor="@color/miui_secondary_text"
+                        android:textSize="13sp" />
+                </LinearLayout>
+
+                <ImageView
+                    android:id="@+id/bulk_send_settings_chevron"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_marginStart="8dp"
+                    android:contentDescription="@string/bulk_send_settings"
+                    android:src="@drawable/ic_expand_down" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/bulk_send_settings_content"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="16dp"
+                    android:text="@string/bulk_send_sim"
+                    android:textColor="@color/miui_section_text"
+                    android:textSize="12sp" />
+
+                <Spinner
+                    android:id="@+id/bulk_send_sim"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:background="@drawable/email_security_spinner_background"
+                    android:contentDescription="@string/bulk_send_sim"
+                    android:paddingHorizontal="12dp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingStart="16dp"
+                    android:paddingTop="8dp"
+                    android:paddingEnd="16dp"
+                    android:text="@string/bulk_send_delay"
+                    android:textColor="@color/miui_section_text"
+                    android:textSize="12sp" />
+
+                <Spinner
+                    android:id="@+id/bulk_send_delay"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:layout_marginBottom="4dp"
+                    android:background="@drawable/email_security_spinner_background"
+                    android:contentDescription="@string/bulk_send_delay"
+                    android:paddingHorizontal="12dp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingHorizontal="16dp"
+                    android:paddingBottom="12dp"
+                    android:text="@string/bulk_send_delay_summary"
+                    android:textColor="@color/miui_secondary_text"
+                    android:textSize="12sp" />
+            </LinearLayout>
+        </LinearLayout>
+
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/bulk_send_recipients"
             android:layout_width="match_parent"
@@ -127,17 +225,6 @@
             android:paddingHorizontal="12dp"
             android:paddingBottom="8dp"
             app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginHorizontal="@dimen/bulk_content_margin"
-            android:layout_marginTop="4dp"
-            android:background="@drawable/bulk_field_background"
-            android:orientation="vertical">
-            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingStart="16dp" android:paddingTop="12dp" android:paddingEnd="16dp" android:text="@string/bulk_send_sim" android:textColor="@color/miui_section_text" android:textSize="12sp" />
-            <Spinner android:id="@+id/bulk_send_sim" android:layout_width="match_parent" android:layout_height="48dp" android:contentDescription="@string/bulk_send_sim" android:paddingHorizontal="16dp" />
-        </LinearLayout>
 
         <org.fossify.commons.views.MyEditText
             android:id="@+id/bulk_send_body"

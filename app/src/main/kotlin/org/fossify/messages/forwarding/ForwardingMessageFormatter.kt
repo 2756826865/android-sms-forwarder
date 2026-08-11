@@ -44,45 +44,50 @@ object ForwardingMessageFormatter {
 
         val formattedTime = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
             .format(Date(receivedAt))
-        val content = buildList {
-            add(body)
-            when (config.templateMode) {
-                MultiForwardConfig.TEMPLATE_STANDARD -> {
-                    if (includeSender && contactName != null && sender.isNotBlank()) add("号码：$sender")
-                    if (includeTime) add("接收时间：$formattedTime")
-                }
+        val content = when (config.templateMode) {
+            MultiForwardConfig.TEMPLATE_STANDARD -> buildList {
+                add(body)
+                if (includeSender && contactName != null && sender.isNotBlank()) add("号码：$sender")
+                if (includeTime) add("接收时间：$formattedTime")
+            }
 
-                MultiForwardConfig.TEMPLATE_DETAILED -> {
-                    if (includeSender && sender.isNotBlank()) add("发送号码：$sender")
-                    if (includeSim && sim.isNotBlank()) add("SIM：$sim")
-                    if (includeTime) add("接收时间：$formattedTime")
-                }
+            MultiForwardConfig.TEMPLATE_DETAILED -> buildList {
+                add(body)
+                if (includeSender && sender.isNotBlank()) add("发送号码：$sender")
+                if (includeSim && sim.isNotBlank()) add("SIM：$sim")
+                if (includeTime) add("接收时间：$formattedTime")
+            }
 
-                MultiForwardConfig.TEMPLATE_EMOJI -> {
-                    add("📩新短信通知")
-                    if (includeSender && sender.isNotBlank()) add("📞号码：$sender")
-                    if (includeTime) add("⏰时间：$formattedTime")
-                    add("💬消息：$body")
-                    if (includeSim && sim.isNotBlank()) add("📶SIM 卡：$sim")
-                }
+            MultiForwardConfig.TEMPLATE_EMOJI -> buildList {
+                add("📩新短信通知")
+                if (includeSender && sender.isNotBlank()) add("📞号码：$sender")
+                if (includeTime) add("⏰时间：$formattedTime")
+                add("💬消息：$body")
+                if (includeSim && sim.isNotBlank()) add("📶SIM 卡：$sim")
+            }
 
-                MultiForwardConfig.TEMPLATE_CUSTOM -> {
-                    val customTemplate = config.customTemplate
-                    if (customTemplate.isNotBlank()) {
-                        val result = customTemplate
+            MultiForwardConfig.TEMPLATE_CUSTOM -> {
+                val customTemplate = config.customTemplate
+                if (customTemplate.isNotBlank()) {
+                    listOf(
+                        customTemplate
                             .replace("{sender}", sender)
                             .replace("{name}", contactName ?: sender)
                             .replace("{body}", body)
                             .replace("{time}", formattedTime)
                             .replace("{sim}", sim)
-                        add(result)
-                    } else {
+                    )
+                } else {
+                    buildList {
                         add(body)
                         if (includeTime) add("接收时间：$formattedTime")
                     }
                 }
+            }
 
-                else -> if (includeTime) add("接收时间：$formattedTime")
+            else -> buildList {
+                add(body)
+                if (includeTime) add("接收时间：$formattedTime")
             }
         }.joinToString("\n")
         return ForwardingPayload(title, content)

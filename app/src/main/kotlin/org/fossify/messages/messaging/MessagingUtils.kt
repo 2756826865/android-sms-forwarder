@@ -91,7 +91,8 @@ class MessagingUtils(val context: Context) {
         subId: Int,
         requireDeliveryReport: Boolean,
         messageId: Long? = null
-    ) {
+    ): List<Uri> {
+        val sentUris = mutableListOf<Uri>()
         if (addresses.size > 1) {
             // insert a dummy message for this thread if it is a group message
             val broadCastThreadId = context.getThreadId(addresses.toSet())
@@ -116,11 +117,13 @@ class MessagingUtils(val context: Context) {
                     subId = subId, destination = address, body = text, serviceCenter = null,
                     requireDeliveryReport = requireDeliveryReport, messageUri = messageUri
                 )
+                sentUris += messageUri
             } catch (e: Exception) {
                 updateSmsMessageSendingStatus(messageUri, Sms.Outbox.MESSAGE_TYPE_FAILED)
                 throw e // propagate error to caller
             }
         }
+        return sentUris
     }
 
     fun updateSmsMessageSendingStatus(messageUri: Uri?, type: Int) {

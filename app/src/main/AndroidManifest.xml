@@ -170,6 +170,42 @@
             android:parentActivityName=".activities.ForwardingChannelsActivity" />
 
         <activity
+            android:name=".activities.BarkSettingsActivity"
+            android:exported="false"
+            android:label="Bark"
+            android:parentActivityName=".activities.ForwardingChannelsActivity" />
+
+        <activity
+            android:name=".activities.GotifySettingsActivity"
+            android:exported="false"
+            android:label="Gotify"
+            android:parentActivityName=".activities.ForwardingChannelsActivity" />
+
+        <activity
+            android:name=".activities.ForwardingRulesSettingsActivity"
+            android:exported="false"
+            android:label="@string/forwarding_rules_title"
+            android:parentActivityName=".activities.ForwardingChannelsActivity" />
+
+        <activity
+            android:name=".activities.RemoteForwardingActivity"
+            android:exported="false"
+            android:label="@string/remote_forwarding_title"
+            android:parentActivityName=".activities.ForwardingChannelsActivity" />
+
+        <activity
+            android:name=".activities.RemoteSmsCommandSettingsActivity"
+            android:exported="false"
+            android:label="@string/remote_sms_title"
+            android:parentActivityName=".activities.RemoteForwardingActivity" />
+
+        <activity
+            android:name=".activities.DingTalkRemoteControlSettingsActivity"
+            android:exported="false"
+            android:label="@string/dingtalk_remote_title"
+            android:parentActivityName=".activities.RemoteForwardingActivity" />
+
+        <activity
             android:name=".activities.ForwardingChannelsActivity"
             android:exported="false"
             android:label="@string/forwarding_title"
@@ -257,6 +293,16 @@
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Maintains reliable incoming SMS handling and user-configured forwarding on OEM Android builds" />
+        </service>
+
+        <service
+            android:name=".services.DingTalkRemoteControlService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse"
+            android:stopWithTask="false">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Maintains DingTalk Stream connection for remote SMS commands" />
         </service>
 
         <service
