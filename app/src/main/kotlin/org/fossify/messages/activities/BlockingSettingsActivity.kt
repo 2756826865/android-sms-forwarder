@@ -7,6 +7,7 @@ import org.fossify.commons.extensions.viewBinding
 import org.fossify.commons.helpers.NavigationIcon
 import org.fossify.messages.R
 import org.fossify.messages.databinding.ActivityBlockingSettingsBinding
+import org.fossify.messages.extensions.applyMiuiPageChrome
 import org.fossify.messages.extensions.config
 
 class BlockingSettingsActivity : SimpleActivity() {
@@ -19,8 +20,7 @@ class BlockingSettingsActivity : SimpleActivity() {
         setupMaterialScrollListener(binding.blockingScrollview, binding.blockingAppbar)
         setupTopAppBar(binding.blockingAppbar, NavigationIcon.Arrow)
         binding.blockingToolbar.title = ""
-        window.statusBarColor = Color.rgb(247, 247, 247)
-        window.navigationBarColor = Color.rgb(247, 247, 247)
+        applyMiuiPageChrome()
 
         binding.blockingSimOne.setOnClickListener { selectSim(first = true) }
         binding.blockingSimTwo.setOnClickListener { selectSim(first = false) }

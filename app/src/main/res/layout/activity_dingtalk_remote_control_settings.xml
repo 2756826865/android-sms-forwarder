@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/miui_page_background">
+
+    <org.fossify.commons.views.MyAppBarLayout
+        android:id="@+id/dingtalk_remote_appbar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/miui_page_background">
+
+        <com.google.android.material.appbar.MaterialToolbar
+            android:layout_width="match_parent"
+            android:layout_height="?attr/actionBarSize"
+            android:background="@color/miui_page_background"
+            app:navigationIconTint="#111111"
+            app:title="@string/dingtalk_remote_title"
+            app:titleTextColor="#111111" />
+    </org.fossify.commons.views.MyAppBarLayout>
+
+    <androidx.core.widget.NestedScrollView
+        android:id="@+id/dingtalk_remote_scrollview"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <com.google.android.material.switchmaterial.SwitchMaterial
+                android:id="@+id/dingtalk_remote_enabled"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/dingtalk_remote_enable"
+                android:textColor="#111111" />
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:hint="@string/dingtalk_remote_client_id">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/dingtalk_remote_client_id"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="text"
+                    android:maxLines="1" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:hint="@string/dingtalk_remote_client_secret"
+                app:endIconMode="password_toggle"
+                app:helperText="@string/dingtalk_remote_secret_hint">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/dingtalk_remote_client_secret"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="textPassword"
+                    android:maxLines="1" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <TextView
+                style="@style/SmsChannelFieldLabel"
+                android:text="@string/dingtalk_remote_send_sim" />
+
+            <Spinner
+                android:id="@+id/dingtalk_remote_send_sim"
+                android:layout_width="match_parent"
+                android:layout_height="52dp"
+                android:layout_marginTop="4dp"
+                android:background="@drawable/email_security_spinner_background"
+                android:popupBackground="@color/miui_card_background"
+                android:paddingHorizontal="12dp" />
+
+            <TextView
+                style="@style/SmsChannelHelperText"
+                android:layout_marginTop="8dp"
+                android:text="@string/dingtalk_remote_format_hint" />
+
+            <TextView
+                style="@style/SmsChannelFieldLabel"
+                android:text="@string/dingtalk_remote_examples_title" />
+
+            <TextView
+                style="@style/SmsSettingsLogBox"
+                android:layout_marginTop="6dp"
+                android:text="@string/dingtalk_remote_examples_body"
+                android:textColor="@color/miui_primary_text" />
+
+            <View style="@style/SmsChannelDivider" />
+
+            <TextView
+                style="@style/SmsChannelSectionTitle"
+                android:text="@string/dingtalk_remote_section_status" />
+
+            <TextView
+                android:id="@+id/dingtalk_remote_status"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:textColor="#111111"
+                android:textSize="14sp" />
+
+            <TextView
+                android:id="@+id/dingtalk_remote_logs"
+                style="@style/SmsSettingsLogBox"
+                android:layout_marginTop="8dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/dingtalk_remote_test"
+                style="@style/SmsChannelTestButton"
+                android:text="@string/dingtalk_remote_test" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/dingtalk_remote_save"
+                style="@style/SmsChannelSaveButton"
+                android:text="@string/dingtalk_remote_save" />
+
+            <View style="@style/SmsChannelDivider" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/channel_legal_notice"
+                android:textColor="#999999"
+                android:textSize="11sp" />
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

@@ -9,18 +9,20 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.Switch
 import androidx.appcompat.app.AlertDialog
-import androidx.core.view.WindowInsetsControllerCompat
 import org.fossify.commons.extensions.toast
 import org.fossify.commons.extensions.viewBinding
 import org.fossify.commons.helpers.NavigationIcon
 import org.fossify.messages.R
 import org.fossify.messages.databinding.ActivityForwardingChannelsBinding
+import org.fossify.messages.extensions.applyMiuiPageChrome
 import org.fossify.messages.extensions.applySmsDialogColors
 import org.fossify.messages.extensions.showSmsStyled
 import org.fossify.messages.forwarding.MultiChannelForwardWorker
 import org.fossify.messages.forwarding.MultiForwardConfig
 import org.fossify.messages.forwarding.PushPlusConfig
 import org.fossify.messages.forwarding.PushPlusWorker
+import org.fossify.messages.forwarding.ForwardingRulesConfig
+import org.fossify.messages.remote.RemoteSmsCommandConfig
 
 class ForwardingChannelsActivity : SimpleActivity() {
     private val binding by viewBinding(ActivityForwardingChannelsBinding::inflate)
@@ -40,10 +42,7 @@ class ForwardingChannelsActivity : SimpleActivity() {
 
     override fun onResume() {
         super.onResume()
-        window.statusBarColor = Color.rgb(247, 247, 247)
-        window.navigationBarColor = Color.rgb(247, 247, 247)
-        WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightStatusBars = true
-        WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightNavigationBars = true
+        applyMiuiPageChrome()
         updateSummaries()
     }
 
@@ -69,9 +68,27 @@ class ForwardingChannelsActivity : SimpleActivity() {
         forwardingSmsDirectHolder.setOnClickListener {
             startActivity(Intent(this@ForwardingChannelsActivity, SmsDirectSettingsActivity::class.java))
         }
+        forwardingBarkHolder.setOnClickListener {
+            startActivity(Intent(this@ForwardingChannelsActivity, BarkSettingsActivity::class.java))
+        }
+        forwardingGotifyHolder.setOnClickListener {
+            startActivity(Intent(this@ForwardingChannelsActivity, GotifySettingsActivity::class.java))
+        }
+        forwardingRulesHolder.setOnClickListener {
+            startActivity(Intent(this@ForwardingChannelsActivity, ForwardingRulesSettingsActivity::class.java))
+        }
+        forwardingRemoteForwardingHolder.setOnClickListener {
+            startActivity(Intent(this@ForwardingChannelsActivity, RemoteForwardingActivity::class.java))
+        }
         forwardingSimOneHolder.setOnClickListener { showSimLabelDialog(0) }
         forwardingSimTwoHolder.setOnClickListener { showSimLabelDialog(1) }
-        forwardingTemplateHolder.setOnClickListener { showTemplateDialog() }
+        forwardingTemplateHolder.setOnClickListener {
+            if (multiConfig.templateMode == MultiForwardConfig.TEMPLATE_CUSTOM) {
+                showCustomTemplateDialog()
+            } else {
+                showTemplateDialog()
+            }
+        }
         forwardingDisclaimerHolder.setOnClickListener { showForwardingDisclaimer(requireAcceptance = false) }
         forwardingTest.setOnClickListener {
             val pushPlusEnabled = pushPlusConfig.enabled && pushPlusConfig.getToken().isNotBlank()
@@ -182,12 +199,14 @@ class ForwardingChannelsActivity : SimpleActivity() {
         AlertDialog.Builder(this)
             .setTitle(R.string.forwarding_template)
             .setSingleChoiceItems(labels, multiConfig.templateMode) { dialog, which ->
-                multiConfig.templateMode = which
                 if (which == MultiForwardConfig.TEMPLATE_CUSTOM) {
+                    dialog.dismiss()
                     showCustomTemplateDialog()
+                } else {
+                    multiConfig.templateMode = which
+                    updateSummaries()
+                    dialog.dismiss()
                 }
-                updateSummaries()
-                dialog.dismiss()
             }
             .setNegativeButton(android.R.string.cancel, null)
             .create()
@@ -201,7 +220,7 @@ class ForwardingChannelsActivity : SimpleActivity() {
         }
 
         val templateInput = android.widget.EditText(this).apply {
-            hint = "输入模板，如：{sender}发来消息：{body}"
+            hint = getString(R.string.forwarding_template_custom_hint)
             setText(multiConfig.customTemplate)
             setPadding(0, 16, 0, 16)
             minLines = 3
@@ -236,10 +255,17 @@ class ForwardingChannelsActivity : SimpleActivity() {
         container.addView(buttonContainer)
 
         AlertDialog.Builder(this)
-            .setTitle("自定义模板")
+            .setTitle(R.string.forwarding_template_custom)
             .setView(container)
-            .setPositiveButton("保存") { _, _ ->
-                multiConfig.customTemplate = templateInput.text.toString()
+            .setPositiveButton(R.string.forwarding_save) { _, _ ->
+                val template = templateInput.text.toString().trim()
+                if (template.isBlank()) {
+                    toast(R.string.forwarding_template_custom_empty)
+                    return@setPositiveButton
+                }
+                multiConfig.customTemplate = template
+                multiConfig.templateMode = MultiForwardConfig.TEMPLATE_CUSTOM
+                updateSummaries()
             }
             .setNegativeButton(android.R.string.cancel, null)
             .create()
@@ -392,6 +418,16 @@ class ForwardingChannelsActivity : SimpleActivity() {
         forwardingWecomBotSummary.text = statusText(multiConfig.weComBotWebhook().isNotBlank(), multiConfig.weComBotEnabled)
         forwardingEmailSummary.text = statusText(multiConfig.emailHost().isNotBlank(), multiConfig.emailEnabled)
         forwardingSmsDirectSummary.text = statusText(multiConfig.smsDirectPhone().isNotBlank(), multiConfig.smsDirectEnabled)
+        forwardingBarkSummary.text = statusText(
+            multiConfig.barkServerUrl().isNotBlank() && multiConfig.barkDeviceKey().isNotBlank(),
+            multiConfig.barkEnabled,
+        )
+        forwardingGotifySummary.text = statusText(
+            multiConfig.gotifyServerUrl().isNotBlank() && multiConfig.gotifyToken().isNotBlank(),
+            multiConfig.gotifyEnabled,
+        )
+        forwardingRulesSummary.text = ForwardingRulesConfig(applicationContext).summary()
+        forwardingRemoteForwardingSummary.text = remoteForwardingHubSummary()
         forwardingSimOneSummary.text = simSummary(multiConfig.simOneLabel, multiConfig.simOneNumber)
         forwardingSimTwoSummary.text = simSummary(multiConfig.simTwoLabel, multiConfig.simTwoNumber)
         forwardingTemplateSummary.text = when (multiConfig.templateMode) {
@@ -400,7 +436,11 @@ class ForwardingChannelsActivity : SimpleActivity() {
             MultiForwardConfig.TEMPLATE_EMOJI -> getString(R.string.forwarding_template_emoji)
             MultiForwardConfig.TEMPLATE_CUSTOM -> {
                 val custom = multiConfig.customTemplate
-                if (custom.isNotBlank()) "自定义: ${custom.take(20)}..." else getString(R.string.forwarding_template_custom)
+                if (custom.isNotBlank()) {
+                    getString(R.string.forwarding_template_custom_summary, custom.take(20) + if (custom.length > 20) "…" else "")
+                } else {
+                    getString(R.string.forwarding_template_custom)
+                }
             }
             else -> getString(R.string.forwarding_template_compact)
         }
@@ -409,6 +449,18 @@ class ForwardingChannelsActivity : SimpleActivity() {
             R.string.forwarding_last_status,
             statuses.joinToString("\n").ifBlank { getString(R.string.forwarding_status_never) }
         )
+    }
+
+    private fun remoteForwardingHubSummary(): String {
+        val smsEnabled = RemoteSmsCommandConfig(applicationContext).enabled
+        val dingTalkEnabled = multiConfig.dingTalkRemoteControlEnabled &&
+            multiConfig.dingTalkRemoteClientId().isNotBlank()
+        return when {
+            smsEnabled && dingTalkEnabled -> getString(R.string.remote_forwarding_hub_both_enabled)
+            smsEnabled -> getString(R.string.remote_forwarding_hub_sms_enabled)
+            dingTalkEnabled -> getString(R.string.remote_forwarding_hub_dingtalk_enabled)
+            else -> getString(R.string.remote_forwarding_hub_default)
+        }
     }
 
     private fun simSummary(label: String, number: String): String {

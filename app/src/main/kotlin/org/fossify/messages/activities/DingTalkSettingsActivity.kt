@@ -1,6 +1,5 @@
 package org.fossify.messages.activities
 
-import android.graphics.Color
 import android.os.Bundle
 import android.view.View
 import android.widget.Toast
@@ -10,6 +9,7 @@ import org.fossify.commons.extensions.viewBinding
 import org.fossify.commons.helpers.NavigationIcon
 import org.fossify.messages.R
 import org.fossify.messages.databinding.ActivityDingtalkSettingsBinding
+import org.fossify.messages.extensions.applyWhitePageChrome
 import org.fossify.messages.forwarding.MultiForwardConfig
 import org.fossify.messages.forwarding.MultiChannelForwardWorker
 
@@ -47,8 +47,7 @@ class DingTalkSettingsActivity : SimpleActivity() {
 
     override fun onResume() {
         super.onResume()
-        window.statusBarColor = Color.WHITE
-        window.navigationBarColor = Color.WHITE
+        applyWhitePageChrome()
     }
 
     private fun loadConfig() = with(binding) {

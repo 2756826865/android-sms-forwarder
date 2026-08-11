@@ -21,6 +21,8 @@ import org.fossify.messages.extensions.notificationHelper
 import org.fossify.messages.extensions.syncThreadToLocal
 import org.fossify.messages.helpers.refreshConversations
 import org.fossify.messages.helpers.refreshMessages
+import org.fossify.messages.remote.RemoteControlReceiptForwarder
+import org.fossify.messages.receivers.SendStatusReceiver
 
 /** Handles updating databases and states when a SMS message is sent. */
 class SmsStatusSentReceiver : SendStatusReceiver() {
@@ -59,6 +61,12 @@ class SmsStatusSentReceiver : SendStatusReceiver() {
                 if (threadId != 0L) {
                     context.syncThreadToLocal(threadId)
                 }
+                RemoteControlReceiptForwarder.onSendResult(
+                    context = context,
+                    messageId = messageId,
+                    resultCode = receiverResultCode,
+                    errorCode = intent.getIntExtra(SendStatusReceiver.EXTRA_ERROR_CODE, SendStatusReceiver.NO_ERROR_CODE),
+                )
                 refreshMessages()
                 refreshConversations()
             }

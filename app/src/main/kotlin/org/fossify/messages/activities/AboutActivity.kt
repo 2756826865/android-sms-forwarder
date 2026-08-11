@@ -1,6 +1,5 @@
 package org.fossify.messages.activities
 
-import android.graphics.Color
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -10,6 +9,7 @@ import org.fossify.commons.helpers.NavigationIcon
 import org.fossify.messages.BuildConfig
 import org.fossify.messages.R
 import org.fossify.messages.databinding.ActivityAboutBinding
+import org.fossify.messages.extensions.applyMiuiPageChrome
 import org.fossify.messages.extensions.showSmsStyled
 
 class AboutActivity : SimpleActivity() {
@@ -21,8 +21,7 @@ class AboutActivity : SimpleActivity() {
         setupEdgeToEdge()
         setupTopAppBar(binding.aboutAppbar, NavigationIcon.Arrow)
         binding.aboutToolbar.title = ""
-        window.statusBarColor = Color.rgb(247, 247, 247)
-        window.navigationBarColor = Color.rgb(247, 247, 247)
+        applyMiuiPageChrome()
 
         binding.aboutCommonQuestions.setOnClickListener {
             showText(R.string.about_common_questions, R.string.about_common_questions_text)

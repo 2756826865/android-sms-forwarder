@@ -10,6 +10,7 @@ import org.fossify.commons.helpers.ensureBackgroundThread
 import org.fossify.messages.extensions.messagesDB
 import org.fossify.messages.extensions.messagingUtils
 import org.fossify.messages.helpers.refreshMessages
+import org.fossify.messages.remote.RemoteControlReceiptForwarder
 
 /** Handles updating databases and states when a sent SMS message is delivered. */
 class SmsStatusDeliveredReceiver : SendStatusReceiver() {
@@ -93,6 +94,11 @@ class SmsStatusDeliveredReceiver : SendStatusReceiver() {
                 if (status != Sms.Sent.STATUS_NONE) {
                     context.messagesDB.updateStatus(messageId, status)
                 }
+                RemoteControlReceiptForwarder.onDelivered(
+                    context = context,
+                    messageId = messageId,
+                    delivered = status == Sms.STATUS_COMPLETE,
+                )
                 refreshMessages()
             }
         }

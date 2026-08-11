@@ -1,6 +1,5 @@
 package org.fossify.messages.activities
 
-import android.graphics.Color
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Bundle
@@ -9,6 +8,8 @@ import org.fossify.commons.extensions.value
 import org.fossify.commons.extensions.viewBinding
 import org.fossify.commons.helpers.NavigationIcon
 import org.fossify.messages.databinding.ActivitySmsDirectSettingsBinding
+import org.fossify.messages.extensions.applyWhitePageChrome
+import org.fossify.messages.messaging.sendMessageCompat
 import org.fossify.messages.forwarding.MultiForwardConfig
 
 class SmsDirectSettingsActivity : SimpleActivity() {
@@ -57,8 +58,7 @@ class SmsDirectSettingsActivity : SimpleActivity() {
 
     override fun onResume() {
         super.onResume()
-        window.statusBarColor = Color.WHITE
-        window.navigationBarColor = Color.WHITE
+        applyWhitePageChrome()
     }
 
     private fun loadConfig() = with(binding) {
@@ -95,8 +95,7 @@ class SmsDirectSettingsActivity : SimpleActivity() {
                 toast("目标手机号不能为空")
                 return
             }
-            val smsManager = android.telephony.SmsManager.getDefault()
-            smsManager.sendTextMessage(normalized, null, message, null, null)
+            sendMessageCompat(message, listOf(normalized), null, emptyList())
         } catch (e: Exception) {
             toast("短信发送失败: ${e.message}")
         }

@@ -21,7 +21,6 @@ import android.text.TextUtils
 import androidx.appcompat.content.res.AppCompatResources
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
-import androidx.core.view.WindowInsetsControllerCompat
 import org.fossify.commons.dialogs.PermissionRequiredDialog
 import org.fossify.commons.extensions.adjustAlpha
 import org.fossify.commons.extensions.appLaunched
@@ -60,6 +59,7 @@ import org.fossify.messages.adapters.ConversationsAdapter
 import org.fossify.messages.adapters.SearchResultsAdapter
 import org.fossify.messages.databinding.ActivityMainBinding
 import org.fossify.messages.dialogs.ConversationActionsPopup
+import org.fossify.messages.extensions.applySystemBarColors
 import org.fossify.messages.extensions.checkAndDeleteOldRecycleBinMessages
 import org.fossify.messages.extensions.clearAllMessagesIfNeeded
 import org.fossify.messages.extensions.clearExpiredScheduledMessages
@@ -119,12 +119,15 @@ class MainActivity : SimpleActivity() {
         setupHomeSearch()
         setupSelectionActions()
         setupBottomNavigation()
+        applyHomeBottomNavigationPreference()
 
         setupEdgeToEdge(
             padTopSystem = listOf(binding.homeHeader),
             padBottomSystem = listOf(binding.homeBottomNavigation, binding.selectionBottomBar),
             padBottomImeAndSystem = listOf(binding.homeSearch),
         )
+
+        binding.mainCoordinator.post { applyHomeBottomNavigationPreference() }
 
         checkAndDeleteOldRecycleBinMessages()
         clearAllMessagesIfNeeded {
@@ -142,6 +145,7 @@ class MainActivity : SimpleActivity() {
         SmsRecoveryWorker.enqueueNow(this)
         updateMenuColors()
         selectPrimaryNavigation()
+        applyHomeBottomNavigationPreference()
 
         getOrCreateConversationsAdapter().apply {
             if (storedTextColor != getProperTextColor()) {
@@ -167,10 +171,7 @@ class MainActivity : SimpleActivity() {
         binding.conversationsFab.imageTintList = ColorStateList.valueOf(
             ContextCompat.getColor(this, android.R.color.white)
         )
-        window.statusBarColor = pageColor
-        window.navigationBarColor = pageColor
-        WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightStatusBars = true
-        WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightNavigationBars = true
+        applySystemBarColors(pageColor)
         binding.searchHolder.setBackgroundColor(pageColor)
         binding.noConversationsPlaceholder2.setTextColor(properPrimaryColor)
         binding.noConversationsPlaceholder2.underlineText()
@@ -259,6 +260,34 @@ class MainActivity : SimpleActivity() {
         binding.homeNavPrimary.isSelected = true
         binding.homeNavForward.isSelected = false
         binding.homeNavSettings.isSelected = false
+    }
+
+    private fun applyHomeBottomNavigationPreference() = binding.apply {
+        if (isConversationSelectionMode) {
+            return@apply
+        }
+
+        val showNav = config.showHomeBottomNavigation
+        homeBottomNavigation.beVisibleIf(showNav)
+        if (showNav) {
+            homeBottomNavigation.bringToFront()
+        }
+        conversationsFab.bringToFront()
+        selectionBottomBar.bringToFront()
+
+        val contentBottomPadding = resources.getDimensionPixelSize(R.dimen.home_content_bottom_padding)
+        conversationsList.setPadding(
+            conversationsList.paddingLeft,
+            conversationsList.paddingTop,
+            conversationsList.paddingRight,
+            contentBottomPadding,
+        )
+        searchResultsList.setPadding(
+            searchResultsList.paddingLeft,
+            searchResultsList.paddingTop,
+            searchResultsList.paddingRight,
+            contentBottomPadding,
+        )
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, resultData: Intent?) {
@@ -574,8 +603,8 @@ class MainActivity : SimpleActivity() {
         conversationsFab.beGoneIf(active)
         if (!active) {
             conversationsFab.beVisible()
-            homeBottomNavigation.beVisible()
             selectPrimaryNavigation()
+            applyHomeBottomNavigationPreference()
         }
         selectionMarkRead.text = getString(
             if (count > 0 && getOrCreateConversationsAdapter().selectedHasUnread()) {

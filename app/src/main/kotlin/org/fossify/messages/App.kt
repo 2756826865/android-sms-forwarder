@@ -12,6 +12,7 @@ import org.fossify.commons.helpers.ensureBackgroundThread
 import org.fossify.messages.extensions.rescheduleAllScheduledMessages
 import org.fossify.messages.helpers.MessagingCache
 import org.fossify.messages.messaging.SmsRecoveryWorker
+import org.fossify.messages.services.DingTalkRemoteControlService
 import org.fossify.messages.services.SmsKeepAliveService
 
 class App : FossifyApp() {
@@ -41,6 +42,7 @@ class App : FossifyApp() {
         }
         SmsRecoveryWorker.schedule(this)
         SmsKeepAliveService.ensureStarted(this)
+        DingTalkRemoteControlService.ensureStarted(this)
     }
 
     private val contactsObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {

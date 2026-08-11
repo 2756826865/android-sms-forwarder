@@ -14,6 +14,7 @@ import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.fossify.messages.messaging.sendMessageCompat
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.BufferedWriter
@@ -41,10 +42,17 @@ class MultiChannelForwardWorker(
         val targetChannel = inputData.getString(KEY_TARGET_CHANNEL).orEmpty()
         if (targetChannel.isBlank() && !config.anyEnabled()) return@withContext Result.success()
 
-        fun shouldRun(channel: String, enabled: Boolean): Boolean = when (targetChannel) {
-            "" -> enabled
-            CHANNEL_ALL -> enabled
-            else -> targetChannel == channel
+        val ruleAllowedChannels = decodeRuleAllowedChannels(
+            inputData.getString(KEY_ALLOWED_CHANNELS).orEmpty(),
+        )
+        fun shouldRun(channel: String, enabled: Boolean): Boolean {
+            if (!enabled) return false
+            if (ruleAllowedChannels != null && channel !in ruleAllowedChannels) return false
+            return when (targetChannel) {
+                "" -> true
+                ForwardingChannels.ALL -> true
+                else -> targetChannel == channel
+            }
         }
 
         val sender = inputData.getString(KEY_SENDER).orEmpty()
@@ -67,24 +75,24 @@ class MultiChannelForwardWorker(
         suspend fun runChannel(name: String, action: suspend () -> Unit) {
             runCatching { action() }
                 .onSuccess { successes += name }
-                .onFailure { failures += "$name�?{it.message ?: it.javaClass.simpleName}" }
+                .onFailure { failures += "$name：${it.message ?: it.javaClass.simpleName}" }
         }
 
-        // 检测网络状�?
+        // 检测网络状态
         val networkAvailable = isNetworkAvailable()
         val onlyOnNoNetwork = config.smsDirectOnlyOnNoNetwork
 
         // 短信直发逻辑
-        if (shouldRun(CHANNEL_SMS_DIRECT, config.smsDirectEnabled)) {
+        if (shouldRun(ForwardingChannels.SMS_DIRECT, config.smsDirectEnabled)) {
             if (onlyOnNoNetwork) {
-                // 仅断网时发送模�?
+                // 仅断网时发送模式
                 if (!networkAvailable) {
                     runChannel("短信直发") {
                         sendSmsDirect(config.smsDirectPhone(), content)
                     }
                 }
             } else {
-                // 始终发送模�?
+                // 始终发送模式
                 runChannel("短信直发") {
                     sendSmsDirect(config.smsDirectPhone(), content)
                 }
@@ -93,13 +101,13 @@ class MultiChannelForwardWorker(
 
         // 网络可用时发送其他渠道
         if (networkAvailable) {
-            if (shouldRun(CHANNEL_DINGTALK, config.dingTalkEnabled)) runChannel("钉钉") {
+            if (shouldRun(ForwardingChannels.DINGTALK, config.dingTalkEnabled)) runChannel("钉钉") {
                 sendDingTalk(config.dingTalkWebhook(), config.dingTalkSecret(), content)
             }
-            if (shouldRun(CHANNEL_FEISHU, config.feishuEnabled)) runChannel("飞书") {
+            if (shouldRun(ForwardingChannels.FEISHU, config.feishuEnabled)) runChannel("飞书") {
                 sendFeishu(config.feishuWebhook(), config.feishuSecret(), content)
             }
-            if (shouldRun(CHANNEL_WECOM, config.weComEnabled)) runChannel("企业微信") {
+            if (shouldRun(ForwardingChannels.WECOM, config.weComEnabled)) runChannel("企业微信") {
                 sendWeCom(
                     config.weComCorpId(),
                     config.weComAgentId(),
@@ -108,10 +116,10 @@ class MultiChannelForwardWorker(
                     content
                 )
             }
-            if (shouldRun(CHANNEL_WECOM_BOT, config.weComBotEnabled)) runChannel("企业微信群机器人") {
+            if (shouldRun(ForwardingChannels.WECOM_BOT, config.weComBotEnabled)) runChannel("企业微信群机器人") {
                 sendWeComBot(config.weComBotWebhook(), content)
             }
-            if (shouldRun(CHANNEL_EMAIL, config.emailEnabled)) runChannel("邮箱") {
+            if (shouldRun(ForwardingChannels.EMAIL, config.emailEnabled)) runChannel("邮箱") {
                 sendEmail(
                     config.emailHost(),
                     config.emailPort,
@@ -122,6 +130,12 @@ class MultiChannelForwardWorker(
                     title,
                     content
                 )
+            }
+            if (shouldRun(ForwardingChannels.BARK, config.barkEnabled)) runChannel("Bark") {
+                sendBark(config.barkServerUrl(), config.barkDeviceKey(), title, content, config.barkAllowHttp)
+            }
+            if (shouldRun(ForwardingChannels.GOTIFY, config.gotifyEnabled)) runChannel("Gotify") {
+                sendGotify(config.gotifyServerUrl(), config.gotifyToken(), title, content, config.gotifyAllowHttp)
             }
         }
 
@@ -358,6 +372,40 @@ class MultiChannelForwardWorker(
         require(url.startsWith("https://")) { "Webhook 必须使用 HTTPS" }
     }
 
+    private fun requireHttpsOrAllowedHttp(url: String, allowHttp: Boolean) {
+        require(url.startsWith("https://") || (allowHttp && url.startsWith("http://"))) {
+            "地址默认必须使用 HTTPS；如需 HTTP 内网地址，请显式开启允许 HTTP"
+        }
+    }
+
+    private fun sendBark(serverUrl: String, deviceKey: String, title: String, content: String, allowHttp: Boolean) {
+        require(serverUrl.isNotBlank() && deviceKey.isNotBlank()) { "Bark 配置不完整" }
+        val base = serverUrl.trim().trimEnd('/')
+        requireHttpsOrAllowedHttp(base, allowHttp)
+        val result = postJson(
+            "$base/${URLEncoder.encode(deviceKey.trim(), "UTF-8")}",
+            JSONObject()
+                .put("title", title)
+                .put("body", content)
+        )
+        val code = result.optInt("code", 0)
+        check(code == 200 || code == 0) { result.optString("message", "Bark 请求失败") }
+    }
+
+    private fun sendGotify(serverUrl: String, token: String, title: String, content: String, allowHttp: Boolean) {
+        require(serverUrl.isNotBlank() && token.isNotBlank()) { "Gotify 配置不完整" }
+        val base = serverUrl.trim().trimEnd('/')
+        requireHttpsOrAllowedHttp(base, allowHttp)
+        val result = postJson(
+            "$base/message?token=${URLEncoder.encode(token.trim(), "UTF-8")}",
+            JSONObject()
+                .put("title", title)
+                .put("message", content)
+                .put("priority", 5)
+        )
+        check(result.has("id") || result.optString("message").isNotBlank()) { "Gotify 请求失败" }
+    }
+
     private fun getJson(url: String) = requestJson(url, "GET", null)
 
     private fun postJson(url: String, payload: JSONObject) = requestJson(url, "POST", payload)
@@ -395,8 +443,7 @@ class MultiChannelForwardWorker(
         require(phone.isNotBlank()) { "目标手机号不能为空" }
         val normalized = phone.trim()
         require(normalized.isNotEmpty()) { "目标手机号格式无效" }
-        val smsManager = android.telephony.SmsManager.getDefault()
-        smsManager.sendTextMessage(normalized, null, content, null, null)
+        applicationContext.sendMessageCompat(content, listOf(normalized), null, emptyList())
     }
 
     companion object {
@@ -405,15 +452,22 @@ class MultiChannelForwardWorker(
         private const val KEY_RECEIVED_AT = "received_at"
         private const val KEY_SUBSCRIPTION_ID = "subscription_id"
         private const val KEY_TARGET_CHANNEL = "target_channel"
-
-        private const val CHANNEL_ALL = "test"
-        private const val CHANNEL_DINGTALK = "dingtalk"
-        private const val CHANNEL_FEISHU = "feishu"
-        private const val CHANNEL_WECOM = "wecom"
-        private const val CHANNEL_WECOM_BOT = "wecom_bot"
-        private const val CHANNEL_EMAIL = "email"
-        private const val CHANNEL_SMS_DIRECT = "sms_direct"
+        private const val KEY_ALLOWED_CHANNELS = "allowed_channels"
         private const val SMTP_TIMEOUT_MS = 12_000
+        /** 规则启用但无任何渠道命中时，与 null（未启用规则）区分 */
+        const val RULE_BLOCK_ALL = "__BLOCK_ALL__"
+
+        private fun decodeRuleAllowedChannels(raw: String): Set<String>? = when {
+            raw.isBlank() -> null
+            raw == RULE_BLOCK_ALL -> emptySet()
+            else -> raw.split(',').map(String::trim).filter(String::isNotBlank).toSet()
+        }
+
+        private fun encodeRuleAllowedChannels(allowedChannels: Set<String>?): String = when {
+            allowedChannels == null -> ""
+            allowedChannels.isEmpty() -> RULE_BLOCK_ALL
+            else -> allowedChannels.joinToString(",")
+        }
 
         fun enqueue(
             context: Context,
@@ -423,6 +477,7 @@ class MultiChannelForwardWorker(
             subscriptionId: Int,
             uniqueId: String,
             targetChannel: String = "",
+            allowedChannels: Set<String>? = null,
         ) {
             val request = OneTimeWorkRequestBuilder<MultiChannelForwardWorker>()
                 .setInputData(
@@ -432,6 +487,7 @@ class MultiChannelForwardWorker(
                         KEY_RECEIVED_AT to receivedAt,
                         KEY_SUBSCRIPTION_ID to subscriptionId,
                         KEY_TARGET_CHANNEL to targetChannel,
+                        KEY_ALLOWED_CHANNELS to encodeRuleAllowedChannels(allowedChannels),
                     )
                 )
                 .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.NOT_REQUIRED).build())

@@ -3,8 +3,11 @@ package org.fossify.messages.extensions
 import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.graphics.Color
 import android.net.Uri
 import android.provider.ContactsContract
+import androidx.core.content.ContextCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import org.fossify.commons.activities.BaseSimpleActivity
 import org.fossify.commons.extensions.getMimeType
 import org.fossify.commons.extensions.hideKeyboard
@@ -21,7 +24,26 @@ import org.fossify.commons.helpers.ensureBackgroundThread
 import org.fossify.commons.models.SimpleContact
 import org.fossify.messages.activities.ConversationDetailsActivity
 import org.fossify.messages.helpers.THREAD_ID
+import org.fossify.messages.R
 import java.util.Locale
+
+@Suppress("DEPRECATION")
+fun Activity.applySystemBarColors(barColor: Int, lightBars: Boolean = true) {
+    window.statusBarColor = barColor
+    window.navigationBarColor = barColor
+    WindowInsetsControllerCompat(window, window.decorView).apply {
+        isAppearanceLightStatusBars = lightBars
+        isAppearanceLightNavigationBars = lightBars
+    }
+}
+
+fun Activity.applyMiuiPageChrome() {
+    applySystemBarColors(ContextCompat.getColor(this, R.color.miui_page_background))
+}
+
+fun Activity.applyWhitePageChrome() {
+    applySystemBarColors(Color.WHITE)
+}
 
 fun BaseSimpleActivity.dialNumber(phoneNumber: String, callback: (() -> Unit)? = null) {
     hideKeyboard()

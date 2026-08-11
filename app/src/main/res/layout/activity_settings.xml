@@ -88,52 +88,6 @@
 
                 <View style="@style/SmsSettingsDivider" />
 
-                <LinearLayout
-                    android:id="@+id/settings_batch_delay_holder"
-                    android:layout_width="match_parent"
-                    android:layout_height="82dp"
-                    android:foreground="?attr/selectableItemBackground"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal"
-                    android:paddingHorizontal="20dp">
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:orientation="vertical">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:fontFamily="sans-serif"
-                            android:text="@string/settings_batch_delay"
-                            android:textColor="@color/miui_primary_text"
-                            android:textSize="18sp" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="2dp"
-                            android:fontFamily="sans-serif"
-                            android:text="@string/settings_batch_delay_summary"
-                            android:textColor="@color/miui_secondary_text"
-                            android:textSize="13sp" />
-                    </LinearLayout>
-
-                    <TextView
-                        android:id="@+id/settings_batch_delay"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:drawableEnd="@drawable/ic_chevron_right_vector"
-                        android:drawablePadding="8dp"
-                        android:fontFamily="sans-serif"
-                        android:textColor="@color/miui_secondary_text"
-                        android:textSize="15sp" />
-                </LinearLayout>
-
-                <View style="@style/SmsSettingsDivider" />
-
                 <TextView
                     android:id="@+id/settings_blocking_holder"
                     style="@style/SmsSettingsRow"
@@ -147,6 +101,66 @@
                     android:text="@string/settings_recently_deleted" />
 
                 <View style="@style/SmsSettingsDivider" />
+
+                <LinearLayout
+                    android:id="@+id/settings_home_bottom_nav_holder"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:minHeight="82dp"
+                    android:orientation="horizontal"
+                    android:paddingHorizontal="20dp"
+                    android:paddingVertical="12dp">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:fontFamily="sans-serif"
+                            android:text="@string/settings_home_bottom_nav"
+                            android:textColor="@color/miui_primary_text"
+                            android:textSize="18sp" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:fontFamily="sans-serif"
+                            android:text="@string/settings_home_bottom_nav_summary"
+                            android:textColor="@color/miui_secondary_text"
+                            android:textSize="13sp" />
+                    </LinearLayout>
+
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/settings_home_bottom_nav_switch"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_marginTop="26dp"
+                android:layout_marginBottom="8dp"
+                android:fontFamily="sans-serif"
+                android:text="@string/settings_system"
+                android:textColor="@color/miui_section_text"
+                android:textSize="15sp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/settings_card_background"
+                android:orientation="vertical"
+                android:paddingVertical="4dp">
 
                 <LinearLayout
                     android:id="@+id/settings_sync_holder"

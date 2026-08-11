@@ -5,7 +5,9 @@
     android:id="@+id/main_coordinator"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/miui_card_background">
+    android:background="@color/miui_page_background"
+    android:clipChildren="false"
+    android:clipToPadding="false">
 
     <org.fossify.commons.views.MyAppBarLayout
         android:id="@+id/main_appbar"
@@ -158,7 +160,8 @@
                 <RelativeLayout
                     android:id="@+id/main_holder"
                     android:layout_width="match_parent"
-                    android:layout_height="match_parent">
+                    android:layout_height="match_parent"
+                    android:background="@color/miui_card_background">
 
                     <com.google.android.material.progressindicator.LinearProgressIndicator
                         android:id="@+id/conversations_progress_bar"
@@ -272,11 +275,12 @@
         android:layout_gravity="bottom|center_horizontal"
         android:layout_marginBottom="@dimen/home_bottom_nav_bottom_margin"
         android:background="@drawable/home_bottom_nav_background"
-        android:clipToOutline="true"
-        android:elevation="12dp"
+        android:elevation="16dp"
         android:gravity="center"
         android:orientation="horizontal"
-        android:padding="@dimen/home_bottom_nav_inner_padding">
+        android:padding="@dimen/home_bottom_nav_inner_padding"
+        android:translationZ="16dp"
+        android:visibility="visible">
 
             <FrameLayout
                 android:layout_width="@dimen/home_bottom_nav_slot_width"
