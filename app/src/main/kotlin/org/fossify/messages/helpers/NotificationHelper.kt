@@ -22,6 +22,8 @@ import org.fossify.messages.R
 import org.fossify.messages.activities.ThreadActivity
 import org.fossify.messages.extensions.config
 import org.fossify.messages.extensions.shortcutHelper
+import org.fossify.messages.helpers.liveisland.LiveIslandCoordinator
+import org.fossify.messages.helpers.liveisland.LiveIslandMessage
 import org.fossify.messages.messaging.isShortCodeWithLetters
 import org.fossify.messages.receivers.DeleteSmsReceiver
 import org.fossify.messages.receivers.DirectReplyReceiver
@@ -169,17 +171,33 @@ class NotificationHelper(private val context: Context) {
             ).setChannelId(notificationChannelId)
         }
 
+        val displayTitle = when (context.config.lockScreenVisibilitySetting) {
+            LOCK_SCREEN_SENDER_MESSAGE -> sender ?: address
+            LOCK_SCREEN_SENDER -> sender
+            else -> sender ?: address
+        } ?: address
+        val liveIslandMessage = LiveIslandMessage(
+            notificationId = notificationId,
+            title = displayTitle,
+            body = body,
+            ticker = displayTitle,
+            contentPendingIntent = contentPendingIntent,
+        )
+        val liveIslandKind = LiveIslandCoordinator.applyToBuilder(context, builder, liveIslandMessage)
+
         var shortcut = context.shortcutHelper.getShortcut(threadId)
         if (shortcut == null) {
             ensureBackgroundThread {
                 shortcut = context.shortcutHelper.createOrUpdateShortcut(threadId)
                 builder.setShortcutInfo(shortcut)
                 notificationManager.notify(notificationId, builder.build())
+                LiveIslandCoordinator.afterNotify(context, liveIslandMessage, liveIslandKind)
                 context.shortcutHelper.reportReceiveMessageUsage(threadId)
             }
         } else {
             builder.setShortcutInfo(shortcut)
             notificationManager.notify(notificationId, builder.build())
+            LiveIslandCoordinator.afterNotify(context, liveIslandMessage, liveIslandKind)
             ensureBackgroundThread {
                 context.shortcutHelper.reportReceiveMessageUsage(threadId)
             }

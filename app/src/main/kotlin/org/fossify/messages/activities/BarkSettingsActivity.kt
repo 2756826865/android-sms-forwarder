@@ -8,6 +8,7 @@ import org.fossify.commons.helpers.NavigationIcon
 import org.fossify.messages.databinding.ActivityBarkSettingsBinding
 import org.fossify.messages.extensions.applyMiuiPageChrome
 import org.fossify.messages.forwarding.ForwardingChannels
+import org.fossify.messages.forwarding.ForwardingUrlPolicy
 import org.fossify.messages.forwarding.MultiChannelForwardWorker
 import org.fossify.messages.forwarding.MultiForwardConfig
 
@@ -60,8 +61,8 @@ class BarkSettingsActivity : SimpleActivity() {
             toast("请填写 Bark 服务地址和 Device Key")
             return false
         }
-        if (needsConfig && !serverUrl.startsWith("https://") && !(binding.barkAllowHttp.isChecked && serverUrl.startsWith("http://"))) {
-            toast("默认必须使用 HTTPS；HTTP 内网地址请开启允许 HTTP")
+        if (needsConfig && !ForwardingUrlPolicy.isAllowed(serverUrl, binding.barkAllowHttp.isChecked)) {
+            toast("默认必须使用 HTTPS；HTTP 仅允许局域网地址")
             return false
         }
         forwardingConfig.barkEnabled = binding.barkEnabled.isChecked

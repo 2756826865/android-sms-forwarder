@@ -142,6 +142,57 @@
                         android:layout_height="wrap_content"
                         android:layout_marginStart="12dp" />
                 </LinearLayout>
+
+                <View style="@style/SmsSettingsDivider" />
+
+                <LinearLayout
+                    android:id="@+id/settings_live_island_holder"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:minHeight="82dp"
+                    android:orientation="horizontal"
+                    android:paddingHorizontal="20dp"
+                    android:paddingVertical="12dp">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:fontFamily="sans-serif"
+                            android:text="@string/settings_live_island"
+                            android:textColor="@color/miui_primary_text"
+                            android:textSize="18sp" />
+
+                        <TextView
+                            android:id="@+id/settings_live_island_summary"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:fontFamily="sans-serif"
+                            android:text="@string/settings_live_island_summary"
+                            android:textColor="@color/miui_secondary_text"
+                            android:textSize="13sp" />
+                    </LinearLayout>
+
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/settings_live_island_switch"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp" />
+                </LinearLayout>
+
+                <View style="@style/SmsSettingsDivider" />
+
+                <TextView
+                    android:id="@+id/settings_low_battery_holder"
+                    style="@style/SmsSettingsRow"
+                    android:text="@string/low_battery_reminder" />
             </LinearLayout>
 
             <TextView

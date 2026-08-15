@@ -36,7 +36,11 @@ class DingTalkRemoteControlSettingsActivity : SimpleActivity() {
             loadConfig()
         }
         binding.dingtalkRemoteTest.setOnClickListener {
-            if (!saveConfig(requireEnabled = false)) return@setOnClickListener
+            if (!binding.dingtalkRemoteEnabled.isChecked) {
+                toast("请先开启钉钉远程指令")
+                return@setOnClickListener
+            }
+            if (!saveConfig()) return@setOnClickListener
             DingTalkRemoteControlService.ensureStarted(applicationContext)
             toast("正在尝试建立 Stream 连接")
             loadConfig()
@@ -64,13 +68,11 @@ class DingTalkRemoteControlSettingsActivity : SimpleActivity() {
         dingtalkRemoteLogs.text = config.dingTalkRemoteLogs().ifBlank { "暂无日志" }
     }
 
-    private fun saveConfig(requireEnabled: Boolean = true): Boolean {
+    private fun saveConfig(): Boolean {
         val clientId = binding.dingtalkRemoteClientId.value.trim()
         val clientSecret = binding.dingtalkRemoteClientSecret.value.trim()
         val enabled = binding.dingtalkRemoteEnabled.isChecked
-        if ((requireEnabled && enabled || clientId.isNotBlank() || clientSecret.isNotBlank()) &&
-            (clientId.isBlank() || clientSecret.isBlank())
-        ) {
+        if (enabled && (clientId.isBlank() || clientSecret.isBlank())) {
             toast("请填写 Client ID 和 Client Secret")
             return false
         }

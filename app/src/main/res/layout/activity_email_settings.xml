@@ -65,7 +65,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
                 android:text="@string/forwarding_email_security"
-                android:textColor="#666666"
+                android:textColor="@color/miui_secondary_text"
                 android:textSize="13sp" />
 
             <Spinner
@@ -83,7 +83,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:paddingHorizontal="4dp"
-                android:textColor="#777777"
+                android:textColor="@color/miui_secondary_text"
                 android:textSize="12sp" />
 
             <com.google.android.material.textfield.TextInputLayout
@@ -184,8 +184,8 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="本功能仅用于个人合法用途，禁止用于骚扰、诈骗、垃圾短信等非法行为。违反者自行承担法律责任。"
-                android:textColor="#999999"
-                android:textSize="11sp" />
+                android:textColor="@color/miui_secondary_text"
+                android:textSize="13sp" />
         </LinearLayout>
     </androidx.core.widget.NestedScrollView>
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

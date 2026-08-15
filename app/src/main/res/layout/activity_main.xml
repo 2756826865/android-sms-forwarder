@@ -216,7 +216,7 @@
                             android:id="@+id/conversations_list"
                             android:layout_width="match_parent"
                             android:layout_height="match_parent"
-                            android:clipToPadding="false"
+                            android:clipToPadding="true"
                             android:layoutAnimation="@anim/layout_animation"
                             android:overScrollMode="ifContentScrolls"
                             android:paddingBottom="@dimen/home_content_bottom_padding"
@@ -259,7 +259,7 @@
                         android:id="@+id/search_results_list"
                         android:layout_width="match_parent"
                         android:layout_height="match_parent"
-                        android:clipToPadding="false"
+                        android:clipToPadding="true"
                         android:paddingBottom="@dimen/home_content_bottom_padding"
                         android:scrollbars="vertical"
                         app:layoutManager="org.fossify.commons.views.MyLinearLayoutManager" />

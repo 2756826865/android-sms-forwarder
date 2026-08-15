@@ -8,6 +8,7 @@ import org.fossify.commons.helpers.NavigationIcon
 import org.fossify.messages.databinding.ActivityGotifySettingsBinding
 import org.fossify.messages.extensions.applyMiuiPageChrome
 import org.fossify.messages.forwarding.ForwardingChannels
+import org.fossify.messages.forwarding.ForwardingUrlPolicy
 import org.fossify.messages.forwarding.MultiChannelForwardWorker
 import org.fossify.messages.forwarding.MultiForwardConfig
 
@@ -59,10 +60,8 @@ class GotifySettingsActivity : SimpleActivity() {
             toast("请填写 Gotify 服务地址和 Token")
             return false
         }
-        if (needs && !serverUrl.startsWith("https://") &&
-            !(binding.gotifyAllowHttp.isChecked && serverUrl.startsWith("http://"))
-        ) {
-            toast("默认必须使用 HTTPS；HTTP 内网地址请开启允许 HTTP")
+        if (needs && !ForwardingUrlPolicy.isAllowed(serverUrl, binding.gotifyAllowHttp.isChecked)) {
+            toast("默认必须使用 HTTPS；HTTP 仅允许局域网地址")
             return false
         }
         forwardingConfig.gotifyEnabled = binding.gotifyEnabled.isChecked

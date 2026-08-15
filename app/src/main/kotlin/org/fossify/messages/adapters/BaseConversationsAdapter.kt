@@ -16,7 +16,9 @@ import org.fossify.commons.adapters.MyRecyclerViewListAdapter
 import org.fossify.commons.extensions.applyColorFilter
 import org.fossify.commons.extensions.beVisibleIf
 import org.fossify.commons.extensions.getTextSize
+import org.fossify.commons.extensions.hasPermission
 import org.fossify.commons.extensions.setupViewBackground
+import org.fossify.commons.helpers.PERMISSION_READ_CONTACTS
 import org.fossify.commons.helpers.SimpleContactsHelper
 import org.fossify.commons.helpers.ensureBackgroundThread
 import org.fossify.commons.views.MyRecyclerView
@@ -221,7 +223,7 @@ abstract class BaseConversationsAdapter(
             }
 
             if (activity.config.showListAvatars) {
-                if (conversation.photoUri.isBlank()) {
+                if (!activity.hasPermission(PERMISSION_READ_CONTACTS) || conversation.photoUri.isBlank()) {
                     conversationImage.setImageResource(org.fossify.commons.R.drawable.ic_person_vector)
                     conversationImage.setBackgroundResource(R.drawable.miui_avatar_background)
                     conversationImage.setPadding(14, 14, 14, 14)

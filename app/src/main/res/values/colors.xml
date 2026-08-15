@@ -7,16 +7,17 @@
     <color name="miui_page_background">#F7F7F7</color>
     <color name="miui_card_background">#FFFFFF</color>
     <color name="miui_primary_text">#111111</color>
-    <color name="miui_secondary_text">#666666</color>
-    <color name="miui_hint_text">#8D8D8D</color>
-    <color name="miui_timestamp_text">#8A8A8A</color>
+    <color name="miui_secondary_text">#555555</color>
+    <color name="miui_hint_text">#666666</color>
+    <color name="miui_timestamp_text">#666666</color>
     <color name="miui_search_background">#F2F2F2</color>
     <color name="miui_search_stroke">#E5E5E5</color>
-    <color name="miui_section_text">#737B8C</color>
+    <color name="miui_section_text">#5F6673</color>
     <color name="miui_divider">#ECECEC</color>
     <color name="miui_unread_red">#FF3B30</color>
+    <color name="miui_warning_text">#9A5A00</color>
     <color name="miui_unread_badge">#20C45A</color>
     <color name="miui_selected_background">#F0F8F3</color>
-    <color name="bottom_nav_unselected">#7A7A7A</color>
+    <color name="bottom_nav_unselected">#666666</color>
     <color name="bulk_outline">#D5D5D5</color>
 </resources>

@@ -57,11 +57,11 @@
                     android:layout_height="wrap_content"
                     android:layout_centerHorizontal="true"
                     android:layout_marginTop="@dimen/bigger_margin"
-                    android:alpha="0.8"
                     android:gravity="center"
                     android:paddingLeft="@dimen/activity_margin"
                     android:paddingRight="@dimen/activity_margin"
                     android:text="@string/no_conversations_found"
+                    android:textColor="@color/miui_secondary_text"
                     android:textSize="@dimen/bigger_text_size"
                     android:textStyle="italic"
                     android:visibility="gone" />

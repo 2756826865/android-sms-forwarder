@@ -262,6 +262,18 @@
             </LinearLayout>
 
             <LinearLayout
+                android:id="@+id/forwarding_history_holder"
+                style="@style/SmsForwardingRow"
+                android:layout_marginTop="18dp"
+                android:background="@drawable/settings_card_background">
+                <LinearLayout style="@style/SmsForwardingTextColumn">
+                    <TextView style="@style/SmsForwardingTitle" android:text="@string/forwarding_history_title" />
+                    <TextView android:id="@+id/forwarding_history_summary" style="@style/SmsForwardingSummary" />
+                </LinearLayout>
+                <ImageView style="@style/SmsForwardingChevron" />
+            </LinearLayout>
+
+            <LinearLayout
                 android:id="@+id/forwarding_disclaimer_holder"
                 style="@style/SmsForwardingRow"
                 android:layout_marginTop="18dp"

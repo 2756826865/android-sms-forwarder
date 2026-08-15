@@ -15,9 +15,9 @@
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
             android:background="@color/miui_page_background"
-            app:navigationIconTint="#111111"
+            app:navigationIconTint="@color/miui_primary_text"
             app:title="@string/remote_sms_title"
-            app:titleTextColor="#111111" />
+            app:titleTextColor="@color/miui_primary_text" />
     </org.fossify.commons.views.MyAppBarLayout>
 
     <androidx.core.widget.NestedScrollView
@@ -37,7 +37,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="@string/remote_sms_enable"
-                android:textColor="#111111" />
+                android:textColor="@color/miui_primary_text" />
 
             <TextView
                 style="@style/SmsChannelHelperText"
@@ -62,6 +62,7 @@
 
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/remote_sms_authorized"
+                    style="@style/SmsChannelInputText"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:inputType="textMultiLine"
@@ -80,7 +81,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
                 android:text="@string/remote_sms_receipt_enable"
-                android:textColor="#111111" />
+                android:textColor="@color/miui_primary_text" />
 
             <com.google.android.material.switchmaterial.SwitchMaterial
                 android:id="@+id/remote_sms_receipt_delivered"
@@ -88,7 +89,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:text="@string/remote_sms_receipt_delivered"
-                android:textColor="#111111" />
+                android:textColor="@color/miui_primary_text" />
 
             <TextView
                 style="@style/SmsChannelHelperText"
@@ -122,7 +123,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
-                android:textColor="#111111"
+                android:textColor="@color/miui_primary_text"
                 android:textSize="14sp" />
 
             <TextView

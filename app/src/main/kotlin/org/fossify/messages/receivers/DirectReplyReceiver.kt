@@ -8,7 +8,6 @@ import android.os.Handler
 import android.os.Looper
 import androidx.core.app.RemoteInput
 import org.fossify.commons.extensions.showErrorToast
-import org.fossify.commons.helpers.SimpleContactsHelper
 import org.fossify.commons.helpers.ensureBackgroundThread
 import org.fossify.messages.extensions.*
 import org.fossify.messages.helpers.REPLY
@@ -53,7 +52,7 @@ class DirectReplyReceiver : BroadcastReceiver() {
                     context.showErrorToast(e)
                 }
 
-                val photoUri = SimpleContactsHelper(context).getPhotoUriFromPhoneNumber(address)
+                val photoUri = context.getNameAndPhotoFromPhoneNumber(address).photoUri.orEmpty()
                 val bitmap = context.getNotificationBitmap(photoUri)
                 Handler(Looper.getMainLooper()).post {
                     context.notificationHelper.showMessageNotification(

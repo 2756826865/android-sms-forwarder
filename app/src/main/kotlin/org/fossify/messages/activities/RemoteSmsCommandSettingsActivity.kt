@@ -29,8 +29,17 @@ class RemoteSmsCommandSettingsActivity : SimpleActivity() {
         loadConfig()
         binding.remoteSmsReceiptChannels.setOnClickListener { showReceiptChannelSelector() }
         binding.remoteSmsSave.setOnClickListener {
+            val authorizedNumbers = binding.remoteSmsAuthorized.value
+            if (binding.remoteSmsEnabled.isChecked && authorizedNumbers.isBlank()) {
+                toast("开启短信远程指令前，请至少填写一个授权号码")
+                return@setOnClickListener
+            }
+            if (binding.remoteSmsReceiptEnabled.isChecked && selectedReceiptChannels.isEmpty()) {
+                toast("开启发送回执前，请至少选择一个提醒渠道")
+                return@setOnClickListener
+            }
             config.enabled = binding.remoteSmsEnabled.isChecked
-            config.authorizedNumbers = binding.remoteSmsAuthorized.value
+            config.authorizedNumbers = authorizedNumbers
             receiptConfig.enabled = binding.remoteSmsReceiptEnabled.isChecked
             receiptConfig.includeDelivered = binding.remoteSmsReceiptDelivered.isChecked
             receiptConfig.channels = selectedReceiptChannels

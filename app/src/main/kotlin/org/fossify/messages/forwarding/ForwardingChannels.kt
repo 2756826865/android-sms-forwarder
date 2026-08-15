@@ -12,8 +12,9 @@ object ForwardingChannels {
     const val BARK = "bark"
     const val GOTIFY = "gotify"
 
-    val networkChannels = setOf(DINGTALK, FEISHU, WECOM, WECOM_BOT, EMAIL, BARK, GOTIFY)
+    val networkChannels = setOf(PUSHPLUS, DINGTALK, FEISHU, WECOM, WECOM_BOT, EMAIL, BARK, GOTIFY)
     val allRuleChannels = listOf(PUSHPLUS, DINGTALK, FEISHU, WECOM, WECOM_BOT, EMAIL, SMS_DIRECT, BARK, GOTIFY)
+    val lowBatteryChannels = listOf(PUSHPLUS, BARK, GOTIFY, DINGTALK, FEISHU, WECOM, WECOM_BOT, EMAIL, SMS_DIRECT)
 
     fun displayName(channel: String): String = when (channel) {
         PUSHPLUS -> "PushPlus"

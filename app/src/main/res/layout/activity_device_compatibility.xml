@@ -99,9 +99,12 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="16dp"
+                    android:minHeight="48dp"
                     android:text="@string/compatibility_continue_fix"
                     android:textAllCaps="false"
-                    app:backgroundTint="@color/miui_action_blue" />
+                    android:textColor="@android:color/white"
+                    app:backgroundTint="@color/miui_action_blue"
+                    app:cornerRadius="8dp" />
             </LinearLayout>
 
             <TextView
@@ -181,6 +184,23 @@
                     android:textColor="@color/miui_secondary_text"
                     android:textSize="14sp"
                     android:lineSpacingExtra="3dp" />
+            </LinearLayout>
+
+            <TextView style="@style/CompatibilitySectionTitle" android:text="@string/compatibility_feature_check_title" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/settings_card_background"
+                android:orientation="vertical"
+                android:padding="20dp">
+                <TextView
+                    android:id="@+id/compatibility_feature_status"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:lineSpacingExtra="3dp"
+                    android:textColor="@color/miui_primary_text"
+                    android:textIsSelectable="true"
+                    android:textSize="14sp" />
             </LinearLayout>
 
             <TextView style="@style/CompatibilitySectionTitle" android:text="@string/compatibility_tools_title" />

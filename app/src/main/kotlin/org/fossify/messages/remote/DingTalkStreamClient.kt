@@ -16,7 +16,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 class DingTalkStreamClient(
     private val clientId: String,
     private val clientSecret: String,
-    private val onCommand: (RemoteSmsCommand) -> Unit,
+    private val onCommand: (DingTalkRemoteCommand) -> Unit,
     private val onStatus: (String) -> Unit,
 ) {
     private val http = OkHttpClient.Builder()
@@ -139,10 +139,18 @@ class DingTalkStreamClient(
             }
             type == "CALLBACK" && topic == BOT_MESSAGE_TOPIC -> {
                 val dataText = envelope.optString("data")
-                val content = runCatching {
-                    JSONObject(dataText).optJSONObject("text")?.optString("content").orEmpty()
-                }.getOrDefault("").trim()
-                RemoteSmsCommand.parse(content)?.let(onCommand)
+                val data = runCatching { JSONObject(dataText) }.getOrNull() ?: JSONObject()
+                val content = data.optJSONObject("text")?.optString("content").orEmpty().trim()
+                val commandMessageId = messageId
+                    .ifBlank { data.optString("msgId") }
+                    .ifBlank { data.optString("messageId") }
+                RemoteSmsCommand.parse(content)?.let { command ->
+                    if (commandMessageId.isBlank()) {
+                        onStatus("忽略缺少 messageId 的钉钉远程指令")
+                    } else {
+                        onCommand(DingTalkRemoteCommand(commandMessageId, command))
+                    }
+                }
                 reply(webSocket, messageId, JSONObject().put("response", JSONObject.NULL))
             }
         }
@@ -175,3 +183,8 @@ class DingTalkStreamClient(
         private const val RECONNECT_DELAY_MS = 5_000L
     }
 }
+
+data class DingTalkRemoteCommand(
+    val messageId: String,
+    val command: RemoteSmsCommand,
+)

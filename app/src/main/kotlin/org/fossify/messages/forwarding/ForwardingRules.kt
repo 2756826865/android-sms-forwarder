@@ -20,6 +20,10 @@ class ForwardingRulesConfig(context: Context) {
         get() = decodeRules(prefs.getString(KEY_RULES, null).orEmpty())
         set(value) = prefs.edit().putString(KEY_RULES, encodeRules(value)).apply()
 
+    var lastDecision: String
+        get() = prefs.getString(KEY_LAST_DECISION, "").orEmpty()
+        set(value) = prefs.edit().putString(KEY_LAST_DECISION, value).apply()
+
     fun summary(): String = if (!enabled) {
         "未启用 · ${scopeLabel(scope)}"
     } else {
@@ -39,6 +43,7 @@ class ForwardingRulesConfig(context: Context) {
                 JSONObject()
                     .put("name", rule.name)
                     .put("enabled", rule.enabled)
+                    .put("matchMode", rule.matchMode)
                     .put("sim", rule.simScope)
                     .put("includeKeywords", JSONArray(rule.includeKeywords))
                     .put("excludeKeywords", JSONArray(rule.excludeKeywords))
@@ -59,6 +64,7 @@ class ForwardingRulesConfig(context: Context) {
                     ForwardingRule(
                         name = item.optString("name"),
                         enabled = item.optBoolean("enabled", true),
+                        matchMode = item.optString("matchMode", ForwardingRule.MATCH_ALL),
                         simScope = item.optString("sim", ForwardingRule.SIM_ALL),
                         includeKeywords = item.optJSONArray("includeKeywords").toStringList(),
                         excludeKeywords = item.optJSONArray("excludeKeywords").toStringList(),
@@ -85,6 +91,7 @@ class ForwardingRulesConfig(context: Context) {
         private const val KEY_ENABLED = "enabled"
         private const val KEY_SCOPE = "scope"
         private const val KEY_RULES = "rules"
+        private const val KEY_LAST_DECISION = "last_decision"
 
         const val SCOPE_FORWARDING_ONLY = 0
         const val SCOPE_FORWARDING_AND_SMS_DIRECT = 1
@@ -101,6 +108,7 @@ class ForwardingRulesConfig(context: Context) {
 data class ForwardingRule(
     val name: String,
     val enabled: Boolean = true,
+    val matchMode: String = MATCH_ALL,
     val simScope: String = SIM_ALL,
     val includeKeywords: List<String> = emptyList(),
     val excludeKeywords: List<String> = emptyList(),
@@ -112,6 +120,8 @@ data class ForwardingRule(
         const val SIM_ALL = "ALL"
         const val SIM_1 = "SIM1"
         const val SIM_2 = "SIM2"
+        const val MATCH_ALL = "ALL"
+        const val MATCH_ANY = "ANY"
     }
 }
 
@@ -152,12 +162,23 @@ class ForwardingRuleEngine(private val rules: List<ForwardingRule>) {
 
     private fun ForwardingRule.matches(text: String, slot: Int?): Boolean {
         if (!simMatches(simScope, slot)) return false
-        val includesOk = includeKeywords.isEmpty() || includeKeywords.any { text.contains(it, ignoreCase = true) }
-        if (!includesOk) return false
         if (excludeKeywords.any { text.contains(it, ignoreCase = true) }) return false
-        if (includeRegex.isNotBlank() && !runCatching { Regex(includeRegex, RegexOption.IGNORE_CASE).containsMatchIn(text) }.getOrDefault(false)) return false
         if (excludeRegex.isNotBlank() && runCatching { Regex(excludeRegex, RegexOption.IGNORE_CASE).containsMatchIn(text) }.getOrDefault(false)) return false
-        return true
+
+        val positiveConditions = buildList {
+            if (includeKeywords.isNotEmpty()) {
+                add(includeKeywords.any { text.contains(it, ignoreCase = true) })
+            }
+            if (includeRegex.isNotBlank()) {
+                add(runCatching { Regex(includeRegex, RegexOption.IGNORE_CASE).containsMatchIn(text) }.getOrDefault(false))
+            }
+        }
+        if (positiveConditions.isEmpty()) return true
+        return if (matchMode == ForwardingRule.MATCH_ANY) {
+            positiveConditions.any { it }
+        } else {
+            positiveConditions.all { it }
+        }
     }
 
     private fun simMatches(scope: String, slot: Int?): Boolean = when (scope) {

@@ -15,9 +15,9 @@
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
             android:background="@android:color/white"
-            app:navigationIconTint="#111111"
+            app:navigationIconTint="@color/miui_primary_text"
             app:title=""
-            app:titleTextColor="#111111" />
+            app:titleTextColor="@color/miui_primary_text" />
 
     </org.fossify.commons.views.MyAppBarLayout>
 
@@ -35,7 +35,7 @@
             android:layout_marginHorizontal="24dp"
             android:layout_marginTop="28dp"
             android:text="@string/new_conversation"
-            android:textColor="#111111"
+            android:textColor="@color/miui_primary_text"
             android:textSize="35sp" />
 
         <LinearLayout
@@ -74,8 +74,8 @@
                 android:hint="@string/add_contact_or_number"
                 android:inputType="textCapWords"
                 android:minWidth="72dp"
-                android:textColor="#111111"
-                android:textColorHint="#8A8A8A"
+                android:textColor="@color/miui_primary_text"
+                android:textColorHint="@color/miui_hint_text"
                 android:textSize="19sp" />
 
             <ImageView

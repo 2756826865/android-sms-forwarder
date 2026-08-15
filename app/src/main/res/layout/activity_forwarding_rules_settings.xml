@@ -25,25 +25,101 @@
         android:id="@+id/rules_scrollview"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:clipToPadding="false"
+        android:fillViewport="true"
+        android:paddingBottom="32dp"
         app:layout_behavior="@string/appbar_scrolling_view_behavior">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="16dp">
+            android:paddingHorizontal="20dp"
+            android:paddingTop="8dp">
 
             <com.google.android.material.switchmaterial.SwitchMaterial
                 android:id="@+id/rules_enabled"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:minHeight="56dp"
                 android:text="@string/forwarding_rules_enable"
-                android:textColor="@color/miui_primary_text" />
+                android:textColor="@color/miui_primary_text"
+                android:textSize="17sp" />
 
             <TextView
                 style="@style/SmsChannelHelperText"
                 android:layout_marginTop="8dp"
                 android:text="@string/forwarding_rules_scope_summary" />
+
+            <View style="@style/SmsChannelDivider" />
+
+            <TextView
+                style="@style/SmsChannelSectionTitle"
+                android:text="@string/forwarding_rules_list_title"
+                android:textColor="@color/miui_primary_text" />
+
+            <LinearLayout
+                android:id="@+id/rules_list"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:orientation="vertical" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:orientation="horizontal">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/rules_add"
+                    style="@style/SmsChannelSecondaryButton"
+                    android:layout_width="0dp"
+                    android:layout_marginTop="0dp"
+                    android:layout_marginEnd="4dp"
+                    android:layout_weight="1"
+                    android:text="@string/forwarding_rules_add" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/rules_delete"
+                    style="@style/SmsChannelSecondaryButton"
+                    android:layout_width="0dp"
+                    android:layout_marginStart="4dp"
+                    android:layout_marginTop="0dp"
+                    android:layout_weight="1"
+                    android:text="@string/forwarding_rules_delete"
+                    android:textColor="@color/miui_unread_red" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:orientation="horizontal">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/rules_move_up"
+                    style="@style/SmsChannelSecondaryButton"
+                    android:layout_width="0dp"
+                    android:layout_marginTop="0dp"
+                    android:layout_marginEnd="4dp"
+                    android:layout_weight="1"
+                    android:text="@string/forwarding_rules_move_up" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/rules_move_down"
+                    style="@style/SmsChannelSecondaryButton"
+                    android:layout_width="0dp"
+                    android:layout_marginStart="4dp"
+                    android:layout_marginTop="0dp"
+                    android:layout_weight="1"
+                    android:text="@string/forwarding_rules_move_down" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/rules_last_decision"
+                style="@style/SmsSettingsLogBox"
+                android:layout_marginTop="10dp" />
 
             <View style="@style/SmsChannelDivider" />
 
@@ -83,6 +159,48 @@
 
             <TextView
                 style="@style/SmsChannelSectionTitle"
+                android:text="@string/forwarding_rules_editor_title"
+                android:textColor="@color/miui_primary_text" />
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:hint="@string/forwarding_rules_name">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/rules_name"
+                    style="@style/SmsChannelInputText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:maxLines="1" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.switchmaterial.SwitchMaterial
+                android:id="@+id/rule_item_enabled"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:minHeight="52dp"
+                android:text="@string/forwarding_rules_item_enabled"
+                android:textColor="@color/miui_primary_text" />
+
+            <TextView
+                style="@style/SmsChannelFieldLabel"
+                android:text="@string/forwarding_rules_match_mode" />
+
+            <Spinner
+                android:id="@+id/rules_match_mode"
+                android:layout_width="match_parent"
+                android:layout_height="52dp"
+                android:layout_marginTop="4dp"
+                android:background="@drawable/email_security_spinner_background"
+                android:popupBackground="@color/miui_card_background"
+                android:paddingHorizontal="12dp" />
+
+            <TextView
+                style="@style/SmsChannelSectionTitle"
+                android:layout_marginTop="16dp"
                 android:text="@string/forwarding_rules_section_filter"
                 android:textColor="@color/miui_primary_text" />
 
@@ -211,8 +329,10 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="10dp"
+                android:lineSpacingExtra="2dp"
                 android:textColor="@color/miui_primary_text"
-                android:textSize="14sp" />
+                android:textSize="14sp"
+                android:textStyle="bold" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/rules_save"

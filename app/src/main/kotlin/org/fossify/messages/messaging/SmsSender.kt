@@ -36,7 +36,7 @@ class SmsSender(val app: Application) {
             throw SmsException(EMPTY_DESTINATION_ADDRESS)
         }
         // Divide the input message by SMS length limit
-        val smsManager = getSmsManager(subId)
+        val smsManager = getSmsManager(app, subId)
         val messages = smsManager.divideMessage(body)
         if (messages == null || messages.size < 1) {
             throw SmsException(ERROR_SENDING_MESSAGE)
@@ -53,42 +53,56 @@ class SmsSender(val app: Application) {
         messages: ArrayList<String>, serviceCenter: String?,
         requireDeliveryReport: Boolean, messageUri: Uri
     ) {
-        val smsManager = getSmsManager(subId)
+        val smsManager = getSmsManager(app, subId)
         val messageCount = messages.size
         val deliveryIntents = ArrayList<PendingIntent?>(messageCount)
         val sentIntents = ArrayList<PendingIntent>(messageCount)
+        val guardKey = HonorSmsCompatibility.claim(app, subId, dest, messages.joinToString(""))
+            ?: throw SmsException(
+                SmsException.DUPLICATE_SEND_BLOCKED,
+                detail = "荣耀兼容保护已阻止重启后的重复发送",
+            )
+        val effectiveDeliveryReport = requireDeliveryReport && !HonorSmsCompatibility.isAffectedDevice
 
         var flags = PendingIntent.FLAG_UPDATE_CURRENT
         if (isSPlus()) {
             flags = flags or PendingIntent.FLAG_MUTABLE
         }
 
-        for (i in 0 until messageCount) {
-            // Make pending intents different for each message part
-            val partId = if (messageCount <= 1) 0 else i + 1
-            if (requireDeliveryReport && i == messageCount - 1) {
-                deliveryIntents.add(
+        try {
+            for (i in 0 until messageCount) {
+                // Make pending intents different for each message part
+                val partId = if (messageCount <= 1) 0 else i + 1
+                if (effectiveDeliveryReport && i == messageCount - 1) {
+                    deliveryIntents.add(
+                        PendingIntent.getBroadcast(
+                            app,
+                            partId,
+                            getDeliveredStatusIntent(messageUri, subId),
+                            flags
+                        )
+                    )
+                } else {
+                    deliveryIntents.add(null)
+                }
+                sentIntents.add(
                     PendingIntent.getBroadcast(
                         app,
                         partId,
-                        getDeliveredStatusIntent(messageUri, subId),
+                        getSendStatusIntent(messageUri, subId, guardKey),
                         flags
                     )
                 )
-            } else {
-                deliveryIntents.add(null)
             }
-            sentIntents.add(
-                PendingIntent.getBroadcast(
-                    app,
-                    partId,
-                    getSendStatusIntent(messageUri, subId),
-                    flags
+            if (messageCount == 1) {
+                smsManager.sendTextMessage(
+                    dest,
+                    serviceCenter,
+                    messages.first(),
+                    sentIntents.first(),
+                    deliveryIntents.first(),
                 )
-            )
-        }
-        try {
-            if (sendMultipartSmsAsSeparateMessages) {
+            } else if (sendMultipartSmsAsSeparateMessages) {
                 // If multipart sms is not supported, send them as separate messages
                 for (i in 0 until messageCount) {
                     smsManager.sendTextMessage(
@@ -105,13 +119,15 @@ class SmsSender(val app: Application) {
                 )
             }
         } catch (e: Exception) {
+            HonorSmsCompatibility.complete(app, guardKey)
             throw SmsException(ERROR_SENDING_MESSAGE, e)
         }
     }
 
-    private fun getSendStatusIntent(requestUri: Uri, subId: Int): Intent {
+    private fun getSendStatusIntent(requestUri: Uri, subId: Int, guardKey: String): Intent {
         val intent = Intent(SendStatusReceiver.SMS_SENT_ACTION, requestUri, app, SmsStatusSentReceiver::class.java)
         intent.putExtra(SendStatusReceiver.EXTRA_SUB_ID, subId)
+        if (guardKey.isNotBlank()) intent.putExtra(SendStatusReceiver.EXTRA_SEND_GUARD_KEY, guardKey)
         return intent
     }
 

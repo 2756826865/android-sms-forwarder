@@ -15,6 +15,7 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.INTERNET" />
@@ -41,6 +42,7 @@
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_launcher_name"
         android:roundIcon="@mipmap/ic_launcher"
+        android:usesCleartextTraffic="true"
         android:theme="@style/AppTheme">
 
         <activity
@@ -188,6 +190,12 @@
             android:parentActivityName=".activities.ForwardingChannelsActivity" />
 
         <activity
+            android:name=".activities.ForwardingHistoryActivity"
+            android:exported="false"
+            android:label="@string/forwarding_history_title"
+            android:parentActivityName=".activities.ForwardingChannelsActivity" />
+
+        <activity
             android:name=".activities.RemoteForwardingActivity"
             android:exported="false"
             android:label="@string/remote_forwarding_title"
@@ -235,6 +243,12 @@
             android:name=".activities.BlockingSettingsActivity"
             android:exported="false"
             android:label="@string/blocking_settings"
+            android:parentActivityName=".activities.SettingsActivity" />
+
+        <activity
+            android:name=".activities.LowBatterySettingsActivity"
+            android:exported="false"
+            android:label="@string/low_battery_reminder"
             android:parentActivityName=".activities.SettingsActivity" />
 
         <activity
@@ -364,7 +378,7 @@
         <receiver
             android:name=".receivers.MarkAsReadReceiver"
             android:enabled="true"
-            android:exported="true">
+            android:exported="false">
             <intent-filter>
                 <action android:name="org.fossify.messages.action.mark_as_read" />
             </intent-filter>
@@ -373,7 +387,7 @@
         <receiver
             android:name=".receivers.DirectReplyReceiver"
             android:enabled="true"
-            android:exported="true">
+            android:exported="false">
             <intent-filter>
                 <action android:name="org.fossify.messages.action.reply" />
             </intent-filter>
@@ -382,7 +396,7 @@
         <receiver
             android:name=".receivers.DeleteSmsReceiver"
             android:enabled="true"
-            android:exported="true">
+            android:exported="false">
             <intent-filter>
                 <action android:name="org.fossify.messages.action.delete" />
             </intent-filter>

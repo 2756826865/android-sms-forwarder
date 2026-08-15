@@ -13,6 +13,7 @@ import org.fossify.messages.extensions.config
 import org.fossify.messages.extensions.getThreadId
 import org.fossify.messages.extensions.messagingUtils
 import org.fossify.messages.extensions.shortcutHelper
+import org.fossify.messages.messaging.SmsException.Companion.DUPLICATE_SEND_BLOCKED
 import org.fossify.messages.messaging.SmsException.Companion.EMPTY_DESTINATION_ADDRESS
 import org.fossify.messages.messaging.SmsException.Companion.ERROR_PERSISTING_MESSAGE
 import org.fossify.messages.messaging.SmsException.Companion.ERROR_SENDING_MESSAGE
@@ -90,6 +91,11 @@ fun Context.sendMessageCompat(
 
                 ERROR_SENDING_MESSAGE -> toast(
                     msg = getString(R.string.unknown_error_occurred_sending_message, e.errorCode),
+                    length = LENGTH_LONG
+                )
+
+                DUPLICATE_SEND_BLOCKED -> toast(
+                    id = R.string.honor_sms_duplicate_send_blocked,
                     length = LENGTH_LONG
                 )
             }

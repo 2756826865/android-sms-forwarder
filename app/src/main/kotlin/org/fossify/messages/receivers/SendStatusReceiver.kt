@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import org.fossify.commons.helpers.ensureBackgroundThread
+import org.fossify.messages.messaging.HonorSmsCompatibility
 
 abstract class SendStatusReceiver : BroadcastReceiver() {
     // Updates the status of the message in the internal database
@@ -14,6 +15,7 @@ abstract class SendStatusReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         val resultCode = resultCode
+        HonorSmsCompatibility.complete(context, intent.getStringExtra(EXTRA_SEND_GUARD_KEY))
         ensureBackgroundThread {
             updateAndroidDatabase(context, intent, resultCode)
             updateAppDatabase(context, intent, resultCode)
@@ -27,6 +29,7 @@ abstract class SendStatusReceiver : BroadcastReceiver() {
         // Defined by platform, but no constant provided. See docs for SmsManager.sendTextMessage.
         const val EXTRA_ERROR_CODE = "errorCode"
         const val EXTRA_SUB_ID = "subId"
+        const val EXTRA_SEND_GUARD_KEY = "sendGuardKey"
 
         const val NO_ERROR_CODE = -1
     }

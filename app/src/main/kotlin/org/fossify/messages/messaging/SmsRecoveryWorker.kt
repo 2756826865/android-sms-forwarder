@@ -18,12 +18,17 @@ import org.fossify.messages.extensions.getNotificationBitmap
 import org.fossify.messages.extensions.messagesDB
 import org.fossify.messages.extensions.showReceivedMessageNotification
 import org.fossify.messages.extensions.syncThreadToLocal
+import org.fossify.messages.forwarding.ForwardingChannels
+import org.fossify.messages.forwarding.ForwardingHistoryStore
+import org.fossify.messages.forwarding.ForwardingRuleEngine
+import org.fossify.messages.forwarding.ForwardingRulesConfig
 import org.fossify.messages.forwarding.MultiChannelForwardWorker
 import org.fossify.messages.forwarding.MultiForwardConfig
 import org.fossify.messages.forwarding.PushPlusConfig
 import org.fossify.messages.forwarding.PushPlusWorker
 import org.fossify.messages.helpers.refreshConversations
 import org.fossify.messages.helpers.refreshMessages
+import org.fossify.messages.remote.RemoteSmsCommandProcessor
 import java.util.concurrent.TimeUnit
 
 /** Repairs SMS broadcasts delayed or suppressed by aggressive OEM background policies. */
@@ -92,10 +97,65 @@ class SmsRecoveryWorker(
                     repairedAny = true
                     val uniqueId = "sms-$id"
                     val pushPlus = PushPlusConfig(applicationContext)
-                    if (pushPlus.enabled) {
+
+                    val multiConfig = MultiForwardConfig(applicationContext)
+                    val rulesConfig = ForwardingRulesConfig(applicationContext)
+                    val enabledForwardChannels = buildSet {
+                        if (pushPlus.enabled) add(ForwardingChannels.PUSHPLUS)
+                        addAll(multiConfig.enabledChannelIds())
+                    }
+                    val simSlotIndex = resolveSimSlotIndex(subscriptionId)
+                    val ruleDecision = if (rulesConfig.enabled) {
+                        ForwardingRuleEngine(rulesConfig.rules).evaluate(
+                            sender = address,
+                            body = body,
+                            subscriptionId = subscriptionId,
+                            channelCandidates = rulesConfig.channelCandidatesForScope(enabledForwardChannels),
+                            simSlotIndex = simSlotIndex,
+                        )
+                    } else {
+                        null
+                    }
+                    if (ruleDecision?.blockedChannels?.isNotEmpty() == true) {
+                        rulesConfig.lastDecision = "补偿恢复 · $address · ${
+                            ruleDecision.blockedChannels.map(ForwardingChannels::displayName).joinToString("、")
+                        } · ${ruleDecision.reason}"
+                    }
+                    val remoteCommandAllowed = !rulesConfig.affectsRemoteCommands() ||
+                        !rulesConfig.enabled ||
+                        rulesConfig.rules.none { it.enabled } ||
+                        ruleDecision?.matchedRules?.isNotEmpty() == true
+                    val remoteCommandConsumed = RemoteSmsCommandProcessor.tryConsume(
+                        context = applicationContext,
+                        sender = address,
+                        body = body,
+                        subscriptionId = subscriptionId,
+                        messageTimestamp = date,
+                        allowExecution = remoteCommandAllowed,
+                    )
+
+                    if (!remoteCommandConsumed && ruleDecision != null) {
+                        val history = ForwardingHistoryStore(applicationContext)
+                        ruleDecision.blockedChannels
+                            .intersect(enabledForwardChannels)
+                            .forEach { channel ->
+                                history.registerSkipped(
+                                    workId = uniqueId,
+                                    channel = channel,
+                                    sender = address,
+                                    body = body,
+                                    receivedAt = date,
+                                    subscriptionId = subscriptionId,
+                                    detail = "转发规则未允许：${ruleDecision.reason}",
+                                )
+                            }
+                    }
+
+                    val allowedForwardChannels = ruleDecision?.allowedChannels
+                    if (pushPlus.enabled && !remoteCommandConsumed && (allowedForwardChannels == null || ForwardingChannels.PUSHPLUS in allowedForwardChannels)) {
                         PushPlusWorker.enqueue(applicationContext, address, body, date, subscriptionId, uniqueId)
                     }
-                    if (MultiForwardConfig(applicationContext).anyEnabled()) {
+                    if (!remoteCommandConsumed && multiConfig.anyEnabled()) {
                         MultiChannelForwardWorker.enqueue(
                             applicationContext,
                             address,
@@ -103,13 +163,17 @@ class SmsRecoveryWorker(
                             date,
                             subscriptionId,
                             uniqueId,
+                            allowedChannels = buildMultiChannelAllowedChannels(rulesConfig, allowedForwardChannels, multiConfig),
                         )
                     }
 
                     if (!isRead) {
                         val contacts = SimpleContactsHelper(applicationContext)
-                        val senderName = contacts.getNameFromPhoneNumber(address).ifBlank { address }
-                        val photoUri = contacts.getPhotoUriFromPhoneNumber(address)
+                        val senderName = runCatching { contacts.getNameFromPhoneNumber(address) }
+                            .getOrDefault("")
+                            .ifBlank { address }
+                        val photoUri = runCatching { contacts.getPhotoUriFromPhoneNumber(address) }
+                            .getOrDefault("")
                         applicationContext.showReceivedMessageNotification(
                             messageId = id,
                             address = address,
@@ -131,6 +195,32 @@ class SmsRecoveryWorker(
             refreshConversations()
         }
         return Result.success()
+    }
+
+    private fun resolveSimSlotIndex(subscriptionId: Int): Int? {
+        if (ContextCompat.checkSelfPermission(applicationContext, Manifest.permission.READ_PHONE_STATE) !=
+            PackageManager.PERMISSION_GRANTED
+        ) return null
+        return runCatching {
+            val manager = applicationContext.getSystemService(SubscriptionManager::class.java)
+            manager?.getActiveSubscriptionInfo(subscriptionId)?.simSlotIndex
+        }.getOrNull()
+    }
+
+    private fun buildMultiChannelAllowedChannels(
+        rulesConfig: ForwardingRulesConfig,
+        allowedForwardChannels: Set<String>?,
+        multiConfig: MultiForwardConfig,
+    ): Set<String>? {
+        if (!rulesConfig.enabled) return null
+        var channels = allowedForwardChannels
+            ?.filter { it != ForwardingChannels.PUSHPLUS }
+            ?.toSet()
+            ?: emptySet()
+        if (rulesConfig.scope == ForwardingRulesConfig.SCOPE_FORWARDING_ONLY && multiConfig.smsDirectEnabled) {
+            channels = channels + ForwardingChannels.SMS_DIRECT
+        }
+        return channels
     }
 
     companion object {

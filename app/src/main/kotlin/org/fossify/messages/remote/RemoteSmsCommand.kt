@@ -8,8 +8,8 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import android.telephony.SubscriptionManager
+import org.fossify.messages.extensions.config
 import org.fossify.messages.extensions.messagingUtils
-import org.fossify.messages.messaging.getSendMessageSettings
 import org.fossify.messages.remote.RemoteControlPendingReceipt
 import org.fossify.messages.remote.RemoteControlReceiptForwarder
 import org.fossify.messages.messaging.SimSendResolver
@@ -44,17 +44,20 @@ class RemoteSmsCommandConfig(context: Context) {
 
     fun isAuthorized(sender: String): Boolean = authorizedList().any { numbersEquivalent(it, sender) }
 
-    fun shouldSuppressDuplicate(fingerprint: String, now: Long = System.currentTimeMillis()): Boolean {
-        val lastFingerprint = prefs.getString(KEY_LAST_FINGERPRINT, "").orEmpty()
-        val lastTime = prefs.getLong(KEY_LAST_FINGERPRINT_TIME, 0L)
-        return fingerprint == lastFingerprint && now - lastTime < DUPLICATE_WINDOW_MS
-    }
+    fun claimFingerprint(fingerprint: String, now: Long = System.currentTimeMillis()): Boolean {
+        synchronized(fingerprintLock) {
+            val recent = decodeFingerprints(prefs.getString(KEY_RECENT_FINGERPRINTS, "[]").orEmpty())
+                .filter { now - it.claimedAt in 0L..DUPLICATE_WINDOW_MS }
+            if (recent.any { it.value == fingerprint }) return false
 
-    fun markDuplicateFingerprint(fingerprint: String, now: Long = System.currentTimeMillis()) {
-        prefs.edit()
-            .putString(KEY_LAST_FINGERPRINT, fingerprint)
-            .putLong(KEY_LAST_FINGERPRINT_TIME, now)
-            .apply()
+            val updated = (recent + FingerprintEntry(fingerprint, now)).takeLast(MAX_RECENT_FINGERPRINTS)
+            val encoded = JSONArray().apply {
+                updated.forEach { entry ->
+                    put(JSONObject().put("value", entry.value).put("claimedAt", entry.claimedAt))
+                }
+            }.toString()
+            return prefs.edit().putString(KEY_RECENT_FINGERPRINTS, encoded).commit()
+        }
     }
 
     fun isRateLimited(sender: String, now: Long = System.currentTimeMillis()): Boolean {
@@ -94,19 +97,36 @@ class RemoteSmsCommandConfig(context: Context) {
         }
     }.getOrDefault(emptyList())
 
+    private fun decodeFingerprints(value: String): List<FingerprintEntry> = runCatching {
+        val array = JSONArray(value)
+        buildList {
+            for (index in 0 until array.length()) {
+                val item = array.optJSONObject(index) ?: continue
+                val fingerprint = item.optString("value")
+                val claimedAt = item.optLong("claimedAt")
+                if (fingerprint.isNotBlank() && claimedAt > 0L) {
+                    add(FingerprintEntry(fingerprint, claimedAt))
+                }
+            }
+        }
+    }.getOrDefault(emptyList())
+
+    private data class FingerprintEntry(val value: String, val claimedAt: Long)
+
     companion object {
         private const val PREFS_NAME = "remote_sms_command"
         private const val KEY_ENABLED = "enabled"
         private const val KEY_AUTHORIZED_NUMBERS = "authorized_numbers"
         private const val KEY_LAST_STATUS = "last_status"
         private const val KEY_LOGS = "logs"
-        private const val KEY_LAST_FINGERPRINT = "last_fingerprint"
-        private const val KEY_LAST_FINGERPRINT_TIME = "last_fingerprint_time"
+        private const val KEY_RECENT_FINGERPRINTS = "recent_fingerprints"
         private const val KEY_RATE_PREFIX = "rate_"
         private const val DUPLICATE_WINDOW_MS = 10 * 60 * 1000L
+        private const val MAX_RECENT_FINGERPRINTS = 100
         private const val RATE_WINDOW_MS = 60 * 60 * 1000L
         private const val RATE_LIMIT_COUNT = 5
         private const val MAX_LOG_LINES = 30
+        private val fingerprintLock = Any()
     }
 }
 
@@ -154,7 +174,7 @@ object RemoteSmsCommandProcessor {
         sender: String,
         body: String,
         subscriptionId: Int,
-        receivedAt: Long,
+        messageTimestamp: Long,
         allowExecution: Boolean = true,
     ): Boolean {
         val command = RemoteSmsCommand.parse(body) ?: return false
@@ -163,7 +183,7 @@ object RemoteSmsCommandProcessor {
             return true
         }
         val config = RemoteSmsCommandConfig(context)
-        val fingerprint = fingerprint(sender, body, receivedAt, subscriptionId)
+        val fingerprint = fingerprint(sender, body, messageTimestamp, subscriptionId)
         if (!config.enabled) {
             config.appendLog("忽略未启用命令：$sender")
             return true
@@ -172,17 +192,16 @@ object RemoteSmsCommandProcessor {
             config.appendLog("拒绝未授权号码：$sender")
             return true
         }
-        if (config.shouldSuppressDuplicate(fingerprint)) {
+        if (config.isRateLimited(sender)) {
+            config.appendLog("触发频率限制：$sender")
+            return true
+        }
+        if (!config.claimFingerprint(fingerprint)) {
             config.appendLog(
                 "抑制重复命令：$sender -> ${command.targetNumber}${simLogSuffix(context, subscriptionId, command.sendMode)}",
             )
             return true
         }
-        if (config.isRateLimited(sender)) {
-            config.appendLog("触发频率限制：$sender")
-            return true
-        }
-        config.markDuplicateFingerprint(fingerprint)
         config.markExecution(sender)
         RemoteSmsCommandWorker.enqueue(
             context,
@@ -203,8 +222,8 @@ object RemoteSmsCommandProcessor {
     private fun simLogSuffix(context: Context, receiveSubId: Int, sendMode: Int): String =
         " · ${SimSendResolver.describeForLog(context, receiveSubId.takeIf { it >= 0 }, sendMode)}"
 
-    private fun fingerprint(sender: String, body: String, receivedAt: Long, subscriptionId: Int): String {
-        val raw = "$sender\u0000$body\u0000$receivedAt\u0000$subscriptionId"
+    private fun fingerprint(sender: String, body: String, messageTimestamp: Long, subscriptionId: Int): String {
+        val raw = "$sender\u0000$body\u0000$messageTimestamp\u0000$subscriptionId"
         return MessageDigest.getInstance("SHA-256")
             .digest(raw.toByteArray())
             .joinToString("") { "%02x".format(it) }
@@ -220,11 +239,12 @@ class RemoteSmsCommandWorker(appContext: Context, params: WorkerParameters) : Co
         val requester = inputData.getString(KEY_REQUESTER).orEmpty()
         val source = inputData.getString(KEY_SOURCE).orEmpty().ifBlank { SOURCE_SMS }
         if (target.isBlank() || content.isBlank()) return Result.failure()
-        val sendSubId = SimSendResolver.resolveSubscriptionId(
+        val resolvedSubId = SimSendResolver.resolveSubscriptionId(
             applicationContext,
             receiveSubId = subId.takeIf { it >= 0 },
             configuredMode = sendMode,
-        ) ?: SubscriptionManager.INVALID_SUBSCRIPTION_ID
+        )
+        val sendSubId = resolvedSubId ?: SubscriptionManager.INVALID_SUBSCRIPTION_ID
         val sendSimLabel = SimSendResolver.describeForLog(
             applicationContext,
             subId.takeIf { it >= 0 },
@@ -239,13 +259,18 @@ class RemoteSmsCommandWorker(appContext: Context, params: WorkerParameters) : Co
             awaitDelivered = false,
             sendSimLabel = sendSimLabel,
         )
+        if (resolvedSubId == null && sendMode in setOf(SimSendResolver.MODE_SIM1, SimSendResolver.MODE_SIM2)) {
+            val error = "未找到可用的${SimSendResolver.modeLabel(sendMode)}"
+            appendRemoteLog(source, "发送失败：$target$simLogSuffix，$error")
+            RemoteControlReceiptForwarder.forwardImmediate(applicationContext, error, pendingReceipt)
+            return Result.failure()
+        }
         return runCatching {
-            val settings = applicationContext.getSendMessageSettings()
             val uris = applicationContext.messagingUtils.sendSmsMessage(
                 text = content,
                 addresses = setOf(target),
                 subId = sendSubId,
-                requireDeliveryReport = settings.deliveryReports,
+                requireDeliveryReport = applicationContext.config.enableDeliveryReports,
             )
             RemoteControlReceiptForwarder.registerFromMessageUris(applicationContext, uris, pendingReceipt)
             appendRemoteLog(source, "已提交发送：$target$simLogSuffix")

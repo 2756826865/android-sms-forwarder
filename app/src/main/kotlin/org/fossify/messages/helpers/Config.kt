@@ -3,6 +3,7 @@ package org.fossify.messages.helpers
 import android.content.Context
 import org.fossify.commons.helpers.BaseConfig
 import org.fossify.messages.extensions.getDefaultKeyboardHeight
+import org.fossify.messages.forwarding.ForwardingChannels
 import org.fossify.messages.models.Conversation
 
 class Config(context: Context) : BaseConfig(context) {
@@ -19,6 +20,10 @@ class Config(context: Context) : BaseConfig(context) {
     var showHomeBottomNavigation: Boolean
         get() = prefs.getBoolean(SHOW_HOME_BOTTOM_NAVIGATION, true)
         set(value) = prefs.edit().putBoolean(SHOW_HOME_BOTTOM_NAVIGATION, value).apply()
+
+    var enableLiveIsland: Boolean
+        get() = prefs.getBoolean(ENABLE_LIVE_ISLAND, false)
+        set(value) = prefs.edit().putBoolean(ENABLE_LIVE_ISLAND, value).apply()
 
     var showCharacterCounter: Boolean
         get() = prefs.getBoolean(SHOW_CHARACTER_COUNTER, false)
@@ -213,4 +218,27 @@ class Config(context: Context) : BaseConfig(context) {
         get() = prefs.getBoolean(KEEP_CONVERSATIONS_ARCHIVED, false)
         set(keepConversationsArchived) = prefs.edit()
             .putBoolean(KEEP_CONVERSATIONS_ARCHIVED, keepConversationsArchived).apply()
+
+    var enableLowBatteryReminder: Boolean
+        get() = prefs.getBoolean(ENABLE_LOW_BATTERY_REMINDER, false)
+        set(value) = prefs.edit().putBoolean(ENABLE_LOW_BATTERY_REMINDER, value).apply()
+
+    var lowBatteryThreshold: Int
+        get() = prefs.getInt(LOW_BATTERY_THRESHOLD, 15).coerceIn(5, 50)
+        set(value) = prefs.edit().putInt(LOW_BATTERY_THRESHOLD, value.coerceIn(5, 50)).apply()
+
+    var lowBatteryLastNotifiedLevel: Int
+        get() = prefs.getInt(LOW_BATTERY_LAST_NOTIFIED_LEVEL, -1)
+        set(value) = prefs.edit().putInt(LOW_BATTERY_LAST_NOTIFIED_LEVEL, value).apply()
+
+    var lowBatteryChannels: Set<String>
+        get() = prefs.getStringSet(
+            LOW_BATTERY_CHANNELS,
+            emptySet(),
+        )?.intersect(ForwardingChannels.lowBatteryChannels.toSet())
+            ?: emptySet()
+        set(value) = prefs.edit().putStringSet(
+            LOW_BATTERY_CHANNELS,
+            value.intersect(ForwardingChannels.lowBatteryChannels.toSet()),
+        ).apply()
 }

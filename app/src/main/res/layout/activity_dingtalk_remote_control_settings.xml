@@ -15,9 +15,9 @@
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
             android:background="@color/miui_page_background"
-            app:navigationIconTint="#111111"
+            app:navigationIconTint="@color/miui_primary_text"
             app:title="@string/dingtalk_remote_title"
-            app:titleTextColor="#111111" />
+            app:titleTextColor="@color/miui_primary_text" />
     </org.fossify.commons.views.MyAppBarLayout>
 
     <androidx.core.widget.NestedScrollView
@@ -37,7 +37,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="@string/dingtalk_remote_enable"
-                android:textColor="#111111" />
+                android:textColor="@color/miui_primary_text" />
 
             <com.google.android.material.textfield.TextInputLayout
                 android:layout_width="match_parent"
@@ -47,6 +47,7 @@
 
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/dingtalk_remote_client_id"
+                    style="@style/SmsChannelInputText"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:inputType="text"
@@ -59,10 +60,12 @@
                 android:layout_marginTop="8dp"
                 android:hint="@string/dingtalk_remote_client_secret"
                 app:endIconMode="password_toggle"
-                app:helperText="@string/dingtalk_remote_secret_hint">
+                app:helperText="@string/dingtalk_remote_secret_hint"
+                app:helperTextTextColor="@color/miui_secondary_text">
 
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/dingtalk_remote_client_secret"
+                    style="@style/SmsChannelInputText"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:inputType="textPassword"
@@ -108,7 +111,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
-                android:textColor="#111111"
+                android:textColor="@color/miui_primary_text"
                 android:textSize="14sp" />
 
             <TextView
@@ -132,8 +135,8 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="@string/channel_legal_notice"
-                android:textColor="#999999"
-                android:textSize="11sp" />
+                android:textColor="@color/miui_secondary_text"
+                android:textSize="13sp" />
         </LinearLayout>
     </androidx.core.widget.NestedScrollView>
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

@@ -101,33 +101,49 @@
         <item name="android:lineSpacingExtra">2dp</item>
     </style>
 
+    <style name="SmsChannelInputText">
+        <item name="android:textColor">@color/miui_primary_text</item>
+        <item name="android:textColorHint">@color/miui_hint_text</item>
+    </style>
+
     <style name="SmsChannelDivider">
         <item name="android:layout_width">match_parent</item>
         <item name="android:layout_height">1dp</item>
         <item name="android:layout_marginVertical">16dp</item>
-        <item name="android:background">#E0E0E0</item>
+        <item name="android:background">@color/miui_divider</item>
     </style>
 
     <style name="SmsChannelTestButton" parent="Widget.MaterialComponents.Button">
         <item name="android:layout_width">match_parent</item>
         <item name="android:layout_height">wrap_content</item>
+        <item name="android:minHeight">48dp</item>
         <item name="android:layout_marginTop">16dp</item>
-        <item name="backgroundTint">#159447</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textColor">@android:color/white</item>
+        <item name="cornerRadius">8dp</item>
+        <item name="backgroundTint">@color/miui_action_blue</item>
     </style>
 
     <style name="SmsChannelSaveButton" parent="Widget.MaterialComponents.Button">
         <item name="android:layout_width">match_parent</item>
         <item name="android:layout_height">wrap_content</item>
+        <item name="android:minHeight">48dp</item>
         <item name="android:layout_marginTop">8dp</item>
-        <item name="backgroundTint">#111111</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textColor">@android:color/white</item>
+        <item name="cornerRadius">8dp</item>
+        <item name="backgroundTint">@color/miui_primary_text</item>
     </style>
 
     <style name="SmsChannelSecondaryButton" parent="Widget.MaterialComponents.Button.OutlinedButton">
         <item name="android:layout_width">match_parent</item>
         <item name="android:layout_height">wrap_content</item>
+        <item name="android:minHeight">48dp</item>
         <item name="android:layout_marginTop">12dp</item>
-        <item name="android:textColor">#111111</item>
-        <item name="strokeColor">#CCCCCC</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textColor">@color/miui_primary_text</item>
+        <item name="cornerRadius">8dp</item>
+        <item name="strokeColor">@color/bulk_outline</item>
     </style>
 
     <style name="SmsSettingsFormCard">
@@ -180,11 +196,13 @@
 
     <style name="CompatibilityCheckRow">
         <item name="android:layout_width">match_parent</item>
-        <item name="android:layout_height">88dp</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:minHeight">88dp</item>
         <item name="android:foreground">?attr/selectableItemBackground</item>
         <item name="android:gravity">center_vertical</item>
         <item name="android:orientation">horizontal</item>
         <item name="android:paddingHorizontal">20dp</item>
+        <item name="android:paddingVertical">14dp</item>
     </style>
 
     <style name="CompatibilityStatusText">
@@ -192,7 +210,8 @@
         <item name="android:layout_height">wrap_content</item>
         <item name="android:layout_marginStart">12dp</item>
         <item name="android:gravity">end</item>
-        <item name="android:maxWidth">88dp</item>
+        <item name="android:maxWidth">104dp</item>
+        <item name="android:maxLines">2</item>
         <item name="android:textColor">@color/miui_secondary_text</item>
         <item name="android:textSize">14sp</item>
         <item name="android:textStyle">bold</item>

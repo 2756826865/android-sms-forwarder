@@ -40,13 +40,17 @@ class MultiChannelForwardWorker(
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         val config = MultiForwardConfig(applicationContext)
         val targetChannel = inputData.getString(KEY_TARGET_CHANNEL).orEmpty()
+        val isTest = inputData.getBoolean(KEY_IS_TEST, false)
+        val history = ForwardingHistoryStore(applicationContext)
+        val historyRecordId = inputData.getString(KEY_HISTORY_RECORD_ID).orEmpty()
+        if (historyRecordId.isNotBlank()) history.markRunning(historyRecordId)
         if (targetChannel.isBlank() && !config.anyEnabled()) return@withContext Result.success()
 
         val ruleAllowedChannels = decodeRuleAllowedChannels(
             inputData.getString(KEY_ALLOWED_CHANNELS).orEmpty(),
         )
         fun shouldRun(channel: String, enabled: Boolean): Boolean {
-            if (!enabled) return false
+            if (!enabled && !(isTest && targetChannel == channel)) return false
             if (ruleAllowedChannels != null && channel !in ruleAllowedChannels) return false
             return when (targetChannel) {
                 "" -> true
@@ -81,6 +85,10 @@ class MultiChannelForwardWorker(
         // 检测网络状态
         val networkAvailable = isNetworkAvailable()
         val onlyOnNoNetwork = config.smsDirectOnlyOnNoNetwork
+        if (targetChannel in ForwardingChannels.networkChannels && !networkAvailable) {
+            if (historyRecordId.isNotBlank()) history.markRetry(historyRecordId, "网络连接中断，等待重试")
+            return@withContext Result.retry()
+        }
 
         // 短信直发逻辑
         if (shouldRun(ForwardingChannels.SMS_DIRECT, config.smsDirectEnabled)) {
@@ -147,9 +155,26 @@ class MultiChannelForwardWorker(
         }
 
         when {
-            failures.isEmpty() -> Result.success()
-            runAttemptCount < 2 -> Result.retry()
-            else -> Result.failure()
+            failures.isEmpty() && successes.isNotEmpty() -> {
+                if (historyRecordId.isNotBlank()) {
+                    history.markSuccess(historyRecordId, "发送成功：${successes.joinToString("、")}")
+                }
+                Result.success()
+            }
+            failures.isEmpty() -> {
+                if (historyRecordId.isNotBlank()) {
+                    history.markSkipped(historyRecordId, "渠道已关闭、规则未允许或发送条件未满足")
+                }
+                Result.success()
+            }
+            runAttemptCount < 2 -> {
+                if (historyRecordId.isNotBlank()) history.markRetry(historyRecordId, failures.joinToString("；"))
+                Result.retry()
+            }
+            else -> {
+                if (historyRecordId.isNotBlank()) history.markFailed(historyRecordId, failures.joinToString("；"))
+                Result.failure()
+            }
         }
     }
 
@@ -373,9 +398,7 @@ class MultiChannelForwardWorker(
     }
 
     private fun requireHttpsOrAllowedHttp(url: String, allowHttp: Boolean) {
-        require(url.startsWith("https://") || (allowHttp && url.startsWith("http://"))) {
-            "地址默认必须使用 HTTPS；如需 HTTP 内网地址，请显式开启允许 HTTP"
-        }
+        ForwardingUrlPolicy.requireAllowed(url, allowHttp)
     }
 
     private fun sendBark(serverUrl: String, deviceKey: String, title: String, content: String, allowHttp: Boolean) {
@@ -388,8 +411,9 @@ class MultiChannelForwardWorker(
                 .put("title", title)
                 .put("body", content)
         )
-        val code = result.optInt("code", 0)
-        check(code == 200 || code == 0) { result.optString("message", "Bark 请求失败") }
+        check(result.optInt("code", -1) == 200) {
+            result.optString("message", "Bark 请求失败")
+        }
     }
 
     private fun sendGotify(serverUrl: String, token: String, title: String, content: String, allowHttp: Boolean) {
@@ -403,7 +427,7 @@ class MultiChannelForwardWorker(
                 .put("message", content)
                 .put("priority", 5)
         )
-        check(result.has("id") || result.optString("message").isNotBlank()) { "Gotify 请求失败" }
+        check(result.optLong("id", -1L) > 0L) { "Gotify 请求失败" }
     }
 
     private fun getJson(url: String) = requestJson(url, "GET", null)
@@ -422,11 +446,18 @@ class MultiChannelForwardWorker(
                 setRequestProperty("Content-Type", "application/json; charset=utf-8")
                 outputStream.bufferedWriter(StandardCharsets.UTF_8).use { it.write(payload.toString()) }
             }
-            val response = (if (responseCode in 200..299) inputStream else errorStream)
+            val statusCode = responseCode
+            val response = (if (statusCode in 200..299) inputStream else errorStream)
                 ?.bufferedReader(StandardCharsets.UTF_8)
                 ?.use { it.readText() }
                 .orEmpty()
             disconnect()
+            check(statusCode in 200..299) {
+                val detail = runCatching {
+                    JSONObject(response).optString("message")
+                }.getOrDefault("").ifBlank { response.take(200) }
+                "HTTP $statusCode${detail.takeIf(String::isNotBlank)?.let { ": $it" }.orEmpty()}"
+            }
             check(response.isNotBlank()) { "接口返回空响应" }
             JSONObject(response)
         }
@@ -453,6 +484,8 @@ class MultiChannelForwardWorker(
         private const val KEY_SUBSCRIPTION_ID = "subscription_id"
         private const val KEY_TARGET_CHANNEL = "target_channel"
         private const val KEY_ALLOWED_CHANNELS = "allowed_channels"
+        private const val KEY_IS_TEST = "is_test"
+        private const val KEY_HISTORY_RECORD_ID = "history_record_id"
         private const val SMTP_TIMEOUT_MS = 12_000
         /** 规则启用但无任何渠道命中时，与 null（未启用规则）区分 */
         const val RULE_BLOCK_ALL = "__BLOCK_ALL__"
@@ -479,6 +512,59 @@ class MultiChannelForwardWorker(
             targetChannel: String = "",
             allowedChannels: Set<String>? = null,
         ) {
+            if (targetChannel.isBlank()) {
+                val enabledChannels = MultiForwardConfig(context).enabledChannelIds()
+                val selectedChannels = allowedChannels
+                    ?.let(enabledChannels::intersect)
+                    ?: enabledChannels
+                selectedChannels.forEach { channel ->
+                    enqueueSingle(
+                        context = context,
+                        sender = sender,
+                        body = body,
+                        receivedAt = receivedAt,
+                        subscriptionId = subscriptionId,
+                        uniqueId = uniqueId,
+                        targetChannel = channel,
+                        allowedChannels = setOf(channel),
+                        isTest = false,
+                    )
+                }
+                return
+            }
+            enqueueSingle(
+                context = context,
+                sender = sender,
+                body = body,
+                receivedAt = receivedAt,
+                subscriptionId = subscriptionId,
+                uniqueId = uniqueId,
+                targetChannel = targetChannel,
+                allowedChannels = allowedChannels,
+                isTest = false,
+            )
+        }
+
+        private fun enqueueSingle(
+            context: Context,
+            sender: String,
+            body: String,
+            receivedAt: Long,
+            subscriptionId: Int,
+            uniqueId: String,
+            targetChannel: String,
+            allowedChannels: Set<String>?,
+            isTest: Boolean,
+        ) {
+            val historyRecordId = ForwardingHistoryStore(context).registerQueued(
+                workId = uniqueId,
+                channel = targetChannel,
+                sender = sender,
+                body = body,
+                receivedAt = receivedAt,
+                subscriptionId = subscriptionId,
+                isTest = isTest,
+            )
             val request = OneTimeWorkRequestBuilder<MultiChannelForwardWorker>()
                 .setInputData(
                     workDataOf(
@@ -488,26 +574,48 @@ class MultiChannelForwardWorker(
                         KEY_SUBSCRIPTION_ID to subscriptionId,
                         KEY_TARGET_CHANNEL to targetChannel,
                         KEY_ALLOWED_CHANNELS to encodeRuleAllowedChannels(allowedChannels),
+                        KEY_IS_TEST to isTest,
+                        KEY_HISTORY_RECORD_ID to historyRecordId,
                     )
                 )
-                .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.NOT_REQUIRED).build())
+                .setConstraints(
+                    Constraints.Builder()
+                        .setRequiredNetworkType(
+                            if (targetChannel in ForwardingChannels.networkChannels) {
+                                NetworkType.CONNECTED
+                            } else {
+                                NetworkType.NOT_REQUIRED
+                            },
+                        )
+                        .build(),
+                )
                 .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 10, TimeUnit.SECONDS)
                 .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
                 .build()
             WorkManager.getInstance(context)
-                .enqueueUniqueWork("multi-forward-$uniqueId", ExistingWorkPolicy.KEEP, request)
+                .enqueueUniqueWork("multi-forward-$uniqueId-$targetChannel", ExistingWorkPolicy.KEEP, request)
         }
 
         fun enqueueTest(context: Context, channel: String = "test", sender: String = "10086", body: String = "这是一条短信多渠道转发测试消息") {
-            enqueue(
-                context = context,
-                sender = sender,
-                body = body,
-                receivedAt = System.currentTimeMillis(),
-                subscriptionId = -1,
-                uniqueId = "test-$channel-${System.currentTimeMillis()}",
-                targetChannel = channel,
-            )
+            val channels = if (channel == ForwardingChannels.ALL) {
+                MultiForwardConfig(context).enabledChannelIds()
+            } else {
+                setOf(channel)
+            }
+            val now = System.currentTimeMillis()
+            channels.forEach { target ->
+                enqueueSingle(
+                    context = context,
+                    sender = sender,
+                    body = body,
+                    receivedAt = now,
+                    subscriptionId = -1,
+                    uniqueId = "test-$now",
+                    targetChannel = target,
+                    allowedChannels = setOf(target),
+                    isTest = true,
+                )
+            }
         }
     }
 }

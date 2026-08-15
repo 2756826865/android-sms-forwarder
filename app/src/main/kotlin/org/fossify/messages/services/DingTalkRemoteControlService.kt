@@ -15,12 +15,16 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import org.fossify.messages.R
 import org.fossify.messages.activities.DingTalkRemoteControlSettingsActivity
+import org.fossify.messages.forwarding.ForwardingRuleEngine
+import org.fossify.messages.forwarding.ForwardingRulesConfig
 import org.fossify.messages.forwarding.MultiForwardConfig
 import org.fossify.messages.messaging.SimSendResolver
+import org.fossify.messages.remote.DingTalkCommandDeduplicator
+import org.fossify.messages.remote.DingTalkRemoteCommand
 import org.fossify.messages.remote.DingTalkStreamClient
-import org.fossify.messages.remote.RemoteSmsCommand
 import org.fossify.messages.remote.RemoteSmsCommandWorker
 import org.fossify.messages.remote.SOURCE_DINGTALK
+import java.security.MessageDigest
 
 class DingTalkRemoteControlService : Service() {
     private var streamClient: DingTalkStreamClient? = null
@@ -50,7 +54,7 @@ class DingTalkRemoteControlService : Service() {
         streamClient = DingTalkStreamClient(
             clientId = clientId,
             clientSecret = clientSecret,
-            onCommand = { command -> handleCommand(command) },
+            onCommand = ::handleCommand,
             onStatus = { status ->
                 MultiForwardConfig(applicationContext).appendDingTalkRemoteLog(status)
                 mainHandler.post { updateNotification(status) }
@@ -66,12 +70,34 @@ class DingTalkRemoteControlService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    private fun handleCommand(command: RemoteSmsCommand) {
+    private fun handleCommand(event: DingTalkRemoteCommand) {
+        val command = event.command
         val config = MultiForwardConfig(applicationContext)
-        val fingerprint = "dingtalk-${command.targetNumber}-${command.content.hashCode()}"
+        if (event.messageId.isNotBlank() && !DingTalkCommandDeduplicator(applicationContext).claim(event.messageId)) {
+            config.appendDingTalkRemoteLog("抑制重复指令 -> ${command.targetNumber}")
+            return
+        }
+        val fingerprint = event.messageId.takeIf(String::isNotBlank)
+            ?.let { "dingtalk-${sha256(it)}" }
+            ?: "dingtalk-${command.targetNumber}-${command.content.hashCode()}"
         val sendMode = command.effectiveSendMode(config.dingTalkRemoteSendSimMode)
         val simSuffix = " · ${SimSendResolver.describeForLog(applicationContext, null, sendMode)}"
         config.appendDingTalkRemoteLog("收到指令 -> ${command.targetNumber}$simSuffix")
+        val rulesConfig = ForwardingRulesConfig(applicationContext)
+        if (rulesConfig.affectsRemoteCommands() && rulesConfig.rules.any { it.enabled }) {
+            val decision = ForwardingRuleEngine(rulesConfig.rules).evaluate(
+                sender = SOURCE_DINGTALK,
+                body = "${command.targetNumber} ${command.content}",
+                subscriptionId = -1,
+                channelCandidates = emptySet(),
+                simSlotIndex = null,
+            )
+            if (decision.matchedRules.isEmpty()) {
+                config.appendDingTalkRemoteLog("规则阻止执行 -> ${command.targetNumber}$simSuffix")
+                return
+            }
+        }
+
         RemoteSmsCommandWorker.enqueue(
             context = applicationContext,
             target = command.targetNumber,
@@ -87,6 +113,10 @@ class DingTalkRemoteControlService : Service() {
         streamClient?.stop()
         streamClient = null
     }
+
+    private fun sha256(value: String): String = MessageDigest.getInstance("SHA-256")
+        .digest(value.toByteArray())
+        .joinToString("") { "%02x".format(it) }
 
     private fun updateNotification(status: String) {
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
@@ -148,10 +178,14 @@ class DingTalkRemoteControlService : Service() {
                 context.stopService(Intent(context, DingTalkRemoteControlService::class.java))
                 return
             }
-            ContextCompat.startForegroundService(
-                context,
-                Intent(context, DingTalkRemoteControlService::class.java),
-            )
+            runCatching {
+                ContextCompat.startForegroundService(
+                    context,
+                    Intent(context, DingTalkRemoteControlService::class.java),
+                )
+            }.onFailure { error ->
+                config.appendDingTalkRemoteLog("启动失败：${error.message ?: error.javaClass.simpleName}")
+            }
         }
 
         fun stop(context: Context) {

@@ -11,6 +11,7 @@ import org.fossify.messages.databinding.ActivitySettingsBinding
 import org.fossify.messages.extensions.applyMiuiPageChrome
 import org.fossify.messages.extensions.showSmsStyled
 import org.fossify.messages.extensions.config
+import org.fossify.messages.helpers.liveisland.LiveIslandCoordinator
 import org.fossify.messages.helpers.refreshConversations
 
 class SettingsActivity : SimpleActivity() {
@@ -32,12 +33,28 @@ class SettingsActivity : SimpleActivity() {
         binding.settingsHomeBottomNavSwitch.setOnCheckedChangeListener { _, isChecked ->
             config.showHomeBottomNavigation = isChecked
         }
+        binding.settingsLiveIslandSwitch.isChecked = config.enableLiveIsland
+        binding.settingsLiveIslandSwitch.setOnCheckedChangeListener { _, isChecked ->
+            config.enableLiveIsland = isChecked
+            updateLiveIslandSummary()
+        }
+        updateLiveIslandSummary()
+    }
+
+    private fun updateLiveIslandSummary() {
+        binding.settingsLiveIslandSummary.text = buildString {
+            append(LiveIslandCoordinator.getStatusLabel(this@SettingsActivity))
+            append('\n')
+            append(getString(R.string.settings_live_island_summary))
+        }
     }
 
     override fun onResume() {
         super.onResume()
         applyMiuiPageChrome()
         binding.settingsHomeBottomNavSwitch.isChecked = config.showHomeBottomNavigation
+        binding.settingsLiveIslandSwitch.isChecked = config.enableLiveIsland
+        updateLiveIslandSummary()
     }
 
     private fun bindActions() = binding.apply {
@@ -69,6 +86,9 @@ class SettingsActivity : SimpleActivity() {
         }
         settingsForwardingHolder.setOnClickListener {
             startActivity(Intent(this@SettingsActivity, ForwardingChannelsActivity::class.java))
+        }
+        settingsLowBatteryHolder.setOnClickListener {
+            startActivity(Intent(this@SettingsActivity, LowBatterySettingsActivity::class.java))
         }
         settingsCompatibilityHolder.setOnClickListener {
             startActivity(Intent(this@SettingsActivity, DeviceCompatibilityActivity::class.java))

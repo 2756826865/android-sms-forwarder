@@ -80,6 +80,9 @@ class ForwardingChannelsActivity : SimpleActivity() {
         forwardingRemoteForwardingHolder.setOnClickListener {
             startActivity(Intent(this@ForwardingChannelsActivity, RemoteForwardingActivity::class.java))
         }
+        forwardingHistoryHolder.setOnClickListener {
+            startActivity(Intent(this@ForwardingChannelsActivity, ForwardingHistoryActivity::class.java))
+        }
         forwardingSimOneHolder.setOnClickListener { showSimLabelDialog(0) }
         forwardingSimTwoHolder.setOnClickListener { showSimLabelDialog(1) }
         forwardingTemplateHolder.setOnClickListener {
@@ -427,6 +430,12 @@ class ForwardingChannelsActivity : SimpleActivity() {
             multiConfig.gotifyEnabled,
         )
         forwardingRulesSummary.text = ForwardingRulesConfig(applicationContext).summary()
+        val historyRecords = org.fossify.messages.forwarding.ForwardingHistoryStore(applicationContext).records()
+        forwardingHistorySummary.text = getString(
+            R.string.forwarding_history_summary,
+            historyRecords.map { record -> record.workId.ifBlank { record.recordId } }.distinct().size,
+            historyRecords.count { it.status == org.fossify.messages.forwarding.ForwardingHistoryStore.STATUS_FAILED },
+        )
         forwardingRemoteForwardingSummary.text = remoteForwardingHubSummary()
         forwardingSimOneSummary.text = simSummary(multiConfig.simOneLabel, multiConfig.simOneNumber)
         forwardingSimTwoSummary.text = simSummary(multiConfig.simTwoLabel, multiConfig.simTwoNumber)

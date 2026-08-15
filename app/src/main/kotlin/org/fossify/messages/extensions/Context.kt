@@ -421,10 +421,13 @@ fun Context.getConversations(
 
             val names = getThreadContactNames(phoneNumbers, privateContacts)
             val title = TextUtils.join(", ", names.toTypedArray())
-            val photoUri =
-                if (phoneNumbers.size == 1) simpleContactHelper.getPhotoUriFromPhoneNumber(
-                    phoneNumbers.first()
-                ) else ""
+            val photoUri = if (phoneNumbers.size == 1 && hasPermission(PERMISSION_READ_CONTACTS)) {
+                runCatching {
+                    simpleContactHelper.getPhotoUriFromPhoneNumber(phoneNumbers.first())
+                }.getOrDefault("")
+            } else {
+                ""
+            }
             val isGroupConversation = phoneNumbers.size > 1
             val read = cursor.getIntValue(Threads.READ) == 1
             val archived =
@@ -444,6 +447,9 @@ fun Context.getConversations(
             )
             conversations.add(conversation)
         }
+    } catch (_: SecurityException) {
+        // Contacts permission is optional and provider access can also be restricted by the OEM.
+        // Keep cached conversations instead of exposing a raw provider exception to the user.
     } catch (sqliteException: SQLiteException) {
         if (
             sqliteException.message?.contains("no such column: archived") == true
@@ -698,7 +704,13 @@ fun Context.getThreadContactNames(
 ): ArrayList<String> {
     val names = ArrayList<String>()
     phoneNumbers.forEach { number ->
-        val name = SimpleContactsHelper(this).getNameFromPhoneNumber(number)
+        val name = if (hasPermission(PERMISSION_READ_CONTACTS)) {
+            runCatching {
+                SimpleContactsHelper(this).getNameFromPhoneNumber(number)
+            }.getOrDefault(number)
+        } else {
+            number
+        }
         if (name != number) {
             names.add(name)
         } else {
@@ -1363,10 +1375,11 @@ fun Context.createTemporaryThread(
     threadId: Long = generateRandomId(),
     cachedConv: Conversation?,
 ) {
-    val simpleContactHelper = SimpleContactsHelper(this)
     val addresses = message.participants.getAddresses()
-    val photoUri = if (addresses.size == 1) {
-        simpleContactHelper.getPhotoUriFromPhoneNumber(addresses.first())
+    val photoUri = if (addresses.size == 1 && hasPermission(PERMISSION_READ_CONTACTS)) {
+        runCatching {
+            SimpleContactsHelper(this).getPhotoUriFromPhoneNumber(addresses.first())
+        }.getOrDefault("")
     } else {
         ""
     }

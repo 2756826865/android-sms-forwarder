@@ -16,9 +16,9 @@
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
             android:background="@color/miui_page_background"
-            app:navigationIconTint="#111111"
+            app:navigationIconTint="@color/miui_primary_text"
             app:title="@string/forwarding_bark"
-            app:titleTextColor="#111111" />
+            app:titleTextColor="@color/miui_primary_text" />
     </org.fossify.commons.views.MyAppBarLayout>
 
     <androidx.core.widget.NestedScrollView
@@ -38,17 +38,19 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="@string/bark_enable"
-                android:textColor="#111111" />
+                android:textColor="@color/miui_primary_text" />
 
             <com.google.android.material.textfield.TextInputLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
                 android:hint="@string/bark_server_url"
-                app:helperText="@string/bark_server_url_hint">
+                app:helperText="@string/bark_server_url_hint"
+                app:helperTextTextColor="@color/miui_secondary_text">
 
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/bark_server_url"
+                    style="@style/SmsChannelInputText"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:inputType="textUri"
@@ -63,11 +65,17 @@
 
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/bark_device_key"
+                    style="@style/SmsChannelInputText"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:inputType="text"
                     android:maxLines="1" />
             </com.google.android.material.textfield.TextInputLayout>
+
+            <TextView
+                style="@style/SmsChannelHelperText"
+                android:layout_marginTop="8dp"
+                android:text="@string/bark_device_key_help" />
 
             <com.google.android.material.switchmaterial.SwitchMaterial
                 android:id="@+id/bark_allow_http"
@@ -75,7 +83,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
                 android:text="@string/bark_allow_http"
-                android:textColor="#111111" />
+                android:textColor="@color/miui_primary_text" />
 
             <View style="@style/SmsChannelDivider" />
 
@@ -91,6 +99,7 @@
 
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/bark_test_sender"
+                    style="@style/SmsChannelInputText"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:inputType="phone"
@@ -105,6 +114,7 @@
 
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/bark_test_body"
+                    style="@style/SmsChannelInputText"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:inputType="textCapSentences|textMultiLine"
@@ -127,8 +137,8 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="@string/channel_legal_notice"
-                android:textColor="#999999"
-                android:textSize="11sp" />
+                android:textColor="@color/miui_secondary_text"
+                android:textSize="13sp" />
         </LinearLayout>
     </androidx.core.widget.NestedScrollView>
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

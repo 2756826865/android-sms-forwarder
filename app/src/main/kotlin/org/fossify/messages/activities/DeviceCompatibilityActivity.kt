@@ -19,6 +19,7 @@ import android.os.PowerManager
 import android.os.Process
 import android.provider.Settings
 import android.provider.Telephony
+import android.telephony.SubscriptionManager
 import android.view.View
 import android.widget.TextView
 import android.widget.Toast
@@ -26,17 +27,28 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
 import org.fossify.commons.extensions.viewBinding
 import org.fossify.commons.helpers.NavigationIcon
 import org.fossify.messages.BuildConfig
 import org.fossify.messages.R
 import org.fossify.messages.databinding.ActivityDeviceCompatibilityBinding
 import org.fossify.messages.extensions.applyMiuiPageChrome
+import org.fossify.messages.extensions.config
+import org.fossify.messages.forwarding.ForwardingChannels
+import org.fossify.messages.forwarding.ForwardingHistoryStore
+import org.fossify.messages.forwarding.ForwardingRulesConfig
+import org.fossify.messages.forwarding.MultiForwardConfig
+import org.fossify.messages.forwarding.PushPlusConfig
 import org.fossify.messages.helpers.NOTIFICATION_CHANNEL_ID
+import org.fossify.messages.helpers.LowBatteryCheckWorker
+import org.fossify.messages.remote.RemoteSmsCommandConfig
 
 class DeviceCompatibilityActivity : SimpleActivity() {
     private val binding by viewBinding(ActivityDeviceCompatibilityBinding::inflate)
     private var advancedExpanded = false
+    private var lowBatteryWorkState = "未调度"
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -73,6 +85,16 @@ class DeviceCompatibilityActivity : SimpleActivity() {
         binding.compatibilityAdvancedToggle.setOnClickListener { toggleAdvancedDiagnostics() }
         binding.compatibilityCopyFix.setOnClickListener { copyAdbRepairCommands() }
         binding.compatibilityProject.setOnClickListener { openProjectRepository() }
+        WorkManager.getInstance(this)
+            .getWorkInfosForUniqueWorkLiveData(LowBatteryCheckWorker.UNIQUE_PERIODIC)
+            .observe(this) { workInfos ->
+                val activeStates = setOf(WorkInfo.State.ENQUEUED, WorkInfo.State.RUNNING, WorkInfo.State.BLOCKED)
+                lowBatteryWorkState = (workInfos.firstOrNull { it.state in activeStates } ?: workInfos.lastOrNull())
+                    ?.state
+                    ?.let(::workStateLabel)
+                    ?: "未调度"
+                refreshFeatureStatus()
+            }
         showBrandAdvice()
     }
 
@@ -162,6 +184,7 @@ class DeviceCompatibilityActivity : SimpleActivity() {
             getString(if (state.smsChain) R.string.compatibility_chain_ready else R.string.compatibility_chain_split),
         )
         binding.compatibilityCopyFix.visibility = if (state.smsChain) View.GONE else View.VISIBLE
+        refreshFeatureStatus()
     }
 
     private fun setStatus(view: TextView, ready: Boolean) {
@@ -315,7 +338,7 @@ class DeviceCompatibilityActivity : SimpleActivity() {
             null -> getString(R.string.compatibility_unknown)
             else -> getString(R.string.compatibility_not_ready)
         }
-        val report = getString(
+        val baseReport = getString(
             R.string.compatibility_diagnostic_report,
             Build.MANUFACTURER,
             Build.MODEL,
@@ -332,6 +355,7 @@ class DeviceCompatibilityActivity : SimpleActivity() {
             routeValue,
             if (state.writeSms) getString(R.string.compatibility_allowed) else getString(R.string.compatibility_not_allowed),
         )
+        val report = "$baseReport\n\n短信与转发功能自检（敏感配置已隐藏）\n${buildFeatureStatus()}"
         val clipboard = getSystemService(ClipboardManager::class.java)
         clipboard?.setPrimaryClip(ClipData.newPlainText(getString(R.string.compatibility_report_label), report))
         Toast.makeText(this, R.string.compatibility_report_copied, Toast.LENGTH_SHORT).show()
@@ -343,6 +367,79 @@ class DeviceCompatibilityActivity : SimpleActivity() {
         binding.compatibilityAdvancedToggle.setText(
             if (advancedExpanded) R.string.compatibility_advanced_hide else R.string.compatibility_advanced_show,
         )
+    }
+
+    private fun refreshFeatureStatus() {
+        binding.compatibilityFeatureStatus.text = buildFeatureStatus()
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun buildFeatureStatus(): String {
+        val multi = MultiForwardConfig(applicationContext)
+        val pushPlus = PushPlusConfig(applicationContext)
+        val rules = ForwardingRulesConfig(applicationContext)
+        val remoteSms = RemoteSmsCommandConfig(applicationContext)
+        val history = ForwardingHistoryStore(applicationContext).records()
+        val simSummary = runCatching {
+            val subscriptions = getSystemService(SubscriptionManager::class.java)
+                ?.activeSubscriptionInfoList
+                .orEmpty()
+                .sortedBy { it.simSlotIndex }
+            if (subscriptions.isEmpty()) {
+                "未检测到可用 SIM 或缺少电话状态权限"
+            } else {
+                subscriptions.joinToString("、") { "SIM${it.simSlotIndex + 1} ${it.carrierName}" }
+            }
+        }.getOrElse { "读取失败或缺少电话状态权限" }
+
+        val channelStates = listOf(
+            configState("PushPlus", pushPlus.enabled, pushPlus.getToken().isNotBlank()),
+            configState("钉钉", multi.dingTalkEnabled, multi.dingTalkWebhook().isNotBlank()),
+            configState("飞书", multi.feishuEnabled, multi.feishuWebhook().isNotBlank()),
+            configState("企业微信", multi.weComEnabled, multi.weComCorpId().isNotBlank() && multi.weComSecret().isNotBlank()),
+            configState("企业微信群机器人", multi.weComBotEnabled, multi.weComBotWebhook().isNotBlank()),
+            configState("邮箱", multi.emailEnabled, multi.emailHost().isNotBlank() && multi.emailUser().isNotBlank()),
+            configState("短信直发", multi.smsDirectEnabled, multi.smsDirectPhone().isNotBlank()),
+            configState("Bark", multi.barkEnabled, multi.barkServerUrl().isNotBlank() && multi.barkDeviceKey().isNotBlank()),
+            configState("Gotify", multi.gotifyEnabled, multi.gotifyServerUrl().isNotBlank() && multi.gotifyToken().isNotBlank()),
+        )
+        val dingTalkRemote = when {
+            !multi.dingTalkRemoteControlEnabled -> "关闭"
+            multi.dingTalkRemoteClientId().isBlank() || multi.dingTalkRemoteClientSecret().isBlank() -> "开启但配置不完整"
+            multi.dingTalkRemoteConnectionStatus.contains("已连接") -> "已连接"
+            else -> "已开启，尚未确认连接"
+        }
+        val lowBattery = when {
+            !config.enableLowBatteryReminder -> "关闭"
+            config.lowBatteryChannels.isEmpty() -> "开启但未选择渠道"
+            else -> "开启 · $lowBatteryWorkState · ${config.lowBatteryChannels.map(ForwardingChannels::displayName).joinToString("、")}"
+        }
+        val failedCount = history.count { it.status == ForwardingHistoryStore.STATUS_FAILED }
+        return buildString {
+            appendLine("SIM：$simSummary")
+            appendLine("转发渠道：")
+            channelStates.forEach { appendLine("  $it") }
+            appendLine("转发规则：${if (rules.enabled) "开启 · ${rules.rules.count { it.enabled }} 条启用" else "关闭"}")
+            appendLine("低电量提醒：$lowBattery")
+            appendLine("短信远程指令：${if (remoteSms.enabled) "开启 · 白名单 ${remoteSms.authorizedList().size} 个" else "关闭"}")
+            appendLine("钉钉远程指令：$dingTalkRemote")
+            append("转发记录：${history.size} 条 · 失败 $failedCount 条")
+        }
+    }
+
+    private fun configState(name: String, enabled: Boolean, complete: Boolean) = when {
+        !enabled -> "$name(关闭)"
+        complete -> "$name(配置完整)"
+        else -> "$name(配置不完整)"
+    }
+
+    private fun workStateLabel(state: WorkInfo.State) = when (state) {
+        WorkInfo.State.ENQUEUED -> "已调度"
+        WorkInfo.State.RUNNING -> "正在检查"
+        WorkInfo.State.BLOCKED -> "等待条件"
+        WorkInfo.State.CANCELLED -> "已取消"
+        WorkInfo.State.FAILED -> "任务失败"
+        WorkInfo.State.SUCCEEDED -> "已完成"
     }
 
     private fun showBrandAdvice() {

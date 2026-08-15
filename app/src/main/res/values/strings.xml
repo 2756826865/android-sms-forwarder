@@ -78,7 +78,16 @@
     <string name="settings_functions">功能</string>
     <string name="settings_system">系统</string>
     <string name="settings_home_bottom_nav">显示首页底部导航</string>
-    <string name="settings_home_bottom_nav_summary">关闭后首页只保留短信列表和新建按钮，仍可从右上角进入设置；适合希望界面更简单的用户</string>
+    <string name="settings_home_bottom_nav_summary">默认开启；关闭后首页保留短信列表和新建按钮，仍可从右上角进入设置</string>
+    <string name="settings_live_island">灵动岛提示（实验）</string>
+    <string name="settings_live_island_summary">说明：网上常见的悬浮窗或私有参数方案不等同于官方灵动岛。小米正式焦点通知/超级岛需要开发者平台授权；未获授权或系统不支持时以普通通知为准。</string>
+    <string name="live_island_status_disabled">已关闭</string>
+    <string name="live_island_status_xiaomi">实验检测 · 小米系统支持焦点参数，正式展示取决于平台授权</string>
+    <string name="live_island_status_oppo">尚未可用 · OPPO 流体云等待平台服务 ID</string>
+    <string name="live_island_status_android">实验检测 · Android Live Updates 接口可用</string>
+    <string name="live_island_status_vivo">尚未可用 · vivo 原子岛等待平台接入</string>
+    <string name="live_island_status_vivo_reserved">尚未可用 · vivo 原子岛等待平台权限</string>
+    <string name="live_island_status_unsupported">当前系统不支持灵动岛，将使用普通通知</string>
     <string name="settings_other">其他</string>
     <string name="settings_show_avatars">列表中显示头像</string>
     <string name="settings_show_avatars_summary">显示联系人头像以及公司等信息</string>
@@ -192,6 +201,13 @@
     <string name="forwarding_template_custom_summary">自定义: %1$s</string>
     <string name="forwarding_custom_template_hint">使用占位符：{sender} {name} {body} {time} {sim}</string>
     <string name="forwarding_status_never">尚未通过扩展渠道发送</string>
+    <string name="forwarding_history_title">转发记录</string>
+    <string name="forwarding_history_summary">最近 %1$d 条短信 · 失败渠道 %2$d 个</string>
+    <string name="forwarding_history_empty">暂无转发记录</string>
+    <string name="forwarding_history_retry">重试此渠道</string>
+    <string name="forwarding_history_retry_queued">已重新加入该渠道发送队列</string>
+    <string name="forwarding_history_clear">清空记录</string>
+    <string name="forwarding_history_clear_confirm">仅清除本地转发记录，不会删除短信。确定继续吗？</string>
     <string name="forwarding_bark">Bark</string>
     <string name="forwarding_gotify">Gotify</string>
     <string name="forwarding_rules_section">转发规则</string>
@@ -219,6 +235,22 @@
     <string name="forwarding_rules_match">✓ 匹配，将转发：%1$s</string>
     <string name="forwarding_rules_no_match">✕ 不匹配，不转发</string>
     <string name="forwarding_rules_invalid_regex">正则表达式无效</string>
+    <string name="forwarding_rules_list_title">规则列表</string>
+    <string name="forwarding_rules_editor_title">编辑当前规则</string>
+    <string name="forwarding_rules_name">规则名称</string>
+    <string name="forwarding_rules_item_enabled">启用当前规则</string>
+    <string name="forwarding_rules_match_mode">允许条件匹配方式</string>
+    <string name="forwarding_rules_add">新增</string>
+    <string name="forwarding_rules_delete">删除</string>
+    <string name="forwarding_rules_move_up">上移</string>
+    <string name="forwarding_rules_move_down">下移</string>
+    <string name="forwarding_rules_last_decision_empty">最近尚无未转发记录</string>
+    <string name="forwarding_rules_last_decision">最近未转发：%1$s</string>
+    <string name="forwarding_rules_rule_default">规则 %1$d</string>
+    <string-array name="forwarding_rules_match_options">
+        <item>全部条件满足</item>
+        <item>任意条件满足</item>
+    </string-array>
     <string-array name="forwarding_rules_sim_options">
         <item>全部 SIM</item>
         <item>SIM1</item>
@@ -318,6 +350,18 @@
     <string name="compatibility_brand_vivo_advice">进入 i 管家或设置，允许自启动、后台高耗电和锁屏通知；vivo X21 等旧机型还应定期确认默认短信应用没有被系统换回。</string>
     <string name="compatibility_brand_huawei_title">华为 / 荣耀专属建议</string>
     <string name="compatibility_brand_huawei_advice">在应用启动管理中改为手动管理，并允许自启动、关联启动和后台活动。若 SMS Role 与底层路由不同步，请展开高级诊断使用 ADB 修复。</string>
+
+    <string name="low_battery_reminder">低电量提醒</string>
+    <string name="low_battery_reminder_summary">电量低于阈值时通过转发渠道发送提醒</string>
+    <string name="low_battery_threshold_label">电量阈值</string>
+    <string name="low_battery_threshold_summary">当前阈值：%d%%</string>
+    <string name="low_battery_alert_title">⚠️ 低电量提醒</string>
+    <string name="low_battery_alert_body">设备电量已低于 %1$d%%，请及时充电！当前电量：%2$d%%</string>
+    <string name="low_battery_channels_label">提醒渠道</string>
+    <string name="low_battery_channels_empty">未选择渠道</string>
+    <string name="low_battery_channels_required">请至少选择一个提醒渠道，低电量提醒仍保持关闭</string>
+    <string name="low_battery_system_sender">系统电量监控</string>
+    <string name="bark_device_key_help">Device Key 是接收设备的推送地址。请在接收通知的 iPhone 或 iPad 上打开 Bark，从测试 URL 中复制 https://api.day.app/ 后面的 Key。备用 Android 手机是发送端；如果接收端也是 Android，建议使用 Gotify。Device Key 相当于推送密码，请勿分享或公开。</string>
     <string name="compatibility_brand_xiaomi_title">小米 / Redmi 专属建议</string>
     <string name="compatibility_brand_xiaomi_advice">允许自启动，将省电策略设为无限制，并允许后台弹出界面与锁屏通知；MIUI / HyperOS 更新后建议重新确认。</string>
     <string name="compatibility_brand_other_title">通用后台建议</string>
@@ -325,6 +369,7 @@
     <string name="compatibility_tools_title">体检工具</string>
     <string name="compatibility_test_notification">发送测试通知</string>
     <string name="compatibility_copy_report">复制诊断报告</string>
+    <string name="compatibility_feature_check_title">短信与转发功能自检</string>
     <string name="compatibility_refreshed">检测结果已刷新</string>
     <string name="compatibility_report_label">后台兼容诊断报告</string>
     <string name="compatibility_report_copied">诊断报告已复制（不含号码、短信和凭据）</string>
@@ -390,7 +435,7 @@
     <string name="about_repository_url">github.com/2756826865/sms-forwarder-huawei</string>
     <string name="about_coolapk">酷安</string>
     <string name="about_coolapk_url">coolapk.com/u/3270136</string>
-    <string name="about_common_questions_text">1. 如何正常接收和发送短信？\n请先将本应用设为系统默认短信应用，并允许接收、读取、发送短信、电话状态和通知权限。然后进入「设置 → 系统 → 后台运行与系统兼容」，确认默认短信角色、底层短信路由和 WRITE_SMS 状态正常。联系人权限为可选；拒绝后仍可手动输入号码，但部分位置无法显示联系人姓名和头像。\n\n2. 已经设为默认短信应用，为什么仍收不到或不转发？\n如果通知仍由系统「信息」应用发出，本应用内也没有新短信，通常说明系统没有把短信广播真正交给本应用。请在「设置 → 系统 → 后台运行与系统兼容」中重新检测默认短信角色、底层路由、WRITE_SMS、短信权限和电池策略。华为 / HarmonyOS 出现状态不同步时，可按页面提供的 ADB 命令修复；普通 APK 无权静默修改这些系统安全设置。\n\n3. 息屏、锁屏或清理后台后收不到短信怎么办？\n华为 / 荣耀请允许自启动、关联启动和后台活动；小米 / Redmi / POCO 请允许自启动并把省电策略设为无限制；vivo / iQOO 请在 i 管家中允许自启动、后台高耗电和锁屏通知。系统升级或重启后建议重新确认默认短信应用没有被换回。\n\n4. 为什么没有新短信通知？\n请确认系统通知权限已允许，并在应用通知设置中开启「收到的短信」通知频道。若系统「信息」应用通知而本应用不通知，请先排查默认短信路由，而不是只修改通知设置。\n\n5. 短信转发支持哪些渠道？\n支持 PushPlus、钉钉群机器人、飞书群机器人、企业微信应用消息、企业微信群机器人、电子邮箱、短信直发、Bark 和 Gotify。入口为首页底部「转发」或「设置 → 短信转发功能」。请先阅读并同意转发免责声明，再配置 Token、Webhook、密钥或邮箱凭据，并发送测试消息验证。\n\n6. 邮箱转发应该怎样选择端口？\nSSL/TLS 通常使用端口 465，适用于 QQ、163、Gmail 等；STARTTLS 通常使用端口 587，Microsoft 365 / Outlook 建议选择此项。多数邮箱要求授权码或应用专用密码，而不是网页登录密码；微软组织账号还可能需要管理员开启 SMTP AUTH。\n\n7. 测试转发成功，真实短信却没有转发怎么办？\n请确认对应渠道已经启用，设备收到短信时网络可用。若启用了「转发 → 转发规则」，请检查关键词、正则、来源 SIM 和作用范围是否导致未匹配。还要检查骚扰拦截的黑名单、白名单。断网时任务可能延后到网络恢复后补发；服务商限流、凭据失效或后台限制也会造成延迟或失败。\n\n8. 双卡名称、号码或发送卡不正确怎么办？\n部分运营商和系统不会向 Android 提供本机号码。可在「短信转发功能」的转发显示中手动填写 SIM1、SIM2 名称和号码。批量发送、远程指令和钉钉远程均可在各自设置页选择 SIM1 / SIM2 / 默认。换卡或系统升级后应重新确认。\n\n9. 新建短信如何添加附件？\n附件仅支持单人会话。先选择一个收件人，再点击左下角「+」，应用会进入单人会话并打开附件选择器。未选择收件人或选择多个收件人时不能添加附件；批量发送只发送普通短信正文。\n\n10. 批量发送在哪里设置？是否收费？\n入口为「设置 → 批量发送」或首页绿色「+ → 批量发送」。同一页可选收件人（含 TXT/CSV 导入）、短信正文、发送 SIM 卡和发送间隔（立即 / 1–5 秒）；单次最多 30 个号码。会按运营商短信资费计费，长短信可能被拆分为多条；间隔只能降低短时间连续发送的压力，不能绕过运营商频率限制。\n\n11. 定时发送为什么可能不准时？\n入口为「设置 → 定时发送」，与批量发送间隔互不影响。Android 12 及以上需要允许精确闹钟权限。实际发送还受省电策略、设备是否开机、SIM 状态和运营商网络影响。\n\n12. 转发规则怎么用？\n入口为「转发 → 转发规则」，默认关闭。可按关键词、正则、来源 SIM 卡过滤短信，并指定规则作用的转发渠道。多个关键词可用逗号、竖线 |、分号或换行分隔，例如「验证码|快递|银行」。页面提供填写示例和规则测试。作用范围可选是否包含短信直发和远程短信指令。\n\n13. 远程转发功能是什么？\n入口为「转发 → 远程转发功能」，默认关闭，内含「短信远程指令」和「钉钉 Stream 远程指令」。短信远程命令格式：/短信发送 [SIM1|SIM2|默认|系统默认] 手机号 内容；需配置授权号码白名单。钉钉远程通过 Client ID / Client Secret 建立 Stream 长连接，群聊 @机器人 或私聊发送相同格式命令。命令短信不会进入正常转发流程，避免循环转发。\n\n14. 远程发送的回执是什么意思？\n「已提交发送」仅表示已交给系统短信栈；「发送成功/失败」来自系统回调；「已送达」来自运营商送达报告（许多运营商不提供或不可靠）。本地执行日志始终记录在「短信远程指令」页；启用「发送回执转发」后，还可推送到 PushPlus、钉钉等渠道（与正常短信转发独立）。\n\n15. 首页底部导航可以关闭吗？\n可以。在「设置 → 功能 → 显示首页底部导航」关闭。关闭后首页只保留短信列表和绿色「+」按钮，「+」位置不变；仍可从右上角进入设置。返回首页后立即生效，无需重启应用。\n\n16. 如何重新同步或恢复短信？\n「设置 → 系统 → 短信同步管理」会重新读取系统短信库；短信很多时可能需要数分钟，建议保持应用前台。删除的会话会进入「最近删除」，可恢复或彻底删除，但系统短信库已被其他应用永久删除的数据无法保证恢复。\n\n17. 为什么 Debug 版不能直接升级正式版？\nDebug 版包名带 .debug 且签名不同，需要先卸载 Debug 版。正式版升级必须同时保持包名 com.helyu.smsforwarder 和正式签名证书一致；更换签名后 Android 不允许覆盖安装。\n\n18. 项目源码、版本和隐私说明在哪里？\n「关于」页面提供当前版本、项目仓库、酷安主页和第三方许可。本应用需要读取短信和联系人以完成短信应用功能；转发凭据属于敏感信息，请妥善保管设备和配置，不要将 Token、Webhook、邮箱密码或诊断日志公开分享。</string>
+    <string name="about_common_questions_text">1. 如何正常接收和发送短信？\n请先将本应用设为系统默认短信应用，并允许接收、读取、发送短信、电话状态和通知权限。然后进入「设置 → 系统 → 后台运行与系统兼容」，确认默认短信角色、底层短信路由和 WRITE_SMS 状态正常。联系人权限为可选；拒绝后仍可手动输入号码，但部分位置无法显示联系人姓名和头像。\n\n2. 已经设为默认短信应用，为什么仍收不到或不转发？\n如果通知仍由系统「信息」应用发出，本应用内也没有新短信，通常说明系统没有把短信广播真正交给本应用。请在「设置 → 系统 → 后台运行与系统兼容」中重新检测默认短信角色、底层路由、WRITE_SMS、短信权限和电池策略。华为 / HarmonyOS 出现状态不同步时，可按页面提供的 ADB 命令修复；普通 APK 无权静默修改这些系统安全设置。\n\n3. 息屏、锁屏或清理后台后收不到短信怎么办？\n华为 / 荣耀请允许自启动、关联启动和后台活动；小米 / Redmi / POCO 请允许自启动并把省电策略设为无限制；vivo / iQOO 请在 i 管家中允许自启动、后台高耗电和锁屏通知。系统升级或重启后建议重新确认默认短信应用没有被换回。\n\n4. 为什么没有新短信通知？\n请确认系统通知权限已允许，并在应用通知设置中开启「收到的短信」通知频道。若系统「信息」应用通知而本应用不通知，请先排查默认短信路由，而不是只修改通知设置。\n\n5. 短信转发支持哪些渠道？\n支持 PushPlus、钉钉群机器人、飞书群机器人、企业微信应用消息、企业微信群机器人、电子邮箱、短信直发、Bark 和 Gotify。入口为首页底部「转发」或「设置 → 短信转发功能」。请先阅读并同意转发免责声明，再配置 Token、Webhook、密钥或邮箱凭据，并发送测试消息验证。\n\n6. 邮箱转发应该怎样选择端口？\nSSL/TLS 通常使用端口 465，适用于 QQ、163、Gmail 等；STARTTLS 通常使用端口 587，Microsoft 365 / Outlook 建议选择此项。多数邮箱要求授权码或应用专用密码，而不是网页登录密码；微软组织账号还可能需要管理员开启 SMTP AUTH。\n\n7. 测试转发成功，真实短信却没有转发怎么办？\n请确认对应渠道已经启用，设备收到短信时网络可用。若启用了「转发 → 转发规则」，请检查关键词、正则、来源 SIM 和作用范围是否导致未匹配。还要检查骚扰拦截的黑名单、白名单。断网时任务可能延后到网络恢复后补发；服务商限流、凭据失效或后台限制也会造成延迟或失败。\n\n8. 双卡名称、号码或发送卡不正确怎么办？\n部分运营商和系统不会向 Android 提供本机号码。可在「短信转发功能」的转发显示中手动填写 SIM1、SIM2 名称和号码。批量发送、远程指令和钉钉远程均可在各自设置页选择 SIM1 / SIM2 / 默认。换卡或系统升级后应重新确认。\n\n9. 新建短信如何添加附件？\n附件仅支持单人会话。先选择一个收件人，再点击左下角「+」，应用会进入单人会话并打开附件选择器。未选择收件人或选择多个收件人时不能添加附件；批量发送只发送普通短信正文。\n\n10. 批量发送在哪里设置？是否收费？\n入口为「设置 → 批量发送」或首页绿色「+ → 批量发送」。同一页可选收件人（含 TXT/CSV 导入）、短信正文、发送 SIM 卡和发送间隔（立即 / 1–5 秒）；单次最多 30 个号码。会按运营商短信资费计费，长短信可能被拆分为多条；间隔只能降低短时间连续发送的压力，不能绕过运营商频率限制。\n\n11. 定时发送为什么可能不准时？\n入口为「设置 → 定时发送」，与批量发送间隔互不影响。Android 12 及以上需要允许精确闹钟权限。实际发送还受省电策略、设备是否开机、SIM 状态和运营商网络影响。\n\n12. 转发规则怎么用？\n入口为「转发 → 转发规则」，默认关闭。可按关键词、正则、来源 SIM 卡过滤短信，并指定规则作用的转发渠道。多个关键词可用逗号、竖线 |、分号或换行分隔，例如「验证码|快递|银行」。页面提供填写示例和规则测试。作用范围可选是否包含短信直发和远程短信指令。\n\n13. 远程转发功能是什么？\n入口为「转发 → 远程转发功能」，默认关闭，内含「短信远程指令」和「钉钉 Stream 远程指令」。短信远程命令格式：/短信发送 [SIM1|SIM2|默认|系统默认] 手机号 内容；需配置授权号码白名单。钉钉远程通过 Client ID / Client Secret 建立 Stream 长连接，群聊 @机器人 或私聊发送相同格式命令。命令短信不会进入正常转发流程，避免循环转发。\n\n14. 远程发送的回执是什么意思？\n「已提交发送」仅表示已交给系统短信栈；「发送成功/失败」来自系统回调；「已送达」来自运营商送达报告（许多运营商不提供或不可靠）。本地执行日志始终记录在「短信远程指令」页；启用「发送回执转发」后，还可推送到 PushPlus、钉钉等渠道（与正常短信转发独立）。\n\n15. 首页底部导航可以关闭吗？\n可以。在「设置 → 功能 → 显示首页底部导航」关闭。默认开启；关闭后首页只保留短信列表和绿色「+」按钮，仍可从右上角进入设置。返回首页后立即生效，无需重启应用。\n\n16. 如何重新同步或恢复短信？\n「设置 → 系统 → 短信同步管理」会重新读取系统短信库；短信很多时可能需要数分钟，建议保持应用前台。删除的会话会进入「最近删除」，可恢复或彻底删除，但系统短信库已被其他应用永久删除的数据无法保证恢复。\n\n17. 为什么 Debug 版不能直接升级正式版？\nDebug 版包名带 .debug 且签名不同，需要先卸载 Debug 版。正式版升级必须同时保持包名 com.helyu.smsforwarder 和正式签名证书一致；更换签名后 Android 不允许覆盖安装。\n\n18. 项目源码、版本和隐私说明在哪里？\n「关于」页面提供当前版本、项目仓库、酷安主页和第三方许可。本应用需要读取短信和联系人以完成短信应用功能；转发凭据属于敏感信息，请妥善保管设备和配置，不要将 Token、Webhook、邮箱密码或诊断日志公开分享。</string>
     <string name="about_known_issues_text">1. 华为默认短信状态可能分裂\n部分 EMUI / HarmonyOS 设备切换默认短信应用后，Android SMS Role、底层 sms_default_application 与 WRITE_SMS 可能不同步。普通应用无法静默修复；请使用「设置 → 系统 → 后台运行与系统兼容」页面检测，并按页面提示操作。卸载重装、切换默认应用或系统升级后可能再次出现。\n\n2. 厂商后台策略可能延迟任务\n华为 / 荣耀、小米 / Redmi / POCO、vivo / iQOO 等系统可能在息屏、锁屏、清理最近任务或省电模式下限制后台工作。必须由用户允许自启动、后台活动和锁屏通知，并将电池策略设为不限制。应用不能通过无限循环或永久唤醒锁可靠绕过系统限制。\n\n3. 系统可能自动换回原「信息」应用\n部分 vivo、华为及其他定制系统在重启、系统更新或安全检查后可能恢复系统短信应用。出现系统「信息」有通知、本应用无记录且不转发时，应首先重新确认默认短信应用和底层路由。\n\n4. RCS / 5G 消息不属于普通短信\n本应用主要处理 Android 系统提供的 SMS / MMS。运营商 RCS、5G 消息或厂商私有网络消息不一定进入系统短信广播，因此可能无法显示或转发。\n\n5. 附件和多人发送能力有限\n附件仅支持单人会话，并按 MMS 能力发送；新建页面选择多个收件人、批量发送和定时发送目前只支持短信正文。MMS 是否成功还取决于移动数据、APN、运营商和彩信大小限制。\n\n6. SIM 本机号码可能无法读取\n部分 SIM、运营商和系统不会向第三方应用提供本机号码，双卡槽顺序也可能在换卡后变化。显示名称和号码可手动填写，但不能据此保证运营商真实号码识别。\n\n7. 邮箱服务商可能拒绝登录或发送\nMicrosoft 365 / Outlook 通常使用 STARTTLS 587，但组织可能关闭 SMTP AUTH；其他邮箱也可能要求授权码、应用专用密码或开启 SMTP 服务。服务商的风控、限流和垃圾邮件策略不受本应用控制。\n\n8. 网络转发不是绝对实时\nPushPlus、机器人、企业微信、邮箱、Bark 和 Gotify 均依赖网络及第三方服务。断网、DNS 异常、接口限流或服务不可用时会延迟或失败；恢复网络后的补发由系统调度，时间无法精确保证。\n\n9. 转发规则可能误拦或漏拦\n规则默认关闭。启用后若关键词、正则或作用范围配置不当，可能导致本应转发的短信被跳过，或不应转发的短信仍被转发。请使用规则测试功能验证，并理解三种作用范围（扩展渠道 / 含短信直发 / 含远程指令）的差异。\n\n10. 钉钉 Stream 远程依赖长连接\n钉钉远程指令需要前台服务维持 Stream 长连接。部分厂商可能在息屏、清理后台或省电模式下断开连接，导致远程命令暂时不可用；需允许自启动和后台活动。\n\n11. 远程发送回执不等于最终送达\n远程指令和钉钉远程的「已提交发送」只表示交给系统短信栈；最终成功、失败或送达以运营商和系统回调为准，许多运营商不提供可靠送达报告。\n\n12. 首次同步大型短信库可能较慢\n系统短信很多或设备性能较低时，首次同步、重新同步和会话刷新可能需要数分钟。同步期间建议保持应用前台，不要反复清除数据或切换默认短信应用。\n\n13. 定时发送受系统和网络影响\n即使已允许精确闹钟，关机、SIM 不可用、无信号、欠费、飞行模式和厂商后台限制仍会导致延迟或失败。\n\n14. Android 15 / 16 界面可能存在厂商差异\n项目可在当前目标 SDK 下编译运行，但新版系统的沉浸式布局、状态栏和导航栏策略可能因厂商不同而出现细微视觉差异，需要通过真机持续适配。\n\n15. 升级必须保持正式签名一致\n正式版只有在包名和签名证书一致时才能覆盖安装。Debug 版、第三方重新签名包或更换证书的 APK 无法直接升级现有正式版。</string>
     <string name="about_licenses_text">Fossify Messages · GPL-3.0\nEventBus · Apache-2.0\nandroid-smsmms · Apache-2.0\nIndicator Fast Scroll · Apache-2.0\nAndroidX / Material Components · Apache-2.0</string>
     <string name="type_a_message">输入信息…</string>
@@ -521,6 +566,7 @@
     <string name="error_radio_turned_off">Couldn\'t send message, radio turned off</string>
     <string name="carrier_send_error">Couldn\'t send message, carrier error</string>
     <string name="unknown_error_occurred_sending_message">Couldn\'t send message, error code: %d</string>
+    <string name="honor_sms_duplicate_send_blocked">荣耀兼容保护已阻止重复发送，请稍后确认短信状态</string>
     <string name="invalid_short_code">Can\'t reply to short codes like this</string>
     <string name="invalid_short_code_desc">You can only reply to short codes with numbers like \"503501\" but not to codes containing letters and numbers like \"AB-CD0\".</string>
     <string name="attachment_sized_exceeds_max_limit">Attachment size exceeds max MMS limit</string>

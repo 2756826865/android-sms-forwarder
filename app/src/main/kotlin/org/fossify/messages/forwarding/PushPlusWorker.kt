@@ -27,11 +27,19 @@ class PushPlusWorker(
 
     override suspend fun doWork(): Result {
         val config = PushPlusConfig(applicationContext)
-        if (!config.enabled && !inputData.getBoolean(KEY_IS_TEST, false)) return Result.success()
+        val isTest = inputData.getBoolean(KEY_IS_TEST, false)
+        val history = ForwardingHistoryStore(applicationContext)
+        val historyRecordId = inputData.getString(KEY_HISTORY_RECORD_ID).orEmpty()
+        if (historyRecordId.isNotBlank()) history.markRunning(historyRecordId)
+        if (!config.enabled && !isTest) {
+            if (historyRecordId.isNotBlank()) history.markSkipped(historyRecordId, "PushPlus 已关闭")
+            return Result.success()
+        }
 
         val token = config.getToken()
         if (token.isBlank()) {
             config.lastStatus = "发送失败：未配置 Token"
+            if (historyRecordId.isNotBlank()) history.markFailed(historyRecordId, "未配置 Token")
             return Result.failure()
         }
 
@@ -56,14 +64,25 @@ class PushPlusWorker(
             val json = JSONObject(response)
             if (json.optInt("code") == 200) {
                 config.lastStatus = "发送成功：${SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault()).format(Date())}"
+                if (historyRecordId.isNotBlank()) history.markSuccess(historyRecordId, "PushPlus 发送成功")
                 Result.success()
             } else {
-                config.lastStatus = "发送失败：${json.optString("msg", "PushPlus 拒绝请求")}"
+                val detail = json.optString("msg", "PushPlus 拒绝请求")
+                config.lastStatus = "发送失败：$detail"
+                if (historyRecordId.isNotBlank()) history.markFailed(historyRecordId, detail)
                 Result.failure()
             }
         } catch (error: Exception) {
-            config.lastStatus = "发送失败，等待重试：${error.message ?: error.javaClass.simpleName}"
-            Result.retry()
+            val detail = error.message ?: error.javaClass.simpleName
+            if (runAttemptCount < MAX_RETRY_INDEX) {
+                config.lastStatus = "发送失败，等待重试：$detail"
+                if (historyRecordId.isNotBlank()) history.markRetry(historyRecordId, detail)
+                Result.retry()
+            } else {
+                config.lastStatus = "发送失败：$detail"
+                if (historyRecordId.isNotBlank()) history.markFailed(historyRecordId, detail)
+                Result.failure()
+            }
         }
     }
 
@@ -96,6 +115,8 @@ class PushPlusWorker(
         private const val KEY_RECEIVED_AT = "received_at"
         private const val KEY_SUBSCRIPTION_ID = "subscription_id"
         private const val KEY_IS_TEST = "is_test"
+        private const val KEY_HISTORY_RECORD_ID = "history_record_id"
+        private const val MAX_RETRY_INDEX = 2
 
         fun enqueue(
             context: Context,
@@ -105,13 +126,23 @@ class PushPlusWorker(
             subscriptionId: Int,
             uniqueId: String
         ) {
+            val historyRecordId = ForwardingHistoryStore(context).registerQueued(
+                workId = uniqueId,
+                channel = ForwardingChannels.PUSHPLUS,
+                sender = sender,
+                body = body,
+                receivedAt = receivedAt,
+                subscriptionId = subscriptionId,
+                isTest = false,
+            )
             val request = OneTimeWorkRequestBuilder<PushPlusWorker>()
                 .setInputData(
                     workDataOf(
                         KEY_SENDER to sender,
                         KEY_BODY to body,
                         KEY_RECEIVED_AT to receivedAt,
-                        KEY_SUBSCRIPTION_ID to subscriptionId
+                        KEY_SUBSCRIPTION_ID to subscriptionId,
+                        KEY_HISTORY_RECORD_ID to historyRecordId,
                     )
                 )
                 .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
@@ -122,13 +153,25 @@ class PushPlusWorker(
         }
 
         fun enqueueTest(context: Context, sender: String, body: String) {
+            val now = System.currentTimeMillis()
+            val workId = "test-pushplus-$now"
+            val historyRecordId = ForwardingHistoryStore(context).registerQueued(
+                workId = workId,
+                channel = ForwardingChannels.PUSHPLUS,
+                sender = sender,
+                body = body,
+                receivedAt = now,
+                subscriptionId = -1,
+                isTest = true,
+            )
             val request = OneTimeWorkRequestBuilder<PushPlusWorker>()
                 .setInputData(
                     workDataOf(
                         KEY_SENDER to sender,
                         KEY_BODY to body,
-                        KEY_RECEIVED_AT to System.currentTimeMillis(),
-                        KEY_IS_TEST to true
+                        KEY_RECEIVED_AT to now,
+                        KEY_IS_TEST to true,
+                        KEY_HISTORY_RECORD_ID to historyRecordId,
                     )
                 )
                 .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())

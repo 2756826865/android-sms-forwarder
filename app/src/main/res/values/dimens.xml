@@ -30,7 +30,7 @@
     <dimen name="home_bottom_nav_slot_width">72dp</dimen>
     <dimen name="home_bottom_nav_item_width">64dp</dimen>
     <dimen name="home_bottom_nav_item_height">54dp</dimen>
-    <dimen name="home_content_bottom_padding">132dp</dimen>
+    <dimen name="home_content_bottom_padding">188dp</dimen>
     <dimen name="home_fab_size">52dp</dimen>
     <dimen name="home_fab_bottom_margin">118dp</dimen>
     <dimen name="selection_content_bottom_padding">88dp</dimen>

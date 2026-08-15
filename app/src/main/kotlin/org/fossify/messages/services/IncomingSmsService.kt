@@ -25,6 +25,7 @@ import org.fossify.commons.models.SimpleContact
 import org.fossify.messages.R
 import org.fossify.messages.activities.MainActivity
 import org.fossify.messages.extensions.config
+import org.fossify.messages.extensions.getNameAndPhotoFromPhoneNumber
 import org.fossify.messages.extensions.getNameFromAddress
 import org.fossify.messages.extensions.getNotificationBitmap
 import org.fossify.messages.extensions.getSmsThreadId
@@ -37,6 +38,7 @@ import org.fossify.messages.extensions.syncThreadToLocal
 import org.fossify.messages.extensions.updateConversationArchivedStatus
 import org.fossify.messages.extensions.subscriptionManagerCompat
 import org.fossify.messages.forwarding.ForwardingChannels
+import org.fossify.messages.forwarding.ForwardingHistoryStore
 import org.fossify.messages.forwarding.ForwardingRuleEngine
 import org.fossify.messages.forwarding.ForwardingRulesConfig
 import org.fossify.messages.forwarding.MultiChannelForwardWorker
@@ -183,7 +185,7 @@ class IncomingSmsService : Service() {
         }.getOrNull()
 
         val enabledForwardChannels = buildSet {
-            add(ForwardingChannels.PUSHPLUS)
+            if (receiverStatus.enabled) add(ForwardingChannels.PUSHPLUS)
             addAll(MultiForwardConfig(applicationContext).enabledChannelIds())
         }
         val ruleDecision = if (rulesConfig.enabled) {
@@ -197,6 +199,14 @@ class IncomingSmsService : Service() {
         } else {
             null
         }
+        if (ruleDecision?.blockedChannels?.isNotEmpty() == true) {
+            val decisionTime = java.text.SimpleDateFormat("MM-dd HH:mm:ss", java.util.Locale.getDefault())
+                .format(java.util.Date())
+            val blockedNames = ruleDecision.blockedChannels
+                .map(ForwardingChannels::displayName)
+                .joinToString("、")
+            rulesConfig.lastDecision = "$decisionTime · $address · $blockedNames · ${ruleDecision.reason}"
+        }
         val allowedForwardChannels = ruleDecision?.allowedChannels
 
         val remoteCommandAllowed = !rulesConfig.affectsRemoteCommands() ||
@@ -208,9 +218,26 @@ class IncomingSmsService : Service() {
             sender = address,
             body = body,
             subscriptionId = subscriptionId,
-            receivedAt = receivedAt,
+            messageTimestamp = sentAt,
             allowExecution = remoteCommandAllowed,
         )
+
+        if (!remoteCommandConsumed && ruleDecision != null) {
+            val history = ForwardingHistoryStore(applicationContext)
+            ruleDecision.blockedChannels
+                .intersect(enabledForwardChannels)
+                .forEach { channel ->
+                    history.registerSkipped(
+                        workId = uniqueId,
+                        channel = channel,
+                        sender = address,
+                        body = body,
+                        receivedAt = receivedAt,
+                        subscriptionId = subscriptionId,
+                        detail = "转发规则未允许：${ruleDecision.reason}",
+                    )
+                }
+        }
 
         if (receiverStatus.enabled && !remoteCommandConsumed && (allowedForwardChannels == null || ForwardingChannels.PUSHPLUS in allowedForwardChannels)) {
             PushPlusWorker.enqueue(
@@ -295,8 +322,11 @@ class IncomingSmsService : Service() {
         if (!isWhitelisted && isMessageFilteredOut(this, body)) return true
         if (!isWhitelisted && isNumberBlocked(address)) return true
         if (!isWhitelisted && baseConfig.blockUnknownNumbers) {
-            val privateCursor = getMyContactsCursor(favoritesOnly = false, withPhoneNumbersOnly = true)
-            val result = SimpleContactsHelper(this).existsSync(address, privateCursor)
+            val result = runCatching {
+                getMyContactsCursor(favoritesOnly = false, withPhoneNumbersOnly = true).use { privateCursor ->
+                    SimpleContactsHelper(this).existsSync(address, privateCursor)
+                }
+            }.getOrNull()
             if (result == ContactLookupResult.NotFound) return true
         }
         return false
@@ -311,11 +341,13 @@ class IncomingSmsService : Service() {
         subscriptionId: Int,
         status: Int,
     ) {
-        val contacts = SimpleContactsHelper(this)
-        val photoUri = contacts.getPhotoUriFromPhoneNumber(address)
-        val senderName = getMyContactsCursor(favoritesOnly = false, withPhoneNumbersOnly = true).use {
-            getNameFromAddress(address, it)
-        }
+        val contact = getNameAndPhotoFromPhoneNumber(address)
+        val photoUri = contact.photoUri.orEmpty()
+        val senderName = runCatching {
+            getMyContactsCursor(favoritesOnly = false, withPhoneNumbersOnly = true).use {
+                getNameFromAddress(address, it)
+            }
+        }.getOrDefault(contact.name.ifBlank { address })
         val participant = SimpleContact(
             rawId = 0,
             contactId = 0,
