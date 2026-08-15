@@ -5,7 +5,7 @@
     android:id="@+id/main_coordinator"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/miui_page_background"
+    android:background="@color/miui_card_background"
     android:clipChildren="false"
     android:clipToPadding="false">
 
@@ -161,7 +161,7 @@
                     android:id="@+id/main_holder"
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
-                    android:background="@color/miui_card_background">
+                    android:background="@android:color/transparent">
 
                     <com.google.android.material.progressindicator.LinearProgressIndicator
                         android:id="@+id/conversations_progress_bar"
@@ -230,7 +230,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
                     android:alpha="0"
-                    android:background="@color/miui_card_background"
+                    android:background="@android:color/transparent"
                     android:visibility="gone">
 
                     <org.fossify.commons.views.MyTextView
