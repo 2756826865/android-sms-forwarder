@@ -89,16 +89,75 @@
                 <View style="@style/SmsSettingsDivider" />
 
                 <TextView
-                    android:id="@+id/settings_blocking_holder"
+                    android:id="@+id/settings_low_battery_holder"
                     style="@style/SmsSettingsRow"
-                    android:text="@string/settings_blocking" />
+                    android:text="@string/low_battery_reminder" />
+
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_marginTop="26dp"
+                android:layout_marginBottom="8dp"
+                android:fontFamily="sans-serif"
+                android:text="@string/settings_system"
+                android:textColor="@color/miui_section_text"
+                android:textSize="15sp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/settings_card_background"
+                android:orientation="vertical"
+                android:paddingVertical="4dp">
+
+                <LinearLayout
+                    android:id="@+id/settings_sync_holder"
+                    android:layout_width="match_parent"
+                    android:layout_height="82dp"
+                    android:foreground="?attr/selectableItemBackground"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingHorizontal="20dp">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:fontFamily="sans-serif"
+                            android:text="@string/settings_sync"
+                            android:textColor="@color/miui_primary_text"
+                            android:textSize="18sp" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:fontFamily="sans-serif"
+                            android:text="@string/settings_sync_summary"
+                            android:textColor="@color/miui_secondary_text"
+                            android:textSize="13sp" />
+                    </LinearLayout>
+
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:src="@drawable/ic_chevron_right_vector" />
+                </LinearLayout>
 
                 <View style="@style/SmsSettingsDivider" />
 
                 <TextView
-                    android:id="@+id/settings_recently_deleted_holder"
+                    android:id="@+id/settings_compatibility_holder"
                     style="@style/SmsSettingsRow"
-                    android:text="@string/settings_recently_deleted" />
+                    android:text="@string/compatibility_title" />
 
                 <View style="@style/SmsSettingsDivider" />
 
@@ -190,74 +249,16 @@
                 <View style="@style/SmsSettingsDivider" />
 
                 <TextView
-                    android:id="@+id/settings_low_battery_holder"
+                    android:id="@+id/settings_blocking_holder"
                     style="@style/SmsSettingsRow"
-                    android:text="@string/low_battery_reminder" />
-            </LinearLayout>
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:layout_marginTop="26dp"
-                android:layout_marginBottom="8dp"
-                android:fontFamily="sans-serif"
-                android:text="@string/settings_system"
-                android:textColor="@color/miui_section_text"
-                android:textSize="15sp" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:background="@drawable/settings_card_background"
-                android:orientation="vertical"
-                android:paddingVertical="4dp">
-
-                <LinearLayout
-                    android:id="@+id/settings_sync_holder"
-                    android:layout_width="match_parent"
-                    android:layout_height="82dp"
-                    android:foreground="?attr/selectableItemBackground"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal"
-                    android:paddingHorizontal="20dp">
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:orientation="vertical">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:fontFamily="sans-serif"
-                            android:text="@string/settings_sync"
-                            android:textColor="@color/miui_primary_text"
-                            android:textSize="18sp" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="2dp"
-                            android:fontFamily="sans-serif"
-                            android:text="@string/settings_sync_summary"
-                            android:textColor="@color/miui_secondary_text"
-                            android:textSize="13sp" />
-                    </LinearLayout>
-
-                    <ImageView
-                        android:layout_width="20dp"
-                        android:layout_height="20dp"
-                        android:src="@drawable/ic_chevron_right_vector" />
-                </LinearLayout>
+                    android:text="@string/settings_blocking" />
 
                 <View style="@style/SmsSettingsDivider" />
 
                 <TextView
-                    android:id="@+id/settings_compatibility_holder"
+                    android:id="@+id/settings_recently_deleted_holder"
                     style="@style/SmsSettingsRow"
-                    android:text="@string/compatibility_title" />
+                    android:text="@string/settings_recently_deleted" />
             </LinearLayout>
 
             <TextView
