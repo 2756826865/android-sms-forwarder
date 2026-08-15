@@ -41,6 +41,7 @@ import android.widget.Toast
 import androidx.annotation.StringRes
 import androidx.appcompat.content.res.AppCompatResources
 import androidx.constraintlayout.widget.ConstraintLayout
+import androidx.core.content.ContextCompat
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.net.toUri
 import androidx.core.view.ViewCompat
@@ -52,7 +53,6 @@ import androidx.recyclerview.widget.RecyclerView
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import org.fossify.commons.dialogs.ConfirmationDialog
-import org.fossify.commons.dialogs.FeatureLockedDialog
 import org.fossify.commons.dialogs.PermissionRequiredDialog
 import org.fossify.commons.dialogs.RadioGroupDialog
 import org.fossify.commons.extensions.addBlockedNumber
@@ -77,7 +77,6 @@ import org.fossify.commons.extensions.getTextSize
 import org.fossify.commons.extensions.hideKeyboard
 import org.fossify.commons.extensions.insetsController
 import org.fossify.commons.extensions.isDynamicTheme
-import org.fossify.commons.extensions.isOrWasThankYouInstalled
 import org.fossify.commons.extensions.isVisible
 import org.fossify.commons.extensions.launchActivityIntent
 import org.fossify.commons.extensions.maybeShowNumberPickerDialog
@@ -430,7 +429,10 @@ class ThreadActivity : SimpleActivity() {
                 PICK_DOCUMENT_INTENT,
                 CAPTURE_AUDIO_INTENT,
                 PICK_PHOTO_INTENT,
-                PICK_VIDEO_INTENT -> addAttachment(data)
+                PICK_VIDEO_INTENT -> {
+                    persistAttachmentReadPermission(resultData)
+                    addAttachment(data)
+                }
 
                 PICK_CONTACT_INTENT -> addContactAttachment(data)
                 PICK_SAVE_FILE_INTENT -> saveAttachments(resultData)
@@ -982,7 +984,7 @@ class ThreadActivity : SimpleActivity() {
                 val uri = intent.getStringExtra(THREAD_ATTACHMENT_URI)!!.toUri()
                 addAttachment(uri)
             } else if (intent.extras?.containsKey(THREAD_ATTACHMENT_URIS) == true) {
-                (intent.getSerializableExtra(THREAD_ATTACHMENT_URIS) as? ArrayList<Uri>)?.forEach {
+                intent.getParcelableArrayListExtra(THREAD_ATTACHMENT_URIS, Uri::class.java)?.forEach {
                     addAttachment(it)
                 }
             }
@@ -1203,11 +1205,7 @@ class ThreadActivity : SimpleActivity() {
     }
 
     private fun tryBlocking() {
-        if (isOrWasThankYouInstalled()) {
-            blockNumber()
-        } else {
-            FeatureLockedDialog(this) { }
-        }
+        blockNumber()
     }
 
     private fun blockNumber() {
@@ -1450,6 +1448,7 @@ class ThreadActivity : SimpleActivity() {
         return items
     }
 
+    @Suppress("DEPRECATION")
     private fun launchActivityForResult(
         intent: Intent,
         requestCode: Int,
@@ -1478,6 +1477,7 @@ class ThreadActivity : SimpleActivity() {
         capturedImageUri = getMyFileUri(imageFile)
         val intent = Intent(MediaStore.ACTION_IMAGE_CAPTURE).apply {
             putExtra(MediaStore.EXTRA_OUTPUT, capturedImageUri)
+            addFlags(FLAG_GRANT_READ_URI_PERMISSION or FLAG_GRANT_WRITE_URI_PERMISSION)
         }
         launchActivityForResult(intent, CAPTURE_PHOTO_INTENT)
     }
@@ -1493,11 +1493,27 @@ class ThreadActivity : SimpleActivity() {
     }
 
     private fun launchGetContentIntent(mimeTypes: Array<String>, requestCode: Int) {
-        Intent(Intent.ACTION_GET_CONTENT).apply {
+        Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
             type = "*/*"
             putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes)
+            addFlags(FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
             launchActivityForResult(this, requestCode)
+        }
+    }
+
+    private fun persistAttachmentReadPermission(resultData: Intent) {
+        val uri = resultData.data ?: return
+        val flags = resultData.flags and FLAG_GRANT_READ_URI_PERMISSION
+        if (flags == 0) {
+            return
+        }
+
+        try {
+            contentResolver.takePersistableUriPermission(uri, FLAG_GRANT_READ_URI_PERMISSION)
+        } catch (_: SecurityException) {
+            // Some providers grant only temporary access. Immediate sending still works.
+        } catch (_: IllegalArgumentException) {
         }
     }
 
@@ -2228,7 +2244,7 @@ class ThreadActivity : SimpleActivity() {
     }
 
     private fun getBottomBarColor() = if (isDynamicTheme()) {
-        resources.getColor(org.fossify.commons.R.color.you_bottom_bar_color)
+        ContextCompat.getColor(this, org.fossify.commons.R.color.you_bottom_bar_color)
     } else {
         getBottomNavigationBackgroundColor()
     }

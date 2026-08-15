@@ -184,6 +184,9 @@
     <string name="forwarding_disclaimer_accept">我已阅读并同意</string>
     <string name="forwarding_disclaimer_decline">不同意并退出</string>
     <string name="forwarding_disclaimer_body">短信转发会将收到的短信内容、发送号码、SIM 标识及接收时间发送到您配置的第三方服务（PushPlus、钉钉、飞书、企业微信或电子邮箱）。短信可能包含验证码、账户信息和其他敏感内容。请仅配置由您本人控制且可信的接收端，并妥善保管 Token、Webhook、密钥和邮箱凭据。因第三方平台、网络、系统限制、配置错误或凭据泄露造成的延迟、丢失或信息泄露风险由使用者承担。请勿将本功能用于未经授权的监控、转发或其他违法用途。点击“我已阅读并同意”表示您理解并同意上述内容。</string>
+    <string name="first_use_notice_title">首次使用提示</string>
+    <string name="first_use_notice_message">本软件免费提供，不含付费解锁功能。\n\n短信发送、彩信、批量发送及远程代发可能产生运营商通信费用；短信转发会将内容发送至您自行配置的第三方服务。\n\n请仅在本人设备或已获得明确授权的设备上使用。严禁用于诈骗、骚扰、垃圾短信、未经授权的监控或转发，以及其他违法违规用途。使用者应自行承担配置、通信费用、数据安全及使用行为产生的责任。</string>
+    <string name="first_use_notice_accept">我已知晓</string>
     <string name="forwarding_display">转发显示</string>
     <string name="forwarding_sim_one_label">SIM1 自定义名称</string>
     <string name="forwarding_sim_two_label">SIM2 自定义名称</string>
@@ -566,6 +569,16 @@
     <string name="error_radio_turned_off">Couldn\'t send message, radio turned off</string>
     <string name="carrier_send_error">Couldn\'t send message, carrier error</string>
     <string name="unknown_error_occurred_sending_message">Couldn\'t send message, error code: %d</string>
+    <string name="mms_error_invalid_apn">Couldn\'t send MMS: APN or MMSC settings are invalid. Check your carrier APN settings.</string>
+    <string name="mms_error_unable_connect">Couldn\'t send MMS: unable to connect to the carrier MMS service. Check signal, mobile data, and APN settings.</string>
+    <string name="mms_error_http_failure">Couldn\'t send MMS: carrier MMS server returned a network error. Try again later or check APN settings.</string>
+    <string name="mms_error_io_error">Couldn\'t send MMS: network I/O failed. Check mobile data and signal, then retry.</string>
+    <string name="mms_error_retry">Couldn\'t send MMS temporarily. Keep mobile data enabled and retry later.</string>
+    <string name="mms_error_configuration">Couldn\'t send MMS: MMS configuration is missing or unsupported on this SIM.</string>
+    <string name="mms_error_no_data_network">Couldn\'t send MMS: no mobile data network is available. Enable mobile data and make sure the sending SIM can use data/APN.</string>
+    <string name="mms_error_invalid_subscription">Couldn\'t send MMS: the selected SIM is invalid. Reselect the sending SIM and retry.</string>
+    <string name="mms_error_inactive_subscription">Couldn\'t send MMS: the selected SIM is inactive. Check SIM status and retry.</string>
+    <string name="mms_error_data_disabled">Couldn\'t send MMS: mobile data is disabled for the MMS APN. Enable mobile data for the sending SIM.</string>
     <string name="honor_sms_duplicate_send_blocked">荣耀兼容保护已阻止重复发送，请稍后确认短信状态</string>
     <string name="invalid_short_code">Can\'t reply to short codes like this</string>
     <string name="invalid_short_code_desc">You can only reply to short codes with numbers like \"503501\" but not to codes containing letters and numbers like \"AB-CD0\".</string>

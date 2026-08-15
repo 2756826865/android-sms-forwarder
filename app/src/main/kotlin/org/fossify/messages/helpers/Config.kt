@@ -21,6 +21,10 @@ class Config(context: Context) : BaseConfig(context) {
         get() = prefs.getBoolean(SHOW_HOME_BOTTOM_NAVIGATION, true)
         set(value) = prefs.edit().putBoolean(SHOW_HOME_BOTTOM_NAVIGATION, value).apply()
 
+    var firstUseNoticeAccepted: Boolean
+        get() = prefs.getBoolean(FIRST_USE_NOTICE_ACCEPTED, false)
+        set(value) = prefs.edit().putBoolean(FIRST_USE_NOTICE_ACCEPTED, value).apply()
+
     var enableLiveIsland: Boolean
         get() = prefs.getBoolean(ENABLE_LIVE_ISLAND, false)
         set(value) = prefs.edit().putBoolean(ENABLE_LIVE_ISLAND, value).apply()

@@ -102,6 +102,16 @@
     <string name="error_radio_turned_off">无法发送信息，无线装置关闭</string>
     <string name="carrier_send_error">无法发送信息，运营商错误</string>
     <string name="unknown_error_occurred_sending_message">无法发送信息，错误代码：%d</string>
+    <string name="mms_error_invalid_apn">无法发送彩信：APN 或 MMSC 配置无效。请检查运营商 APN 设置。</string>
+    <string name="mms_error_unable_connect">无法发送彩信：无法连接运营商彩信服务。请检查信号、移动数据和 APN 设置。</string>
+    <string name="mms_error_http_failure">无法发送彩信：运营商彩信服务器返回网络错误。请稍后重试或检查 APN 设置。</string>
+    <string name="mms_error_io_error">无法发送彩信：网络读写失败。请检查移动数据和信号后重试。</string>
+    <string name="mms_error_retry">暂时无法发送彩信。请保持移动数据开启，稍后重试。</string>
+    <string name="mms_error_configuration">无法发送彩信：当前 SIM 缺少彩信配置或不支持彩信。</string>
+    <string name="mms_error_no_data_network">无法发送彩信：没有可用的移动数据网络。请开启移动数据，并确认发送 SIM 可使用数据/APN。</string>
+    <string name="mms_error_invalid_subscription">无法发送彩信：选择的 SIM 无效。请重新选择发送 SIM 后重试。</string>
+    <string name="mms_error_inactive_subscription">无法发送彩信：选择的 SIM 未激活。请检查 SIM 状态后重试。</string>
+    <string name="mms_error_data_disabled">无法发送彩信：当前 SIM 的彩信数据已关闭。请为发送 SIM 开启移动数据。</string>
     <string name="invalid_short_code">无法回复此类短代码</string>
     <string name="invalid_short_code_desc">您只能回复类似“503501”这样的纯数字短代码，而不能回复类似“AB-CD0”这样包含字母和数字混合的代码。</string>
     <string name="attachment_sized_exceeds_max_limit">附件大小超出了彩信上限</string>

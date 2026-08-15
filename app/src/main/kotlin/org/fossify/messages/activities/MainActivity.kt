@@ -18,12 +18,12 @@ import android.os.Process
 import android.provider.Settings
 import android.provider.Telephony
 import android.text.TextUtils
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.content.res.AppCompatResources
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import org.fossify.commons.dialogs.PermissionRequiredDialog
 import org.fossify.commons.extensions.adjustAlpha
-import org.fossify.commons.extensions.appLaunched
 import org.fossify.commons.extensions.appLockManager
 import org.fossify.commons.extensions.applyColorFilter
 import org.fossify.commons.extensions.areSystemAnimationsEnabled
@@ -31,10 +31,10 @@ import org.fossify.commons.extensions.beGone
 import org.fossify.commons.extensions.beGoneIf
 import org.fossify.commons.extensions.beVisible
 import org.fossify.commons.extensions.beVisibleIf
-import org.fossify.commons.extensions.checkWhatsNew
 import org.fossify.commons.extensions.convertToBitmap
 import org.fossify.commons.extensions.fadeIn
 import org.fossify.commons.extensions.getMyContactsCursor
+import org.fossify.commons.extensions.getInternalStoragePath
 import org.fossify.commons.extensions.getProperBackgroundColor
 import org.fossify.commons.extensions.getProperPrimaryColor
 import org.fossify.commons.extensions.getProperTextColor
@@ -43,6 +43,7 @@ import org.fossify.commons.extensions.openNotificationSettings
 import org.fossify.commons.extensions.onTextChangeListener
 import org.fossify.commons.extensions.toast
 import org.fossify.commons.extensions.underlineText
+import org.fossify.commons.extensions.updateSDCardPath
 import org.fossify.commons.extensions.viewBinding
 import org.fossify.commons.helpers.LOWER_ALPHA
 import org.fossify.commons.helpers.MyContactsContentProvider
@@ -52,7 +53,6 @@ import org.fossify.commons.helpers.PERMISSION_SEND_SMS
 import org.fossify.commons.helpers.SHORT_ANIMATION_DURATION
 import org.fossify.commons.helpers.ensureBackgroundThread
 import org.fossify.commons.helpers.isQPlus
-import org.fossify.commons.models.Release
 import org.fossify.messages.BuildConfig
 import org.fossify.messages.R
 import org.fossify.messages.adapters.ConversationsAdapter
@@ -71,6 +71,7 @@ import org.fossify.messages.extensions.getMessages
 import org.fossify.messages.extensions.insertOrUpdateConversation
 import org.fossify.messages.extensions.messagesDB
 import org.fossify.messages.extensions.markThreadMessagesRead
+import org.fossify.messages.extensions.showSmsStyled
 import org.fossify.messages.extensions.syncThreadToLocal
 import org.fossify.messages.helpers.SEARCHED_MESSAGE_ID
 import org.fossify.messages.helpers.THREAD_ID
@@ -88,8 +89,6 @@ import org.greenrobot.eventbus.ThreadMode
 class MainActivity : SimpleActivity() {
     override var isSearchBarEnabled = false
     
-    private val MAKE_DEFAULT_APP_REQUEST = 1
-    private val LEGACY_DEFAULT_APP_REQUEST = 2
     private val SMS_DEFAULT_APPLICATION_KEY = "sms_default_application"
     private val WRITE_SMS_APP_OP = "android:write_sms"
     private val ROLE_STATE_SETTLE_DELAY_MS = 500L
@@ -107,12 +106,22 @@ class MainActivity : SimpleActivity() {
     ) { granted ->
         if (!granted) toast(R.string.receive_sms_permission_required)
     }
+    private val makeDefaultSmsAppLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        handleDefaultSmsRoleResult(result.resultCode)
+    }
+    private val legacyDefaultSmsAppLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        askPermissions()
+    }
 
     @SuppressLint("InlinedApi")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
-        appLaunched(BuildConfig.APPLICATION_ID)
+        initializeAppSession()
         config.showListAvatars = true
         config.showLetterAvatars = false
         config.useRecycleBin = true
@@ -128,12 +137,42 @@ class MainActivity : SimpleActivity() {
         )
 
         binding.mainCoordinator.post { applyHomeBottomNavigationPreference() }
+        showFirstUseNoticeIfNeeded()
 
         checkAndDeleteOldRecycleBinMessages()
         clearAllMessagesIfNeeded {
             loadMessages()
         }
 
+    }
+
+    private fun initializeAppSession() {
+        config.internalStoragePath = getInternalStoragePath()
+        updateSDCardPath()
+        config.appId = BuildConfig.APPLICATION_ID
+        config.appRunCount++
+    }
+
+    private fun showFirstUseNoticeIfNeeded() {
+        if (config.firstUseNoticeAccepted) {
+            return
+        }
+
+        binding.root.post {
+            if (isFinishing || isDestroyed || config.firstUseNoticeAccepted) {
+                return@post
+            }
+
+            AlertDialog.Builder(this)
+                .setTitle(R.string.first_use_notice_title)
+                .setMessage(R.string.first_use_notice_message)
+                .setPositiveButton(R.string.first_use_notice_accept) { _, _ ->
+                    config.firstUseNoticeAccepted = true
+                }
+                .setCancelable(false)
+                .create()
+                .showSmsStyled()
+        }
     }
 
     override fun onResume() {
@@ -290,31 +329,6 @@ class MainActivity : SimpleActivity() {
         )
     }
 
-    override fun onActivityResult(requestCode: Int, resultCode: Int, resultData: Intent?) {
-        super.onActivityResult(requestCode, resultCode, resultData)
-        when (requestCode) {
-            MAKE_DEFAULT_APP_REQUEST -> {
-                if (resultCode != RESULT_OK) {
-                    finish()
-                    return
-                }
-
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    binding.root.postDelayed({
-                        if (!isSmsChainReady() && launchLegacyDefaultSmsRequest()) {
-                            return@postDelayed
-                        }
-                        askPermissions()
-                    }, ROLE_STATE_SETTLE_DELAY_MS)
-                } else {
-                    askPermissions()
-                }
-            }
-
-            LEGACY_DEFAULT_APP_REQUEST -> askPermissions()
-        }
-    }
-
     private fun isSmsChainReady(): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return true
         val roleReady = getSystemService(RoleManager::class.java)?.isRoleHeld(RoleManager.ROLE_SMS) == true
@@ -328,13 +342,30 @@ class MainActivity : SimpleActivity() {
         return roleReady && routeReady && writeSmsReady
     }
 
-    @Suppress("DEPRECATION")
     private fun launchLegacyDefaultSmsRequest(): Boolean = runCatching {
         val intent = Intent(Telephony.Sms.Intents.ACTION_CHANGE_DEFAULT)
             .putExtra(Telephony.Sms.Intents.EXTRA_PACKAGE_NAME, packageName)
-        startActivityForResult(intent, LEGACY_DEFAULT_APP_REQUEST)
+        legacyDefaultSmsAppLauncher.launch(intent)
         true
     }.getOrDefault(false)
+
+    private fun handleDefaultSmsRoleResult(resultCode: Int) {
+        if (resultCode != RESULT_OK) {
+            finish()
+            return
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            binding.root.postDelayed({
+                if (!isSmsChainReady() && launchLegacyDefaultSmsRequest()) {
+                    return@postDelayed
+                }
+                askPermissions()
+            }, ROLE_STATE_SETTLE_DELAY_MS)
+        } else {
+            askPermissions()
+        }
+    }
 
     private fun storeStateVariables() {
         storedTextColor = getProperTextColor()
@@ -351,7 +382,7 @@ class MainActivity : SimpleActivity() {
                     askPermissions()
                 } else {
                     val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_SMS)
-                    startActivityForResult(intent, MAKE_DEFAULT_APP_REQUEST)
+                    makeDefaultSmsAppLauncher.launch(intent)
                 }
             } else {
                 toast(org.fossify.commons.R.string.unknown_error_occurred)
@@ -363,7 +394,7 @@ class MainActivity : SimpleActivity() {
             } else {
                 val intent = Intent(Telephony.Sms.Intents.ACTION_CHANGE_DEFAULT)
                 intent.putExtra(Telephony.Sms.Intents.EXTRA_PACKAGE_NAME, packageName)
-                startActivityForResult(intent, MAKE_DEFAULT_APP_REQUEST)
+                legacyDefaultSmsAppLauncher.launch(intent)
             }
         }
     }
@@ -410,7 +441,6 @@ class MainActivity : SimpleActivity() {
     }
 
     private fun initMessenger() {
-        checkWhatsNewDialog()
         storeStateVariables()
         getCachedConversations()
         binding.noConversationsPlaceholder2.setOnClickListener {
@@ -872,9 +902,4 @@ class MainActivity : SimpleActivity() {
         initMessenger()
     }
 
-    private fun checkWhatsNewDialog() {
-        arrayListOf<Release>().apply {
-            checkWhatsNew(this, BuildConfig.VERSION_CODE)
-        }
-    }
 }
