@@ -61,6 +61,26 @@ class DeviceCompatibilityActivity : SimpleActivity() {
     private val receiveSmsPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { refreshCompatibilityStatus() }
+    private val smsRoleLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        if (result.resultCode == RESULT_OK) {
+            binding.root.postDelayed({
+                refreshCompatibilityStatus()
+                if (isDefaultSmsApp() && !isSmsChainReady()) requestLegacyDefaultSmsChange()
+            }, ROLE_STATE_SETTLE_DELAY_MS)
+        } else {
+            refreshCompatibilityStatus()
+        }
+    }
+    private val legacyDefaultSmsLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) {
+        binding.root.postDelayed(
+            { refreshCompatibilityStatus() },
+            ROLE_STATE_SETTLE_DELAY_MS,
+        )
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -108,21 +128,6 @@ class DeviceCompatibilityActivity : SimpleActivity() {
             Build.VERSION.RELEASE,
         )
         refreshCompatibilityStatus()
-    }
-
-    @Deprecated("Deprecated in Android")
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        when (requestCode) {
-            REQUEST_SMS_ROLE -> binding.root.postDelayed({
-                refreshCompatibilityStatus()
-                if (isDefaultSmsApp() && !isSmsChainReady()) requestLegacyDefaultSmsChange()
-            }, ROLE_STATE_SETTLE_DELAY_MS)
-            REQUEST_LEGACY_DEFAULT_SMS -> binding.root.postDelayed(
-                { refreshCompatibilityStatus() },
-                ROLE_STATE_SETTLE_DELAY_MS,
-            )
-        }
     }
 
     private fun refreshCompatibilityStatus() {
@@ -496,7 +501,7 @@ class DeviceCompatibilityActivity : SimpleActivity() {
                 return
             }
             val intent = getSystemService(RoleManager::class.java)?.createRequestRoleIntent(RoleManager.ROLE_SMS)
-            if (intent != null) runCatching { startActivityForResult(intent, REQUEST_SMS_ROLE) }
+            if (intent != null) runCatching { smsRoleLauncher.launch(intent) }
                 .onFailure { openAppDetails() }
             return
         }
@@ -507,7 +512,7 @@ class DeviceCompatibilityActivity : SimpleActivity() {
     private fun requestLegacyDefaultSmsChange() {
         val intent = Intent(Telephony.Sms.Intents.ACTION_CHANGE_DEFAULT)
             .putExtra(Telephony.Sms.Intents.EXTRA_PACKAGE_NAME, packageName)
-        runCatching { startActivityForResult(intent, REQUEST_LEGACY_DEFAULT_SMS) }
+        runCatching { legacyDefaultSmsLauncher.launch(intent) }
             .onFailure {
                 Toast.makeText(this, R.string.compatibility_legacy_sms_switch_unavailable, Toast.LENGTH_LONG).show()
             }
@@ -563,8 +568,6 @@ class DeviceCompatibilityActivity : SimpleActivity() {
         const val TEST_CHANNEL_ID = "compatibility_test"
         const val TEST_NOTIFICATION_ID = 19084
         const val HEALTH_CHECK_COUNT = 4
-        const val REQUEST_SMS_ROLE = 801
-        const val REQUEST_LEGACY_DEFAULT_SMS = 802
         const val ROLE_STATE_SETTLE_DELAY_MS = 500L
         const val PROJECT_REPOSITORY_URL = "https://github.com/2756826865/sms-forwarder-huawei"
     }
