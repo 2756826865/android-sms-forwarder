@@ -1,7 +1,6 @@
 package org.fossify.messages.activities
 
 import android.Manifest
-import android.annotation.SuppressLint
 import android.app.AppOpsManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -12,7 +11,7 @@ import android.content.ClipboardManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
-import android.net.Uri
+import android.annotation.SuppressLint
 import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
@@ -27,6 +26,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import androidx.core.net.toUri
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import org.fossify.commons.extensions.viewBinding
@@ -234,7 +234,6 @@ class DeviceCompatibilityActivity : SimpleActivity() {
         ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
 
     private fun isSmsNotificationChannelEnabled(): Boolean {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return true
         val manager = getSystemService(NotificationManager::class.java)
         val channel = manager?.getNotificationChannel(NOTIFICATION_CHANNEL_ID)
         return channel == null || channel.importance != NotificationManager.IMPORTANCE_NONE
@@ -270,12 +269,8 @@ class DeviceCompatibilityActivity : SimpleActivity() {
     }
 
     private fun openNotificationSettings() {
-        val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
-                .putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
-        } else {
-            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))
-        }
+        val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+            .putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
         runCatching { startActivity(intent) }.onFailure {
             Toast.makeText(this, R.string.compatibility_notification_settings_unavailable, Toast.LENGTH_SHORT).show()
             openAppDetails()
@@ -298,12 +293,10 @@ class DeviceCompatibilityActivity : SimpleActivity() {
     @SuppressLint("MissingPermission")
     private fun sendTestNotificationInternal() {
         createTestNotificationChannel()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val manager = getSystemService(NotificationManager::class.java)
-            if (manager?.getNotificationChannel(TEST_CHANNEL_ID)?.importance == NotificationManager.IMPORTANCE_NONE) {
-                openNotificationSettings()
-                return
-            }
+        val manager = getSystemService(NotificationManager::class.java)
+        if (manager?.getNotificationChannel(TEST_CHANNEL_ID)?.importance == NotificationManager.IMPORTANCE_NONE) {
+            openNotificationSettings()
+            return
         }
         val contentIntent = PendingIntent.getActivity(
             this,
@@ -327,7 +320,6 @@ class DeviceCompatibilityActivity : SimpleActivity() {
     }
 
     private fun createTestNotificationChannel() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val channel = NotificationChannel(
             TEST_CHANNEL_ID,
             getString(R.string.compatibility_test_channel_name),
@@ -491,7 +483,7 @@ class DeviceCompatibilityActivity : SimpleActivity() {
     }
 
     private fun openProjectRepository() {
-        launchOrFallback(Intent(Intent.ACTION_VIEW, Uri.parse(PROJECT_REPOSITORY_URL)))
+        launchOrFallback(Intent(Intent.ACTION_VIEW, PROJECT_REPOSITORY_URL.toUri()))
     }
 
     private fun requestDefaultSmsRole() {
@@ -530,13 +522,7 @@ class DeviceCompatibilityActivity : SimpleActivity() {
             Toast.makeText(this, R.string.compatibility_battery_already_ready, Toast.LENGTH_SHORT).show()
             return
         }
-        val directRequest = Intent(
-            Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-            Uri.parse("package:$packageName"),
-        )
-        runCatching { startActivity(directRequest) }.onFailure {
-            launchOrFallback(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
-        }
+        launchOrFallback(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
     }
 
     private fun launchOrFallback(intent: Intent) {
@@ -544,7 +530,7 @@ class DeviceCompatibilityActivity : SimpleActivity() {
     }
 
     private fun openAppDetails() {
-        startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
+        startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, "package:$packageName".toUri()))
     }
 
     private data class CompatibilityState(

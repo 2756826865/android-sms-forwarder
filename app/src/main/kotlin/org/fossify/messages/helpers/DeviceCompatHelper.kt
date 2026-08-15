@@ -3,6 +3,7 @@ package org.fossify.messages.helpers
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
@@ -273,12 +274,8 @@ object DeviceCompatHelper {
     }
 
     fun isNotificationEnabled(context: Context): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
-            notificationManager.areNotificationsEnabled()
-        } else {
-            true
-        }
+        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+        return notificationManager.areNotificationsEnabled()
     }
 
     fun openAutoStartSettings(context: Context, brand: DeviceBrand = detectBrand()): Boolean {
@@ -297,15 +294,7 @@ object DeviceCompatHelper {
         val config = getBrandConfig(brand)
         if (!config.hasBatteryOptimization) return false
 
-        val directRequest = Intent(
-            Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-            android.net.Uri.parse("package:${context.packageName}")
-        )
-
         return runCatching {
-            context.startActivity(directRequest)
-            true
-        }.getOrDefault(false) || runCatching {
             context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
             true
         }.getOrDefault(false)
@@ -313,7 +302,7 @@ object DeviceCompatHelper {
 
     fun openAppDetails(context: Context) {
         context.startActivity(
-            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:${context.packageName}"))
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}"))
         )
     }
 
