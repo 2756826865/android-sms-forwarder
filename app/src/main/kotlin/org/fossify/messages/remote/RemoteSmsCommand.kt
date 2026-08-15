@@ -234,6 +234,7 @@ class RemoteSmsCommandWorker(appContext: Context, params: WorkerParameters) : Co
     override suspend fun doWork(): Result {
         val target = inputData.getString(KEY_TARGET).orEmpty()
         val content = inputData.getString(KEY_CONTENT).orEmpty()
+        val uniqueId = inputData.getString(KEY_UNIQUE_ID).orEmpty()
         val subId = inputData.getInt(KEY_SUB_ID, SubscriptionManager.INVALID_SUBSCRIPTION_ID)
         val sendMode = inputData.getInt(KEY_SEND_MODE, SimSendResolver.MODE_FOLLOW_RECEIVE)
         val requester = inputData.getString(KEY_REQUESTER).orEmpty()
@@ -265,6 +266,10 @@ class RemoteSmsCommandWorker(appContext: Context, params: WorkerParameters) : Co
             RemoteControlReceiptForwarder.forwardImmediate(applicationContext, error, pendingReceipt)
             return Result.failure()
         }
+        if (uniqueId.isNotBlank() && !RemoteSmsCommandConfig(applicationContext).claimFingerprint("execution:$uniqueId")) {
+            appendRemoteLog(source, "抑制重复执行：$target$simLogSuffix")
+            return Result.success()
+        }
         return runCatching {
             val uris = applicationContext.messagingUtils.sendSmsMessage(
                 text = content,
@@ -282,7 +287,7 @@ class RemoteSmsCommandWorker(appContext: Context, params: WorkerParameters) : Co
                 "提交失败：${error.message ?: error.javaClass.simpleName}",
                 pendingReceipt,
             )
-            if (runAttemptCount < 2) Result.retry() else Result.failure()
+            Result.failure()
         }
     }
 
@@ -296,6 +301,7 @@ class RemoteSmsCommandWorker(appContext: Context, params: WorkerParameters) : Co
     companion object {
         private const val KEY_TARGET = "target"
         private const val KEY_CONTENT = "content"
+        private const val KEY_UNIQUE_ID = "unique_id"
         private const val KEY_SUB_ID = "sub_id"
         private const val KEY_SEND_MODE = "send_mode"
         private const val KEY_REQUESTER = "requester"
@@ -316,6 +322,7 @@ class RemoteSmsCommandWorker(appContext: Context, params: WorkerParameters) : Co
                     workDataOf(
                         KEY_TARGET to target,
                         KEY_CONTENT to content,
+                        KEY_UNIQUE_ID to uniqueId,
                         KEY_SUB_ID to subId,
                         KEY_SEND_MODE to sendMode,
                         KEY_REQUESTER to requester,

@@ -42,7 +42,8 @@ fun Context.sendMessageCompat(
     addresses: List<String>,
     subId: Int?,
     attachments: List<Attachment>,
-    messageId: Long? = null
+    messageId: Long? = null,
+    propagateErrors: Boolean = false,
 ) {
     val settings = getSendMessageSettings()
     if (subId != null) {
@@ -59,14 +60,14 @@ fun Context.sendMessageCompat(
             if (attachments.size > 1) {
                 for (i in 0 until lastIndex) {
                     val attachment = attachments[i]
-                    messagingUtils.sendMmsMessage("", addresses, attachment, settings, messageId)
+                    messagingUtils.sendMmsMessage("", addresses, attachment, settings, messageId, propagateErrors)
                 }
             }
 
             val lastAttachment = attachments[lastIndex]
-            messagingUtils.sendMmsMessage(text, addresses, lastAttachment, settings, messageId)
+            messagingUtils.sendMmsMessage(text, addresses, lastAttachment, settings, messageId, propagateErrors)
         } else {
-            messagingUtils.sendMmsMessage(text, addresses, null, settings, messageId)
+            messagingUtils.sendMmsMessage(text, addresses, null, settings, messageId, propagateErrors)
         }
     } else {
         try {
@@ -78,6 +79,7 @@ fun Context.sendMessageCompat(
                 messageId = messageId
             )
         } catch (e: SmsException) {
+            if (propagateErrors) throw e
             when (e.errorCode) {
                 EMPTY_DESTINATION_ADDRESS -> toast(
                     id = R.string.empty_destination_address,
@@ -100,6 +102,7 @@ fun Context.sendMessageCompat(
                 )
             }
         } catch (e: Exception) {
+            if (propagateErrors) throw e
             showErrorToast(e)
         }
     }

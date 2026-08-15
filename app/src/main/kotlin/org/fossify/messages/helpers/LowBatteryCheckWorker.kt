@@ -53,7 +53,9 @@ class LowBatteryCheckWorker(
             val content = "$title\n$body"
 
             try {
-                val uniqueId = "low-battery-${System.currentTimeMillis()}"
+                // Claim before enqueue so a process death cannot enqueue the same alert twice.
+                config.lowBatteryLastNotifiedLevel = batteryLevel
+                val uniqueId = "low-battery-$threshold"
                 val now = System.currentTimeMillis()
                 if (enabledMultiChannels.isNotEmpty()) {
                     MultiChannelForwardWorker.enqueue(
@@ -76,8 +78,8 @@ class LowBatteryCheckWorker(
                         uniqueId = uniqueId,
                     )
                 }
-                config.lowBatteryLastNotifiedLevel = batteryLevel
             } catch (_: Exception) {
+                config.lowBatteryLastNotifiedLevel = -1
                 return Result.retry()
             }
         } else if (batteryLevel > threshold) {

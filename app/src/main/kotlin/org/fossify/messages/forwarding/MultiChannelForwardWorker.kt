@@ -96,13 +96,13 @@ class MultiChannelForwardWorker(
                 // 仅断网时发送模式
                 if (!networkAvailable) {
                     runChannel("短信直发") {
-                        sendSmsDirect(config.smsDirectPhone(), content)
+                        sendSmsDirect(config.smsDirectPhone(), content, subscriptionId)
                     }
                 }
             } else {
                 // 始终发送模式
                 runChannel("短信直发") {
-                    sendSmsDirect(config.smsDirectPhone(), content)
+                    sendSmsDirect(config.smsDirectPhone(), content, subscriptionId)
                 }
             }
         }
@@ -470,11 +470,17 @@ class MultiChannelForwardWorker(
         return capabilities.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
     }
 
-    private fun sendSmsDirect(phone: String, content: String) {
+    private fun sendSmsDirect(phone: String, content: String, receiveSubId: Int) {
         require(phone.isNotBlank()) { "目标手机号不能为空" }
         val normalized = phone.trim()
         require(normalized.isNotEmpty()) { "目标手机号格式无效" }
-        applicationContext.sendMessageCompat(content, listOf(normalized), null, emptyList())
+        applicationContext.sendMessageCompat(
+            text = content,
+            addresses = listOf(normalized),
+            subId = receiveSubId.takeIf { it >= 0 },
+            attachments = emptyList(),
+            propagateErrors = true,
+        )
     }
 
     companion object {

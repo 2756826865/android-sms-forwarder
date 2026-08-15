@@ -166,7 +166,8 @@ class MessagingUtils(val context: Context) {
         addresses: List<String>,
         attachment: Attachment?,
         settings: Settings,
-        messageId: Long? = null
+        messageId: Long? = null,
+        propagateErrors: Boolean = false,
     ) {
         val transaction = Transaction(context, settings)
         val message = Message(text, addresses.toTypedArray())
@@ -185,8 +186,10 @@ class MessagingUtils(val context: Context) {
                     message.addMedia(bytes, mimeType, name, name)
                 }
             } catch (e: Exception) {
+                if (propagateErrors) throw e
                 context.showErrorToast(e)
             } catch (e: Error) {
+                if (propagateErrors) throw e
                 context.showErrorToast(e.localizedMessage ?: context.getString(org.fossify.commons.R.string.unknown_error_occurred))
             }
         }
@@ -198,6 +201,7 @@ class MessagingUtils(val context: Context) {
         try {
             transaction.sendNewMessage(message)
         } catch (e: Exception) {
+            if (propagateErrors) throw e
             context.showErrorToast(e)
         }
     }

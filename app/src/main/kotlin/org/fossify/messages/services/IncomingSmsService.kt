@@ -51,6 +51,8 @@ import org.fossify.messages.helpers.refreshConversations
 import org.fossify.messages.helpers.refreshMessages
 import org.fossify.messages.messaging.SmsRecoveryWorker
 import org.fossify.messages.models.Message
+import org.json.JSONArray
+import org.json.JSONObject
 import java.security.MessageDigest
 import java.util.concurrent.Executors
 
@@ -391,15 +393,52 @@ class IncomingSmsService : Service() {
         )
     }
 
-    private fun wasPersisted(fingerprint: String): Boolean =
-        getSharedPreferences(DUPLICATE_PREFS, Context.MODE_PRIVATE)
-            .getString(KEY_LAST_FINGERPRINT, null) == fingerprint
+    private fun wasPersisted(fingerprint: String): Boolean = synchronized(duplicateLock) {
+        val prefs = getSharedPreferences(DUPLICATE_PREFS, Context.MODE_PRIVATE)
+        val rawEntries = decodePersistedFingerprints(
+            prefs.getString(KEY_RECENT_FINGERPRINTS, "[]").orEmpty(),
+        )
+        val now = System.currentTimeMillis()
+        val entries = rawEntries.filter { now - it.second in 0L..DUPLICATE_WINDOW_MS }
+        if (entries.size != rawEntries.size) persistFingerprints(prefs, entries)
+        prefs.getString(KEY_LAST_FINGERPRINT, null) == fingerprint || entries.any { it.first == fingerprint }
+    }
 
-    private fun markPersisted(fingerprint: String) {
-        getSharedPreferences(DUPLICATE_PREFS, Context.MODE_PRIVATE)
-            .edit()
-            .putString(KEY_LAST_FINGERPRINT, fingerprint)
-            .commit()
+    private fun markPersisted(fingerprint: String) = synchronized(duplicateLock) {
+        val prefs = getSharedPreferences(DUPLICATE_PREFS, Context.MODE_PRIVATE)
+        val now = System.currentTimeMillis()
+        val entries = decodePersistedFingerprints(
+            prefs.getString(KEY_RECENT_FINGERPRINTS, "[]").orEmpty(),
+        ).filter { now - it.second in 0L..DUPLICATE_WINDOW_MS }
+            .filterNot { it.first == fingerprint }
+            .plus(fingerprint to now)
+            .takeLast(MAX_RECENT_FINGERPRINTS)
+        persistFingerprints(prefs, entries)
+        prefs.edit().remove(KEY_LAST_FINGERPRINT).commit()
+    }
+
+    private fun decodePersistedFingerprints(value: String): List<Pair<String, Long>> = runCatching {
+        val array = JSONArray(value)
+        buildList {
+            for (index in 0 until array.length()) {
+                val item = array.optJSONObject(index) ?: continue
+                val entry = item.optString("value")
+                val timestamp = item.optLong("timestamp")
+                if (entry.isNotBlank() && timestamp > 0L) add(entry to timestamp)
+            }
+        }
+    }.getOrDefault(emptyList())
+
+    private fun persistFingerprints(
+        prefs: android.content.SharedPreferences,
+        entries: List<Pair<String, Long>>,
+    ) {
+        val encoded = JSONArray().apply {
+            entries.forEach { (value, timestamp) ->
+                put(JSONObject().put("value", value).put("timestamp", timestamp))
+            }
+        }.toString()
+        prefs.edit().putString(KEY_RECENT_FINGERPRINTS, encoded).commit()
     }
 
     private fun fingerprint(
@@ -468,6 +507,10 @@ class IncomingSmsService : Service() {
         private const val PROVIDER_RETRY_DELAY_MS = 500L
         private const val DUPLICATE_PREFS = "sms_receiver_state"
         private const val KEY_LAST_FINGERPRINT = "last_fingerprint"
+        private const val KEY_RECENT_FINGERPRINTS = "recent_fingerprints"
+        private const val MAX_RECENT_FINGERPRINTS = 100
+        private const val DUPLICATE_WINDOW_MS = 24 * 60 * 60 * 1000L
+        private val duplicateLock = Any()
 
         fun enqueue(context: Context, source: Intent) {
             val serviceIntent = Intent(context, IncomingSmsService::class.java).apply {
