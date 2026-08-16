@@ -32,14 +32,6 @@
     <string name="mark_as_unread">Marcáil mar Neamhléite</string>
     <string name="me">Mise</string>
     <string name="enable_custom_notifications">Cumasaigh fógraí saincheaptha</string>
-    <string name="unarchive">Díchartlann</string>
-    <string name="empty_archive">Scrios gach comhrá sa chartlann</string>
-    <string name="archived_conversations">Cartlann</string>
-    <string name="show_archived_conversations">Taispeáin comhráite cartlainne</string>
-    <string name="no_archived_conversations">Ní bhfuarthas aon chomhrá cartlainne</string>
-    <string name="archive_emptied_successfully">D’éirigh leis an gcartlann a fholmhú</string>
-    <string name="empty_archive_confirmation">An bhfuil tú cinnte gur mhaith leat an chartlann a fholmhú? Caillfear go buan gach comhrá sa chartlann.</string>
-    <string name="archive_confirmation">An bhfuil tú cinnte gur mhaith leat %s a chur sa chartlann?</string>
     <plurals name="delete_conversations">
         <item quantity="one">%d comhrá</item>
         <item quantity="two">%d comhráite</item>
@@ -101,7 +93,6 @@
     <string name="send_now">Seol anois</string>
     <string name="message_details_sender">Seoltóir</string>
     <string name="delete_whole_conversation_confirmation">An bhfuil tú cinnte gur mhaith leat gach teachtaireacht den chomhrá seo a scriosadh?</string>
-    <string name="archive">Cartlann</string>
     <string name="restore">Athchóirigh</string>
     <string name="restore_all_messages">Athchóirigh gach teachtaireacht</string>
     <string name="empty_recycle_bin_messages_confirmation">An bhfuil tú cinnte gur mhaith leat an Araid Athchúrsála a fholmhú? Caillfear na teachtaireachtaí go buan.</string>
@@ -128,7 +119,6 @@
     <string name="export_blocked_keywords">Easpórtáil eochairfhocail blocáilte</string>
     <string name="import_blocked_keywords">Iompórtáil eochairfhocail blocáilte</string>
     <string name="keywords">Eochairfhocail</string>
-    <string name="keep_conversations_archived">Coinnigh comhráite cartlannaithe</string>
     <string name="faq_4_title">Cén fáth a bhfuil freagraí mo theachtaireachtaí grúpa le feiceáil mar théacsanna aonair chuig faighteoirí?</string>
     <string name="faq_4_text">Ní mór duit \"Seol teachtaireachtaí grúpa mar MMS\" a chumasú i socruithe an aip. Cinnteoidh sé seo go seolfar teachtaireachtaí grúpa mar MMS ceart, rud a ligfidh do na rannpháirtithe go léir freagraí a chéile a fheiceáil.</string>
     <string name="send_group_message">Formáid teachtaireachta grúpa</string>

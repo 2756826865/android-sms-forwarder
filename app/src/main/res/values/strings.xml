@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="sideloaded_app"></string>
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:ignore="MissingTranslation">
+    <string name="sideloaded_app" translatable="false">短信转发</string>
     <string name="app_launcher_name">短信转发</string>
     <string name="home_primary">短信</string>
     <string name="bottom_nav_primary">短信</string>
@@ -350,7 +351,7 @@
     <string name="compatibility_manual_check">需手动确认</string>
     <string name="compatibility_brand_advice_title">当前品牌建议</string>
     <string name="compatibility_brand_vivo_title">vivo / iQOO 专属建议</string>
-    <string name="compatibility_brand_vivo_advice">进入 i 管家或设置，允许自启动、后台高耗电和锁屏通知；vivo X21 等旧机型还应定期确认默认短信应用没有被系统换回。</string>
+    <string name="compatibility_brand_vivo_advice">vivo / iQOO 若自动换回系统信息，请先进入系统设置 → 应用与权限 → 默认应用 → 短信，选择本应用；再到 i 管家允许自启动、后台高耗电和锁屏通知。重启、系统更新或 i 管家修复后建议回到本页重新检测。仍被回退时，可展开高级技术诊断并复制 ADB 修复命令。</string>
     <string name="compatibility_brand_huawei_title">华为 / 荣耀专属建议</string>
     <string name="compatibility_brand_huawei_advice">在应用启动管理中改为手动管理，并允许自启动、关联启动和后台活动。若 SMS Role 与底层路由不同步，请展开高级诊断使用 ADB 修复。</string>
 
@@ -499,16 +500,6 @@
     <string name="delete">删除</string>
     <string name="me">Me</string>
     <string name="enable_custom_notifications">Enable custom notifications</string>
-    <!-- Archive -->
-    <string name="unarchive">Unarchive</string>
-    <string name="empty_archive">Delete all archived conversations</string>
-    <string name="archived_conversations">Archive</string>
-    <string name="show_archived_conversations">Show archived conversations</string>
-    <string name="archive">Archive</string>
-    <string name="no_archived_conversations">No archived conversations have been found</string>
-    <string name="archive_emptied_successfully">The archive has been emptied successfully</string>
-    <string name="empty_archive_confirmation">Are you sure you want to empty the archive? All archived conversations will be permanently lost.</string>
-    <string name="keep_conversations_archived">Keep conversations archived</string>
     <!-- Recycle bin -->
     <string name="restore">Restore</string>
     <string name="restore_all_messages">Restore all messages</string>
@@ -516,7 +507,6 @@
     <string name="skip_the_recycle_bin_messages">Skip the Recycle Bin, delete messages directly</string>
     <!-- Confirmation dialog -->
     <string name="delete_whole_conversation_confirmation">Are you sure you want to delete all messages of this conversation?</string>
-    <string name="archive_confirmation">Are you sure you want to archive %s?</string>
     <string name="restore_whole_conversation_confirmation">Are you sure you want to restore all messages of this conversation?</string>
     <string name="restore_confirmation">Are you sure you want to restore %s?</string>
     <!-- Are you sure you want to delete 5 conversations? -->

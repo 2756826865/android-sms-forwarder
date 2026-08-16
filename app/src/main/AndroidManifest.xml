@@ -67,13 +67,6 @@
             android:parentActivityName=".activities.MainActivity" />
 
         <activity
-            android:name=".activities.ArchivedConversationsActivity"
-            android:configChanges="orientation"
-            android:exported="true"
-            android:label="@string/archived_conversations"
-            android:parentActivityName=".activities.MainActivity" />
-
-        <activity
             android:name=".activities.ThreadActivity"
             android:configChanges="orientation"
             android:exported="false"
@@ -371,12 +364,12 @@
 
         <receiver
             android:name=".receivers.MmsSentReceiver"
-            android:exported="true"
+            android:exported="false"
             android:taskAffinity="com.klinker.android.messaging.MMS_SENT" />
 
         <receiver
             android:name=".receivers.MmsReceiver"
-            android:exported="true"
+            android:exported="false"
             android:taskAffinity="com.klinker.android.messaging.MMS_RECEIVED" />
 
         <receiver

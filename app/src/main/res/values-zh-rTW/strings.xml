@@ -48,20 +48,11 @@
     <string name="mark_as_read">標為已讀</string>
     <string name="mark_as_unread">標為未讀</string>
     <string name="me">我</string>
-    <string name="unarchive">取消封存</string>
-    <string name="empty_archive">刪除所有已封存的對話</string>
-    <string name="archived_conversations">封存</string>
-    <string name="show_archived_conversations">顯示已封存的對話</string>
-    <string name="archive">封存</string>
-    <string name="no_archived_conversations">未找到已封存的對話</string>
-    <string name="archive_emptied_successfully">封存已成功清空</string>
-    <string name="empty_archive_confirmation">您確定要清空封存嗎？所有已封存的對話將會永久遺失。</string>
     <string name="restore">還原</string>
     <string name="restore_all_messages">還原所有訊息</string>
     <string name="empty_recycle_bin_messages_confirmation">您確定要清空回收筒嗎？訊息將會永久遺失。</string>
     <string name="skip_the_recycle_bin_messages">跳過回收筒，直接刪除訊息</string>
     <string name="delete_whole_conversation_confirmation">您確定要刪除此對話中的所有訊息嗎？</string>
-    <string name="archive_confirmation">您確定要封存 %s 嗎？</string>
     <string name="restore_whole_conversation_confirmation">您確定要還原此對話中的所有訊息嗎？</string>
     <string name="restore_confirmation">您確定要還原 %s 嗎？</string>
     <plurals name="delete_conversations">
@@ -116,7 +107,6 @@
     <string name="keywords">關鍵字</string>
     <string name="export_blocked_keywords">匯出被封鎖的關鍵字</string>
     <string name="import_blocked_keywords">匯入被封鎖的關鍵字</string>
-    <string name="keep_conversations_archived">保留對話封存</string>
     <string name="faq_4_title">為何我的群組訊息回覆會顯示為收件者的個別簡訊？</string>
     <string name="faq_4_text">您需要在應用程式設定中啟用「將群組訊息以多媒體簡訊形式傳送」功能。此設定可確保群組訊息以正確的多媒體簡訊格式傳送，讓所有參與者都能看見彼此的回覆內容。</string>
 </resources>

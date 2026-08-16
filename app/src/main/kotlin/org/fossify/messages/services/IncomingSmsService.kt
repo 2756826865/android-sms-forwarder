@@ -32,10 +32,8 @@ import org.fossify.messages.extensions.getSmsThreadId
 import org.fossify.messages.extensions.getThreadId
 import org.fossify.messages.extensions.insertNewSMS
 import org.fossify.messages.extensions.messagesDB
-import org.fossify.messages.extensions.shouldUnarchive
 import org.fossify.messages.extensions.showReceivedMessageNotification
 import org.fossify.messages.extensions.syncThreadToLocal
-import org.fossify.messages.extensions.updateConversationArchivedStatus
 import org.fossify.messages.extensions.subscriptionManagerCompat
 import org.fossify.messages.forwarding.ForwardingChannels
 import org.fossify.messages.forwarding.ForwardingHistoryStore
@@ -221,6 +219,7 @@ class IncomingSmsService : Service() {
             body = body,
             subscriptionId = subscriptionId,
             messageTimestamp = sentAt,
+            messageId = insertedMessageId,
             allowExecution = remoteCommandAllowed,
         )
 
@@ -380,7 +379,6 @@ class IncomingSmsService : Service() {
 
         messagesDB.insertOrUpdate(message)
         syncThreadToLocal(threadId)
-        if (shouldUnarchive()) updateConversationArchivedStatus(threadId, false)
         refreshMessages()
         refreshConversations()
         showReceivedMessageNotification(

@@ -79,8 +79,6 @@
     <string name="update_message">עדכון הודעה</string>
     <string name="faq_3_text">כן, אפשר לתזמן שליחת הודעות עתידית בעזרת לחיצה ארוכה על כפתור השליחה ובחירת התאריך והשעה הרצויים.</string>
     <string name="duplicate_item_warning">הפריט הכפול לא נכלל</string>
-    <string name="archive_emptied_successfully">הארכיון רוקן בהצלחה</string>
-    <string name="archive_confirmation">האם אתה בטוח שברצונך להעביר שיחה %s לארכיון?</string>
     <string name="unable_to_save_message">לא ניתן לשמור הודעה במסד הנתונים של הטלפוניה</string>
     <string name="error_service_is_unavailable">לא ניתן לשלוח הודעה, השירות לא זמין</string>
     <string name="sim_card_not_available">כרטיס SIM אינו זמין</string>
@@ -91,12 +89,6 @@
     <string name="message_details_sender">שולח</string>
     <string name="message_details_receiver">נמען</string>
     <string name="message_details_received_at">התקבלה במועד</string>
-    <string name="unarchive">הוצאה מהארכיון</string>
-    <string name="empty_archive">מחיקת כל השיחות מהארכיון</string>
-    <string name="show_archived_conversations">הצגת שיחות בארכיון</string>
-    <string name="archived_conversations">ארכיון</string>
-    <string name="archive">העברה לארכיון</string>
-    <string name="empty_archive_confirmation">לרוקן את הארכיון? כל השיחות בארכיון יאבדו לצמיתות.</string>
     <string name="restore">שחזור</string>
     <string name="restore_all_messages">שחזור כל ההודעות</string>
     <string name="skip_the_recycle_bin_messages">אפשר לדלג על סל המחזור ולמחוק לצמיתות ישר</string>
@@ -118,12 +110,10 @@
     <string name="export_blocked_keywords">ייצא מילות מפתח חסומות</string>
     <string name="import_blocked_keywords">ייבא מילות מפתח חסומות</string>
     <string name="add_a_blocked_keyword">הוסף מילת מפתח חסומה</string>
-    <string name="no_archived_conversations">לא נמצאו שיחות בארכיון</string>
     <string name="empty_recycle_bin_messages_confirmation">לרוקן את האשפה? ההודעות יאבדו לצמיתות.</string>
     <string name="message_details_sent_at">נשלחה במועד</string>
     <string name="restore_whole_conversation_confirmation">האם אתה בטוח שברצונך לשחזר את כל ההודעות של השיחה הזו?</string>
     <string name="invalid_short_code_desc">אתה יכול להשיב רק לקודים קצרים עם מספרים כמו \"503501\" אך לא לקודים המכילים אותיות ומספרים כמו \"AB-CD0\".</string>
-    <string name="keep_conversations_archived">שמירת השיחות בארכיון</string>
     <string name="faq_4_title">מדוע תשובות להודעות הקבוצתיות שלי מופיעות כהודעות טקסט אישיות לנמענים?</string>
     <string name="faq_4_text">עליך להפעיל את האפשרות \"שליחת הודעות קבוצתיות כ-MMS\" בהגדרות האפליקציה. פעולה זו תבטיח שהודעות הקבוצה יישלחו כ-MMS תקינות, כך שכל המשתתפים יוכלו לראות את תשובותיהם של אחרים.</string>
     <string name="separate_messages">שלח בנפרד</string>

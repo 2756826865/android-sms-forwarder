@@ -87,12 +87,6 @@
     <string name="app_launcher_name">メッセージ</string>
     <string name="message_details">メッセージ詳細</string>
     <string name="message_details_receiver">受信者</string>
-    <string name="empty_archive">すべてのアーカイブされた会話を削除する</string>
-    <string name="archived_conversations">アーカイブ</string>
-    <string name="unarchive">非アーカイブ</string>
-    <string name="show_archived_conversations">アーカイブされた会話を表示する</string>
-    <string name="archive">アーカイブ</string>
-    <string name="no_archived_conversations">アーカイブされた会話が見つかりませんでした</string>
     <string name="restore_all_messages">すべてのメッセージを復元する</string>
     <string name="restore">復元</string>
     <string name="enable_custom_notifications">カスタム通知を有効にする</string>
@@ -106,12 +100,8 @@
     <string name="sim_card_not_available">SIMカードは利用できません</string>
     <string name="message_details_sent_at">送信時間</string>
     <string name="message_details_received_at">受信時間</string>
-    <string name="archive_emptied_successfully">アーカイブを空にしました</string>
-    <string name="empty_archive_confirmation">アーカイブを空にしてよろしいですか？全ての会話は完全に消去されます。</string>
     <string name="empty_recycle_bin_messages_confirmation">ごみ箱を空にしてよろしいですか？メッセージは完全に消去されます。</string>
     <string name="restore_confirmation">%sを復元してよろしいですか？</string>
-    <string name="archive_confirmation">%sをアーカイブしてよろしいですか？</string>
     <string name="restore_whole_conversation_confirmation">この会話の全てのメッセージを復元してよろしいですか？</string>
     <string name="couldnt_download_mms">MMSをダウンロードできませんでした</string>
-    <string name="keep_conversations_archived">会話をアーカイブに保存する</string>
 </resources>

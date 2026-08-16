@@ -1,12 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="unarchive">درآوردن از بایگانی</string>
     <string name="enable_custom_notifications">تنظیم اعلان شخصی‌شده</string>
-    <string name="archive">بایگانی کردن</string>
-    <string name="show_archived_conversations">نمایش بایگانی‌ها</string>
-    <string name="empty_archive">حذف همه‌ی بایگانی‌ها</string>
-    <string name="no_archived_conversations">هیچ پیامی در بایگانی نیست</string>
-    <string name="archive_emptied_successfully">بایگانی با موفقیت خالی شد</string>
     <string name="restore">بازیابی</string>
     <string name="restore_all_messages">بازیابی همه‌ی پیام‌ها</string>
     <string name="skip_the_recycle_bin_messages">بی‌خیال سطل شو، پیام‌ها را درجا حذف کن</string>
@@ -58,10 +52,7 @@
     <string name="conversation_details">جزئیات گفت‌وگو</string>
     <string name="rename_conversation_warning">تنها شما می‌توانید این عنوان گفت‌وگو را ببینید</string>
     <string name="schedule_send_warning">گوشی را روشن نگه دارید و مطمئن شوید که هیچ‌چیز فعالیت برنامه در پس‌زمینه را متوقف نکند.</string>
-    <string name="archived_conversations">بایگانی</string>
-    <string name="empty_archive_confirmation">بایگانی، خالی شود؟ همه‌ی پیام‌های بایگانی برای همیشه حذف می‌شوند.</string>
     <string name="empty_recycle_bin_messages_confirmation">سطل زباله، خالی شود؟ پیام‌ها برای همیشه حذف می‌شوند.</string>
-    <string name="archive_confirmation">‏%s بایگانی شود؟</string>
     <string name="restore_whole_conversation_confirmation">همه‌ی پیام‌های این گفت‌وگو بازیابی شود؟</string>
     <plurals name="delete_messages">
         <item quantity="one">‏%d پیام</item>

@@ -460,7 +460,7 @@ class MainActivity : SimpleActivity() {
 
     private fun markAllAsRead() {
         ensureBackgroundThread {
-            conversationsDB.getNonArchived()
+            conversationsDB.getAllRegular()
                 .filterNot { it.read }
                 .forEach { markThreadMessagesRead(it.threadId) }
             runOnUiThread {
@@ -473,22 +473,14 @@ class MainActivity : SimpleActivity() {
     private fun getCachedConversations() {
         ensureBackgroundThread {
             val conversations = try {
-                conversationsDB.getNonArchived().toMutableList() as ArrayList<Conversation>
+                conversationsDB.getAllRegular().toMutableList() as ArrayList<Conversation>
             } catch (_: Exception) {
                 ArrayList()
             }
 
-            val archived = try {
-                conversationsDB.getAllArchived()
-            } catch (_: Exception) {
-                listOf()
-            }
-
             runOnUiThread {
                 setupConversations(conversations, cached = true)
-                getNewConversations(
-                    (conversations + archived).toMutableList() as ArrayList<Conversation>
-                )
+                getNewConversations(conversations)
             }
             conversations.forEach {
                 clearExpiredScheduledMessages(it.threadId)
@@ -567,7 +559,7 @@ class MainActivity : SimpleActivity() {
                     }
                 }
 
-            val allConversations = ArrayList(conversationsDB.getNonArchived())
+            val allConversations = ArrayList(conversationsDB.getAllRegular())
             runOnUiThread {
                 setupConversations(allConversations)
             }
@@ -865,11 +857,6 @@ class MainActivity : SimpleActivity() {
     private fun launchRecycleBin() {
         hideKeyboard()
         startActivity(Intent(applicationContext, RecycleBinConversationsActivity::class.java))
-    }
-
-    private fun launchArchivedConversations() {
-        hideKeyboard()
-        startActivity(Intent(applicationContext, ArchivedConversationsActivity::class.java))
     }
 
     private fun launchSettings() {

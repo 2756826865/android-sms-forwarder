@@ -162,7 +162,7 @@ class ShortcutHelper(private val context: Context) {
         if (conv.isGroupConversation) {
             return true
         }
-        if (conv.isArchived || !conv.phoneNumber.isDigitsOnly()) {
+        if (!conv.phoneNumber.isDigitsOnly()) {
             return false
         }
         return true

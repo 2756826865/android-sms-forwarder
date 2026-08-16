@@ -1,11 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="unarchive">보관 해제</string>
-    <string name="archived_conversations">보관</string>
-    <string name="no_archived_conversations">보관한 대화가 없습니다</string>
-    <string name="archive_emptied_successfully">보관된 대화가 삭제되었습니다</string>
     <string name="restore">복원</string>
-    <string name="empty_archive_confirmation">보관한 대화를 삭제하시겠습니까? 모든 보관된 대화가 영구적으로 삭제됩니다.</string>
     <string name="sender_and_message">보낸 사람 및 내용</string>
     <string name="sender_only">보낸 사람만</string>
     <string name="enable_delivery_reports">수신 확인 사용</string>
@@ -38,8 +33,6 @@
     <string name="faq_2_text">MMS 크기는 이동 통신사에 의해 제한됩니다. 앱 설정에서 저 작은 크기로 설정해보세요.</string>
     <string name="new_message">새 메시지</string>
     <string name="enable_custom_notifications">사용자 지정 알림 사용</string>
-    <string name="empty_archive">보관한 대화 모두 삭제</string>
-    <string name="show_archived_conversations">보관된 대화 표시</string>
     <plurals name="delete_conversations">
         <item quantity="other">대화 %d개</item>
     </plurals>
@@ -65,7 +58,6 @@
     <string name="empty_recycle_bin_messages_confirmation">휴지통을 비우시겠습니까? 모든 메시지가 영구적으로 삭제됩니다.</string>
     <string name="restore_all_messages">모든 메시지 복원</string>
     <string name="restore_whole_conversation_confirmation">이 대화의 모든 메시지를 복원하시겠습니까?</string>
-    <string name="archive_confirmation">%s를 보관하시겠습니까?</string>
     <string name="restore_confirmation">%s를 복원하시겠습니까?</string>
     <string name="blocked_keywords">차단된 단어</string>
     <string name="keyword">단어</string>
@@ -112,5 +104,4 @@
     <string name="mark_as_read">읽음으로 표시</string>
     <string name="mark_as_unread">읽지 않음으로 표시</string>
     <string name="me">나</string>
-    <string name="archive">보관</string>
 </resources>

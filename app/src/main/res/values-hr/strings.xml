@@ -50,20 +50,11 @@
     <string name="mark_as_read">Označi kao pročitano</string>
     <string name="mark_as_unread">Označi kao nepročitano</string>
     <string name="me">Ja</string>
-    <string name="unarchive">Dearhiviraj</string>
-    <string name="empty_archive">Izbriši sve arhivirane razgovore</string>
-    <string name="archived_conversations">Arhiva</string>
-    <string name="show_archived_conversations">Prikaži arhivirane razgovore</string>
-    <string name="archive">Arhiviraj</string>
-    <string name="no_archived_conversations">Nema arhiviranih razgovora</string>
-    <string name="archive_emptied_successfully">Arhiv je uspješno ispražnjen</string>
-    <string name="empty_archive_confirmation">Jeste li ste sigurni da želite isprazniti arhiv? Svi arhivirani razgovori će biti obrisani.</string>
     <string name="restore">Obnovi</string>
     <string name="restore_all_messages">Obnovi sve poruke</string>
     <string name="empty_recycle_bin_messages_confirmation">Stvarno želiš isprazniti koš za smeće? Poruke će biti trajno izgubljene.</string>
     <string name="skip_the_recycle_bin_messages">Preskoči koš za smeće, izbriši poruke odmah</string>
     <string name="delete_whole_conversation_confirmation">Stvarno želiš izbrisati sve poruke ovog razgovora\?</string>
-    <string name="archive_confirmation">Stvarno želiš arhivirati %s?</string>
     <string name="restore_whole_conversation_confirmation">Stvarno želiš obnoviti sve poruke ovog razgovora?</string>
     <string name="restore_confirmation">Stvarno želiš obnoviti %s?</string>
     <plurals name="delete_conversations">
@@ -122,7 +113,6 @@
     <string name="keywords">Ključne riječi</string>
     <string name="export_blocked_keywords">Izvezi blokirane ključne riječi</string>
     <string name="import_blocked_keywords">Uvezi blokirane ključne riječi</string>
-    <string name="keep_conversations_archived">Arhiviraj razgovore</string>
     <string name="faq_4_title">Zašto se moji odgovori na grupne poruke primateljima prikazuju kao pojedinačne poruke?</string>
     <string name="faq_4_text">U postavkama aplikacije morate omogućiti „Pošalji grupne poruka kao MMS”. To će osigurati da se grupne poruke šalju kao ispravni MMS, što će svim sudionicima omogućiti da vide međusobne odgovore.</string>
 </resources>

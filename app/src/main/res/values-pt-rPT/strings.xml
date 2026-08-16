@@ -1,15 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="archive_emptied_successfully">O arquivo foi limpo com sucesso</string>
     <string name="type_a_message">Escrever uma mensagem…</string>
     <string name="reply">Responder</string>
     <string name="schedule_send_warning">Mantenha o telefone ligado e verifique se não há nada que esteja a bloquear a aplicação em segundo plano.</string>
     <string name="send_now">Enviar agora</string>
-    <string name="no_archived_conversations">Não existem conversas arquivadas</string>
-    <string name="empty_archive_confirmation">Tem a certeza de que pretende limpar o arquivo? Todas as conversas arquivadas serão eliminadas.</string>
     <string name="restore">Restaurar</string>
     <string name="delete_whole_conversation_confirmation">Tem a certeza de que pretende apagar todas as mensagens desta conversa?</string>
-    <string name="archive_confirmation">Tem a certeza de que pretende arquivar %s?</string>
     <string name="no_conversations_found">Não foram encontradas conversas</string>
     <plurals name="delete_conversations">
         <item quantity="one">%d conversa</item>
@@ -74,15 +70,10 @@
     <string name="unpin_conversation">Desafixar</string>
     <string name="cancel_schedule_send">Cancelar envio agendado</string>
     <string name="enable_custom_notifications">Ativar notificações personalizadas</string>
-    <string name="empty_archive">Eliminar todas as conversas arquivadas</string>
-    <string name="archived_conversations">Arquivo</string>
-    <string name="show_archived_conversations">Mostrar conversas arquivadas</string>
-    <string name="unarchive">Desarquivar</string>
     <string name="empty_recycle_bin_messages_confirmation">Tem a certeza de que pretende esvaziar a reciclagem? As mensagens não poderão ser recuperadas.</string>
     <string name="skip_the_recycle_bin_messages">Eliminar mensagens sem as colocar na reciclagem</string>
     <string name="restore_whole_conversation_confirmation">Tem a certeza de que pretende restaurar todas as mensagens desta conversa?</string>
     <string name="restore_all_messages">Restaurar todas as mensagens</string>
-    <string name="archive">Arquivo</string>
     <string name="restore_confirmation">Tem a certeza de que pretende restaurar %s?</string>
     <string name="export_mms">Exportar MMS</string>
     <string name="import_messages">Importar mensagens</string>
@@ -122,7 +113,6 @@
     <string name="export_blocked_keywords">Exportar palavras-chave bloqueadas</string>
     <string name="keywords">Palavras-chave</string>
     <string name="import_blocked_keywords">Importar palavras-chave bloqueadas</string>
-    <string name="keep_conversations_archived">Manter conversas arquivadas</string>
     <string name="faq_4_title">Por que as minhas respostas a mensagens em grupo aparecem como mensagens individuais para os destinatários?</string>
     <string name="faq_4_text">Tem de ativar a opção “Enviar mensagens em grupo como MMS” nas configurações da aplicação. Isso garantirá que as mensagens em grupo sejam enviadas como MMS adequadas, permitindo que todos os participantes vejam as respostas uns dos outros.</string>
 </resources>

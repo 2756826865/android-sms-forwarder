@@ -18,7 +18,6 @@
     <string name="message_details_sender">મોકલનાર</string>
     <string name="me">હું</string>
     <string name="conversation_name">વાતચીતનું નામ</string>
-    <string name="archived_conversations">સંગ્રહાલય</string>
     <string name="message_details">સંદેશ વિવરણ</string>
     <string name="restore_whole_conversation_confirmation">પાકુ આ વાતચીતના બધા સંદેશો તમને પુનઃસ્થાપિત કરવા છે?</string>
     <string name="error_radio_turned_off">સંદેશ મોકલી શકાયા નથી (રેડિયો બંધ છે)</string>
@@ -53,8 +52,6 @@
     <string name="channel_received_sms">SMS પ્રાપ્ત થયો</string>
     <string name="mark_as_read">વંચાય ગયું</string>
     <string name="mark_as_unread">નથી વાંચ્યું</string>
-    <string name="show_archived_conversations">સંગ્રહ કરેલા વાતચીત દેખાડો</string>
-    <string name="no_archived_conversations">કોઈ સંગ્રહ કરેલા વાતચીત મળ્યા નહીં</string>
     <string name="restore">પુનઃસ્થાપિત</string>
     <string name="skip_the_recycle_bin_messages">કચરાપેટી છોડો, સીધા બધા સંદેશો કાઢી નાખો</string>
     <string name="delete_whole_conversation_confirmation">પાકુ આ વાતચીત માંથી બધા સંદેશો કાઢી નાખવા છે?</string>
@@ -87,12 +84,8 @@
     <string name="unknown_error_occurred_sending_message">સંદેશ મોકલી શકાયા નથી (ત્રુટિ કોડ: %d)</string>
     <string name="empty_destination_address">ખાલી નંબર પર સંદેશ નહી મોકલી શકો</string>
     <string name="empty_recycle_bin_messages_confirmation">પાકુ તમને કચરાપેટી ખાલી કરવી છે? બધા સંદેશો સદા માટે જતા રહેશે.</string>
-    <string name="archive">સંગ્રહાલય</string>
     <string name="export_sms">SMS એક્સપોર્ટ કરો</string>
     <string name="export_mms">MMS એક્સપોર્ટ કરો</string>
-    <string name="archive_confirmation">પાકુ આ %s તમને સંગ્રહાલયમાં નાખવું છે?</string>
     <string name="mms_file_size_limit_none">કોઈ સીમા નહીં</string>
-    <string name="empty_archive_confirmation">પાકુ તમને સંગ્રહાલય ખાલી કરવું છે? સંગ્રહિત કરેલા વાતચીતો સદા માટે જતા રહેશે.</string>
     <string name="app_launcher_name">સંદેશો</string>
-    <string name="archive_emptied_successfully">સંગ્રહાલય ખાલી કરી દીધું</string>
 </resources>

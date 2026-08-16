@@ -24,7 +24,6 @@ import org.fossify.messages.extensions.markThreadMessagesRead
 import org.fossify.messages.extensions.markThreadMessagesUnread
 import org.fossify.messages.extensions.moveConversationToRecycleBin
 import org.fossify.messages.extensions.renameConversation
-import org.fossify.messages.extensions.updateConversationArchivedStatus
 import org.fossify.messages.helpers.refreshConversations
 import org.fossify.messages.messaging.isShortCodeWithLetters
 import org.fossify.messages.models.Conversation
@@ -45,7 +44,6 @@ class ConversationsAdapter(
         val isSingleSelection = isOneItemSelected()
         val selectedConversation = selectedItems.firstOrNull() ?: return
         val isGroupConversation = selectedConversation.isGroupConversation
-        val archiveAvailable = activity.config.isArchiveAvailable
 
         menu.apply {
             findItem(R.id.cab_block_number).title =
@@ -61,7 +59,6 @@ class ConversationsAdapter(
             findItem(R.id.cab_conversation_details).isVisible = isSingleSelection
             findItem(R.id.cab_mark_as_read).isVisible = selectedItems.any { !it.read }
             findItem(R.id.cab_mark_as_unread).isVisible = selectedItems.any { it.read }
-            findItem(R.id.cab_archive).isVisible = archiveAvailable
             checkPinBtnVisibility(this)
         }
     }
@@ -112,7 +109,6 @@ class ConversationsAdapter(
             R.id.cab_dial_number -> dialNumber()
             R.id.cab_copy_number -> copyNumberToClipboard()
             R.id.cab_delete -> askConfirmDelete()
-            R.id.cab_archive -> askConfirmArchive()
             R.id.cab_rename_conversation -> renameConversation(selectedItems.first())
             R.id.cab_conversation_details ->
                 activity.launchConversationDetails(selectedItems.first().threadId)
@@ -185,51 +181,6 @@ class ConversationsAdapter(
         ConfirmationDialog(activity, question) {
             ensureBackgroundThread {
                 deleteConversations()
-            }
-        }
-    }
-
-    private fun askConfirmArchive() {
-        val itemsCnt = selectedKeys.size
-        val items = resources.getQuantityString(R.plurals.delete_conversations, itemsCnt, itemsCnt)
-
-        val baseString = R.string.archive_confirmation
-        val question = String.format(resources.getString(baseString), items)
-
-        ConfirmationDialog(activity, question) {
-            ensureBackgroundThread {
-                archiveConversations()
-            }
-        }
-    }
-
-    private fun archiveConversations() {
-        if (selectedKeys.isEmpty()) {
-            return
-        }
-
-        val conversationsToRemove =
-            currentList.filter { selectedKeys.contains(it.hashCode()) } as ArrayList<Conversation>
-        conversationsToRemove.forEach {
-            activity.updateConversationArchivedStatus(it.threadId, true)
-            activity.notificationManager.cancel(it.threadId.hashCode())
-        }
-
-        val newList = try {
-            currentList.toMutableList().apply { removeAll(conversationsToRemove) }
-        } catch (ignored: Exception) {
-            currentList.toMutableList()
-        }
-
-        activity.runOnUiThread {
-            if (newList.none { selectedKeys.contains(it.hashCode()) }) {
-                refreshConversations()
-                finishActMode()
-            } else {
-                submitList(newList)
-                if (newList.isEmpty()) {
-                    refreshConversations()
-                }
             }
         }
     }

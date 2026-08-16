@@ -353,8 +353,6 @@ fun Context.getConversations(
     threadId: Long? = null,
     privateContacts: ArrayList<SimpleContact> = ArrayList(),
 ): ArrayList<Conversation> {
-    val archiveAvailable = config.isArchiveAvailable
-
     val uri = "${Threads.CONTENT_URI}?simple=true".toUri()
     val projection = mutableListOf(
         Threads._ID,
@@ -363,10 +361,6 @@ fun Context.getConversations(
         Threads.READ,
         Threads.RECIPIENT_IDS,
     )
-
-    if (archiveAvailable) {
-        projection += Threads.ARCHIVED
-    }
 
     var selection = "${Threads.MESSAGE_COUNT} > 0"
     var selectionArgs = arrayOf<String>()
@@ -430,8 +424,6 @@ fun Context.getConversations(
             }
             val isGroupConversation = phoneNumbers.size > 1
             val read = cursor.getIntValue(Threads.READ) == 1
-            val archived =
-                if (archiveAvailable) cursor.getIntValue(Threads.ARCHIVED) == 1 else false
             val unreadCount = if (!read) unreadMap[id] ?: 0 else 0
             val conversation = Conversation(
                 threadId = id,
@@ -442,7 +434,7 @@ fun Context.getConversations(
                 photoUri = photoUri,
                 isGroupConversation = isGroupConversation,
                 phoneNumber = phoneNumbers.first(),
-                isArchived = archived,
+                isArchived = false,
                 unreadCount = unreadCount,
             )
             conversations.add(conversation)
@@ -451,15 +443,7 @@ fun Context.getConversations(
         // Contacts permission is optional and provider access can also be restricted by the OEM.
         // Keep cached conversations instead of exposing a raw provider exception to the user.
     } catch (sqliteException: SQLiteException) {
-        if (
-            sqliteException.message?.contains("no such column: archived") == true
-            && archiveAvailable
-        ) {
-            config.isArchiveAvailable = false
-            return getConversations(threadId, privateContacts)
-        } else {
-            showErrorToast(sqliteException)
-        }
+        showErrorToast(sqliteException)
     } catch (e: Exception) {
         showErrorToast(e)
     }
@@ -878,20 +862,6 @@ fun Context.getSmsThreadId(messageId: Long): Long {
     return result
 }
 
-fun Context.removeAllArchivedConversations(callback: (() -> Unit)? = null) {
-    ensureBackgroundThread {
-        try {
-            for (conversation in conversationsDB.getAllArchived()) {
-                deleteConversation(conversation.threadId)
-            }
-            toast(R.string.archive_emptied_successfully)
-            callback?.invoke()
-        } catch (_: Exception) {
-            toast(org.fossify.commons.R.string.unknown_error_occurred)
-        }
-    }
-}
-
 fun Context.deleteConversation(threadId: Long) {
     var uri = Sms.CONTENT_URI
     val selection = "${Sms.THREAD_ID} = ?"
@@ -988,33 +958,6 @@ fun Context.restoreMessageFromRecycleBin(id: Long) {
         messagesDB.deleteFromRecycleBin(id)
     } catch (e: Exception) {
         showErrorToast(e)
-    }
-}
-
-fun Context.updateConversationArchivedStatus(threadId: Long, archived: Boolean) {
-    val uri = Threads.CONTENT_URI
-    val values = ContentValues().apply {
-        put(Threads.ARCHIVED, archived)
-    }
-    val selection = "${Threads._ID} = ?"
-    val selectionArgs = arrayOf(threadId.toString())
-    try {
-        contentResolver.update(uri, values, selection, selectionArgs)
-    } catch (sqliteException: SQLiteException) {
-        if (
-            sqliteException.message?.contains("no such column: archived") == true
-            && config.isArchiveAvailable
-        ) {
-            config.isArchiveAvailable = false
-            return
-        } else {
-            throw sqliteException
-        }
-    }
-    if (archived) {
-        conversationsDB.moveToArchive(threadId)
-    } else {
-        conversationsDB.unarchive(threadId)
     }
 }
 
@@ -1451,10 +1394,6 @@ fun Context.rescheduleAllScheduledMessages() {
 
 fun Context.getDefaultKeyboardHeight(): Int {
     return resources.getDimensionPixelSize(R.dimen.default_keyboard_height)
-}
-
-fun Context.shouldUnarchive(): Boolean {
-    return config.isArchiveAvailable && !config.keepConversationsArchived
 }
 
 fun Context.copyToUri(src: Uri, dst: Uri) {

@@ -39,7 +39,6 @@
     <string name="add_person">Pievienot cilvēku</string>
     <string name="add_a_blocked_keyword">Pievienot liegto atslēgvārdu</string>
     <string name="invalid_short_code">Nevar atbildēt uz īsajiem kodiem kā šis</string>
-    <string name="no_archived_conversations">Netika atrasta neviena arhivēta saruna</string>
     <string name="restore">Atjaunot</string>
     <string name="app_launcher_name">Ziņojumi</string>
     <string name="no_conversations_found">Netika atrasta neviena saglabāta saruna</string>
@@ -63,13 +62,7 @@
     <string name="channel_received_sms">Saņemtās SMS</string>
     <string name="mark_as_read">Atzīmēt kā izlasītu</string>
     <string name="mark_as_unread">Atzīmēt kā nelasītu</string>
-    <string name="unarchive">Atcelt arhivēšanu</string>
-    <string name="show_archived_conversations">Rādīt arhivētās sarunas</string>
-    <string name="archive">Arhīvs</string>
-    <string name="archive_emptied_successfully">Arhīvs tika sekmīgi iztukšots</string>
-    <string name="empty_archive_confirmation">Vai tiešām iztukšot arhīvu? Visas arhivētās sarunas tiks neatgriezeniski izdzēstas.</string>
     <string name="empty_recycle_bin_messages_confirmation">Vai tiešām iztukšot atkritni? Ziņojumi tiks neatgriezeniski zaudēti.</string>
-    <string name="archive_confirmation">Vai tiešām arhivēt %s?</string>
     <string name="restore_whole_conversation_confirmation">Vai tiešām atjaunot visus šīs sarunas ziņojumus?</string>
     <string name="restore_confirmation">Vai tiešām atjaunot %s?</string>
     <string name="blocked_keywords">Liegtie atslēgvārdi</string>
@@ -100,13 +93,11 @@
     <string name="export_blocked_keywords">Izgūt liegtos atslēgvārdus</string>
     <string name="import_blocked_keywords">Ievietot liegtos atslēgvārdus</string>
     <string name="error_radio_turned_off">Nevarēja nosūtīt ziņojumu, radio ir izslēgs</string>
-    <string name="empty_archive">Izdzēst visas arhivētās sarunas</string>
     <string name="couldnt_download_mms">Nevarēja lejupielādēt MMS</string>
     <string name="new_message">Jauns ziņojums</string>
     <string name="send_now">Nosūtīt tagad</string>
     <string name="manage_blocked_keywords">Pārvaldīt liegtos atslēgvārdus</string>
     <string name="schedule_send">Ieplānot nosūtīšanu</string>
-    <string name="archived_conversations">Arhīvs</string>
     <string name="delete_whole_conversation_confirmation">Vai tiešām izdzēst visus šīs sarunas ziņojumus?</string>
     <string name="me">Es</string>
     <string name="loading_messages">Ielādē ziņojumus…</string>
@@ -122,7 +113,6 @@
     <string name="skip_the_recycle_bin_messages">Izlaist atkritni, izdzēst ziņojumus uzreiz</string>
     <string name="unknown_error_occurred_sending_message">Nevarēja nosūtīt ziņojumu, kļūdas kods: %d</string>
     <string name="faq_1_text">Diemžēl tas ir nepieciešams MMS pielikumu nosūtīšanai. Nevarēšana nosūtīt MMS būtu ļoti liels trūkums salīdzinājumā ar citām lietotnēm, tādēļ mēs izlēmām rīkoties šādi. Tomēr, kā ierasts, šeit nav nekādu reklāmu, izsekošanas vai datu apkopošanas, internets tiek izmantots tikai MMS nosūtīšanai.</string>
-    <string name="keep_conversations_archived">Paturēt sarunas arhivētas</string>
     <string name="faq_4_text">Lietotnes iestatījumos nepieciešams iespējot “Nosūtīt kopu ziņas kā MMS”. Tas nodrošinās, ka kopu ziņas tiek pareizi nosūtītas kā MMS, ļaujot visiem dalībniekiem redzēt citam cita atbildes.</string>
     <string name="faq_4_title">Kādēļ manas kopu ziņu atbildes saņēmējiem parādās kā atsevišķas īsziņas?</string>
 </resources>

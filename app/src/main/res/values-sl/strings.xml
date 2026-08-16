@@ -84,9 +84,6 @@
     <string name="faq_3_title">Ali aplikacija podpira načrtovana sporočila\?</string>
     <string name="faq_3_text">Da, lahko načrtujete pošiljanje sporočil v prihodnosti, da dolgo pritisnete gumb Pošlji in izberete želeni datum in čas.</string>
     <string name="enable_custom_notifications">Omogoči obvestila po meri</string>
-    <string name="no_archived_conversations">Ni bilo najdenih arhiviranih pogovorov</string>
-    <string name="archive_emptied_successfully">Arhiv je bil uspešno izpraznjen</string>
-    <string name="empty_archive_confirmation">Ste prepričani, da želite izprazniti arhiv? Vsi arhivirani pogovori bodo trajno izgubljeni.</string>
     <string name="restore_all_messages">Obnovi vsa sporočila</string>
     <string name="empty_recycle_bin_messages_confirmation">Ali ste prepričani, da želite izprazniti koš? Sporočila bodo trajno izgubljena.</string>
     <string name="skip_the_recycle_bin_messages">Preskoči koš, neposredno izbriši sporočila</string>
@@ -97,10 +94,6 @@
     <string name="message_details_receiver">Prejemnik</string>
     <string name="message_details_sent_at">Poslano ob</string>
     <string name="message_details_received_at">Prejeto ob</string>
-    <string name="empty_archive">Izbriši vsa arhivirana sporočila</string>
-    <string name="show_archived_conversations">Prikaži arhivirana sporočila</string>
-    <string name="archived_conversations">Arhiv</string>
-    <string name="archive">Arhiviraj</string>
     <string name="restore">Obnovi</string>
     <string name="blocked_keywords">Blokirane ključne besede</string>
     <string name="add_a_blocked_keyword">Dodajanje blokirane ključne besede</string>
@@ -113,10 +106,8 @@
     <string name="error_radio_turned_off">Ni bilo mogoče poslati sporočila, radio je izključen</string>
     <string name="restore_confirmation">Ste prepričani, da želite obnoviti %s?</string>
     <string name="restore_whole_conversation_confirmation">Ste prepričani, da želite obnoviti vsa sporočila tega pogovora?</string>
-    <string name="archive_confirmation">Ste prepričani, da želite arhivirati %s?</string>
     <string name="not_blocking_keywords">Ne blokirate nobene ključne besede. Tu lahko dodate ključne besede, da blokirate vsa sporočila, ki jih vsebujejo.</string>
     <string name="manage_blocked_keywords">Upravljanje blokiranih ključnih besed</string>
-    <string name="unarchive">Vrni iz arhiva</string>
     <string name="keyword">Ključna beseda</string>
     <string name="sim_card_not_available">Kartica SIM ni na voljo</string>
     <string name="invalid_short_code">Ni mogoče odgovoriti na kratke kode, kot je ta</string>
