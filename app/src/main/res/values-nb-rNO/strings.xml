@@ -79,18 +79,10 @@
     <string name="faq_2_text">MMS-størrelsen er begrenset av operatører, du kan prøve å sette en mindre grense i appinnstillingene.</string>
     <string name="faq_3_title">Støtter appen planlagte meldinger\?</string>
     <string name="faq_3_text">Ja, du kan planlegge at meldinger sendes i framtiden ved å lang-trykke knappen Send og velge ønsket dato og klokkeslett.</string>
-    <string name="empty_archive">Slett alle arkiverte samtaler</string>
-    <string name="no_archived_conversations">Ingen arkiverte samtaler funnet</string>
-    <string name="archive_emptied_successfully">Arkivet har blitt tømt</string>
-    <string name="empty_archive_confirmation">Er du sikker på at du vil tømme arkivet? Alle arkiverte samtaler vil slettes permanent.</string>
     <string name="restore_all_messages">Gjenopprett alle meldinger</string>
     <string name="skip_the_recycle_bin_messages">Ikke bruk papirkurven, slett meldinger med én gang</string>
-    <string name="archive_confirmation">Er du sikker på at du vil arkivere %s?</string>
     <string name="restore_confirmation">Er du sikker på at du vil gjenopprette %s?</string>
     <string name="app_launcher_name">Meldinger</string>
-    <string name="show_archived_conversations">Vis arkiverte samtaler</string>
-    <string name="archived_conversations">Arkiver</string>
-    <string name="archive">Arkiv</string>
     <string name="invalid_short_code_desc">Du kan kun svare til kortnummer med sifre som «503501», men ikke til numre som inneholder tall og sifre som «AB-CD0».</string>
     <string name="restore_whole_conversation_confirmation">Er du sikker på at du vil gjenopprette alle meldingene i denne samtalen?</string>
     <string name="couldnt_download_mms">Kunne ikke laste ned MMS</string>
@@ -103,7 +95,6 @@
     <string name="message_details_sent_at">Sendt</string>
     <string name="message_details_received_at">Mottatt</string>
     <string name="me">Meg</string>
-    <string name="unarchive">Angre arkivering</string>
     <string name="restore">Gjenopprett</string>
     <string name="keyword">Nøkkelord</string>
     <string name="blocked_keywords">Blokkerte nøkkelord</string>

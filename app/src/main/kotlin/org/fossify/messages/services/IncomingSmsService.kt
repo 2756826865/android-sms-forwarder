@@ -32,10 +32,8 @@ import org.fossify.messages.extensions.getSmsThreadId
 import org.fossify.messages.extensions.getThreadId
 import org.fossify.messages.extensions.insertNewSMS
 import org.fossify.messages.extensions.messagesDB
-import org.fossify.messages.extensions.shouldUnarchive
 import org.fossify.messages.extensions.showReceivedMessageNotification
 import org.fossify.messages.extensions.syncThreadToLocal
-import org.fossify.messages.extensions.updateConversationArchivedStatus
 import org.fossify.messages.extensions.subscriptionManagerCompat
 import org.fossify.messages.forwarding.ForwardingChannels
 import org.fossify.messages.forwarding.ForwardingHistoryStore
@@ -118,10 +116,16 @@ class IncomingSmsService : Service() {
             ?.takeIf { it > 0L }
             ?: System.currentTimeMillis()
         val receivedAt = System.currentTimeMillis()
-        val subscriptionId = intent.getIntExtra(
+        val subscriptionId = listOf(
             "subscription",
-            intent.getIntExtra("subscription_id", SubscriptionManager.INVALID_SUBSCRIPTION_ID),
-        )
+            "subscription_id",
+            "android.telephony.extra.SUBSCRIPTION_INDEX",
+            "subscriptionIndex",
+            "android.telephony.extra.SUBSCRIPTION_ID",
+        ).map { intent.getIntExtra(it, SubscriptionManager.INVALID_SUBSCRIPTION_ID) }
+            .firstOrNull { it != SubscriptionManager.INVALID_SUBSCRIPTION_ID }
+            ?: SubscriptionManager.INVALID_SUBSCRIPTION_ID
+        Log.d(TAG, "subscriptionId resolved: $subscriptionId from ${intent.action}")
         val fingerprint = fingerprint(address, body, sentAt, subscriptionId)
         if (wasPersisted(fingerprint)) {
             Log.i(TAG, "duplicate ${intent.action} ignored after successful persistence")
@@ -221,6 +225,7 @@ class IncomingSmsService : Service() {
             body = body,
             subscriptionId = subscriptionId,
             messageTimestamp = sentAt,
+            messageId = insertedMessageId,
             allowExecution = remoteCommandAllowed,
         )
 
@@ -380,7 +385,6 @@ class IncomingSmsService : Service() {
 
         messagesDB.insertOrUpdate(message)
         syncThreadToLocal(threadId)
-        if (shouldUnarchive()) updateConversationArchivedStatus(threadId, false)
         refreshMessages()
         refreshConversations()
         showReceivedMessageNotification(

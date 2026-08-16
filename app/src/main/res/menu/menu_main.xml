@@ -9,11 +9,6 @@
         android:title="@string/show_the_recycle_bin"
         app:showAsAction="never" />
     <item
-        android:id="@+id/show_archived"
-        android:showAsAction="never"
-        android:title="@string/show_archived_conversations"
-        app:showAsAction="never" />
-    <item
         android:id="@+id/pushplus_forwarding"
         android:icon="@drawable/ic_send_vector"
         android:showAsAction="never"

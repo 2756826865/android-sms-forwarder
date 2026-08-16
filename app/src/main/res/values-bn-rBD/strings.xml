@@ -40,10 +40,6 @@
     <string name="send_now">এখনই পাঠান</string>
     <string name="message_details_receiver">প্রাপক</string>
     <string name="message_details_sent_at">এই সময়ে পাঠানো হয়েছে</string>
-    <string name="show_archived_conversations">আর্কাইভ করা কথোপকথন দেখুন</string>
-    <string name="empty_archive">সমস্ত আর্কাইভ করা কথোপকথন মুছুন</string>
-    <string name="archive">আর্কাইভ করুন</string>
-    <string name="empty_archive_confirmation">আপনি কি নিশ্চিত যে আপনি আর্কাইভ খালি করতে চান? সমস্ত আর্কাইভ করা কথোপকথন স্থায়ীভাবে হারিয়ে যাবে।</string>
     <string name="restore_whole_conversation_confirmation">আপনি কি এই কথোপকথনের সমস্ত বার্তা পুনরুদ্ধার করার বিষয়ে নিশ্চিত?</string>
     <plurals name="delete_conversations">
         <item quantity="one">%d টি কথোপকথন</item>
@@ -67,13 +63,9 @@
     <string name="invalid_short_code_desc">আপনি শুধুমাত্র \"503501\" এর মতো নম্বর সহ শর্ট কোডের উত্তর দিতে পারেন কিন্তু \"AB-CD0\" এর মতো অক্ষর এবং সংখ্যা সম্বলিত কোডগুলিতে নয়।</string>
     <string name="faq_1_text">দুঃখজনকভাবে এটি এমএমএস সংযুক্তি পাঠানোর জন্য প্রয়োজন. অন্যান্য অ্যাপের তুলনায় এমএমএস পাঠাতে না পারা সত্যিই একটি বড় অসুবিধা হবে, তাই আমরা এই পথে যাওয়ার সিদ্ধান্ত নিয়েছি। যাইহোক, সাধারণত, কোন বিজ্ঞাপন, ট্র্যাকিং বা বিশ্লেষণ কোনো কিছুই নেই, ইন্টারনেট শুধুমাত্র এমএমএস পাঠানোর জন্য ব্যবহার করা হয়।</string>
     <string name="pin_conversation">উপরে পিন করুন</string>
-    <string name="archived_conversations">আর্কাইভকৃত বার্তাসমূহ</string>
     <string name="forward_message">ফরোয়ার্ড করুন</string>
-    <string name="no_archived_conversations">কোনো আর্কাইভকৃত কথোপকথন পাওয়া যায়নি</string>
     <string name="enable_custom_notifications">কাস্টম বিজ্ঞপ্তি সক্রিয় করুন</string>
-    <string name="archive_emptied_successfully">আর্কাইভ সফলভাবে খালি করা হয়েছে</string>
     <string name="add_a_blocked_keyword">একটি ব্লকড কীওয়ার্ড যোগ করুন</string>
-    <string name="unarchive">আর্কাইভ মুক্ত করুন</string>
     <string name="lock_screen_visibility">লক স্ক্রীন বিজ্ঞপ্তি দৃশ্যমানতা</string>
     <plurals name="and_other_contacts">
         <item quantity="one">এবং আরও %d জন</item>
@@ -91,7 +83,6 @@
     <string name="conversation_details">কথোপকথনের বিবরণ</string>
     <string name="skip_the_recycle_bin_messages">রিসাইকেল বিন এড়িয়ে যান, সরাসরি বার্তা মুছুন</string>
     <string name="delete_whole_conversation_confirmation">আপনি কি এই কথোপকথনের সমস্ত বার্তা মুছে ফেলার বিষয়ে নিশ্চিত?</string>
-    <string name="archive_confirmation">আপনি কি নিশ্চিত আপনি %s আর্কাইভ করতে চান?</string>
     <string name="restore_confirmation">আপনি কি %s পুনরুদ্ধার করার বিষয়ে নিশ্চিত?</string>
     <string name="keyword">কীওয়ার্ড</string>
     <plurals name="delete_messages">

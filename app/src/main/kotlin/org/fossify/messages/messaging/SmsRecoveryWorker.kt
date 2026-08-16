@@ -131,6 +131,7 @@ class SmsRecoveryWorker(
                         body = body,
                         subscriptionId = subscriptionId,
                         messageTimestamp = date,
+                        messageId = id,
                         allowExecution = remoteCommandAllowed,
                     )
 

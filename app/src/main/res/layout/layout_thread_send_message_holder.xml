@@ -5,11 +5,12 @@
     android:id="@+id/message_holder"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="@android:color/white"
-    android:paddingStart="20dp"
-    android:paddingTop="8dp"
-    android:paddingEnd="20dp"
-    android:paddingBottom="10dp">
+    android:background="@color/miui_page_background"
+    android:minHeight="58dp"
+    android:paddingStart="12dp"
+    android:paddingTop="4dp"
+    android:paddingEnd="10dp"
+    android:paddingBottom="8dp">
 
     <RelativeLayout
         android:id="@+id/scheduled_message_holder"
@@ -108,8 +109,8 @@
         android:id="@+id/thread_type_message"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginStart="@dimen/small_margin"
-        android:layout_marginEnd="@dimen/small_margin"
+        android:layout_marginStart="8dp"
+        android:layout_marginEnd="8dp"
         android:background="@drawable/message_input_background"
         android:gravity="center_vertical"
         android:hint="@string/type_a_message"
@@ -202,7 +203,8 @@
         android:id="@+id/attachment_picker_holder"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginHorizontal="@dimen/small_margin"
+        android:layout_marginHorizontal="0dp"
+        android:background="@color/miui_page_background"
         android:overScrollMode="always"
         android:visibility="gone"
         app:layout_constraintBottom_toBottomOf="parent"

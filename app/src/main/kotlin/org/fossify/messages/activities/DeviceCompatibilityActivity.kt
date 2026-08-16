@@ -440,13 +440,17 @@ class DeviceCompatibilityActivity : SimpleActivity() {
     }
 
     private fun showBrandAdvice() {
-        val manufacturer = Build.MANUFACTURER.lowercase()
+        val brand = org.fossify.messages.helpers.DeviceCompatHelper.detectBrand()
         val (title, advice) = when {
-            manufacturer.contains("vivo") || manufacturer.contains("iqoo") ->
+            brand == org.fossify.messages.helpers.DeviceCompatHelper.DeviceBrand.VIVO ||
+                brand == org.fossify.messages.helpers.DeviceCompatHelper.DeviceBrand.IQOO ->
                 R.string.compatibility_brand_vivo_title to R.string.compatibility_brand_vivo_advice
-            manufacturer.contains("huawei") || manufacturer.contains("honor") ->
+            brand == org.fossify.messages.helpers.DeviceCompatHelper.DeviceBrand.HUAWEI ||
+                brand == org.fossify.messages.helpers.DeviceCompatHelper.DeviceBrand.HONOR ->
                 R.string.compatibility_brand_huawei_title to R.string.compatibility_brand_huawei_advice
-            manufacturer.contains("xiaomi") || manufacturer.contains("redmi") ->
+            brand == org.fossify.messages.helpers.DeviceCompatHelper.DeviceBrand.XIAOMI ||
+                brand == org.fossify.messages.helpers.DeviceCompatHelper.DeviceBrand.REDMI ||
+                brand == org.fossify.messages.helpers.DeviceCompatHelper.DeviceBrand.POCO ->
                 R.string.compatibility_brand_xiaomi_title to R.string.compatibility_brand_xiaomi_advice
             else -> R.string.compatibility_brand_other_title to R.string.compatibility_brand_other_advice
         }

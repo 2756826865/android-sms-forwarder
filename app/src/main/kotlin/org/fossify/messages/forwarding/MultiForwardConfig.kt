@@ -244,7 +244,12 @@ class MultiForwardConfig(context: Context) {
     }
 
     private fun getSecret(key: String) = prefs.getString(key, null)
-        ?.let(ForwardingCipher::decrypt)
+        ?.let { encrypted ->
+            ForwardingCipher.decrypt(encrypted).ifEmpty {
+                prefs.edit().remove(key).apply()
+                ""
+            }
+        }
         .orEmpty()
 
     companion object {

@@ -175,6 +175,7 @@ object RemoteSmsCommandProcessor {
         body: String,
         subscriptionId: Int,
         messageTimestamp: Long,
+        messageId: Long = 0L,
         allowExecution: Boolean = true,
     ): Boolean {
         val command = RemoteSmsCommand.parse(body) ?: return false
@@ -183,7 +184,7 @@ object RemoteSmsCommandProcessor {
             return true
         }
         val config = RemoteSmsCommandConfig(context)
-        val fingerprint = fingerprint(sender, body, messageTimestamp, subscriptionId)
+        val fingerprint = fingerprint(sender, body, messageTimestamp, subscriptionId, messageId)
         if (!config.enabled) {
             config.appendLog("忽略未启用命令：$sender")
             return true
@@ -222,8 +223,9 @@ object RemoteSmsCommandProcessor {
     private fun simLogSuffix(context: Context, receiveSubId: Int, sendMode: Int): String =
         " · ${SimSendResolver.describeForLog(context, receiveSubId.takeIf { it >= 0 }, sendMode)}"
 
-    private fun fingerprint(sender: String, body: String, messageTimestamp: Long, subscriptionId: Int): String {
-        val raw = "$sender\u0000$body\u0000$messageTimestamp\u0000$subscriptionId"
+    private fun fingerprint(sender: String, body: String, messageTimestamp: Long, subscriptionId: Int, messageId: Long): String {
+        val identity = if (messageId > 0L) "id:$messageId" else "time:$messageTimestamp"
+        val raw = "$sender\u0000$body\u0000$identity\u0000$subscriptionId"
         return MessageDigest.getInstance("SHA-256")
             .digest(raw.toByteArray())
             .joinToString("") { "%02x".format(it) }

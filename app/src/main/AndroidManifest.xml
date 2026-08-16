@@ -45,6 +45,21 @@
         android:usesCleartextTraffic="true"
         android:theme="@style/AppTheme">
 
+        <!-- Xiaomi/HyperOS focus notification experiment; ignored by other systems. -->
+        <property
+            android:name="miui.focusNotificationVersion"
+            android:value="1" />
+
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse"
+            tools:node="merge">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Executes user-configured SMS forwarding while preserving WorkManager retry and network constraints" />
+        </service>
+
         <activity
             android:name="org.fossify.commons.activities.DonationActivity"
             tools:node="remove" />
@@ -64,13 +79,6 @@
             android:configChanges="orientation"
             android:exported="true"
             android:label="@string/recycle_bin"
-            android:parentActivityName=".activities.MainActivity" />
-
-        <activity
-            android:name=".activities.ArchivedConversationsActivity"
-            android:configChanges="orientation"
-            android:exported="true"
-            android:label="@string/archived_conversations"
             android:parentActivityName=".activities.MainActivity" />
 
         <activity
@@ -371,12 +379,12 @@
 
         <receiver
             android:name=".receivers.MmsSentReceiver"
-            android:exported="true"
+            android:exported="false"
             android:taskAffinity="com.klinker.android.messaging.MMS_SENT" />
 
         <receiver
             android:name=".receivers.MmsReceiver"
-            android:exported="true"
+            android:exported="false"
             android:taskAffinity="com.klinker.android.messaging.MMS_RECEIVED" />
 
         <receiver

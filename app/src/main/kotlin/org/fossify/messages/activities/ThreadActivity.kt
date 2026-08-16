@@ -11,6 +11,7 @@ import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.drawable.LayerDrawable
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.provider.ContactsContract
 import android.provider.DocumentsContract
@@ -152,12 +153,10 @@ import org.fossify.messages.extensions.renameConversation
 import org.fossify.messages.extensions.restoreAllMessagesFromRecycleBinForConversation
 import org.fossify.messages.extensions.restoreMessageFromRecycleBin
 import org.fossify.messages.extensions.saveSmsDraft
-import org.fossify.messages.extensions.shouldUnarchive
 import org.fossify.messages.extensions.showWithAnimation
 import org.fossify.messages.extensions.subscriptionManagerCompat
 import org.fossify.messages.extensions.toArrayList
 import org.fossify.messages.extensions.toSortedMessages
-import org.fossify.messages.extensions.updateConversationArchivedStatus
 import org.fossify.messages.extensions.updateLastConversationMessage
 import org.fossify.messages.extensions.updateScheduledMessagesThreadId
 import org.fossify.messages.helpers.CAPTURE_AUDIO_INTENT
@@ -361,14 +360,9 @@ class ThreadActivity : SimpleActivity() {
 
     private fun refreshMenuItems() {
         val firstPhoneNumber = participants.firstOrNull()?.phoneNumbers?.firstOrNull()?.value
-        val archiveAvailable = config.isArchiveAvailable
         binding.threadToolbar.menu.apply {
             findItem(R.id.delete).isVisible = threadItems.isNotEmpty()
             findItem(R.id.restore).isVisible = threadItems.isNotEmpty() && isRecycleBin
-            findItem(R.id.archive).isVisible =
-                threadItems.isNotEmpty() && conversation?.isArchived == false && !isRecycleBin && archiveAvailable
-            findItem(R.id.unarchive).isVisible =
-                threadItems.isNotEmpty() && conversation?.isArchived == true && !isRecycleBin && archiveAvailable
             findItem(R.id.rename_conversation).isVisible =
                 participants.size > 1 && conversation != null && !isRecycleBin
             findItem(R.id.conversation_details).isVisible = conversation != null && !isRecycleBin
@@ -400,8 +394,6 @@ class ThreadActivity : SimpleActivity() {
             R.id.block_number -> tryBlocking()
             R.id.delete -> askConfirmDelete()
             R.id.restore -> askConfirmRestoreAll()
-            R.id.archive -> archiveConversation()
-            R.id.unarchive -> unarchiveConversation()
             R.id.rename_conversation -> renameConversation()
             R.id.conversation_details -> launchConversationDetails(threadId)
             R.id.add_number_to_contact -> addNumberToContact()
@@ -984,7 +976,13 @@ class ThreadActivity : SimpleActivity() {
                 val uri = intent.getStringExtra(THREAD_ATTACHMENT_URI)!!.toUri()
                 addAttachment(uri)
             } else if (intent.extras?.containsKey(THREAD_ATTACHMENT_URIS) == true) {
-                intent.getParcelableArrayListExtra(THREAD_ATTACHMENT_URIS, Uri::class.java)?.forEach {
+                val attachmentUris = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    intent.getParcelableArrayListExtra(THREAD_ATTACHMENT_URIS, Uri::class.java)
+                } else {
+                    @Suppress("DEPRECATION")
+                    intent.getParcelableArrayListExtra(THREAD_ATTACHMENT_URIS)
+                }
+                attachmentUris?.forEach {
                     addAttachment(it)
                 }
             }
@@ -1254,26 +1252,6 @@ class ThreadActivity : SimpleActivity() {
                     refreshConversations()
                     finish()
                 }
-            }
-        }
-    }
-
-    private fun archiveConversation() {
-        ensureBackgroundThread {
-            updateConversationArchivedStatus(threadId, true)
-            runOnUiThread {
-                refreshConversations()
-                finish()
-            }
-        }
-    }
-
-    private fun unarchiveConversation() {
-        ensureBackgroundThread {
-            updateConversationArchivedStatus(threadId, false)
-            runOnUiThread {
-                refreshConversations()
-                finish()
             }
         }
     }
@@ -1797,10 +1775,6 @@ class ThreadActivity : SimpleActivity() {
             }
         }
         messagesDB.insertOrUpdate(message)
-        if (shouldUnarchive()) {
-            updateConversationArchivedStatus(message.threadId, false)
-            refreshConversations()
-        }
     }
 
     // show selected contacts, properly split to new lines when appropriate

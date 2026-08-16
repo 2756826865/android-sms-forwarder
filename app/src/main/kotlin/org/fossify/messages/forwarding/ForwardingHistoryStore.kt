@@ -1,8 +1,6 @@
 package org.fossify.messages.forwarding
 
 import android.content.Context
-import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -43,7 +41,6 @@ class ForwardingHistoryStore(context: Context) {
         val current = decode(prefs.getString(KEY_RECORDS, "[]").orEmpty()).toMutableList()
         val existing = current.firstOrNull { it.recordId == recordId }
         current.removeAll { it.recordId == recordId }
-        val waitingForNetwork = channel in ForwardingChannels.networkChannels && !isNetworkAvailable()
         current += ForwardingHistoryRecord(
             recordId = recordId,
             workId = workId,
@@ -52,9 +49,12 @@ class ForwardingHistoryStore(context: Context) {
             body = body.take(MAX_BODY_LENGTH),
             receivedAt = receivedAt,
             subscriptionId = subscriptionId,
-            status = if (waitingForNetwork) STATUS_WAITING_NETWORK else STATUS_QUEUED,
+            // The history is a record of the enqueue lifecycle. WorkManager owns
+            // network constraints; do not expose a transient network snapshot as
+            // a long-lived "waiting" state before the worker starts.
+            status = STATUS_QUEUED,
             attempts = existing?.attempts ?: 0,
-            detail = if (waitingForNetwork) "等待网络连接" else "已加入发送队列",
+            detail = "已加入发送队列",
             updatedAt = System.currentTimeMillis(),
             isTest = isTest,
         )
@@ -168,13 +168,6 @@ class ForwardingHistoryStore(context: Context) {
             }
         }
     }.getOrDefault(emptyList())
-
-    private fun isNetworkAvailable(): Boolean {
-        val manager = appContext.getSystemService(ConnectivityManager::class.java) ?: return false
-        val network = manager.activeNetwork ?: return false
-        val capabilities = manager.getNetworkCapabilities(network) ?: return false
-        return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-    }
 
     companion object {
         const val STATUS_QUEUED = "queued"

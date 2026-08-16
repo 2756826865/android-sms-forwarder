@@ -22,12 +22,6 @@
         android:title="@string/dial_number"
         app:showAsAction="always" />
     <item
-        android:id="@+id/cab_archive"
-        android:icon="@drawable/ic_archive_vector"
-        android:showAsAction="always"
-        android:title="@string/archive"
-        app:showAsAction="always" />
-    <item
         android:id="@+id/cab_delete"
         android:icon="@drawable/ic_delete_vector"
         android:showAsAction="always"

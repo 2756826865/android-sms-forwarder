@@ -1,7 +1,5 @@
 package org.fossify.messages.activities
 
-import android.content.res.ColorStateList
-import android.graphics.Color
 import android.graphics.Typeface
 import android.os.Bundle
 import android.os.Handler
@@ -13,8 +11,6 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
-import com.google.android.material.button.MaterialButton
-import org.fossify.commons.extensions.toast
 import org.fossify.commons.extensions.viewBinding
 import org.fossify.commons.helpers.NavigationIcon
 import org.fossify.messages.R
@@ -24,8 +20,6 @@ import org.fossify.messages.extensions.showSmsStyled
 import org.fossify.messages.forwarding.ForwardingChannels
 import org.fossify.messages.forwarding.ForwardingHistoryRecord
 import org.fossify.messages.forwarding.ForwardingHistoryStore
-import org.fossify.messages.forwarding.MultiChannelForwardWorker
-import org.fossify.messages.forwarding.PushPlusWorker
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -161,54 +155,8 @@ class ForwardingHistoryActivity : SimpleActivity() {
                         setPadding(0, dp(4), 0, 0)
                     })
                 })
-                if (record.status == ForwardingHistoryStore.STATUS_FAILED) {
-                    addView(MaterialButton(context).apply {
-                        text = getString(R.string.forwarding_history_retry)
-                        isAllCaps = false
-                        textSize = 14f
-                        cornerRadius = dp(8)
-                        insetTop = 0
-                        insetBottom = 0
-                        minHeight = dp(48)
-                        setTextColor(Color.WHITE)
-                        backgroundTintList = ColorStateList.valueOf(
-                            ContextCompat.getColor(context, R.color.miui_action_blue),
-                        )
-                        setOnClickListener { retry(record) }
-                        layoutParams = LinearLayout.LayoutParams(
-                            LinearLayout.LayoutParams.WRAP_CONTENT,
-                            LinearLayout.LayoutParams.WRAP_CONTENT,
-                        ).apply { topMargin = dp(4) }
-                    })
-                }
             }
         }
-    }
-
-    private fun retry(record: ForwardingHistoryRecord) {
-        if (record.channel == ForwardingChannels.PUSHPLUS) {
-            PushPlusWorker.enqueue(
-                context = applicationContext,
-                sender = record.sender,
-                body = record.body,
-                receivedAt = record.receivedAt,
-                subscriptionId = record.subscriptionId,
-                uniqueId = record.workId,
-            )
-        } else {
-            MultiChannelForwardWorker.enqueue(
-                context = applicationContext,
-                sender = record.sender,
-                body = record.body,
-                receivedAt = record.receivedAt,
-                subscriptionId = record.subscriptionId,
-                uniqueId = record.workId,
-                targetChannel = record.channel,
-                allowedChannels = setOf(record.channel),
-            )
-        }
-        toast(R.string.forwarding_history_retry_queued)
-        renderRecords()
     }
 
     private fun confirmClear() {
@@ -225,7 +173,7 @@ class ForwardingHistoryActivity : SimpleActivity() {
     }
 
     private fun statusLabel(status: String) = when (status) {
-        ForwardingHistoryStore.STATUS_QUEUED -> "等待发送"
+        ForwardingHistoryStore.STATUS_QUEUED -> "已入队"
         ForwardingHistoryStore.STATUS_WAITING_NETWORK -> "等待网络"
         ForwardingHistoryStore.STATUS_RUNNING -> "发送中"
         ForwardingHistoryStore.STATUS_SUCCESS -> "成功"

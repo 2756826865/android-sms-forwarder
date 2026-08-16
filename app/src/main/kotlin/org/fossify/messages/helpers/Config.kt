@@ -195,11 +195,6 @@ class Config(context: Context) : BaseConfig(context) {
         set(lastRecycleBinCheck) = prefs.edit().putLong(LAST_RECYCLE_BIN_CHECK, lastRecycleBinCheck)
             .apply()
 
-    var isArchiveAvailable: Boolean
-        get() = prefs.getBoolean(IS_ARCHIVE_AVAILABLE, true)
-        set(isArchiveAvailable) = prefs.edit().putBoolean(IS_ARCHIVE_AVAILABLE, isArchiveAvailable)
-            .apply()
-
     var customNotifications: Set<String>
         get() = prefs.getStringSet(CUSTOM_NOTIFICATIONS, HashSet<String>())!!
         set(customNotifications) = prefs.edit()
@@ -217,11 +212,6 @@ class Config(context: Context) : BaseConfig(context) {
         get() = prefs.getString(LAST_BLOCKED_KEYWORD_EXPORT_PATH, "")!!
         set(lastBlockedNumbersExportPath) = prefs.edit()
             .putString(LAST_BLOCKED_KEYWORD_EXPORT_PATH, lastBlockedNumbersExportPath).apply()
-
-    var keepConversationsArchived: Boolean
-        get() = prefs.getBoolean(KEEP_CONVERSATIONS_ARCHIVED, false)
-        set(keepConversationsArchived) = prefs.edit()
-            .putBoolean(KEEP_CONVERSATIONS_ARCHIVED, keepConversationsArchived).apply()
 
     var enableLowBatteryReminder: Boolean
         get() = prefs.getBoolean(ENABLE_LOW_BATTERY_REMINDER, false)

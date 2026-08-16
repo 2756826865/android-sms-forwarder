@@ -9,6 +9,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         app:constraint_referenced_ids="choose_photo,choose_video,take_photo,record_video,record_audio,pick_file,pick_contact,schedule_message"
+        app:flow_horizontalGap="8dp"
         app:flow_verticalGap="@dimen/small_margin"
         app:flow_wrapMode="aligned"
         app:layout_constraintEnd_toEndOf="parent"
@@ -19,7 +20,7 @@
         android:id="@+id/choose_photo"
         android:layout_width="@dimen/attachment_button_width"
         android:layout_height="wrap_content"
-        android:background="?selectableItemBackgroundBorderless"
+        android:background="@drawable/attachment_tile_background"
         android:minHeight="@dimen/attachment_button_height"
         android:orientation="vertical"
         android:paddingHorizontal="@dimen/medium_margin"
@@ -30,10 +31,10 @@
             android:layout_width="@dimen/medium_icon_size"
             android:layout_height="@dimen/medium_icon_size"
             android:layout_gravity="center"
-            android:background="@drawable/circle_background"
-            android:backgroundTint="@color/colorPrimary"
+            android:background="@android:color/transparent"
             android:padding="@dimen/medium_margin"
-            android:src="@drawable/ic_image_vector" />
+            android:src="@drawable/ic_image_vector"
+            app:tint="@color/miui_primary_text" />
 
         <androidx.appcompat.widget.AppCompatTextView
             android:id="@+id/choose_photo_text"
@@ -51,7 +52,7 @@
         android:id="@+id/choose_video"
         android:layout_width="@dimen/attachment_button_width"
         android:layout_height="wrap_content"
-        android:background="?selectableItemBackgroundBorderless"
+        android:background="@drawable/attachment_tile_background"
         android:minHeight="@dimen/attachment_button_height"
         android:orientation="vertical"
         android:paddingHorizontal="@dimen/medium_margin"
@@ -62,10 +63,10 @@
             android:layout_width="@dimen/medium_icon_size"
             android:layout_height="@dimen/medium_icon_size"
             android:layout_gravity="center"
-            android:background="@drawable/circle_background"
-            android:backgroundTint="@color/colorPrimary"
+            android:background="@android:color/transparent"
             android:padding="@dimen/medium_margin"
-            android:src="@drawable/ic_video_camera_vector" />
+            android:src="@drawable/ic_video_camera_vector"
+            app:tint="@color/miui_primary_text" />
 
         <androidx.appcompat.widget.AppCompatTextView
             android:id="@+id/choose_video_text"
@@ -83,7 +84,7 @@
         android:id="@+id/take_photo"
         android:layout_width="@dimen/attachment_button_width"
         android:layout_height="wrap_content"
-        android:background="?selectableItemBackgroundBorderless"
+        android:background="@drawable/attachment_tile_background"
         android:minHeight="@dimen/attachment_button_height"
         android:orientation="vertical"
         android:paddingHorizontal="@dimen/medium_margin"
@@ -94,10 +95,10 @@
             android:layout_width="@dimen/medium_icon_size"
             android:layout_height="@dimen/medium_icon_size"
             android:layout_gravity="center"
-            android:background="@drawable/circle_background"
-            android:backgroundTint="@color/colorPrimary"
+            android:background="@android:color/transparent"
             android:padding="@dimen/medium_margin"
-            android:src="@drawable/ic_camera_vector" />
+            android:src="@drawable/ic_camera_vector"
+            app:tint="@color/miui_primary_text" />
 
         <androidx.appcompat.widget.AppCompatTextView
             android:id="@+id/take_photo_text"
@@ -115,7 +116,7 @@
         android:id="@+id/record_video"
         android:layout_width="@dimen/attachment_button_width"
         android:layout_height="wrap_content"
-        android:background="?selectableItemBackgroundBorderless"
+        android:background="@drawable/attachment_tile_background"
         android:minHeight="@dimen/attachment_button_height"
         android:orientation="vertical"
         android:paddingHorizontal="@dimen/medium_margin"
@@ -126,10 +127,10 @@
             android:layout_width="@dimen/medium_icon_size"
             android:layout_height="@dimen/medium_icon_size"
             android:layout_gravity="center"
-            android:background="@drawable/circle_background"
-            android:backgroundTint="@color/colorPrimary"
+            android:background="@android:color/transparent"
             android:padding="@dimen/medium_margin"
-            android:src="@drawable/ic_videocam_vector" />
+            android:src="@drawable/ic_videocam_vector"
+            app:tint="@color/miui_primary_text" />
 
         <androidx.appcompat.widget.AppCompatTextView
             android:id="@+id/record_video_text"
@@ -147,7 +148,7 @@
         android:id="@+id/record_audio"
         android:layout_width="@dimen/attachment_button_width"
         android:layout_height="wrap_content"
-        android:background="?selectableItemBackgroundBorderless"
+        android:background="@drawable/attachment_tile_background"
         android:minHeight="@dimen/attachment_button_height"
         android:orientation="vertical"
         android:paddingHorizontal="@dimen/medium_margin"
@@ -158,10 +159,10 @@
             android:layout_width="@dimen/medium_icon_size"
             android:layout_height="@dimen/medium_icon_size"
             android:layout_gravity="center"
-            android:background="@drawable/circle_background"
-            android:backgroundTint="@color/colorPrimary"
+            android:background="@android:color/transparent"
             android:padding="@dimen/medium_margin"
-            android:src="@drawable/ic_microphone_vector" />
+            android:src="@drawable/ic_microphone_vector"
+            app:tint="@color/miui_primary_text" />
 
         <androidx.appcompat.widget.AppCompatTextView
             android:id="@+id/record_audio_text"
@@ -179,7 +180,7 @@
         android:id="@+id/pick_file"
         android:layout_width="@dimen/attachment_button_width"
         android:layout_height="wrap_content"
-        android:background="?selectableItemBackgroundBorderless"
+        android:background="@drawable/attachment_tile_background"
         android:minHeight="@dimen/attachment_button_height"
         android:orientation="vertical"
         android:paddingHorizontal="@dimen/medium_margin"
@@ -191,10 +192,10 @@
             android:layout_width="@dimen/medium_icon_size"
             android:layout_height="@dimen/medium_icon_size"
             android:layout_gravity="center"
-            android:background="@drawable/circle_background"
-            android:backgroundTint="@color/colorPrimary"
+            android:background="@android:color/transparent"
             android:padding="@dimen/medium_margin"
-            android:src="@drawable/ic_document_vector" />
+            android:src="@drawable/ic_document_vector"
+            app:tint="@color/miui_primary_text" />
 
         <androidx.appcompat.widget.AppCompatTextView
             android:id="@+id/pick_file_text"
@@ -212,7 +213,7 @@
         android:id="@+id/pick_contact"
         android:layout_width="@dimen/attachment_button_width"
         android:layout_height="wrap_content"
-        android:background="?selectableItemBackgroundBorderless"
+        android:background="@drawable/attachment_tile_background"
         android:minHeight="@dimen/attachment_button_height"
         android:orientation="vertical"
         android:paddingHorizontal="@dimen/medium_margin"
@@ -224,10 +225,10 @@
             android:layout_width="@dimen/medium_icon_size"
             android:layout_height="@dimen/medium_icon_size"
             android:layout_gravity="center"
-            android:background="@drawable/circle_background"
-            android:backgroundTint="@color/colorPrimary"
+            android:background="@android:color/transparent"
             android:padding="@dimen/medium_margin"
-            android:src="@drawable/ic_person_vector" />
+            android:src="@drawable/ic_person_vector"
+            app:tint="@color/miui_primary_text" />
 
         <androidx.appcompat.widget.AppCompatTextView
             android:id="@+id/pick_contact_text"
@@ -245,7 +246,7 @@
         android:id="@+id/schedule_message"
         android:layout_width="@dimen/attachment_button_width"
         android:layout_height="wrap_content"
-        android:background="?selectableItemBackgroundBorderless"
+        android:background="@drawable/attachment_tile_background"
         android:minHeight="@dimen/attachment_button_height"
         android:orientation="vertical"
         android:paddingHorizontal="@dimen/medium_margin"
@@ -256,10 +257,10 @@
             android:layout_width="@dimen/medium_icon_size"
             android:layout_height="@dimen/medium_icon_size"
             android:layout_gravity="center"
-            android:background="@drawable/circle_background"
-            android:backgroundTint="@color/colorPrimary"
+            android:background="@android:color/transparent"
             android:padding="@dimen/medium_margin"
-            android:src="@drawable/ic_clock_vector" />
+            android:src="@drawable/ic_clock_vector"
+            app:tint="@color/miui_primary_text" />
 
         <androidx.appcompat.widget.AppCompatTextView
             android:id="@+id/schedule_message_text"

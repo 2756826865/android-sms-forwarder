@@ -48,20 +48,11 @@
     <string name="mark_as_read">Marcar como Lida</string>
     <string name="mark_as_unread">Marcar como Não Lida</string>
     <string name="me">Eu</string>
-    <string name="unarchive">Desarquivar</string>
-    <string name="empty_archive">Apagar todas as conversas arquivadas</string>
-    <string name="archived_conversations">Arquivar</string>
-    <string name="show_archived_conversations">Mostrar conversas arquivadas</string>
-    <string name="archive">Arquivar</string>
-    <string name="no_archived_conversations">Nenhuma conversa arquivada foi encontrada</string>
-    <string name="archive_emptied_successfully">O arquivo foi esvaziado com sucesso</string>
-    <string name="empty_archive_confirmation">Tem certeza de que deseja esvaziar o arquivo\? Todas as conversas arquivadas serão perdidas permanentemente.</string>
     <string name="restore">Restaurar</string>
     <string name="restore_all_messages">Restaurar todas as mensagens</string>
     <string name="empty_recycle_bin_messages_confirmation">Deseja realmente esvaziar a Lixeira\? Os arquivos serão excluidos permanentemente.</string>
     <string name="skip_the_recycle_bin_messages">Ignore a Lixeira, exclua as mensagens diretamente</string>
     <string name="delete_whole_conversation_confirmation">Tem certeza que quer deletar todas as mensagens dessa conversa\?</string>
-    <string name="archive_confirmation">Tem certeza de que deseja arquivar %s\?</string>
     <string name="restore_whole_conversation_confirmation">Tem certeza de que deseja restaurar todas as mensagens dessa conversa\?</string>
     <string name="restore_confirmation">Tem certeza de que deseja restaurar %s\?</string>
     <plurals name="delete_conversations">
@@ -122,7 +113,6 @@
     <string name="keywords">Palavras-chave</string>
     <string name="export_blocked_keywords">Exportar palavras-chave bloqueadas</string>
     <string name="import_blocked_keywords">Importar palavras-chave bloqueadas</string>
-    <string name="keep_conversations_archived">Manter conversas arquivadas</string>
     <string name="faq_4_title">Por que minhas respostas em mensagens de grupo aparecem como mensagens individuais para os destinatários?</string>
     <string name="faq_4_text">Você precisa ativar a opção \"Enviar mensagens em grupo como MMS\" nas configurações do aplicativo. Isso garantirá que as mensagens em grupo sejam enviadas como MMS, permitindo que todos os participantes vejam as respostas uns dos outros.</string>
 </resources>

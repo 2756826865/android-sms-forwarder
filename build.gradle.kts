@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.android).apply(false)
     alias(libs.plugins.kotlinSerialization).apply(false)
+    alias(libs.plugins.composeCompiler).apply(false)
     alias(libs.plugins.ksp).apply(false)
     alias(libs.plugins.detekt).apply(false)
 }

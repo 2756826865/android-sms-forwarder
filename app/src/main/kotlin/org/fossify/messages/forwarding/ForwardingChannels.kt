@@ -1,7 +1,7 @@
 package org.fossify.messages.forwarding
 
 object ForwardingChannels {
-    const val ALL = "test"
+    const val ALL = "all"
     const val PUSHPLUS = "pushplus"
     const val DINGTALK = "dingtalk"
     const val FEISHU = "feishu"

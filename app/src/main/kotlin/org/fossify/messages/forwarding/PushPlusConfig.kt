@@ -50,7 +50,12 @@ class PushPlusConfig(context: Context) {
         prefs.edit().putString(KEY_TOKEN, TokenCipher.encrypt(token.trim())).apply()
     }
 
-    fun getToken(): String = prefs.getString(KEY_TOKEN, null)?.let(TokenCipher::decrypt).orEmpty()
+    fun getToken(): String = prefs.getString(KEY_TOKEN, null)?.let { encrypted ->
+        TokenCipher.decrypt(encrypted).ifEmpty {
+            prefs.edit().remove(KEY_TOKEN).apply()
+            ""
+        }
+    }.orEmpty()
 
     companion object {
         private const val PREFS_NAME = "pushplus_forwarding"

@@ -183,7 +183,7 @@ class MainActivity : SimpleActivity() {
         }
         SmsRecoveryWorker.enqueueNow(this)
         updateMenuColors()
-        selectPrimaryNavigation()
+        selectBottomNavigation(0)
         applyHomeBottomNavigationPreference()
 
         getOrCreateConversationsAdapter().apply {
@@ -211,6 +211,8 @@ class MainActivity : SimpleActivity() {
             ContextCompat.getColor(this, android.R.color.white)
         )
         applySystemBarColors(pageColor)
+        @Suppress("DEPRECATION")
+        window.navigationBarColor = android.graphics.Color.TRANSPARENT
         binding.searchHolder.setBackgroundColor(pageColor)
         binding.noConversationsPlaceholder2.setTextColor(properPrimaryColor)
         binding.noConversationsPlaceholder2.underlineText()
@@ -272,33 +274,36 @@ class MainActivity : SimpleActivity() {
     private fun setupBottomNavigation() {
         binding.homeNavPrimary.contentDescription = getString(R.string.bottom_nav_primary_description)
         binding.homeNavForward.contentDescription = getString(R.string.bottom_nav_forward_description)
+        binding.homeNavBulk.contentDescription = getString(R.string.bottom_nav_bulk_description)
         binding.homeNavSettings.contentDescription = getString(R.string.bottom_nav_settings_description)
         binding.homeNavPrimary.setOnClickListener {
             binding.homeSearch.setText("")
             binding.conversationsList.stopScroll()
             binding.conversationsList.scrollToPosition(0)
-            selectPrimaryNavigation()
+            selectBottomNavigation(0)
         }
         binding.homeNavForward.setOnClickListener {
-            binding.homeNavPrimary.isSelected = false
-            binding.homeNavForward.isSelected = true
-            binding.homeNavSettings.isSelected = false
+            selectBottomNavigation(1)
             hideKeyboard()
             startActivity(Intent(this, ForwardingChannelsActivity::class.java))
         }
+        binding.homeNavBulk.setOnClickListener {
+            selectBottomNavigation(2)
+            hideKeyboard()
+            startActivity(Intent(this, BulkSendActivity::class.java))
+        }
         binding.homeNavSettings.setOnClickListener {
-            binding.homeNavPrimary.isSelected = false
-            binding.homeNavForward.isSelected = false
-            binding.homeNavSettings.isSelected = true
+            selectBottomNavigation(3)
             hideKeyboard()
             launchSettings()
         }
     }
 
-    private fun selectPrimaryNavigation() {
-        binding.homeNavPrimary.isSelected = true
-        binding.homeNavForward.isSelected = false
-        binding.homeNavSettings.isSelected = false
+    private fun selectBottomNavigation(selectedIndex: Int) {
+        binding.homeNavPrimary.isSelected = selectedIndex == 0
+        binding.homeNavForward.isSelected = selectedIndex == 1
+        binding.homeNavBulk.isSelected = selectedIndex == 2
+        binding.homeNavSettings.isSelected = selectedIndex == 3
     }
 
     private fun applyHomeBottomNavigationPreference() = binding.apply {
@@ -314,7 +319,11 @@ class MainActivity : SimpleActivity() {
         conversationsFab.bringToFront()
         selectionBottomBar.bringToFront()
 
-        val contentBottomPadding = resources.getDimensionPixelSize(R.dimen.home_content_bottom_padding)
+        val contentBottomPadding = if (showNav) {
+            resources.getDimensionPixelSize(R.dimen.home_content_bottom_padding)
+        } else {
+            0
+        }
         conversationsList.setPadding(
             conversationsList.paddingLeft,
             conversationsList.paddingTop,
@@ -460,7 +469,7 @@ class MainActivity : SimpleActivity() {
 
     private fun markAllAsRead() {
         ensureBackgroundThread {
-            conversationsDB.getNonArchived()
+            conversationsDB.getAllRegular()
                 .filterNot { it.read }
                 .forEach { markThreadMessagesRead(it.threadId) }
             runOnUiThread {
@@ -473,22 +482,14 @@ class MainActivity : SimpleActivity() {
     private fun getCachedConversations() {
         ensureBackgroundThread {
             val conversations = try {
-                conversationsDB.getNonArchived().toMutableList() as ArrayList<Conversation>
+                conversationsDB.getAllRegular().toMutableList() as ArrayList<Conversation>
             } catch (_: Exception) {
                 ArrayList()
             }
 
-            val archived = try {
-                conversationsDB.getAllArchived()
-            } catch (_: Exception) {
-                listOf()
-            }
-
             runOnUiThread {
                 setupConversations(conversations, cached = true)
-                getNewConversations(
-                    (conversations + archived).toMutableList() as ArrayList<Conversation>
-                )
+                getNewConversations(conversations)
             }
             conversations.forEach {
                 clearExpiredScheduledMessages(it.threadId)
@@ -567,7 +568,7 @@ class MainActivity : SimpleActivity() {
                     }
                 }
 
-            val allConversations = ArrayList(conversationsDB.getNonArchived())
+            val allConversations = ArrayList(conversationsDB.getAllRegular())
             runOnUiThread {
                 setupConversations(allConversations)
             }
@@ -633,7 +634,7 @@ class MainActivity : SimpleActivity() {
         conversationsFab.beGoneIf(active)
         if (!active) {
             conversationsFab.beVisible()
-            selectPrimaryNavigation()
+            selectBottomNavigation(0)
             applyHomeBottomNavigationPreference()
         }
         selectionMarkRead.text = getString(
@@ -649,8 +650,10 @@ class MainActivity : SimpleActivity() {
             conversationsList.paddingRight,
             if (active) {
                 resources.getDimensionPixelSize(R.dimen.selection_content_bottom_padding)
-            } else {
+            } else if (config.showHomeBottomNavigation) {
                 resources.getDimensionPixelSize(R.dimen.home_content_bottom_padding)
+            } else {
+                0
             },
         )
     }
@@ -865,11 +868,6 @@ class MainActivity : SimpleActivity() {
     private fun launchRecycleBin() {
         hideKeyboard()
         startActivity(Intent(applicationContext, RecycleBinConversationsActivity::class.java))
-    }
-
-    private fun launchArchivedConversations() {
-        hideKeyboard()
-        startActivity(Intent(applicationContext, ArchivedConversationsActivity::class.java))
     }
 
     private fun launchSettings() {

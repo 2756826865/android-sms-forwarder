@@ -60,15 +60,8 @@
     <string name="faq_2_title">Kitas galas negauna mano MMS, ar galiu ką nors padaryti\?</string>
     <string name="faq_2_text">MMS dydį riboja operatoriai, todėl programėlės nustatymuose galite pabandyti nustatyti mažesnę ribą.</string>
     <string name="enable_custom_notifications">Įjungti pasirinktinius pranešimus</string>
-    <string name="empty_archive_confirmation">Ar tikrai norite ištuštinti archyvą? Visi archyvuoti pokalbiai bus visam laikui prarasti.</string>
     <string name="message_details_sent_at">Išsiųsta</string>
-    <string name="archive">Archyvas</string>
-    <string name="show_archived_conversations">Rodyti archyvuotus pokalbius</string>
-    <string name="archive_emptied_successfully">Archyvas sėkmingai ištuštintas</string>
     <string name="update_message">Atnaujinti žinutė</string>
-    <string name="unarchive">Išarchyvuoti</string>
-    <string name="empty_archive">Ištrinti visus archyvuotus pokalbius</string>
-    <string name="archived_conversations">Archyvuoti</string>
     <string name="app_launcher_name">Žinutės</string>
     <string name="duplicate_item_warning">Pasikartojantis elementas nebuvo įtrauktas</string>
     <string name="members">Nariai</string>
@@ -87,7 +80,6 @@
     <string name="restore_all_messages">Atkurti visas žinutes</string>
     <string name="message_details_received_at">Gauta</string>
     <string name="message_details_receiver">Gavėjas</string>
-    <string name="no_archived_conversations">Nerasta jokių archyvuotų pokalbių</string>
     <string name="rename_conversation">Pervardyti pokalbį</string>
     <plurals name="and_other_contacts">
         <item quantity="one">ir %d kitas</item>

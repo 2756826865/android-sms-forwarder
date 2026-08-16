@@ -8,16 +8,17 @@
     <org.fossify.commons.views.MyAppBarLayout
         android:id="@+id/forwarding_appbar"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="?attr/actionBarSize"
         android:background="@color/miui_page_background">
 
         <com.google.android.material.appbar.MaterialToolbar
             android:id="@+id/forwarding_toolbar"
             android:layout_width="match_parent"
-            android:layout_height="?attr/actionBarSize"
+            android:layout_height="match_parent"
             android:background="@color/miui_page_background"
             app:navigationIconTint="@color/miui_primary_text"
-            app:title="" />
+            app:title="@string/forwarding_title"
+            app:titleTextColor="@color/miui_primary_text" />
     </org.fossify.commons.views.MyAppBarLayout>
 
     <androidx.core.widget.NestedScrollView

@@ -1,8 +1,12 @@
 package org.fossify.messages.messaging
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
 import android.telephony.SmsManager
+import android.telephony.SubscriptionInfo
 import android.telephony.SubscriptionManager
+import androidx.core.content.ContextCompat
 import org.fossify.messages.extensions.subscriptionManagerCompat
 
 object SimSendResolver {
@@ -12,8 +16,7 @@ object SimSendResolver {
     const val MODE_DEFAULT = 3
 
     fun resolveSubscriptionId(context: Context, receiveSubId: Int?, configuredMode: Int): Int? {
-        val manager = runCatching { context.subscriptionManagerCompat() }.getOrNull()
-        val active = manager?.activeSubscriptionInfoList.orEmpty().sortedBy { it.simSlotIndex }
+        val active = activeSubscriptions(context)
 
         return when (configuredMode) {
             MODE_SIM1 -> active.firstOrNull { it.simSlotIndex == 0 }?.subscriptionId
@@ -45,9 +48,17 @@ object SimSendResolver {
 
     private fun slotLabel(context: Context, subscriptionId: Int?): String? {
         if (subscriptionId == null || subscriptionId == SubscriptionManager.INVALID_SUBSCRIPTION_ID) return null
-        return runCatching { context.subscriptionManagerCompat() }.getOrNull()
-            ?.activeSubscriptionInfoList
-            ?.find { it.subscriptionId == subscriptionId }
+        return activeSubscriptions(context)
+            .find { it.subscriptionId == subscriptionId }
             ?.let { info -> "SIM${info.simSlotIndex + 1}" }
+    }
+
+    private fun activeSubscriptions(context: Context): List<SubscriptionInfo> {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED) {
+            return emptyList()
+        }
+        return runCatching {
+            context.subscriptionManagerCompat().activeSubscriptionInfoList.orEmpty()
+        }.getOrDefault(emptyList()).sortedBy { it.simSlotIndex }
     }
 }

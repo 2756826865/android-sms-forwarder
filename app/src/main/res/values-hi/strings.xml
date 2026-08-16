@@ -26,7 +26,6 @@
         <item quantity="one">और %d अन्य</item>
         <item quantity="other">और %d अन्य</item>
     </plurals>
-    <string name="archive_confirmation">क्या आप वाकई %s को संग्रहित करना चाहते हैं?</string>
     <string name="restore_confirmation">क्या आप वाकई %s को पुनर्स्थापित करना चाहते हैं?</string>
     <plurals name="delete_conversations">
         <item quantity="one">%d वार्तालाप</item>
@@ -38,9 +37,6 @@
     <string name="mms_file_size_limit_none">कोई सीमा नहीं</string>
     <string name="messages">संदेशों</string>
     <string name="enable_custom_notifications">कस्टम सूचनाएं सक्षम करें</string>
-    <string name="show_archived_conversations">संग्रहीत वार्तालाप दिखाएँ</string>
-    <string name="archive_emptied_successfully">संग्रह सफलतापूर्वक खाली कर दिया गया है</string>
-    <string name="empty_archive_confirmation">क्या आप वाकई संग्रह को खाली करना चाहते हैं? सभी संग्रहीत वार्तालाप स्थायी रूप से खो जाएंगे।</string>
     <string name="restore_whole_conversation_confirmation">क्या आप वाकई इस वार्तालाप के सभी संदेशों को पुनर्स्थापित करना चाहते हैं?</string>
     <string name="blocked_keywords">अवरुद्ध कीवर्ड</string>
     <string name="manage_blocked_keywords">अवरुद्ध कीवर्ड प्रबंधित करें</string>
@@ -96,8 +92,6 @@
     <string name="new_message">नया सन्देश</string>
     <string name="mark_as_read">पढ़ा गया के रूप में चिह्नित करें</string>
     <string name="mark_as_unread">अपठित के रूप में चिह्नित करें</string>
-    <string name="unarchive">संग्रह से निकालें</string>
-    <string name="archived_conversations">संग्रहालय</string>
     <string name="restore">पुनर्स्थापित</string>
     <string name="delete_whole_conversation_confirmation">क्या आप वाकई इस वार्तालाप के सभी संदेशों को हटाना चाहते हैं?</string>
     <string name="restore_all_messages">सभी संदेश पुनर्स्थापित करें</string>
@@ -113,9 +107,6 @@
     <string name="unknown_error_occurred_sending_message">संदेश नहीं भेजा जा सका, त्रुटि कोड: %d</string>
     <string name="invalid_short_code">इस तरह के छोटे कोड का उत्तर नहीं दे सकते</string>
     <string name="faq_3_text">हां, आप भेजें बटन को देर तक दबाकर और वांछित दिनांक और समय चुनकर भविष्य में भेजे जाने वाले संदेशों को शेड्यूल कर सकते हैं।</string>
-    <string name="empty_archive">सभी संग्रहीत वार्तालाप हटाएँ</string>
-    <string name="archive">संग्रहालय</string>
-    <string name="no_archived_conversations">कोई संग्रहीत वार्तालाप नहीं मिला है</string>
     <string name="export_blocked_keywords">अवरुद्ध शब्द निर्यात करें</string>
     <string name="import_blocked_keywords">अवरुद्ध शब्द आयात करें</string>
     <string name="keywords">प्रमुख शब्द</string>

@@ -49,20 +49,11 @@
     <string name="mark_as_read">Merkitse luetuksi</string>
     <string name="mark_as_unread">Merkitse lukemattomaksi</string>
     <string name="me">Minä</string>
-    <string name="unarchive">Poista arkivointi</string>
-    <string name="empty_archive">Poista kaikki arkistoidut keskustelut</string>
-    <string name="archived_conversations">Arkisto</string>
-    <string name="show_archived_conversations">Näytä arkistoidut keskustelut</string>
-    <string name="archive">Arkivoi</string>
-    <string name="no_archived_conversations">Arkivoituja keskusteluja ei löytynyt</string>
-    <string name="archive_emptied_successfully">Arkisto tyhjennettiin onnistuneesti</string>
-    <string name="empty_archive_confirmation">Haluatko tyhjentää arkiston? Kaikki arkistoidut keskustelut menetetään pysyvästi.</string>
     <string name="restore">Palauta</string>
     <string name="restore_all_messages">Palauta kaikki viestit</string>
     <string name="empty_recycle_bin_messages_confirmation">Haluatko tyhjentää Roskakorin\? Viestit menetetään pysyvästi.</string>
     <string name="skip_the_recycle_bin_messages">Ohita Roskakori, poista viestit välittömästi</string>
     <string name="delete_whole_conversation_confirmation">Haluatko varmasti poistaa kaikki tämän keskustelun viestit\?</string>
-    <string name="archive_confirmation">Haluatko arkivoida %s\?</string>
     <string name="restore_whole_conversation_confirmation">Haluatko palauttaa tämän keskustelun kaikki viestit\?</string>
     <string name="restore_confirmation">Haluatko varmasti palauttaa %s?</string>
     <plurals name="delete_conversations">
@@ -119,7 +110,6 @@
     <string name="keywords">Avainsanat</string>
     <string name="export_blocked_keywords">Vie estetyt avainsanat</string>
     <string name="import_blocked_keywords">Tuo estetyt avainsanat</string>
-    <string name="keep_conversations_archived">Pidä keskustelut arkistoituna</string>
     <string name="faq_4_title">Miksi ryhmäviestien vastaukset näkyvät vastaanottajille yksittäisinä tekstiviesteinä?</string>
     <string name="faq_4_text">Sinun on otettava käyttöön ”Lähetä ryhmäviestit MMS-viesteinä” -asetus sovelluksen asetuksissa. Tämä varmistaa, että ryhmäviestit lähetetään oikeina MMS-viesteinä, jolloin kaikki osallistujat voivat nähdä toistensa vastaukset.</string>
 </resources>

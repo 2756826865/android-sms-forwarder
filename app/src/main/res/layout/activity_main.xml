@@ -134,13 +134,13 @@
                 android:layout_marginTop="8dp"
                 android:background="@drawable/home_search_background"
                 android:drawableStart="@drawable/ic_search_vector"
-                android:drawablePadding="12dp"
+                android:drawablePadding="8dp"
                 android:fontFamily="sans-serif"
                 android:hint="@string/home_search_sms"
                 android:imeOptions="actionSearch"
                 android:inputType="text"
                 android:maxLines="1"
-                android:paddingHorizontal="18dp"
+                android:paddingHorizontal="12dp"
                 android:textColor="@color/miui_primary_text"
                 android:textColorHint="@color/miui_hint_text"
                 android:textSize="17sp" />
@@ -271,76 +271,153 @@
     <LinearLayout
         android:id="@+id/home_bottom_navigation"
         android:layout_width="wrap_content"
-        android:layout_height="@dimen/bottom_nav_height"
+        android:layout_height="wrap_content"
         android:layout_gravity="bottom|center_horizontal"
         android:layout_marginBottom="@dimen/home_bottom_nav_bottom_margin"
-        android:background="@drawable/home_bottom_nav_background"
+        android:background="@android:color/transparent"
+        android:clipToPadding="false"
         android:elevation="16dp"
-        android:gravity="center"
-        android:orientation="horizontal"
-        android:padding="@dimen/home_bottom_nav_inner_padding"
+        android:gravity="center_horizontal"
+        android:orientation="vertical"
         android:translationZ="16dp"
         android:visibility="visible">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="@dimen/bottom_nav_height"
+            android:background="@drawable/home_bottom_nav_background"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:padding="@dimen/home_bottom_nav_inner_padding">
 
             <FrameLayout
                 android:layout_width="@dimen/home_bottom_nav_slot_width"
                 android:layout_height="match_parent">
 
-                <TextView
+                <LinearLayout
                     android:id="@+id/home_nav_primary"
                     android:layout_width="@dimen/home_bottom_nav_item_width"
                     android:layout_height="@dimen/home_bottom_nav_item_height"
                     android:layout_gravity="center"
-                    android:background="@drawable/home_bottom_nav_item_background"
-                    android:drawableTop="@drawable/ic_home_messages_vector"
-                    android:drawablePadding="-4dp"
                     android:gravity="center"
-                    android:includeFontPadding="false"
-                    android:text="@string/bottom_nav_primary"
-                    android:textColor="@color/home_bottom_nav_tint"
-                    android:textSize="11sp"
-                    app:drawableTint="@color/home_bottom_nav_tint" />
+                    android:orientation="vertical">
+
+                    <ImageView
+                        android:layout_width="48dp"
+                        android:layout_height="36dp"
+                        android:background="@drawable/home_bottom_nav_item_background"
+                        android:duplicateParentState="true"
+                        android:padding="7dp"
+                        android:src="@drawable/ic_home_messages_vector"
+                        app:tint="@color/home_bottom_nav_tint" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:duplicateParentState="true"
+                        android:includeFontPadding="false"
+                        android:text="@string/bottom_nav_primary"
+                        android:textColor="@color/home_bottom_nav_tint"
+                        android:textSize="11sp" />
+                </LinearLayout>
             </FrameLayout>
 
             <FrameLayout
                 android:layout_width="@dimen/home_bottom_nav_slot_width"
                 android:layout_height="match_parent">
 
-                <TextView
+                <LinearLayout
                     android:id="@+id/home_nav_forward"
                     android:layout_width="@dimen/home_bottom_nav_item_width"
                     android:layout_height="@dimen/home_bottom_nav_item_height"
                     android:layout_gravity="center"
-                    android:background="@drawable/home_bottom_nav_item_background"
-                    android:drawableTop="@drawable/ic_forwarding_vector"
-                    android:drawablePadding="-4dp"
                     android:gravity="center"
-                    android:includeFontPadding="false"
-                    android:text="@string/bottom_nav_forward"
-                    android:textColor="@color/home_bottom_nav_tint"
-                    android:textSize="11sp"
-                    app:drawableTint="@color/home_bottom_nav_tint" />
+                    android:orientation="vertical">
+
+                    <ImageView
+                        android:layout_width="48dp"
+                        android:layout_height="36dp"
+                        android:background="@drawable/home_bottom_nav_item_background"
+                        android:duplicateParentState="true"
+                        android:padding="7dp"
+                        android:src="@drawable/ic_forwarding_vector"
+                        app:tint="@color/home_bottom_nav_tint" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:duplicateParentState="true"
+                        android:includeFontPadding="false"
+                        android:text="@string/bottom_nav_forward"
+                        android:textColor="@color/home_bottom_nav_tint"
+                        android:textSize="11sp" />
+                </LinearLayout>
             </FrameLayout>
 
             <FrameLayout
                 android:layout_width="@dimen/home_bottom_nav_slot_width"
                 android:layout_height="match_parent">
 
-                <TextView
+                <LinearLayout
+                    android:id="@+id/home_nav_bulk"
+                    android:layout_width="@dimen/home_bottom_nav_item_width"
+                    android:layout_height="@dimen/home_bottom_nav_item_height"
+                    android:layout_gravity="center"
+                    android:gravity="center"
+                    android:orientation="vertical">
+
+                    <ImageView
+                        android:layout_width="48dp"
+                        android:layout_height="36dp"
+                        android:background="@drawable/home_bottom_nav_item_background"
+                        android:duplicateParentState="true"
+                        android:padding="7dp"
+                        android:src="@drawable/ic_bulk_send_vector"
+                        app:tint="@color/home_bottom_nav_tint" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:duplicateParentState="true"
+                        android:includeFontPadding="false"
+                        android:text="@string/bottom_nav_bulk"
+                        android:textColor="@color/home_bottom_nav_tint"
+                        android:textSize="11sp" />
+                </LinearLayout>
+            </FrameLayout>
+
+            <FrameLayout
+                android:layout_width="@dimen/home_bottom_nav_slot_width"
+                android:layout_height="match_parent">
+
+                <LinearLayout
                     android:id="@+id/home_nav_settings"
                     android:layout_width="@dimen/home_bottom_nav_item_width"
                     android:layout_height="@dimen/home_bottom_nav_item_height"
                     android:layout_gravity="center"
-                    android:background="@drawable/home_bottom_nav_item_background"
-                    android:drawableTop="@drawable/ic_settings_cog_vector"
-                    android:drawablePadding="-4dp"
                     android:gravity="center"
-                    android:includeFontPadding="false"
-                    android:text="@string/bottom_nav_settings"
-                    android:textColor="@color/home_bottom_nav_tint"
-                    android:textSize="11sp"
-                    app:drawableTint="@color/home_bottom_nav_tint" />
+                    android:orientation="vertical">
+
+                    <ImageView
+                        android:layout_width="48dp"
+                        android:layout_height="36dp"
+                        android:background="@drawable/home_bottom_nav_item_background"
+                        android:duplicateParentState="true"
+                        android:padding="7dp"
+                        android:src="@drawable/ic_settings_cog_vector"
+                        app:tint="@color/home_bottom_nav_tint" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:duplicateParentState="true"
+                        android:includeFontPadding="false"
+                        android:text="@string/bottom_nav_settings"
+                        android:textColor="@color/home_bottom_nav_tint"
+                        android:textSize="11sp" />
+                </LinearLayout>
             </FrameLayout>
+        </LinearLayout>
     </LinearLayout>
 
     <org.fossify.commons.views.MyFloatingActionButton

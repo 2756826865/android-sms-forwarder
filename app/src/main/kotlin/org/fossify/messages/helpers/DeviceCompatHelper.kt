@@ -222,6 +222,7 @@ object DeviceCompatHelper {
     fun detectBrand(): DeviceBrand {
         val manufacturer = Build.MANUFACTURER.lowercase()
         val brand = Build.BRAND.lowercase()
+        val model = Build.MODEL.lowercase()
         return when {
             manufacturer.contains("huawei") || brand.contains("huawei") -> DeviceBrand.HUAWEI
             manufacturer.contains("honor") || brand.contains("honor") -> DeviceBrand.HONOR
@@ -231,8 +232,8 @@ object DeviceCompatHelper {
             manufacturer.contains("oppo") || brand.contains("oppo") -> DeviceBrand.OPPO
             manufacturer.contains("oneplus") || brand.contains("oneplus") -> DeviceBrand.ONEPLUS
             manufacturer.contains("realme") || brand.contains("realme") -> DeviceBrand.REALME
+            brand.contains("iqoo") || model.contains("iqoo") -> DeviceBrand.IQOO
             manufacturer.contains("vivo") || brand.contains("vivo") -> DeviceBrand.VIVO
-            brand.contains("iqoo") -> DeviceBrand.IQOO
             manufacturer.contains("samsung") || brand.contains("samsung") -> DeviceBrand.SAMSUNG
             manufacturer.contains("google") || brand.contains("google") || brand.contains("pixel") -> DeviceBrand.PIXEL
             else -> DeviceBrand.OTHER

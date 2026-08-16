@@ -5,7 +5,7 @@
     android:id="@+id/thread_message_holder"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginTop="@dimen/small_margin"
+    android:layout_marginTop="12dp"
     android:foreground="@drawable/selector"
     android:paddingHorizontal="20dp">
 
@@ -61,7 +61,8 @@
             android:autoLink="email|web"
             android:background="@drawable/item_received_background"
             android:drawablePadding="8dp"
-            android:padding="@dimen/normal_margin"
+            android:paddingHorizontal="19dp"
+            android:paddingVertical="14dp"
             android:textColor="@color/miui_primary_text"
             android:textSize="17sp"
             tools:drawableEndCompat="@drawable/scheduled_message_icon"

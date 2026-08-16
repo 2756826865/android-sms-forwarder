@@ -1,6 +1,9 @@
 [versions]
 #jetbrains
 kotlin = "2.4.10"
+composeUi = "1.12.0"
+composeMaterial3 = "1.4.0"
+composeActivity = "1.13.0"
 kotlinxSerializationJson = "1.11.0"
 #KSP
 ksp = "2.3.10"
@@ -25,8 +28,8 @@ indicator-fast-scroll = "4524cd0b61"
 #Gradle
 gradlePlugins-agp = "9.3.1"
 #build
-app-build-compileSDKVersion = "36"
-app-build-targetSDK = "36"
+app-build-compileSDKVersion = "37"
+app-build-targetSDK = "37"
 app-build-minimumSDK = "26"
 app-build-javaVersion = "VERSION_17"
 app-build-kotlinJVMTarget = "17"
@@ -38,6 +41,10 @@ androidx-constraintlayout = { module = "androidx.constraintlayout:constraintlayo
 androidx-lifecycle-process = { module = "androidx.lifecycle:lifecycle-process", version.ref = "androidx-lifecycleprocess" }
 androidx-swiperefreshlayout = { module = "androidx.swiperefreshlayout:swiperefreshlayout", version.ref = "androidx-swiperefreshlayout" }
 androidx-documentfile = { module = "androidx.documentfile:documentfile", version.ref = "androidx-documentfile" }
+androidx-compose-ui = { module = "androidx.compose.ui:ui", version.ref = "composeUi" }
+androidx-compose-foundation = { module = "androidx.compose.foundation:foundation", version.ref = "composeUi" }
+androidx-compose-material3 = { module = "androidx.compose.material3:material3", version.ref = "composeMaterial3" }
+androidx-compose-activity = { module = "androidx.activity:activity-compose", version.ref = "composeActivity" }
 androidx-work-runtime = { module = "androidx.work:work-runtime-ktx", version.ref = "androidx-work" }
 okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
 #Room
@@ -64,5 +71,6 @@ room = [
 [plugins]
 android = { id = "com.android.application", version.ref = "gradlePlugins-agp" }
 kotlinSerialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+composeCompiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }

@@ -25,7 +25,10 @@ class PushPlusWorker(
     params: WorkerParameters
 ) : CoroutineWorker(appContext, params) {
 
+    override suspend fun getForegroundInfo() = ForwardingForegroundInfo.create(applicationContext)
+
     override suspend fun doWork(): Result {
+        setForeground(getForegroundInfo())
         val config = PushPlusConfig(applicationContext)
         val isTest = inputData.getBoolean(KEY_IS_TEST, false)
         val history = ForwardingHistoryStore(applicationContext)
@@ -126,7 +129,8 @@ class PushPlusWorker(
             subscriptionId: Int,
             uniqueId: String
         ) {
-            val historyRecordId = ForwardingHistoryStore(context).registerQueued(
+            val history = ForwardingHistoryStore(context)
+            val historyRecordId = history.registerQueued(
                 workId = uniqueId,
                 channel = ForwardingChannels.PUSHPLUS,
                 sender = sender,
@@ -149,7 +153,11 @@ class PushPlusWorker(
                 .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 10, TimeUnit.SECONDS)
                 .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
                 .build()
-            WorkManager.getInstance(context).enqueueUniqueWork("pushplus-$uniqueId", ExistingWorkPolicy.KEEP, request)
+            runCatching {
+                WorkManager.getInstance(context).enqueueUniqueWork("pushplus-$uniqueId", ExistingWorkPolicy.KEEP, request)
+            }.onFailure { error ->
+                history.markFailed(historyRecordId, "发送任务入队失败：${error.message ?: error.javaClass.simpleName}")
+            }
         }
 
         fun enqueueTest(context: Context, sender: String, body: String) {
