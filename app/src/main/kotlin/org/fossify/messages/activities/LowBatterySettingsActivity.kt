@@ -7,7 +7,7 @@ import org.fossify.commons.extensions.viewBinding
 import org.fossify.commons.helpers.NavigationIcon
 import org.fossify.messages.R
 import org.fossify.messages.databinding.ActivityLowBatterySettingsBinding
-import org.fossify.messages.extensions.applyMiuiPageChrome
+import org.fossify.messages.extensions.applyMiuiTopAppBarChrome
 import org.fossify.messages.extensions.config
 import org.fossify.messages.extensions.showSmsStyled
 import org.fossify.messages.forwarding.ForwardingChannels
@@ -19,13 +19,17 @@ class LowBatterySettingsActivity : SimpleActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
-        setupEdgeToEdge(padBottomImeAndSystem = listOf(binding.lowBatteryNestedScrollview))
+        setupEdgeToEdge(
+            padTopSystem = listOf(binding.lowBatteryAppbar),
+            padBottomImeAndSystem = listOf(binding.lowBatteryNestedScrollview),
+        )
         setupMaterialScrollListener(
             scrollingView = binding.lowBatteryNestedScrollview,
             topAppBar = binding.lowBatteryAppbar,
         )
         setupTopAppBar(binding.lowBatteryAppbar, NavigationIcon.Arrow)
         binding.lowBatteryToolbar.title = ""
+        applyMiuiTopAppBarChrome(binding.lowBatteryAppbar, binding.lowBatteryToolbar)
 
         val config = config
 
@@ -105,6 +109,6 @@ class LowBatterySettingsActivity : SimpleActivity() {
 
     override fun onResume() {
         super.onResume()
-        applyMiuiPageChrome()
+        applyMiuiTopAppBarChrome(binding.lowBatteryAppbar, binding.lowBatteryToolbar)
     }
 }

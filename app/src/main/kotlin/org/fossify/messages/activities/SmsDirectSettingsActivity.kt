@@ -8,7 +8,7 @@ import org.fossify.commons.extensions.value
 import org.fossify.commons.extensions.viewBinding
 import org.fossify.commons.helpers.NavigationIcon
 import org.fossify.messages.databinding.ActivitySmsDirectSettingsBinding
-import org.fossify.messages.extensions.applyWhitePageChrome
+import org.fossify.messages.extensions.applyMiuiTopAppBarChrome
 import org.fossify.messages.messaging.sendMessageCompat
 import org.fossify.messages.forwarding.MultiForwardConfig
 

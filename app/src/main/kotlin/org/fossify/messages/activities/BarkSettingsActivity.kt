@@ -6,7 +6,7 @@ import org.fossify.commons.extensions.value
 import org.fossify.commons.extensions.viewBinding
 import org.fossify.commons.helpers.NavigationIcon
 import org.fossify.messages.databinding.ActivityBarkSettingsBinding
-import org.fossify.messages.extensions.applyMiuiPageChrome
+import org.fossify.messages.extensions.applyMiuiTopAppBarChrome
 import org.fossify.messages.forwarding.ForwardingChannels
 import org.fossify.messages.forwarding.ForwardingUrlPolicy
 import org.fossify.messages.forwarding.MultiChannelForwardWorker
@@ -19,9 +19,13 @@ class BarkSettingsActivity : SimpleActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
-        setupEdgeToEdge(padBottomImeAndSystem = listOf(binding.barkScrollview))
+        setupEdgeToEdge(
+            padTopSystem = listOf(binding.barkAppbar),
+            padBottomImeAndSystem = listOf(binding.barkScrollview),
+        )
         setupMaterialScrollListener(binding.barkScrollview, binding.barkAppbar)
         setupTopAppBar(binding.barkAppbar, NavigationIcon.Arrow)
+        applyMiuiTopAppBarChrome(binding.barkAppbar, binding.barkToolbar)
         loadConfig()
 
         binding.barkSave.setOnClickListener { if (saveConfig()) toast("配置已保存") }
@@ -41,7 +45,7 @@ class BarkSettingsActivity : SimpleActivity() {
 
     override fun onResume() {
         super.onResume()
-        applyMiuiPageChrome()
+        applyMiuiTopAppBarChrome(binding.barkAppbar, binding.barkToolbar)
     }
 
     private fun loadConfig() = with(binding) {

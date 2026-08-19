@@ -9,7 +9,7 @@ import org.fossify.commons.helpers.NavigationIcon
 import org.fossify.messages.BuildConfig
 import org.fossify.messages.R
 import org.fossify.messages.databinding.ActivityAboutBinding
-import org.fossify.messages.extensions.applyMiuiPageChrome
+import org.fossify.messages.extensions.applyMiuiTopAppBarChrome
 import org.fossify.messages.extensions.showSmsStyled
 
 class AboutActivity : SimpleActivity() {
@@ -18,10 +18,10 @@ class AboutActivity : SimpleActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
-        setupEdgeToEdge()
+        setupEdgeToEdge(padTopSystem = listOf(binding.aboutAppbar))
         setupTopAppBar(binding.aboutAppbar, NavigationIcon.Arrow)
         binding.aboutToolbar.title = ""
-        applyMiuiPageChrome()
+        applyMiuiTopAppBarChrome(binding.aboutAppbar, binding.aboutToolbar)
 
         binding.aboutCommonQuestions.setOnClickListener {
             showText(R.string.about_common_questions, R.string.about_common_questions_text)

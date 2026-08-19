@@ -7,7 +7,7 @@ import org.fossify.commons.extensions.viewBinding
 import org.fossify.commons.helpers.NavigationIcon
 import org.fossify.messages.R
 import org.fossify.messages.databinding.ActivityBlockingSettingsBinding
-import org.fossify.messages.extensions.applyMiuiPageChrome
+import org.fossify.messages.extensions.applyMiuiTopAppBarChrome
 import org.fossify.messages.extensions.config
 
 class BlockingSettingsActivity : SimpleActivity() {
@@ -16,11 +16,14 @@ class BlockingSettingsActivity : SimpleActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
-        setupEdgeToEdge(padBottomImeAndSystem = listOf(binding.blockingScrollview))
+        setupEdgeToEdge(
+            padTopSystem = listOf(binding.blockingAppbar),
+            padBottomImeAndSystem = listOf(binding.blockingScrollview),
+        )
         setupMaterialScrollListener(binding.blockingScrollview, binding.blockingAppbar)
         setupTopAppBar(binding.blockingAppbar, NavigationIcon.Arrow)
         binding.blockingToolbar.title = ""
-        applyMiuiPageChrome()
+        applyMiuiTopAppBarChrome(binding.blockingAppbar, binding.blockingToolbar)
 
         binding.blockingSimOne.setOnClickListener { selectSim(first = true) }
         binding.blockingSimTwo.setOnClickListener { selectSim(first = false) }

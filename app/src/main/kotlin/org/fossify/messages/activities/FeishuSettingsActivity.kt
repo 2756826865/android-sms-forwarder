@@ -6,7 +6,7 @@ import org.fossify.commons.extensions.toast
 import org.fossify.commons.extensions.viewBinding
 import org.fossify.commons.helpers.NavigationIcon
 import org.fossify.messages.databinding.ActivityFeishuSettingsBinding
-import org.fossify.messages.extensions.applyWhitePageChrome
+import org.fossify.messages.extensions.applyMiuiTopAppBarChrome
 import org.fossify.messages.forwarding.MultiForwardConfig
 import org.fossify.messages.forwarding.MultiChannelForwardWorker
 
@@ -17,9 +17,13 @@ class FeishuSettingsActivity : SimpleActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
-        setupEdgeToEdge(padBottomImeAndSystem = listOf(binding.feishuScrollview))
+        setupEdgeToEdge(
+            padTopSystem = listOf(binding.feishuAppbar),
+            padBottomImeAndSystem = listOf(binding.feishuScrollview),
+        )
         setupMaterialScrollListener(binding.feishuScrollview, binding.feishuAppbar)
         setupTopAppBar(binding.feishuAppbar, NavigationIcon.Arrow)
+        applyMiuiTopAppBarChrome(binding.feishuAppbar, binding.feishuToolbar)
         loadConfig()
 
         binding.feishuSave.setOnClickListener {
@@ -42,7 +46,7 @@ class FeishuSettingsActivity : SimpleActivity() {
 
     override fun onResume() {
         super.onResume()
-        applyWhitePageChrome()
+        applyMiuiTopAppBarChrome(binding.feishuAppbar, binding.feishuToolbar)
     }
 
     private fun loadConfig() = with(binding) {

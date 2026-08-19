@@ -3,13 +3,7 @@ package org.fossify.messages.activities
 import android.content.Intent
 import android.os.Bundle
 import androidx.appcompat.app.AlertDialog
-import androidx.core.content.ContextCompat
-import org.fossify.commons.extensions.toast
-import org.fossify.commons.extensions.viewBinding
-import org.fossify.commons.helpers.NavigationIcon
-import org.fossify.messages.R
-import org.fossify.messages.databinding.ActivitySettingsBinding
-import org.fossify.messages.extensions.applyMiuiPageChrome
+import org.fossify.messages.extensions.applyMiuiTopAppBarChrome
 import org.fossify.messages.extensions.config
 import org.fossify.messages.extensions.showSmsStyled
 import org.fossify.messages.helpers.liveisland.LiveIslandCoordinator
@@ -31,19 +25,14 @@ class SettingsActivity : SimpleActivity() {
         )
         setupTopAppBar(binding.settingsAppbar, NavigationIcon.Arrow)
         binding.settingsToolbar.title = getString(R.string.settings_messages_title)
-        val pageGray = ContextCompat.getColor(this, R.color.miui_page_background)
-        binding.settingsAppbar.setBackgroundColor(pageGray)
-        binding.settingsToolbar.setBackgroundColor(pageGray)
+        applyMiuiTopAppBarChrome(binding.settingsAppbar, binding.settingsToolbar)
         bindActions()
         bindToggles()
     }
 
     override fun onResume() {
         super.onResume()
-        applyMiuiPageChrome()
-        val pageGray = ContextCompat.getColor(this, R.color.miui_page_background)
-        binding.settingsAppbar.setBackgroundColor(pageGray)
-        binding.settingsToolbar.setBackgroundColor(pageGray)
+        applyMiuiTopAppBarChrome(binding.settingsAppbar, binding.settingsToolbar)
         refreshToggleStates()
     }
 

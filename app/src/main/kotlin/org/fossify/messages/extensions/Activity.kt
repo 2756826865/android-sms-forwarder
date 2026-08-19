@@ -6,8 +6,10 @@ import android.content.Intent
 import android.graphics.Color
 import android.net.Uri
 import android.provider.ContactsContract
+import android.view.View
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import com.google.android.material.appbar.MaterialToolbar
 import org.fossify.commons.activities.BaseSimpleActivity
 import org.fossify.commons.extensions.getMimeType
 import org.fossify.commons.extensions.hideKeyboard
@@ -39,6 +41,13 @@ fun Activity.applySystemBarColors(barColor: Int, lightBars: Boolean = true) {
 
 fun Activity.applyMiuiPageChrome() {
     applySystemBarColors(ContextCompat.getColor(this, R.color.miui_page_background))
+}
+
+fun Activity.applyMiuiTopAppBarChrome(appBar: View, toolbar: MaterialToolbar) {
+    val pageGray = ContextCompat.getColor(this, R.color.miui_page_background)
+    appBar.setBackgroundColor(pageGray)
+    toolbar.setBackgroundColor(pageGray)
+    applyMiuiPageChrome()
 }
 
 fun Activity.applyWhitePageChrome() {

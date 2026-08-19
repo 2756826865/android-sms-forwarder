@@ -12,7 +12,7 @@ import org.fossify.commons.extensions.viewBinding
 import org.fossify.commons.helpers.NavigationIcon
 import org.fossify.messages.R
 import org.fossify.messages.databinding.ActivityPushplusSettingsBinding
-import org.fossify.messages.extensions.applyWhitePageChrome
+import org.fossify.messages.extensions.applyMiuiTopAppBarChrome
 import org.fossify.messages.forwarding.PushPlusConfig
 import org.fossify.messages.forwarding.PushPlusWorker
 
@@ -23,12 +23,16 @@ class PushPlusSettingsActivity : SimpleActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
-        setupEdgeToEdge(padBottomImeAndSystem = listOf(binding.pushplusScrollview))
+        setupEdgeToEdge(
+            padTopSystem = listOf(binding.pushplusAppbar),
+            padBottomImeAndSystem = listOf(binding.pushplusScrollview),
+        )
         setupMaterialScrollListener(
             scrollingView = binding.pushplusScrollview,
             topAppBar = binding.pushplusAppbar
         )
         setupTopAppBar(binding.pushplusAppbar, NavigationIcon.Arrow)
+        applyMiuiTopAppBarChrome(binding.pushplusAppbar, binding.pushplusToolbar)
         loadConfig()
 
         binding.pushplusSave.setOnClickListener {
@@ -54,7 +58,7 @@ class PushPlusSettingsActivity : SimpleActivity() {
 
     override fun onResume() {
         super.onResume()
-        applyWhitePageChrome()
+        applyMiuiTopAppBarChrome(binding.pushplusAppbar, binding.pushplusToolbar)
         updateLastStatus()
         updateDiagnostics()
     }

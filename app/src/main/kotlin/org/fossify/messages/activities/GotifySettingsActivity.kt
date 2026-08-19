@@ -6,7 +6,7 @@ import org.fossify.commons.extensions.value
 import org.fossify.commons.extensions.viewBinding
 import org.fossify.commons.helpers.NavigationIcon
 import org.fossify.messages.databinding.ActivityGotifySettingsBinding
-import org.fossify.messages.extensions.applyMiuiPageChrome
+import org.fossify.messages.extensions.applyMiuiTopAppBarChrome
 import org.fossify.messages.forwarding.ForwardingChannels
 import org.fossify.messages.forwarding.ForwardingUrlPolicy
 import org.fossify.messages.forwarding.MultiChannelForwardWorker
@@ -19,9 +19,13 @@ class GotifySettingsActivity : SimpleActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
-        setupEdgeToEdge(padBottomImeAndSystem = listOf(binding.gotifyScrollview))
+        setupEdgeToEdge(
+            padTopSystem = listOf(binding.gotifyAppbar),
+            padBottomImeAndSystem = listOf(binding.gotifyScrollview),
+        )
         setupMaterialScrollListener(binding.gotifyScrollview, binding.gotifyAppbar)
         setupTopAppBar(binding.gotifyAppbar, NavigationIcon.Arrow)
+        applyMiuiTopAppBarChrome(binding.gotifyAppbar, binding.gotifyToolbar)
         loadConfig()
         binding.gotifySave.setOnClickListener { if (saveConfig()) toast("配置已保存") }
         binding.gotifyTest.setOnClickListener {
@@ -40,7 +44,7 @@ class GotifySettingsActivity : SimpleActivity() {
 
     override fun onResume() {
         super.onResume()
-        applyMiuiPageChrome()
+        applyMiuiTopAppBarChrome(binding.gotifyAppbar, binding.gotifyToolbar)
     }
 
     private fun loadConfig() = with(binding) {

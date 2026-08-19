@@ -18,7 +18,7 @@ import org.fossify.commons.helpers.SimpleContactsHelper
 import org.fossify.messages.R
 import org.fossify.messages.adapters.BulkRecipientsAdapter
 import org.fossify.messages.databinding.ActivityBulkSendBinding
-import org.fossify.messages.extensions.applyMiuiPageChrome
+import org.fossify.messages.extensions.applyMiuiTopAppBarChrome
 import org.fossify.messages.extensions.config
 import org.fossify.messages.extensions.subscriptionManagerCompat
 import org.fossify.messages.messaging.BulkSendWorker
@@ -41,12 +41,16 @@ class BulkSendActivity : SimpleActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
-        setupEdgeToEdge(padBottomImeAndSystem = listOf(binding.bulkSendAction))
+        setupEdgeToEdge(
+            padTopSystem = listOf(binding.bulkSendAppbar),
+            padBottomImeAndSystem = listOf(binding.bulkSendAction),
+        )
         setupMaterialScrollListener(
             scrollingView = binding.bulkSendRecipients,
             topAppBar = binding.bulkSendAppbar
         )
         setupTopAppBar(binding.bulkSendAppbar, NavigationIcon.Arrow)
+        applyMiuiTopAppBarChrome(binding.bulkSendAppbar, binding.bulkSendToolbar)
         applyLightUiColors()
         binding.bulkSendRecipients.adapter = adapter
 
@@ -287,7 +291,7 @@ class BulkSendActivity : SimpleActivity() {
     private fun applyLightUiColors() {
         val pageColor = ContextCompat.getColor(this, R.color.miui_page_background)
         binding.bulkSendHolder.setBackgroundColor(pageColor)
-        applyMiuiPageChrome()
+        applyMiuiTopAppBarChrome(binding.bulkSendAppbar, binding.bulkSendToolbar)
         binding.bulkSendSearch.setTextColor(ContextCompat.getColor(this, R.color.miui_primary_text))
         binding.bulkSendSearch.setHintTextColor(ContextCompat.getColor(this, R.color.miui_hint_text))
         binding.bulkSendAddNumber.setTextColor(ContextCompat.getColor(this, R.color.miui_action_blue))

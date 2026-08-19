@@ -15,7 +15,7 @@ import org.fossify.commons.helpers.ensureBackgroundThread
 import org.fossify.messages.R
 import org.fossify.messages.databinding.ActivityScheduledMessagesBinding
 import org.fossify.messages.databinding.ItemScheduledMessageBinding
-import org.fossify.messages.extensions.applyMiuiPageChrome
+import org.fossify.messages.extensions.applyMiuiTopAppBarChrome
 import org.fossify.messages.extensions.conversationsDB
 import org.fossify.messages.extensions.deleteScheduledMessage
 import org.fossify.messages.extensions.getAddresses
@@ -39,10 +39,14 @@ class ScheduledMessagesActivity : SimpleActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
-        setupEdgeToEdge(padBottomImeAndSystem = listOf(binding.scheduledScrollview))
+        setupEdgeToEdge(
+            padTopSystem = listOf(binding.scheduledAppbar),
+            padBottomImeAndSystem = listOf(binding.scheduledScrollview),
+        )
         setupMaterialScrollListener(binding.scheduledScrollview, binding.scheduledAppbar)
         setupTopAppBar(binding.scheduledAppbar, NavigationIcon.Arrow)
         binding.scheduledToolbar.title = ""
+        applyMiuiTopAppBarChrome(binding.scheduledAppbar, binding.scheduledToolbar)
         binding.scheduledAdd.setOnClickListener {
             startActivity(Intent(this, NewConversationActivity::class.java).putExtra(IS_SCHEDULE_MODE, true))
         }
@@ -50,7 +54,7 @@ class ScheduledMessagesActivity : SimpleActivity() {
 
     override fun onResume() {
         super.onResume()
-        applyMiuiPageChrome()
+        applyMiuiTopAppBarChrome(binding.scheduledAppbar, binding.scheduledToolbar)
         updateAlarmStatus()
         loadMessages()
     }

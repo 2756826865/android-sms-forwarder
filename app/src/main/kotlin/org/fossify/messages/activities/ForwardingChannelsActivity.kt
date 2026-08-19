@@ -14,7 +14,7 @@ import org.fossify.commons.extensions.viewBinding
 import org.fossify.commons.helpers.NavigationIcon
 import org.fossify.messages.R
 import org.fossify.messages.databinding.ActivityForwardingChannelsBinding
-import org.fossify.messages.extensions.applyMiuiPageChrome
+import org.fossify.messages.extensions.applyMiuiTopAppBarChrome
 import org.fossify.messages.extensions.applySmsDialogColors
 import org.fossify.messages.extensions.showSmsStyled
 import org.fossify.messages.forwarding.MultiChannelForwardWorker
@@ -32,17 +32,21 @@ class ForwardingChannelsActivity : SimpleActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
-        setupEdgeToEdge(padBottomImeAndSystem = listOf(binding.forwardingScrollview))
+        setupEdgeToEdge(
+            padTopSystem = listOf(binding.forwardingAppbar),
+            padBottomImeAndSystem = listOf(binding.forwardingScrollview),
+        )
         setupMaterialScrollListener(binding.forwardingScrollview, binding.forwardingAppbar)
         setupTopAppBar(binding.forwardingAppbar, NavigationIcon.Arrow)
         binding.forwardingToolbar.title = ""
+        applyMiuiTopAppBarChrome(binding.forwardingAppbar, binding.forwardingToolbar)
         bindActions()
         enforceForwardingDisclaimer()
     }
 
     override fun onResume() {
         super.onResume()
-        applyMiuiPageChrome()
+        applyMiuiTopAppBarChrome(binding.forwardingAppbar, binding.forwardingToolbar)
         updateSummaries()
     }
 

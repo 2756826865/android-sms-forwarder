@@ -9,7 +9,7 @@ import org.fossify.commons.extensions.toast
 import org.fossify.commons.extensions.viewBinding
 import org.fossify.commons.helpers.NavigationIcon
 import org.fossify.messages.databinding.ActivityEmailSettingsBinding
-import org.fossify.messages.extensions.applyWhitePageChrome
+import org.fossify.messages.extensions.applyMiuiTopAppBarChrome
 import org.fossify.messages.forwarding.MultiForwardConfig
 import org.fossify.messages.forwarding.MultiChannelForwardWorker
 
@@ -20,9 +20,13 @@ class EmailSettingsActivity : SimpleActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
-        setupEdgeToEdge(padBottomImeAndSystem = listOf(binding.emailScrollview))
+        setupEdgeToEdge(
+            padTopSystem = listOf(binding.emailAppbar),
+            padBottomImeAndSystem = listOf(binding.emailScrollview),
+        )
         setupMaterialScrollListener(binding.emailScrollview, binding.emailAppbar)
         setupTopAppBar(binding.emailAppbar, NavigationIcon.Arrow)
+        applyMiuiTopAppBarChrome(binding.emailAppbar, binding.emailToolbar)
         setupSecuritySelector()
         loadConfig()
 
@@ -46,7 +50,7 @@ class EmailSettingsActivity : SimpleActivity() {
 
     override fun onResume() {
         super.onResume()
-        applyWhitePageChrome()
+        applyMiuiTopAppBarChrome(binding.emailAppbar, binding.emailToolbar)
     }
 
     private fun loadConfig() = with(binding) {

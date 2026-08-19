@@ -6,7 +6,7 @@ import org.fossify.commons.extensions.toast
 import org.fossify.commons.extensions.viewBinding
 import org.fossify.commons.helpers.NavigationIcon
 import org.fossify.messages.databinding.ActivityWecomSettingsBinding
-import org.fossify.messages.extensions.applyWhitePageChrome
+import org.fossify.messages.extensions.applyMiuiTopAppBarChrome
 import org.fossify.messages.forwarding.MultiForwardConfig
 import org.fossify.messages.forwarding.MultiChannelForwardWorker
 
@@ -17,9 +17,13 @@ class WeComSettingsActivity : SimpleActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
-        setupEdgeToEdge(padBottomImeAndSystem = listOf(binding.wecomScrollview))
+        setupEdgeToEdge(
+            padTopSystem = listOf(binding.wecomAppbar),
+            padBottomImeAndSystem = listOf(binding.wecomScrollview),
+        )
         setupMaterialScrollListener(binding.wecomScrollview, binding.wecomAppbar)
         setupTopAppBar(binding.wecomAppbar, NavigationIcon.Arrow)
+        applyMiuiTopAppBarChrome(binding.wecomAppbar, binding.wecomToolbar)
         loadConfig()
 
         binding.wecomSave.setOnClickListener {
@@ -42,7 +46,7 @@ class WeComSettingsActivity : SimpleActivity() {
 
     override fun onResume() {
         super.onResume()
-        applyWhitePageChrome()
+        applyMiuiTopAppBarChrome(binding.wecomAppbar, binding.wecomToolbar)
     }
 
     private fun loadConfig() = with(binding) {

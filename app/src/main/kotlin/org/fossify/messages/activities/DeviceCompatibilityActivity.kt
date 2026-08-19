@@ -34,7 +34,7 @@ import org.fossify.commons.helpers.NavigationIcon
 import org.fossify.messages.BuildConfig
 import org.fossify.messages.R
 import org.fossify.messages.databinding.ActivityDeviceCompatibilityBinding
-import org.fossify.messages.extensions.applyMiuiPageChrome
+import org.fossify.messages.extensions.applyMiuiTopAppBarChrome
 import org.fossify.messages.extensions.config
 import org.fossify.messages.forwarding.ForwardingChannels
 import org.fossify.messages.forwarding.ForwardingHistoryStore
@@ -85,10 +85,14 @@ class DeviceCompatibilityActivity : SimpleActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
-        setupEdgeToEdge(padBottomImeAndSystem = listOf(binding.compatibilityScrollview))
+        setupEdgeToEdge(
+            padTopSystem = listOf(binding.compatibilityAppbar),
+            padBottomImeAndSystem = listOf(binding.compatibilityScrollview),
+        )
         setupMaterialScrollListener(binding.compatibilityScrollview, binding.compatibilityAppbar)
         setupTopAppBar(binding.compatibilityAppbar, NavigationIcon.Arrow)
         binding.compatibilityToolbar.title = ""
+        applyMiuiTopAppBarChrome(binding.compatibilityAppbar, binding.compatibilityToolbar)
 
         binding.compatibilityDefaultSms.setOnClickListener { requestDefaultSmsRole() }
         binding.compatibilityPermissions.setOnClickListener { requestReceiveSmsPermission() }
@@ -120,7 +124,7 @@ class DeviceCompatibilityActivity : SimpleActivity() {
 
     override fun onResume() {
         super.onResume()
-        applyMiuiPageChrome()
+        applyMiuiTopAppBarChrome(binding.compatibilityAppbar, binding.compatibilityToolbar)
         binding.compatibilityDevice.text = getString(
             R.string.compatibility_device,
             Build.MANUFACTURER,
