@@ -22,6 +22,7 @@ import org.fossify.messages.databinding.ActivityManageBlockedKeywordsBinding
 import org.fossify.messages.dialogs.AddBlockedKeywordDialog
 import org.fossify.messages.dialogs.ExportBlockedKeywordsDialog
 import org.fossify.messages.dialogs.ManageBlockedKeywordsAdapter
+import org.fossify.messages.extensions.applyMiuiTopAppBarChrome
 import org.fossify.messages.extensions.config
 import org.fossify.messages.extensions.toArrayList
 import org.fossify.messages.helpers.BlockedKeywordsExporter
@@ -39,7 +40,10 @@ class ManageBlockedKeywordsActivity : SimpleActivity(), RefreshRecyclerViewListe
         updateBlockedKeywords()
         setupOptionsMenu()
 
-        setupEdgeToEdge(padBottomImeAndSystem = listOf(binding.manageBlockedKeywordsList))
+        setupEdgeToEdge(
+            padTopSystem = listOf(binding.blockKeywordsAppbar),
+            padBottomImeAndSystem = listOf(binding.manageBlockedKeywordsList),
+        )
         setupMaterialScrollListener(
             scrollingView = binding.manageBlockedKeywordsList,
             topAppBar = binding.blockKeywordsAppbar
@@ -58,6 +62,7 @@ class ManageBlockedKeywordsActivity : SimpleActivity(), RefreshRecyclerViewListe
     override fun onResume() {
         super.onResume()
         setupTopAppBar(binding.blockKeywordsAppbar, NavigationIcon.Arrow)
+        applyMiuiTopAppBarChrome(binding.blockKeywordsAppbar, binding.blockKeywordsToolbar)
     }
 
     private fun setupOptionsMenu() {

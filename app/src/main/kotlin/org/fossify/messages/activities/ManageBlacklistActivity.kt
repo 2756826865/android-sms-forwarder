@@ -12,7 +12,7 @@ import org.fossify.commons.extensions.viewBinding
 import org.fossify.commons.helpers.NavigationIcon
 import org.fossify.messages.R
 import org.fossify.messages.databinding.ActivityManageWhitelistBinding
-import org.fossify.messages.extensions.applyMiuiPageChrome
+import org.fossify.messages.extensions.applyMiuiTopAppBarChrome
 import org.fossify.messages.extensions.config
 import org.fossify.messages.extensions.showSmsStyled
 
@@ -23,11 +23,14 @@ class ManageBlacklistActivity : SimpleActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
-        setupEdgeToEdge(padBottomImeAndSystem = listOf(binding.whitelistList))
+        setupEdgeToEdge(
+            padTopSystem = listOf(binding.whitelistAppbar),
+            padBottomImeAndSystem = listOf(binding.whitelistList),
+        )
         setupTopAppBar(binding.whitelistAppbar, NavigationIcon.Arrow)
         binding.whitelistToolbar.title = ""
         binding.whitelistTitleText.setText(R.string.blacklist_numbers)
-        applyMiuiPageChrome()
+        applyMiuiTopAppBarChrome(binding.whitelistAppbar, binding.whitelistToolbar)
         binding.whitelistFab.setOnClickListener { showAddDialog() }
         binding.whitelistList.setOnItemLongClickListener { _, _, position, _ ->
             val number = currentNumbers().getOrNull(position)

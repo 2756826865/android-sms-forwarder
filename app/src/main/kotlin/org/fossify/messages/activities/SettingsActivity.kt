@@ -3,6 +3,11 @@ package org.fossify.messages.activities
 import android.content.Intent
 import android.os.Bundle
 import androidx.appcompat.app.AlertDialog
+import org.fossify.commons.extensions.toast
+import org.fossify.commons.extensions.viewBinding
+import org.fossify.commons.helpers.NavigationIcon
+import org.fossify.messages.R
+import org.fossify.messages.databinding.ActivitySettingsBinding
 import org.fossify.messages.extensions.applyMiuiTopAppBarChrome
 import org.fossify.messages.extensions.config
 import org.fossify.messages.extensions.showSmsStyled

@@ -7,7 +7,7 @@ import org.fossify.commons.extensions.viewBinding
 import org.fossify.commons.helpers.NavigationIcon
 import org.fossify.messages.R
 import org.fossify.messages.databinding.ActivityDingtalkRemoteControlSettingsBinding
-import org.fossify.messages.extensions.applyMiuiPageChrome
+import org.fossify.messages.extensions.applyMiuiTopAppBarChrome
 import org.fossify.messages.extensions.bindMiuiOptions
 import org.fossify.messages.forwarding.MultiForwardConfig
 import org.fossify.messages.forwarding.SimSendMode
@@ -20,9 +20,13 @@ class DingTalkRemoteControlSettingsActivity : SimpleActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
-        setupEdgeToEdge(padBottomImeAndSystem = listOf(binding.dingtalkRemoteScrollview))
+        setupEdgeToEdge(
+            padTopSystem = listOf(binding.dingtalkRemoteAppbar),
+            padBottomImeAndSystem = listOf(binding.dingtalkRemoteScrollview),
+        )
         setupMaterialScrollListener(binding.dingtalkRemoteScrollview, binding.dingtalkRemoteAppbar)
         setupTopAppBar(binding.dingtalkRemoteAppbar, NavigationIcon.Arrow)
+        applyMiuiTopAppBarChrome(binding.dingtalkRemoteAppbar, binding.dingtalkRemoteToolbar)
         binding.dingtalkRemoteSendSim.bindMiuiOptions(R.array.dingtalk_remote_sim_options)
         loadConfig()
         binding.dingtalkRemoteSave.setOnClickListener {
@@ -49,7 +53,7 @@ class DingTalkRemoteControlSettingsActivity : SimpleActivity() {
 
     override fun onResume() {
         super.onResume()
-        applyMiuiPageChrome()
+        applyMiuiTopAppBarChrome(binding.dingtalkRemoteAppbar, binding.dingtalkRemoteToolbar)
         loadConfig()
     }
 

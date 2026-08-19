@@ -12,6 +12,7 @@
         android:background="@color/miui_page_background">
 
         <com.google.android.material.appbar.MaterialToolbar
+            android:id="@+id/remote_sms_toolbar"
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
             android:background="@color/miui_page_background"

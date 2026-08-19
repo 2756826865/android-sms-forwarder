@@ -15,7 +15,7 @@ import org.fossify.commons.extensions.viewBinding
 import org.fossify.commons.helpers.NavigationIcon
 import org.fossify.messages.R
 import org.fossify.messages.databinding.ActivityForwardingHistoryBinding
-import org.fossify.messages.extensions.applyMiuiPageChrome
+import org.fossify.messages.extensions.applyMiuiTopAppBarChrome
 import org.fossify.messages.extensions.showSmsStyled
 import org.fossify.messages.forwarding.ForwardingChannels
 import org.fossify.messages.forwarding.ForwardingHistoryRecord
@@ -39,16 +39,20 @@ class ForwardingHistoryActivity : SimpleActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
-        setupEdgeToEdge(padBottomImeAndSystem = listOf(binding.forwardingHistoryScrollview))
+        setupEdgeToEdge(
+            padTopSystem = listOf(binding.forwardingHistoryAppbar),
+            padBottomImeAndSystem = listOf(binding.forwardingHistoryScrollview),
+        )
         setupMaterialScrollListener(binding.forwardingHistoryScrollview, binding.forwardingHistoryAppbar)
         setupTopAppBar(binding.forwardingHistoryAppbar, NavigationIcon.Arrow)
         binding.forwardingHistoryToolbar.title = ""
+        applyMiuiTopAppBarChrome(binding.forwardingHistoryAppbar, binding.forwardingHistoryToolbar)
         binding.forwardingHistoryClear.setOnClickListener { confirmClear() }
     }
 
     override fun onResume() {
         super.onResume()
-        applyMiuiPageChrome()
+        applyMiuiTopAppBarChrome(binding.forwardingHistoryAppbar, binding.forwardingHistoryToolbar)
         refreshHandler.post(refreshRecords)
     }
 

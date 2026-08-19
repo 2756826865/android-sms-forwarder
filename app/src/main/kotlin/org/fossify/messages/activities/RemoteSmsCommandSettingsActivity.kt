@@ -8,7 +8,7 @@ import org.fossify.commons.extensions.viewBinding
 import org.fossify.commons.helpers.NavigationIcon
 import org.fossify.messages.R
 import org.fossify.messages.databinding.ActivityRemoteSmsCommandSettingsBinding
-import org.fossify.messages.extensions.applyMiuiPageChrome
+import org.fossify.messages.extensions.applyMiuiTopAppBarChrome
 import org.fossify.messages.extensions.showSmsStyled
 import org.fossify.messages.forwarding.ForwardingChannels
 import org.fossify.messages.remote.RemoteControlReceiptConfig
@@ -23,9 +23,13 @@ class RemoteSmsCommandSettingsActivity : SimpleActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
-        setupEdgeToEdge(padBottomImeAndSystem = listOf(binding.remoteSmsScrollview))
+        setupEdgeToEdge(
+            padTopSystem = listOf(binding.remoteSmsAppbar),
+            padBottomImeAndSystem = listOf(binding.remoteSmsScrollview),
+        )
         setupMaterialScrollListener(binding.remoteSmsScrollview, binding.remoteSmsAppbar)
         setupTopAppBar(binding.remoteSmsAppbar, NavigationIcon.Arrow)
+        applyMiuiTopAppBarChrome(binding.remoteSmsAppbar, binding.remoteSmsToolbar)
         loadConfig()
         binding.remoteSmsReceiptChannels.setOnClickListener { showReceiptChannelSelector() }
         binding.remoteSmsSave.setOnClickListener {
@@ -50,7 +54,7 @@ class RemoteSmsCommandSettingsActivity : SimpleActivity() {
 
     override fun onResume() {
         super.onResume()
-        applyMiuiPageChrome()
+        applyMiuiTopAppBarChrome(binding.remoteSmsAppbar, binding.remoteSmsToolbar)
         loadConfig()
     }
 

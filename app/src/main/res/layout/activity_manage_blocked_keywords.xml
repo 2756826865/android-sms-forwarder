@@ -4,20 +4,24 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/block_keywords_coordinator"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:background="@color/miui_page_background">
 
     <org.fossify.commons.views.MyAppBarLayout
         android:id="@+id/block_keywords_appbar"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content">
+        android:layout_height="wrap_content"
+        android:background="@color/miui_page_background">
 
         <com.google.android.material.appbar.MaterialToolbar
             android:id="@+id/block_keywords_toolbar"
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
-            android:background="@color/color_primary"
+            android:background="@color/miui_page_background"
+            app:navigationIconTint="@color/miui_primary_text"
             app:menu="@menu/menu_add_blocked_keyword"
             app:title="@string/manage_blocked_keywords"
+            app:titleTextColor="@color/miui_primary_text"
             app:titleTextAppearance="@style/AppTheme.ActionBar.TitleTextStyle" />
 
     </org.fossify.commons.views.MyAppBarLayout>

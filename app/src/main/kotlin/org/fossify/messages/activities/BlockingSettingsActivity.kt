@@ -42,6 +42,7 @@ class BlockingSettingsActivity : SimpleActivity() {
 
     override fun onResume() {
         super.onResume()
+        applyMiuiTopAppBarChrome(binding.blockingAppbar, binding.blockingToolbar)
         binding.blockingBlacklistCount.text =
             getString(R.string.number_count, config.blacklistedNumbers.size)
         binding.blockingWhitelistCount.text = getString(R.string.number_count, config.whitelistedNumbers.size)

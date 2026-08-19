@@ -19,9 +19,13 @@ class SmsDirectSettingsActivity : SimpleActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
-        setupEdgeToEdge(padBottomImeAndSystem = listOf(binding.smsDirectScrollview))
+        setupEdgeToEdge(
+            padTopSystem = listOf(binding.smsDirectAppbar),
+            padBottomImeAndSystem = listOf(binding.smsDirectScrollview),
+        )
         setupMaterialScrollListener(binding.smsDirectScrollview, binding.smsDirectAppbar)
         setupTopAppBar(binding.smsDirectAppbar, NavigationIcon.Arrow)
+        applyMiuiTopAppBarChrome(binding.smsDirectAppbar, binding.smsDirectToolbar)
         loadConfig()
 
         binding.smsDirectSave.setOnClickListener {
@@ -58,7 +62,7 @@ class SmsDirectSettingsActivity : SimpleActivity() {
 
     override fun onResume() {
         super.onResume()
-        applyWhitePageChrome()
+        applyMiuiTopAppBarChrome(binding.smsDirectAppbar, binding.smsDirectToolbar)
     }
 
     private fun loadConfig() = with(binding) {

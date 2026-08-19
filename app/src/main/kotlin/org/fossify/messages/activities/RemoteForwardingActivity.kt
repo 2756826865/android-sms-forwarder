@@ -6,7 +6,7 @@ import org.fossify.commons.extensions.viewBinding
 import org.fossify.commons.helpers.NavigationIcon
 import org.fossify.messages.R
 import org.fossify.messages.databinding.ActivityRemoteForwardingBinding
-import org.fossify.messages.extensions.applyMiuiPageChrome
+import org.fossify.messages.extensions.applyMiuiTopAppBarChrome
 import org.fossify.messages.forwarding.MultiForwardConfig
 import org.fossify.messages.remote.RemoteSmsCommandConfig
 
@@ -18,10 +18,14 @@ class RemoteForwardingActivity : SimpleActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
-        setupEdgeToEdge(padBottomImeAndSystem = listOf(binding.remoteForwardingScrollview))
+        setupEdgeToEdge(
+            padTopSystem = listOf(binding.remoteForwardingAppbar),
+            padBottomImeAndSystem = listOf(binding.remoteForwardingScrollview),
+        )
         setupMaterialScrollListener(binding.remoteForwardingScrollview, binding.remoteForwardingAppbar)
         setupTopAppBar(binding.remoteForwardingAppbar, NavigationIcon.Arrow)
         binding.remoteForwardingToolbar.title = ""
+        applyMiuiTopAppBarChrome(binding.remoteForwardingAppbar, binding.remoteForwardingToolbar)
 
         binding.remoteForwardingSmsHolder.setOnClickListener {
             startActivity(Intent(this, RemoteSmsCommandSettingsActivity::class.java))
@@ -33,7 +37,7 @@ class RemoteForwardingActivity : SimpleActivity() {
 
     override fun onResume() {
         super.onResume()
-        applyMiuiPageChrome()
+        applyMiuiTopAppBarChrome(binding.remoteForwardingAppbar, binding.remoteForwardingToolbar)
         updateSummaries()
     }
 

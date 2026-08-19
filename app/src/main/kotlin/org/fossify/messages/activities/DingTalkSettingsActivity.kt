@@ -9,7 +9,7 @@ import org.fossify.commons.extensions.viewBinding
 import org.fossify.commons.helpers.NavigationIcon
 import org.fossify.messages.R
 import org.fossify.messages.databinding.ActivityDingtalkSettingsBinding
-import org.fossify.messages.extensions.applyWhitePageChrome
+import org.fossify.messages.extensions.applyMiuiTopAppBarChrome
 import org.fossify.messages.forwarding.MultiForwardConfig
 import org.fossify.messages.forwarding.MultiChannelForwardWorker
 
@@ -20,9 +20,13 @@ class DingTalkSettingsActivity : SimpleActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
-        setupEdgeToEdge(padBottomImeAndSystem = listOf(binding.dingtalkScrollview))
+        setupEdgeToEdge(
+            padTopSystem = listOf(binding.dingtalkAppbar),
+            padBottomImeAndSystem = listOf(binding.dingtalkScrollview),
+        )
         setupMaterialScrollListener(binding.dingtalkScrollview, binding.dingtalkAppbar)
         setupTopAppBar(binding.dingtalkAppbar, NavigationIcon.Arrow)
+        applyMiuiTopAppBarChrome(binding.dingtalkAppbar, binding.dingtalkToolbar)
         loadConfig()
 
         binding.dingtalkSave.setOnClickListener {
@@ -47,7 +51,7 @@ class DingTalkSettingsActivity : SimpleActivity() {
 
     override fun onResume() {
         super.onResume()
-        applyWhitePageChrome()
+        applyMiuiTopAppBarChrome(binding.dingtalkAppbar, binding.dingtalkToolbar)
     }
 
     private fun loadConfig() = with(binding) {

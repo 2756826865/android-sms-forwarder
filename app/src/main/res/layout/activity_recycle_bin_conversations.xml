@@ -4,19 +4,23 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/recycle_bin_coordinator"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:background="@color/miui_page_background">
 
     <org.fossify.commons.views.MyAppBarLayout
         android:id="@+id/recycle_bin_appbar"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content">
+        android:layout_height="wrap_content"
+        android:background="@color/miui_page_background">
 
         <com.google.android.material.appbar.MaterialToolbar
             android:id="@+id/recycle_bin_toolbar"
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
-            android:background="@color/color_primary"
+            android:background="@color/miui_page_background"
+            app:navigationIconTint="@color/miui_primary_text"
             app:title="@string/recycle_bin"
+            app:titleTextColor="@color/miui_primary_text"
             app:titleTextAppearance="@style/AppTheme.ActionBar.TitleTextStyle" />
 
     </org.fossify.commons.views.MyAppBarLayout>

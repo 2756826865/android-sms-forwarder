@@ -14,6 +14,7 @@ import org.fossify.commons.helpers.ensureBackgroundThread
 import org.fossify.messages.R
 import org.fossify.messages.adapters.RecycleBinConversationsAdapter
 import org.fossify.messages.databinding.ActivityRecycleBinConversationsBinding
+import org.fossify.messages.extensions.applyMiuiTopAppBarChrome
 import org.fossify.messages.extensions.config
 import org.fossify.messages.extensions.conversationsDB
 import org.fossify.messages.extensions.emptyMessagesRecycleBin
@@ -36,7 +37,10 @@ class RecycleBinConversationsActivity : SimpleActivity() {
         setContentView(binding.root)
         setupOptionsMenu()
 
-        setupEdgeToEdge(padBottomImeAndSystem = listOf(binding.conversationsList))
+        setupEdgeToEdge(
+            padTopSystem = listOf(binding.recycleBinAppbar),
+            padBottomImeAndSystem = listOf(binding.conversationsList),
+        )
         setupMaterialScrollListener(
             scrollingView = binding.conversationsList,
             topAppBar = binding.recycleBinAppbar
@@ -48,6 +52,7 @@ class RecycleBinConversationsActivity : SimpleActivity() {
     override fun onResume() {
         super.onResume()
         setupTopAppBar(binding.recycleBinAppbar, NavigationIcon.Arrow)
+        applyMiuiTopAppBarChrome(binding.recycleBinAppbar, binding.recycleBinToolbar)
         loadRecycleBinConversations()
     }
 

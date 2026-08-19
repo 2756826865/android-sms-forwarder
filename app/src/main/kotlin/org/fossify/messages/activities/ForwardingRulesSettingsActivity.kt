@@ -14,7 +14,7 @@ import org.fossify.commons.extensions.viewBinding
 import org.fossify.commons.helpers.NavigationIcon
 import org.fossify.messages.R
 import org.fossify.messages.databinding.ActivityForwardingRulesSettingsBinding
-import org.fossify.messages.extensions.applyMiuiPageChrome
+import org.fossify.messages.extensions.applyMiuiTopAppBarChrome
 import org.fossify.messages.extensions.bindMiuiOptions
 import org.fossify.messages.extensions.showSmsStyled
 import org.fossify.messages.forwarding.ForwardingChannels
@@ -33,9 +33,13 @@ class ForwardingRulesSettingsActivity : SimpleActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
-        setupEdgeToEdge(padBottomImeAndSystem = listOf(binding.rulesScrollview))
+        setupEdgeToEdge(
+            padTopSystem = listOf(binding.rulesAppbar),
+            padBottomImeAndSystem = listOf(binding.rulesScrollview),
+        )
         setupMaterialScrollListener(binding.rulesScrollview, binding.rulesAppbar)
         setupTopAppBar(binding.rulesAppbar, NavigationIcon.Arrow)
+        applyMiuiTopAppBarChrome(binding.rulesAppbar, binding.rulesToolbar)
         binding.rulesScope.bindMiuiOptions(R.array.forwarding_rules_scope_options)
         binding.rulesSimScope.bindMiuiOptions(R.array.forwarding_rules_sim_options)
         binding.rulesMatchMode.bindMiuiOptions(R.array.forwarding_rules_match_options)
@@ -52,7 +56,7 @@ class ForwardingRulesSettingsActivity : SimpleActivity() {
 
     override fun onResume() {
         super.onResume()
-        applyMiuiPageChrome()
+        applyMiuiTopAppBarChrome(binding.rulesAppbar, binding.rulesToolbar)
     }
 
     private fun loadRules() {
