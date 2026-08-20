@@ -3,7 +3,7 @@ package org.fossify.messages.forwarding
 import android.annotation.SuppressLint
 import android.content.Context
 import android.telephony.SubscriptionManager
-import org.fossify.commons.helpers.SimpleContactsHelper
+import org.fossify.messages.extensions.getNameAndPhotoFromPhoneNumber
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -23,13 +23,9 @@ object ForwardingMessageFormatter {
         includeTime: Boolean = true,
     ): ForwardingPayload {
         val config = MultiForwardConfig(context)
-        val contactName = try {
-            SimpleContactsHelper(context).getNameFromPhoneNumber(sender)
-        } catch (_: NumberFormatException) {
-            null
-        } catch (_: Exception) {
-            null
-        }?.takeIf { it.isNotBlank() && it != sender }
+        val contactName = runCatching {
+            context.getNameAndPhotoFromPhoneNumber(sender).name
+        }.getOrNull()?.takeIf { it.isNotBlank() && it != sender }
         val senderTitle = contactName ?: sender.ifBlank { "新短信" }
         val sim = if (includeSim && subscriptionId >= 0) {
             getSimDescription(context, config, subscriptionId)

@@ -59,7 +59,6 @@ import org.fossify.messages.adapters.ConversationsAdapter
 import org.fossify.messages.adapters.SearchResultsAdapter
 import org.fossify.messages.databinding.ActivityMainBinding
 import org.fossify.messages.dialogs.ConversationActionsPopup
-import org.fossify.messages.extensions.applySystemBarColors
 import org.fossify.messages.extensions.checkAndDeleteOldRecycleBinMessages
 import org.fossify.messages.extensions.clearAllMessagesIfNeeded
 import org.fossify.messages.extensions.clearExpiredScheduledMessages
@@ -96,6 +95,7 @@ class MainActivity : SimpleActivity() {
 
     private var storedTextColor = 0
     private var storedFontSize = 0
+    private var storedHomeListDensity = 0
     private var lastSearchedText = ""
     private var bus: EventBus? = null
     private var isConversationSelectionMode = false
@@ -121,6 +121,7 @@ class MainActivity : SimpleActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
+        clearHomeBottomSystemScrim()
         initializeAppSession()
         config.showListAvatars = true
         config.showLetterAvatars = false
@@ -135,8 +136,12 @@ class MainActivity : SimpleActivity() {
             padBottomSystem = listOf(binding.homeBottomNavigation, binding.selectionBottomBar),
             padBottomImeAndSystem = listOf(binding.homeSearch),
         )
-
-        binding.mainCoordinator.post { applyHomeBottomNavigationPreference() }
+        // Edge-to-edge helpers may re-tint system bars; clear the bottom scrim again.
+        clearHomeBottomSystemScrim()
+        binding.mainCoordinator.post {
+            clearHomeBottomSystemScrim()
+            applyHomeBottomNavigationPreference()
+        }
         showFirstUseNoticeIfNeeded()
 
         checkAndDeleteOldRecycleBinMessages()
@@ -177,6 +182,7 @@ class MainActivity : SimpleActivity() {
 
     override fun onResume() {
         super.onResume()
+        clearHomeBottomSystemScrim()
         if (Telephony.Sms.getDefaultSmsPackage(this) == packageName) {
             getSystemService(NotificationManager::class.java)
                 ?.cancel(DEFAULT_SMS_LOST_NOTIFICATION_ID)
@@ -195,6 +201,10 @@ class MainActivity : SimpleActivity() {
                 updateFontSize()
             }
 
+            if (storedHomeListDensity != config.homeListDensity) {
+                updateListDensity()
+            }
+
             updateDrafts()
         }
 
@@ -202,6 +212,7 @@ class MainActivity : SimpleActivity() {
         val properPrimaryColor = ContextCompat.getColor(this, R.color.miui_action_blue)
         binding.homeHeader.setBackgroundColor(pageColor)
         binding.homeTitle.setTextColor(ContextCompat.getColor(this, R.color.miui_primary_text))
+        binding.homeUnreadSubtitle.setTextColor(ContextCompat.getColor(this, R.color.miui_secondary_text))
         binding.homeSearch.setTextColor(ContextCompat.getColor(this, R.color.miui_primary_text))
         binding.homeSearch.setHintTextColor(ContextCompat.getColor(this, R.color.miui_hint_text))
         binding.conversationsFab.backgroundTintList = ColorStateList.valueOf(
@@ -210,9 +221,10 @@ class MainActivity : SimpleActivity() {
         binding.conversationsFab.imageTintList = ColorStateList.valueOf(
             ContextCompat.getColor(this, android.R.color.white)
         )
-        applySystemBarColors(pageColor)
+        // Keep status bar white; do not paint the system nav area white (that was the bottom "whiteboard").
         @Suppress("DEPRECATION")
-        window.navigationBarColor = android.graphics.Color.TRANSPARENT
+        window.statusBarColor = pageColor
+        clearHomeBottomSystemScrim()
         binding.searchHolder.setBackgroundColor(pageColor)
         binding.noConversationsPlaceholder2.setTextColor(properPrimaryColor)
         binding.noConversationsPlaceholder2.underlineText()
@@ -299,6 +311,22 @@ class MainActivity : SimpleActivity() {
         }
     }
 
+    /** Removes the system navigation scrim / contrast sheet under the floating capsule. */
+    @Suppress("DEPRECATION")
+    private fun clearHomeBottomSystemScrim() {
+        window.navigationBarColor = android.graphics.Color.TRANSPARENT
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            window.navigationBarDividerColor = android.graphics.Color.TRANSPARENT
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            window.isNavigationBarContrastEnforced = false
+        }
+        androidx.core.view.WindowInsetsControllerCompat(window, window.decorView).apply {
+            isAppearanceLightStatusBars = true
+            isAppearanceLightNavigationBars = true
+        }
+    }
+
     private fun selectBottomNavigation(selectedIndex: Int) {
         binding.homeNavPrimary.isSelected = selectedIndex == 0
         binding.homeNavForward.isSelected = selectedIndex == 1
@@ -379,6 +407,7 @@ class MainActivity : SimpleActivity() {
     private fun storeStateVariables() {
         storedTextColor = getProperTextColor()
         storedFontSize = config.fontSize
+        storedHomeListDensity = config.homeListDensity
     }
 
     private fun updateMenuColors() = Unit
@@ -626,6 +655,12 @@ class MainActivity : SimpleActivity() {
     private fun updateConversationSelectionUi(active: Boolean, count: Int) = binding.apply {
         isConversationSelectionMode = active
         homeNormalTopRow.beGoneIf(active)
+        homeTitle.beGoneIf(active)
+        if (active) {
+            homeUnreadSubtitle.beGone()
+        } else {
+            refreshHomeUnreadSubtitleFromAdapter()
+        }
         selectionTopRow.beVisibleIf(active)
         selectionTitle.beVisibleIf(active)
         selectionBottomBar.beVisibleIf(active)
@@ -669,6 +704,8 @@ class MainActivity : SimpleActivity() {
                 }.thenByDescending { it.date }
             ).toMutableList() as ArrayList<Conversation>
 
+        updateHomeUnreadSubtitle(sortedConversations)
+
         if (cached && config.appRunCount == 1) {
             // there are no cached conversations on the first run so we show the
             // loading placeholder and progress until we are done loading from telephony
@@ -684,9 +721,41 @@ class MainActivity : SimpleActivity() {
                     if (!cached) {
                         showOrHidePlaceholder(currentList.isEmpty())
                     }
+                    updateHomeUnreadSubtitle(currentList.filterIsInstance<Conversation>())
                 }
             }
         } catch (_: Exception) {
+        }
+    }
+
+    private fun refreshHomeUnreadSubtitleFromAdapter() {
+        val conversations = (binding.conversationsList.adapter as? ConversationsAdapter)
+            ?.currentList
+            ?.filterIsInstance<Conversation>()
+            .orEmpty()
+        updateHomeUnreadSubtitle(conversations)
+    }
+
+    private fun updateHomeUnreadSubtitle(conversations: List<Conversation>) {
+        if (isConversationSelectionMode) {
+            binding.homeUnreadSubtitle.beGone()
+            return
+        }
+        val unread = conversations.sumOf { conversation ->
+            when {
+                conversation.read -> 0
+                conversation.unreadCount > 0 -> conversation.unreadCount
+                else -> 1
+            }
+        }
+        binding.homeUnreadSubtitle.apply {
+            if (unread > 0) {
+                text = getString(R.string.home_unread_count, unread)
+                beVisible()
+            } else {
+                text = ""
+                beGone()
+            }
         }
     }
 

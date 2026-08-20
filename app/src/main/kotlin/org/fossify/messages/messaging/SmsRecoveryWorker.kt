@@ -13,7 +13,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
-import org.fossify.commons.helpers.SimpleContactsHelper
+import org.fossify.messages.extensions.getNameAndPhotoFromPhoneNumber
 import org.fossify.messages.extensions.getNotificationBitmap
 import org.fossify.messages.extensions.messagesDB
 import org.fossify.messages.extensions.showReceivedMessageNotification
@@ -169,12 +169,11 @@ class SmsRecoveryWorker(
                     }
 
                     if (!isRead) {
-                        val contacts = SimpleContactsHelper(applicationContext)
-                        val senderName = runCatching { contacts.getNameFromPhoneNumber(address) }
-                            .getOrDefault("")
-                            .ifBlank { address }
-                        val photoUri = runCatching { contacts.getPhotoUriFromPhoneNumber(address) }
-                            .getOrDefault("")
+                        val namePhoto = runCatching {
+                            applicationContext.getNameAndPhotoFromPhoneNumber(address)
+                        }.getOrNull()
+                        val senderName = namePhoto?.name?.takeIf { it.isNotBlank() } ?: address
+                        val photoUri = namePhoto?.photoUri.orEmpty()
                         applicationContext.showReceivedMessageNotification(
                             messageId = id,
                             address = address,

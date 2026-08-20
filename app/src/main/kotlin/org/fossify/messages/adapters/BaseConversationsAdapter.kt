@@ -27,6 +27,7 @@ import org.fossify.messages.activities.SimpleActivity
 import org.fossify.messages.databinding.ItemConversationBinding
 import org.fossify.messages.extensions.config
 import org.fossify.messages.extensions.getAllDrafts
+import org.fossify.messages.helpers.HomeListDensityStyle
 import org.fossify.messages.helpers.formatConversationDate
 import org.fossify.messages.models.Conversation
 
@@ -68,6 +69,11 @@ abstract class BaseConversationsAdapter(
     @SuppressLint("NotifyDataSetChanged")
     fun updateFontSize() {
         fontSize = activity.getTextSize()
+        notifyDataSetChanged()
+    }
+
+    @SuppressLint("NotifyDataSetChanged")
+    fun updateListDensity() {
         notifyDataSetChanged()
     }
 
@@ -156,6 +162,26 @@ abstract class BaseConversationsAdapter(
     private fun setupView(view: View, conversation: Conversation) {
         ItemConversationBinding.bind(view).apply {
             root.setupViewBackground(activity)
+            val density = HomeListDensityStyle.forDensity(activity.config.homeListDensity)
+            val densityScale = activity.resources.displayMetrics.density
+            fun dp(value: Int) = (value * densityScale).toInt()
+
+            conversationFrame.minimumHeight = dp(density.avatarDp + density.verticalPadDp * 2)
+            conversationFrame.setPadding(
+                conversationFrame.paddingLeft,
+                dp(density.verticalPadDp),
+                conversationFrame.paddingRight,
+                0,
+            )
+            conversationImage.layoutParams = conversationImage.layoutParams.apply {
+                width = dp(density.avatarDp)
+                height = dp(density.avatarDp)
+            }
+            (conversationBodyShort.layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
+                lp.bottomMargin = dp(density.verticalPadDp)
+                conversationBodyShort.layoutParams = lp
+            }
+
             val smsDraft = drafts[conversation.threadId]
             draftIndicator.beVisibleIf(!smsDraft.isNullOrEmpty())
             draftIndicator.setTextColor(properPrimaryColor)
@@ -183,17 +209,20 @@ abstract class BaseConversationsAdapter(
 
             conversationAddress.apply {
                 text = conversation.title
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, density.titleSp)
+                includeFontPadding = false
             }
 
             conversationBodyShort.apply {
                 text = smsDraft ?: conversation.snippet
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, density.bodySp)
+                includeFontPadding = false
             }
 
             conversationDate.apply {
                 text = formatConversationDate(conversation.date)
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, density.dateSp)
+                includeFontPadding = false
             }
 
             val isUnread = !conversation.read
@@ -224,9 +253,10 @@ abstract class BaseConversationsAdapter(
 
             if (activity.config.showListAvatars) {
                 if (!activity.hasPermission(PERMISSION_READ_CONTACTS) || conversation.photoUri.isBlank()) {
-                    conversationImage.setImageResource(org.fossify.commons.R.drawable.ic_person_vector)
+                    conversationImage.setImageResource(R.drawable.ic_person_vector)
                     conversationImage.setBackgroundResource(R.drawable.miui_avatar_background)
-                    conversationImage.setPadding(14, 14, 14, 14)
+                    val iconPad = dp(density.avatarIconPadDp)
+                    conversationImage.setPadding(iconPad, iconPad, iconPad, iconPad)
                 } else {
                     conversationImage.background = null
                     conversationImage.setPadding(0, 0, 0, 0)

@@ -28,7 +28,7 @@
             android:src="@drawable/ic_person_vector"
             android:visibility="gone"
             tools:ignore="ContentDescription"
-            tools:visibility="visible" />
+            tools:visibility="gone" />
 
         <LinearLayout
             android:id="@+id/thread_message_attachments_holder"

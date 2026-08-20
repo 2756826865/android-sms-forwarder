@@ -21,6 +21,30 @@ class Config(context: Context) : BaseConfig(context) {
         get() = prefs.getBoolean(SHOW_HOME_BOTTOM_NAVIGATION, true)
         set(value) = prefs.edit().putBoolean(SHOW_HOME_BOTTOM_NAVIGATION, value).apply()
 
+    /** Approximate visible conversation rows on the home list: 4 / 6 / 8 / 10. Default 6. */
+    var homeListDensity: Int
+        get() = prefs.getInt(HOME_LIST_DENSITY, HOME_LIST_DENSITY_6).let { value ->
+            when (value) {
+                HOME_LIST_DENSITY_4,
+                HOME_LIST_DENSITY_6,
+                HOME_LIST_DENSITY_8,
+                HOME_LIST_DENSITY_10,
+                -> value
+                else -> HOME_LIST_DENSITY_6
+            }
+        }
+        set(value) = prefs.edit().putInt(
+            HOME_LIST_DENSITY,
+            when (value) {
+                HOME_LIST_DENSITY_4,
+                HOME_LIST_DENSITY_6,
+                HOME_LIST_DENSITY_8,
+                HOME_LIST_DENSITY_10,
+                -> value
+                else -> HOME_LIST_DENSITY_6
+            },
+        ).apply()
+
     var firstUseNoticeAccepted: Boolean
         get() = prefs.getBoolean(FIRST_USE_NOTICE_ACCEPTED, false)
         set(value) = prefs.edit().putBoolean(FIRST_USE_NOTICE_ACCEPTED, value).apply()

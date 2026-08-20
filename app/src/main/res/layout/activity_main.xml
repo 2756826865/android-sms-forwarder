@@ -37,7 +37,7 @@
             android:orientation="vertical"
             android:paddingStart="@dimen/home_horizontal_margin"
             android:paddingEnd="@dimen/home_horizontal_margin"
-            android:paddingBottom="16dp">
+            android:paddingBottom="8dp">
 
             <LinearLayout
                 android:id="@+id/selection_top_row"
@@ -121,11 +121,25 @@
                 android:id="@+id/home_title"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
-                android:fontFamily="sans-serif"
+                android:layout_marginTop="0dp"
+                android:fontFamily="sans-serif-medium"
+                android:includeFontPadding="false"
                 android:text="@string/home_primary"
                 android:textColor="@color/miui_primary_text"
                 android:textSize="@dimen/home_title_size" />
+
+            <TextView
+                android:id="@+id/home_unread_subtitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:fontFamily="sans-serif"
+                android:includeFontPadding="false"
+                android:textColor="@color/miui_secondary_text"
+                android:textSize="13sp"
+                android:visibility="gone"
+                tools:text="14 条未读"
+                tools:visibility="visible" />
 
             <org.fossify.commons.views.MyEditText
                 android:id="@+id/home_search"
@@ -216,7 +230,7 @@
                             android:id="@+id/conversations_list"
                             android:layout_width="match_parent"
                             android:layout_height="match_parent"
-                            android:clipToPadding="true"
+                            android:clipToPadding="false"
                             android:layoutAnimation="@anim/layout_animation"
                             android:overScrollMode="ifContentScrolls"
                             android:paddingBottom="@dimen/home_content_bottom_padding"
@@ -259,7 +273,7 @@
                         android:id="@+id/search_results_list"
                         android:layout_width="match_parent"
                         android:layout_height="match_parent"
-                        android:clipToPadding="true"
+                        android:clipToPadding="false"
                         android:paddingBottom="@dimen/home_content_bottom_padding"
                         android:scrollbars="vertical"
                         app:layoutManager="org.fossify.commons.views.MyLinearLayoutManager" />
@@ -276,18 +290,18 @@
         android:layout_marginBottom="@dimen/home_bottom_nav_bottom_margin"
         android:background="@android:color/transparent"
         android:clipToPadding="false"
-        android:elevation="16dp"
         android:gravity="center_horizontal"
         android:orientation="vertical"
-        android:translationZ="16dp"
         android:visibility="visible">
 
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="@dimen/bottom_nav_height"
             android:background="@drawable/home_bottom_nav_background"
+            android:elevation="8dp"
             android:gravity="center"
             android:orientation="horizontal"
+            android:outlineProvider="background"
             android:padding="@dimen/home_bottom_nav_inner_padding">
 
             <FrameLayout

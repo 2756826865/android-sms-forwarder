@@ -1,4 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <inset xmlns:android="http://schemas.android.com/apk/res/android"
-    android:inset="8%"
-    android:drawable="@drawable/ic_launcher_custom" />
+    android:drawable="@drawable/ic_launcher_custom"
+    android:inset="0%" />

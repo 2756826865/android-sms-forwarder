@@ -3,7 +3,7 @@
     tools:ignore="MissingTranslation">
     <string name="sideloaded_app" translatable="false">短信转发</string>
     <string name="app_launcher_name">短信转发</string>
-    <string name="home_primary">短信</string>
+    <string name="home_primary">信息</string>
     <string name="bottom_nav_primary">短信</string>
     <string name="bottom_nav_forward">转发</string>
     <string name="bottom_nav_bulk">批量</string>
@@ -12,7 +12,8 @@
     <string name="bottom_nav_forward_description">打开短信转发渠道</string>
     <string name="bottom_nav_bulk_description">打开批量发送</string>
     <string name="bottom_nav_settings_description">打开应用设置</string>
-    <string name="home_search_sms">搜索短信</string>
+    <string name="home_search_sms">搜索信息</string>
+    <string name="home_unread_count">%1$d 条未读</string>
     <string name="mark_all_read">一键已读</string>
     <string name="all_messages_marked_read">所有短信已标记为已读</string>
     <string name="resync_all_messages">重新同步全部短信</string>
@@ -50,6 +51,12 @@
     <string name="bulk_send_manual_number">手动添加</string>
     <string name="bulk_send_select_all">全选当前结果</string>
     <string name="multi_select">多选</string>
+    <string name="message_menu_copy">复制</string>
+    <string name="message_menu_share">分享</string>
+    <string name="message_menu_save_as">保存附件</string>
+    <string name="message_menu_select_text">选择文本</string>
+    <string name="message_menu_details">详情</string>
+    <string name="message_menu_restore">恢复</string>
     <string name="selected_conversations">已选择 %1$d 项</string>
     <string name="bulk_send_clear">清空选择</string>
     <string name="bulk_send_selected">已选择 %1$d 人</string>
@@ -82,6 +89,12 @@
     <string name="settings_system">系统</string>
     <string name="settings_home_bottom_nav">显示首页底部导航</string>
     <string name="settings_home_bottom_nav_summary">默认开启；关闭后首页保留短信列表和新建按钮，仍可从右上角进入设置</string>
+    <string name="settings_home_list_density">首页列表显示条数</string>
+    <string name="settings_home_list_density_summary">调节会话列表疏密，约一屏显示 %1$d 条</string>
+    <string name="settings_home_list_density_4">约 4 条（很宽松）</string>
+    <string name="settings_home_list_density_6">约 6 条（宽松）</string>
+    <string name="settings_home_list_density_8">约 8 条（适中）</string>
+    <string name="settings_home_list_density_10">约 10 条（紧凑）</string>
     <string name="settings_live_island">灵动岛提示（实验）</string>
     <string name="settings_live_island_summary">说明：网上常见的悬浮窗或私有参数方案不等同于官方灵动岛。小米正式焦点通知/超级岛需要开发者平台授权；未获授权或系统不支持时以普通通知为准。</string>
     <string name="live_island_status_disabled">已关闭</string>
@@ -437,7 +450,7 @@
     <string name="about_licenses">第三方许可</string>
     <string name="about_version">版本 %1$s</string>
     <string name="about_repository">项目仓库</string>
-    <string name="about_repository_url">github.com/2756826865/sms-forwarder-huawei</string>
+    <string name="about_repository_url">github.com/2756826865/android-sms-forwarder</string>
     <string name="about_coolapk">酷安</string>
     <string name="about_coolapk_url">coolapk.com/u/3270136</string>
     <string name="about_common_questions_text">1. 如何正常接收和发送短信？\n请先将本应用设为系统默认短信应用，并允许接收、读取、发送短信、电话状态和通知权限。然后进入「设置 → 系统 → 后台运行与系统兼容」，确认默认短信角色、底层短信路由和 WRITE_SMS 状态正常。联系人权限为可选；拒绝后仍可手动输入号码，但部分位置无法显示联系人姓名和头像。\n\n2. 已经设为默认短信应用，为什么仍收不到或不转发？\n如果通知仍由系统「信息」应用发出，本应用内也没有新短信，通常说明系统没有把短信广播真正交给本应用。请在「设置 → 系统 → 后台运行与系统兼容」中重新检测默认短信角色、底层路由、WRITE_SMS、短信权限和电池策略。华为 / HarmonyOS 出现状态不同步时，可按页面提供的 ADB 命令修复；普通 APK 无权静默修改这些系统安全设置。\n\n3. 息屏、锁屏或清理后台后收不到短信怎么办？\n华为 / 荣耀请允许自启动、关联启动和后台活动；小米 / Redmi / POCO 请允许自启动并把省电策略设为无限制；vivo / iQOO 请在 i 管家中允许自启动、后台高耗电和锁屏通知。系统升级或重启后建议重新确认默认短信应用没有被换回。\n\n4. 为什么没有新短信通知？\n请确认系统通知权限已允许，并在应用通知设置中开启「收到的短信」通知频道。若系统「信息」应用通知而本应用不通知，请先排查默认短信路由，而不是只修改通知设置。\n\n5. 短信转发支持哪些渠道？\n支持 PushPlus、钉钉群机器人、飞书群机器人、企业微信应用消息、企业微信群机器人、电子邮箱、短信直发、Bark 和 Gotify。入口为首页底部「转发」或「设置 → 短信转发功能」。请先阅读并同意转发免责声明，再配置 Token、Webhook、密钥或邮箱凭据，并发送测试消息验证。\n\n6. 邮箱转发应该怎样选择端口？\nSSL/TLS 通常使用端口 465，适用于 QQ、163、Gmail 等；STARTTLS 通常使用端口 587，Microsoft 365 / Outlook 建议选择此项。多数邮箱要求授权码或应用专用密码，而不是网页登录密码；微软组织账号还可能需要管理员开启 SMTP AUTH。\n\n7. 测试转发成功，真实短信却没有转发怎么办？\n请确认对应渠道已经启用，设备收到短信时网络可用。若启用了「转发 → 转发规则」，请检查关键词、正则、来源 SIM 和作用范围是否导致未匹配。还要检查骚扰拦截的黑名单、白名单。断网时任务可能延后到网络恢复后补发；服务商限流、凭据失效或后台限制也会造成延迟或失败。\n\n8. 双卡名称、号码或发送卡不正确怎么办？\n部分运营商和系统不会向 Android 提供本机号码。可在「短信转发功能」的转发显示中手动填写 SIM1、SIM2 名称和号码。批量发送、短信远程发送和钉钉远程均可在各自设置页选择 SIM1 / SIM2 / 默认。换卡或系统升级后应重新确认。\n\n9. 新建短信如何添加附件？\n附件仅支持单人会话。先选择一个收件人，再点击左下角「+」，应用会进入单人会话并打开附件选择器。未选择收件人或选择多个收件人时不能添加附件；批量发送只发送普通短信正文。\n\n10. 批量发送在哪里设置？是否收费？\n入口为「设置 → 批量发送」或首页绿色「+ → 批量发送」。同一页可选收件人（含 TXT/CSV 导入）、短信正文、发送 SIM 卡和发送间隔（立即 / 1–5 秒）；单次最多 30 个号码。会按运营商短信资费计费，长短信可能被拆分为多条；间隔只能降低短时间连续发送的压力，不能绕过运营商频率限制。\n\n11. 定时发送为什么可能不准时？\n入口为「设置 → 定时发送」，与批量发送间隔互不影响。Android 12 及以上需要允许精确闹钟权限。实际发送还受省电策略、设备是否开机、SIM 状态和运营商网络影响。\n\n12. 转发规则怎么用？\n入口为「转发 → 转发规则」，默认关闭。可按关键词、正则、来源 SIM 卡过滤短信，并指定规则作用的转发渠道。多个关键词可用逗号、竖线 |、分号或换行分隔，例如「验证码|快递|银行」。页面提供填写示例和规则测试。作用范围可选是否包含短信直发和短信远程发送。\n\n13. 短信远程发送是什么？\n入口为「转发 → 短信远程发送」，默认关闭，内含「短信远程指令」和「钉钉 Stream 远程指令」。短信远程命令格式：/短信发送 [SIM1|SIM2|默认|系统默认] 手机号 内容；需配置授权号码白名单。钉钉远程通过 Client ID / Client Secret 建立 Stream 长连接，群聊 @机器人 或私聊发送相同格式命令。命令短信不会进入正常转发流程，避免循环转发。\n\n14. 远程发送的回执是什么意思？\n「已提交发送」仅表示已交给系统短信栈；「发送成功/失败」来自系统回调；「已送达」来自运营商送达报告（许多运营商不提供或不可靠）。本地执行日志始终记录在「短信远程指令」页；启用「发送回执转发」后，还可推送到 PushPlus、钉钉等渠道（与正常短信转发独立）。\n\n15. 首页底部导航可以关闭吗？\n可以。在「设置 → 系统 → 显示首页底部导航」关闭。默认开启；关闭后首页只保留短信列表和绿色「+」按钮，仍可从右上角进入设置。返回首页后立即生效，无需重启应用。\n\n16. 如何重新同步或恢复短信？\n「设置 → 系统 → 短信同步管理」会重新读取系统短信库；短信很多时可能需要数分钟，建议保持应用前台。删除的会话会进入「最近删除」，可恢复或彻底删除，但系统短信库已被其他应用永久删除的数据无法保证恢复。\n\n17. 为什么 Debug 版不能直接升级正式版？\nDebug 版包名带 .debug 且签名不同，需要先卸载 Debug 版。正式版升级必须同时保持包名 com.helyu.smsforwarder 和正式签名证书一致；更换签名后 Android 不允许覆盖安装。\n\n18. 项目源码、版本和隐私说明在哪里？\n「关于」页面提供当前版本、项目仓库、酷安主页和第三方许可。本应用需要读取短信和联系人以完成短信应用功能；转发凭据属于敏感信息，请妥善保管设备和配置，不要将 Token、Webhook、邮箱密码或诊断日志公开分享。</string>
@@ -459,7 +472,7 @@
     <string name="sending">Sending…</string>
     <string name="pin_conversation">置顶</string>
     <string name="unpin_conversation">取消置顶</string>
-    <string name="forward_message">Forward</string>
+    <string name="forward_message">转发</string>
     <string name="compress_error">Unable to compress image to selected size</string>
     <!-- Attachments -->
     <string name="duplicate_item_warning">Duplicate item was not included</string>

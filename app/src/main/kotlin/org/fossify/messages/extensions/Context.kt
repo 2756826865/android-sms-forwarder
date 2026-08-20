@@ -59,6 +59,7 @@ import org.fossify.messages.helpers.MESSAGES_LIMIT
 import org.fossify.messages.helpers.MessagingCache
 import org.fossify.messages.helpers.NotificationHelper
 import org.fossify.messages.helpers.ShortcutHelper
+import org.fossify.messages.helpers.YellowPageLookup
 import org.fossify.messages.helpers.generateRandomId
 import org.fossify.messages.interfaces.AttachmentsDao
 import org.fossify.messages.interfaces.ConversationsDao
@@ -699,11 +700,11 @@ fun Context.getThreadContactNames(
             names.add(name)
         } else {
             val privateContact = privateContacts.firstOrNull { it.doesHavePhoneNumber(number) }
-            if (privateContact == null) {
-                names.add(name)
-            } else {
-                names.add(privateContact.name)
-            }
+            names.add(
+                privateContact?.name
+                    ?: YellowPageLookup.displayName(this, number)
+                    ?: number
+            )
         }
     }
     return names
@@ -786,31 +787,29 @@ fun Context.getSuggestedContacts(
 
 fun Context.getNameAndPhotoFromPhoneNumber(number: String): NamePhoto {
     MessagingCache.namePhoto.get(number)?.let { return it }
-    if (!hasPermission(PERMISSION_READ_CONTACTS)) {
-        return NamePhoto(number, null)
-    }
 
-    val uri = Uri.withAppendedPath(PhoneLookup.CONTENT_FILTER_URI, Uri.encode(number))
-    val projection = arrayOf(
-        PhoneLookup.DISPLAY_NAME,
-        PhoneLookup.PHOTO_URI
-    )
-
-    val result = try {
-        val cursor = contentResolver.query(uri, projection, null, null, null)
-        cursor.use {
-            if (cursor?.moveToFirst() == true) {
-                val name = cursor.getStringValue(PhoneLookup.DISPLAY_NAME)
-                val photoUri = cursor.getStringValue(PhoneLookup.PHOTO_URI)
-                NamePhoto(name, photoUri)
-            } else {
-                NamePhoto(number, null)
+    var photoUri: String? = null
+    var contactName: String? = null
+    if (hasPermission(PERMISSION_READ_CONTACTS)) {
+        val uri = Uri.withAppendedPath(PhoneLookup.CONTENT_FILTER_URI, Uri.encode(number))
+        val projection = arrayOf(
+            PhoneLookup.DISPLAY_NAME,
+            PhoneLookup.PHOTO_URI
+        )
+        try {
+            contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    contactName = cursor.getStringValue(PhoneLookup.DISPLAY_NAME)
+                    photoUri = cursor.getStringValue(PhoneLookup.PHOTO_URI)
+                }
             }
+        } catch (_: Exception) {
         }
-    } catch (_: Exception) {
-        NamePhoto(number, null)
     }
 
+    // Yellow pages are home-list only (getThreadContactNames); keep this contacts-only.
+    val resolvedName = contactName?.takeIf { it.isNotBlank() } ?: number
+    val result = NamePhoto(resolvedName, photoUri)
     MessagingCache.namePhoto.put(number, result)
     return result
 }

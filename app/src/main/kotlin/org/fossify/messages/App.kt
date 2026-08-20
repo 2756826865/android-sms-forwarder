@@ -13,6 +13,7 @@ import org.fossify.messages.extensions.rescheduleAllScheduledMessages
 import org.fossify.messages.helpers.MessagingCache
 import org.fossify.messages.messaging.SmsRecoveryWorker
 import org.fossify.messages.helpers.LowBatteryCheckWorker
+import org.fossify.messages.helpers.YellowPageLookup
 import org.fossify.messages.services.DingTalkRemoteControlService
 import org.fossify.messages.services.SmsKeepAliveService
 
@@ -40,6 +41,7 @@ class App : FossifyApp() {
 
         ensureBackgroundThread {
             rescheduleAllScheduledMessages()
+            YellowPageLookup.warmup(this@App)
         }
         SmsRecoveryWorker.schedule(this)
         LowBatteryCheckWorker.sync(this)

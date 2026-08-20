@@ -3,14 +3,20 @@ package org.fossify.messages.activities
 import android.content.Intent
 import android.os.Bundle
 import androidx.appcompat.app.AlertDialog
+import org.fossify.commons.dialogs.RadioGroupDialog
 import org.fossify.commons.extensions.toast
 import org.fossify.commons.extensions.viewBinding
 import org.fossify.commons.helpers.NavigationIcon
+import org.fossify.commons.models.RadioItem
 import org.fossify.messages.R
 import org.fossify.messages.databinding.ActivitySettingsBinding
 import org.fossify.messages.extensions.applyMiuiTopAppBarChrome
 import org.fossify.messages.extensions.config
 import org.fossify.messages.extensions.showSmsStyled
+import org.fossify.messages.helpers.HOME_LIST_DENSITY_10
+import org.fossify.messages.helpers.HOME_LIST_DENSITY_4
+import org.fossify.messages.helpers.HOME_LIST_DENSITY_6
+import org.fossify.messages.helpers.HOME_LIST_DENSITY_8
 import org.fossify.messages.helpers.liveisland.LiveIslandCoordinator
 import org.fossify.messages.helpers.refreshConversations
 
@@ -33,12 +39,14 @@ class SettingsActivity : SimpleActivity() {
         applyMiuiTopAppBarChrome(binding.settingsAppbar, binding.settingsToolbar)
         bindActions()
         bindToggles()
+        bindHomeListDensity()
     }
 
     override fun onResume() {
         super.onResume()
         applyMiuiTopAppBarChrome(binding.settingsAppbar, binding.settingsToolbar)
         refreshToggleStates()
+        updateHomeListDensitySummary()
     }
 
     private fun bindToggles() {
@@ -64,6 +72,27 @@ class SettingsActivity : SimpleActivity() {
             append('\n')
             append(getString(R.string.settings_live_island_summary))
         }
+    }
+
+    private fun bindHomeListDensity() {
+        binding.settingsHomeListDensityHolder.setOnClickListener {
+            val items = arrayListOf(
+                RadioItem(HOME_LIST_DENSITY_4, getString(R.string.settings_home_list_density_4)),
+                RadioItem(HOME_LIST_DENSITY_6, getString(R.string.settings_home_list_density_6)),
+                RadioItem(HOME_LIST_DENSITY_8, getString(R.string.settings_home_list_density_8)),
+                RadioItem(HOME_LIST_DENSITY_10, getString(R.string.settings_home_list_density_10)),
+            )
+            RadioGroupDialog(this, items, config.homeListDensity) {
+                config.homeListDensity = it as Int
+                updateHomeListDensitySummary()
+            }
+        }
+        updateHomeListDensitySummary()
+    }
+
+    private fun updateHomeListDensitySummary() {
+        binding.settingsHomeListDensitySummary.text =
+            getString(R.string.settings_home_list_density_summary, config.homeListDensity)
     }
 
     private fun bindActions() = binding.apply {

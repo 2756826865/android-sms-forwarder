@@ -4,6 +4,7 @@
     <color name="miui_action_blue">#159447</color>
     <color name="miui_fab_green">#1DCE38</color>
     <color name="home_fab_light_green">#5BD77B</color>
+    <color name="launcher_icon_green">#52E115</color>
     <color name="miui_page_background">#F7F7F7</color>
     <color name="miui_card_background">#FFFFFF</color>
     <color name="miui_primary_text">#111111</color>

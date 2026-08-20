@@ -5,7 +5,7 @@
     android:id="@+id/message_holder"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="@color/miui_page_background"
+    android:background="@color/miui_card_background"
     android:minHeight="58dp"
     android:paddingStart="12dp"
     android:paddingTop="4dp"

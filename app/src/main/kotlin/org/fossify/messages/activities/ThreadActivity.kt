@@ -285,11 +285,16 @@ class ThreadActivity : SimpleActivity() {
         setupTopAppBar(
             topAppBar = binding.threadAppbar,
             navigationIcon = NavigationIcon.Arrow,
-            topBarColor = getProperBackgroundColor()
+            topBarColor = ContextCompat.getColor(this, R.color.miui_page_background)
         )
-        binding.threadToolbar.setBackgroundColor(Color.WHITE)
-        binding.threadToolbar.setTitleTextColor(Color.rgb(17, 17, 17))
-        binding.threadHolder.setBackgroundColor(Color.WHITE)
+        val threadHeaderGray = ContextCompat.getColor(this, R.color.miui_page_background)
+        binding.threadToolbar.setBackgroundColor(threadHeaderGray)
+        binding.threadToolbar.setTitleTextColor(ContextCompat.getColor(this, R.color.miui_primary_text))
+        binding.threadToolbar.setSubtitleTextColor(ContextCompat.getColor(this, R.color.miui_primary_text))
+        @Suppress("DEPRECATION")
+        window.statusBarColor = threadHeaderGray
+        // Chat area gray like MIUI so white received bubbles are visible.
+        binding.threadHolder.setBackgroundColor(threadHeaderGray)
 
         isActivityVisible = true
 
@@ -1101,12 +1106,22 @@ class ThreadActivity : SimpleActivity() {
     }
 
     private fun setupThreadTitle() {
-        val title = conversation?.title
-        binding.threadToolbar.title = if (!title.isNullOrEmpty()) {
-            title
-        } else {
-            participants.getThreadTitle()
-        }
+        val title = conversation?.title?.takeIf { it.isNotEmpty() }
+            ?: participants.getThreadTitle()
+        val number = conversation?.phoneNumber
+            ?.ifEmpty { null }
+            ?: participants.firstOrNull()?.phoneNumbers?.firstOrNull()?.normalizedNumber
+            ?: participants.firstOrNull()?.phoneNumbers?.firstOrNull()?.value
+            ?: ""
+
+        binding.threadToolbar.title = title
+        // Like Huawei/MIUI: show phone under yellow-page / contact name when it differs.
+        val isGroup = conversation?.isGroupConversation == true || participants.size > 1
+        val showNumberAsSubtitle = !isGroup
+            && number.isNotBlank()
+            && !title.equals(number, ignoreCase = true)
+            && !title.contains(number)
+        binding.threadToolbar.subtitle = if (showNumberAsSubtitle) number else null
     }
 
     @SuppressLint("MissingPermission")
@@ -1389,7 +1404,7 @@ class ThreadActivity : SimpleActivity() {
             // or if the message is sent from a different SIM
             if (shouldShowThreadDateTime(message, prevDateTime, prevSIMId)) {
                 val simCardID = subscriptionIdToSimId[message.subscriptionId] ?: "?"
-                items.add(ThreadDateTime(message.date, simCardID))
+                items.add(ThreadDateTime(message.date, simCardID, message.isReceivedMessage()))
                 prevDateTime = message.date
             }
             items.add(message)
@@ -2119,16 +2134,8 @@ class ThreadActivity : SimpleActivity() {
         .toArrayList()
 
     private fun setupAttachmentPickerView() = binding.messageHolder.attachmentPicker.apply {
-        val buttonColors = arrayOf(
-            org.fossify.commons.R.color.md_red_500,
-            org.fossify.commons.R.color.md_brown_500,
-            org.fossify.commons.R.color.md_pink_500,
-            org.fossify.commons.R.color.md_purple_500,
-            org.fossify.commons.R.color.md_teal_500,
-            org.fossify.commons.R.color.md_green_500,
-            org.fossify.commons.R.color.md_indigo_500,
-            org.fossify.commons.R.color.md_blue_500
-        ).map { ResourcesCompat.getColor(resources, it, theme) }
+        // White tiles: use gray icons (old contrast-on-color logic made them white-on-white).
+        val iconGray = ContextCompat.getColor(this@ThreadActivity, R.color.miui_secondary_text)
         arrayOf(
             choosePhotoIcon,
             chooseVideoIcon,
@@ -2138,13 +2145,12 @@ class ThreadActivity : SimpleActivity() {
             pickFileIcon,
             pickContactIcon,
             scheduleMessageIcon
-        ).forEachIndexed { index, icon ->
-            val iconColor = buttonColors[index]
-            icon.background.applyColorFilter(iconColor)
-            icon.applyColorFilter(iconColor.getContrastColor())
+        ).forEach { icon ->
+            icon.background = null
+            icon.applyColorFilter(iconGray)
         }
 
-        val textColor = getProperTextColor()
+        val textColor = ContextCompat.getColor(this@ThreadActivity, R.color.miui_primary_text)
         arrayOf(
             choosePhotoText,
             chooseVideoText,

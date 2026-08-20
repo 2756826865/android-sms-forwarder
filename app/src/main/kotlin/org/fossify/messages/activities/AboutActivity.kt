@@ -52,7 +52,7 @@ class AboutActivity : SimpleActivity() {
 
     companion object {
         private const val PROJECT_REPOSITORY =
-            "https://github.com/2756826865/sms-forwarder-huawei"
+            "https://github.com/2756826865/android-sms-forwarder"
         private const val COOLAPK_PROFILE = "https://www.coolapk.com/u/3270136"
     }
 }

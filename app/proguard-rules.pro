@@ -1,3 +1,9 @@
+# FingerprintManager (reprint library, deprecated on Android P+)
+-dontwarn android.hardware.fingerprint.FingerprintManager$AuthenticationCallback
+-dontwarn android.hardware.fingerprint.FingerprintManager$AuthenticationResult
+-dontwarn android.hardware.fingerprint.FingerprintManager$CryptoObject
+-dontwarn android.hardware.fingerprint.FingerprintManager
+
 # OkHttp (DingTalk Stream WebSocket)
 -dontwarn okhttp3.**
 -dontwarn okio.**

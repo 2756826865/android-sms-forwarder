@@ -563,6 +563,6 @@ class DeviceCompatibilityActivity : SimpleActivity() {
         const val TEST_NOTIFICATION_ID = 19084
         const val HEALTH_CHECK_COUNT = 4
         const val ROLE_STATE_SETTLE_DELAY_MS = 500L
-        const val PROJECT_REPOSITORY_URL = "https://github.com/2756826865/sms-forwarder-huawei"
+        const val PROJECT_REPOSITORY_URL = "https://github.com/2756826865/android-sms-forwarder"
     }
 }
