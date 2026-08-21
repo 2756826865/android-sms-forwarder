@@ -78,6 +78,7 @@ class SmsRecoveryWorker(
                 val subIndex = cursor.getColumnIndex(Telephony.Sms.SUBSCRIPTION_ID)
                 val readIndex = cursor.getColumnIndexOrThrow(Telephony.Sms.READ)
 
+                val threadIdsToSync = mutableSetOf<Long>()
                 while (cursor.moveToNext()) {
                     val id = cursor.getLong(idIndex)
                     val address = cursor.getString(addressIndex).orEmpty()
@@ -93,8 +94,7 @@ class SmsRecoveryWorker(
                     newestSeen = maxOf(newestSeen, date)
                     if (id in localIds || address.isBlank()) continue
 
-                    android.util.Log.d("MessagingDebug", "SmsRecoveryWorker repairing message: id=$id, address=$address, threadId=$threadId")
-                    applicationContext.syncThreadToLocal(threadId)
+                    threadIdsToSync.add(threadId)
                     repairedAny = true
                     val uniqueId = "sms-$id"
                     val pushPlus = PushPlusConfig(applicationContext)
@@ -184,6 +184,11 @@ class SmsRecoveryWorker(
                             bitmap = applicationContext.getNotificationBitmap(photoUri),
                         )
                     }
+                }
+                
+                // 对本轮扫描出的 threadId 批量去重后执行同步，避免查询放大
+                threadIdsToSync.forEach { threadId ->
+                    applicationContext.syncThreadToLocal(threadId)
                 }
             }
         }.onFailure {

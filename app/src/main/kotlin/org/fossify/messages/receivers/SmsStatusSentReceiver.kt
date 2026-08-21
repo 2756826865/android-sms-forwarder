@@ -66,8 +66,7 @@ class SmsStatusSentReceiver : SendStatusReceiver() {
 
                 // Log local state before update
                 val localBefore = context.messagesDB.getMessageWithId(messageId)
-                Log.d("MessagingDebug", "SmsStatusSent LocalDB Before: msgId=$messageId, thread_id=${localBefore?.threadId}, address=${localBefore?.senderPhoneNumber}")
-
+                
                 // 1. Repair from Intent if local record is missing
                 if (localBefore == null && intentThreadId != 0L && intentAddress.isNotBlank()) {
                     val participant = SimpleContact(
@@ -75,8 +74,6 @@ class SmsStatusSentReceiver : SendStatusReceiver() {
                         phoneNumbers = arrayListOf(PhoneNumber(intentAddress, 0, "", intentAddress)),
                         birthdays = ArrayList(), anniversaries = ArrayList()
                     )
-                    // We don't have the body easily here without querying Android Provider, 
-                    // but we can try to fetch it from Provider now that some time has passed.
                     val androidBody = context.contentResolver.query(messageUri, arrayOf(Sms.BODY), null, null, null)?.use {
                         if (it.moveToFirst()) it.getString(0) else ""
                     } ?: ""
@@ -89,21 +86,17 @@ class SmsStatusSentReceiver : SendStatusReceiver() {
                         subscriptionId = intent.getIntExtra(SendStatusReceiver.EXTRA_SUB_ID, -1)
                     )
                     context.messagesDB.insertOrUpdate(repairedMsg)
-                    val verifyRepaired = context.messagesDB.getMessageWithId(messageId)
-                    Log.d("MessagingDebug", "LocalDB repaired from Intent: msgId=$messageId, threadId=${verifyRepaired?.threadId}, address=${verifyRepaired?.senderPhoneNumber}")
+                    Log.d("MessagingDebug", "LocalDB repaired from Intent: msgId=$messageId, threadId=$intentThreadId")
                 } else {
                     // 2. Standard update
                     context.messagesDB.updateType(messageId, type)
                 }
 
-                // Log local state after update
                 val localAfter = context.messagesDB.getMessageWithId(messageId)
-                Log.d("MessagingDebug", "SmsStatusSent LocalDB After: msgId=$messageId, thread_id=${localAfter?.threadId}, address=${localAfter?.senderPhoneNumber}")
                 
-                // 3. System Provider info (for comparison only)
+                // 3. System Provider info
                 val androidThreadId = context.getSmsThreadId(messageId)
                 val androidAddress = context.getMessageRecipientAddress(messageId)
-                Log.d("MessagingDebug", "SmsStatusSent AndroidProvider row: id=$messageId, thread_id=$androidThreadId, address=$androidAddress")
 
                 // 4. Final Sync/Refresh
                 val finalThreadId = when {

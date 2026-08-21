@@ -135,16 +135,15 @@ fun Context.getMessages(
     val messages = ArrayList<Message>()
 
     // 优先尝试按 threadId 查询
-    android.util.Log.d("MessagingDebug", "getMessages query: threadId=$threadId, address=$address")
     queryCursor(uri, projection, selection, selectionArgs, sortOrder, showErrors = true) { cursor ->
         parseSmsFromCursor(cursor, messages, blockStatus, blockedNumbers)
     }
 
     // 小米/HyperOS 兼容性兜底：
-    // 如果传入了号码，且 (threadId 结果少 或 是短号码)，则强制按 address 直接查询
+    // 修改策略：只有当主查询（按 ID）确实没有返回任何消息，且提供了号码时，才触发按号码的全库查询。
+    // 这避免了短号码（服务号）每次查询都触发无意义的 fallback。
     val targetAddress = address ?: if (threadId != 0L) getPhoneNumbersFromSmsTable(threadId).firstOrNull() else null
-    if (targetAddress != null && (messages.size < 2 || targetAddress.length < 11)) {
-        android.util.Log.d("MessagingDebug", "getMessages fallback query for address: $targetAddress")
+    if (messages.isEmpty() && !targetAddress.isNullOrBlank()) {
         val addrSelection = "${Sms.ADDRESS} = ? $rangeQuery"
         val addrArgs = arrayOf(targetAddress)
         contentResolver.query(uri, projection, addrSelection, addrArgs, sortOrder)?.use { cursor ->
@@ -153,7 +152,6 @@ fun Context.getMessages(
                 do {
                     val id = cursor.getLongValue(Sms._ID)
                     if (!existingIds.contains(id)) {
-                        android.util.Log.d("MessagingDebug", "getMessages found message via address: msgId=$id")
                         parseSmsFromCursor(cursor, messages, blockStatus, blockedNumbers, forceThreadId = threadId)
                     }
                 } while (cursor.moveToNext())
@@ -525,7 +523,9 @@ fun Context.getMmsAttachment(id: Long): MessageAttachment {
     val projection = arrayOf(
         Mms._ID,
         Mms.Part.CONTENT_TYPE,
-        Mms.Part.TEXT
+        Mms.Part.TEXT,
+        "name",
+        "fn"
     )
     val selection = "${Mms.Part.MSG_ID} = ?"
     val selectionArgs = arrayOf(id.toString())
@@ -543,6 +543,9 @@ fun Context.getMmsAttachment(id: Long): MessageAttachment {
                 .orEmpty()
         } else if (mimetype.startsWith("image/") || mimetype.startsWith("video/")) {
             val fileUri = Uri.withAppendedPath(uri, partId.toString())
+            val partName = cursor.getStringValue("name") ?: cursor.getStringValue("fn") ?: ""
+            val currentNames = attachmentNames
+            val attachmentName = currentNames?.getOrNull(attachmentCount) ?: partName
             messageAttachment.attachments.add(
                 Attachment(
                     id = partId,
@@ -551,11 +554,16 @@ fun Context.getMmsAttachment(id: Long): MessageAttachment {
                     mimetype = mimetype,
                     width = 0,
                     height = 0,
-                    filename = ""
+                    filename = attachmentName
                 )
             )
+            if (currentNames != null && attachmentCount < currentNames.size) {
+                attachmentCount++
+            }
         } else if (mimetype != "application/smil") {
-            val attachmentName = attachmentNames?.getOrNull(attachmentCount) ?: ""
+            val partName = cursor.getStringValue("name") ?: cursor.getStringValue("fn") ?: ""
+            val currentNames = attachmentNames
+            val attachmentName = currentNames?.getOrNull(attachmentCount) ?: partName
             val attachment = Attachment(
                 id = partId,
                 messageId = id,
@@ -566,15 +574,13 @@ fun Context.getMmsAttachment(id: Long): MessageAttachment {
                 filename = attachmentName
             )
             messageAttachment.attachments.add(attachment)
-            attachmentCount++
+            if (currentNames != null && attachmentCount < currentNames.size) {
+                attachmentCount++
+            }
         } else {
             val text = cursor.getStringValue(Mms.Part.TEXT)
-            attachmentNames = try {
-                parseAttachmentNames(text)
-            } catch (e: XmlPullParserException) {
-                e.printStackTrace()
-                null
-            }
+            // Malformed SMIL is handled internally by parseAttachmentNames and returns empty list
+            attachmentNames = parseAttachmentNames(text, mmsId = id)
         }
     }
 
@@ -729,7 +735,7 @@ fun Context.getPhoneNumbersFromSmsTable(threadId: Long): ArrayList<String> {
             }
         }
     } catch (e: Exception) {
-        e.printStackTrace()
+        android.util.Log.w("Context", "Error in getMessages: ${e.message}")
     }
     return numbers
 }
@@ -922,7 +928,7 @@ fun Context.deleteConversation(threadId: Long) {
     try {
         contentResolver.delete(uri, selection, selectionArgs)
     } catch (e: Exception) {
-        e.printStackTrace()
+        android.util.Log.w("Context", "Error in getMessages: ${e.message}")
     }
 
     conversationsDB.deleteThreadId(threadId)
@@ -1180,7 +1186,7 @@ fun Context.getAllDrafts(): HashMap<Long, String> {
             drafts[it.threadId] = it.body
         }
     } catch (e: Exception) {
-        e.printStackTrace()
+        android.util.Log.w("Context", "Error in getMessages: ${e.message}")
     }
 
     return drafts
@@ -1196,7 +1202,6 @@ fun Context.saveSmsDraft(body: String, threadId: Long) {
     try {
         draftsDB.insertOrUpdate(draft)
     } catch (e: Exception) {
-        e.printStackTrace()
         showErrorToast(e)
     }
 }
@@ -1357,7 +1362,7 @@ fun Context.renameConversation(conversation: Conversation, newTitle: String): Co
             shortcutHelper.createOrUpdateShortcut(updatedConv)
         }
     } catch (e: Exception) {
-        e.printStackTrace()
+        android.util.Log.w("Context", "Error in getMessages: ${e.message}")
     }
     return updatedConv
 }
@@ -1399,7 +1404,7 @@ fun Context.createTemporaryThread(
     try {
         conversationsDB.insertOrUpdate(conversation)
     } catch (e: Exception) {
-        e.printStackTrace()
+        android.util.Log.w("Context", "Error in getMessages: ${e.message}")
     }
 }
 

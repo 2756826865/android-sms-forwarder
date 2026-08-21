@@ -590,7 +590,8 @@ class MainActivity : SimpleActivity() {
             }
 
             val needsFullHistorySync = !config.fullHistorySyncedV2
-            conversations.forEach { conversation ->
+            // 性能优化：确保 threadId 唯一性，避免重复触发 syncThreadToLocal
+            conversations.distinctBy { it.threadId }.forEach { conversation ->
                 syncThreadToLocal(conversation.threadId, loadAll = needsFullHistorySync)
             }
             if (needsFullHistorySync) {

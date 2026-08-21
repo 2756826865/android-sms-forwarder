@@ -1755,20 +1755,12 @@ class ThreadActivity : SimpleActivity() {
                 sendMessageCompat(text, addresses, subscriptionId, attachments, messageToResend)
                 
                 val number = addresses.firstOrNull()
-                android.util.Log.d("MessagingDebug", "ThreadActivity reload START: threadId=$threadId, number=$number")
-                
-                // 2. 智能合并：获取 Provider 最新数据的同时，保留本地尚未归档的记录
                 val synced = syncThreadToLocal(threadId, address = number)
                 val localMsgs = messagesDB.getThreadMessages(threadId)
-                
-                android.util.Log.d("MessagingDebug", "Thread reload provider ids=${synced.map { it.id }}")
-                android.util.Log.d("MessagingDebug", "Thread reload local pending ids=${localMsgs.filter { it.type == android.provider.Telephony.Sms.MESSAGE_TYPE_OUTBOX || it.type == android.provider.Telephony.Sms.MESSAGE_TYPE_SENT }.map { it.id }}")
                 
                 // 以 ID 为准去重合并，LocalDB 的记录具有更高优先级（保留 pending 状态）
                 val byId = (localMsgs + synced).associateBy { it.id }.toMutableMap()
                 messages = byId.values.toList().toSortedMessages()
-                
-                android.util.Log.d("MessagingDebug", "Thread reload merged ids=${messages.map { it.id }}")
                 
                 val newItems = getThreadItems()
                 runOnUiThread {

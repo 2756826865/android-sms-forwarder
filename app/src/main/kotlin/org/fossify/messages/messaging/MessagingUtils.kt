@@ -53,10 +53,8 @@ class MessagingUtils(val context: Context) {
             throw SmsException(ERROR_PERSISTING_MESSAGE)
         }
 
-        val response: Uri?
         val values = ContentValues().apply {
             put(Sms.ADDRESS, dest)
-            android.util.Log.d("MessagingDebug", "insertSmsMessage: address=$dest, threadId=$resolvedThreadId")
             put(Sms.DATE, timestamp)
             put(Sms.DATE_SENT, timestamp)
             put(Sms.READ, 1)
@@ -77,6 +75,7 @@ class MessagingUtils(val context: Context) {
         }
 
         try {
+            val response: Uri?
             if (messageId != null) {
                 val selection = "${Sms._ID} = ?"
                 val selectionArgs = arrayOf(messageId.toString())
@@ -85,14 +84,14 @@ class MessagingUtils(val context: Context) {
             } else {
                 response = context.contentResolver.insert(Sms.CONTENT_URI, values)
             }
+            val inserted = response ?: throw SmsException(ERROR_PERSISTING_MESSAGE)
+            runCatching {
+                context.contentResolver.notifyChange(Telephony.MmsSms.CONTENT_CONVERSATIONS_URI, null)
+            }
+            return inserted
         } catch (e: Exception) {
             throw SmsException(ERROR_PERSISTING_MESSAGE, e)
         }
-        val inserted = response ?: throw SmsException(ERROR_PERSISTING_MESSAGE)
-        runCatching {
-            context.contentResolver.notifyChange(Telephony.MmsSms.CONTENT_CONVERSATIONS_URI, null)
-        }
-        return inserted
     }
 
     /** Send an SMS message and ensures LocalDB identity is established first. */
@@ -127,7 +126,6 @@ class MessagingUtils(val context: Context) {
             
             val insertedId = messageUri.lastPathSegment?.toLongOrNull() ?: 0L
             if (insertedId > 0L) {
-                android.util.Log.d("MessagingDebug", "LocalDB preinsert START: msgId=$insertedId, threadId=$threadId, address=$address")
                 val participant = SimpleContact(
                     rawId = 0, contactId = 0, name = address, photoUri = "",
                     phoneNumbers = arrayListOf(PhoneNumber(address, 0, "", address)),
@@ -143,10 +141,9 @@ class MessagingUtils(val context: Context) {
                 context.messagesDB.insertOrUpdate(localMessage)
                 val verify = context.messagesDB.getMessageWithId(insertedId)
                 val isVerified = verify != null && verify.threadId == threadId && verify.senderPhoneNumber == address
-                android.util.Log.d("MessagingDebug", "LocalDB preinsert VERIFY: exists=${verify != null}, threadId=${verify?.threadId}, address=${verify?.senderPhoneNumber}")
                 
                 if (!isVerified) {
-                    android.util.Log.e("MessagingDebug", "LocalDB preinsert VERIFY FAILED! Aborting send to prevent bubble disappearance.")
+                    android.util.Log.e("MessagingDebug", "LocalDB preinsert VERIFY FAILED! msgId=$insertedId, targetThreadId=$threadId")
                     return emptyList()
                 }
             }
@@ -156,7 +153,6 @@ class MessagingUtils(val context: Context) {
                     subId = subId, destination = address, body = text, serviceCenter = null,
                     requireDeliveryReport = requireDeliveryReport, messageUri = messageUri, threadId = threadId
                 )
-                android.util.Log.d("MessagingDebug", "sendSmsMessage: address=$address, threadId=$threadId, uri=$messageUri")
                 sentUris += messageUri
             } catch (e: Exception) {
                 updateSmsMessageSendingStatus(messageUri, Sms.Outbox.MESSAGE_TYPE_FAILED)
