@@ -93,6 +93,7 @@ class SmsRecoveryWorker(
                     newestSeen = maxOf(newestSeen, date)
                     if (id in localIds || address.isBlank()) continue
 
+                    android.util.Log.d("MessagingDebug", "SmsRecoveryWorker repairing message: id=$id, address=$address, threadId=$threadId")
                     applicationContext.syncThreadToLocal(threadId)
                     repairedAny = true
                     val uniqueId = "sms-$id"

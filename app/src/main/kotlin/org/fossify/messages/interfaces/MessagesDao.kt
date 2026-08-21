@@ -56,6 +56,9 @@ interface MessagesDao {
     @Query("SELECT * FROM messages WHERE body LIKE :text")
     fun getMessagesWithText(text: String): List<Message>
 
+    @Query("SELECT * FROM messages WHERE id = :id LIMIT 1")
+    fun getMessageWithId(id: Long): Message?
+
     @Query("UPDATE messages SET read = 1 WHERE id = :id")
     fun markRead(id: Long)
 

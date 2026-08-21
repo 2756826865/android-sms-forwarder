@@ -135,6 +135,7 @@ fun Context.getMessages(
     val messages = ArrayList<Message>()
 
     // 优先尝试按 threadId 查询
+    android.util.Log.d("MessagingDebug", "getMessages query: threadId=$threadId, address=$address")
     queryCursor(uri, projection, selection, selectionArgs, sortOrder, showErrors = true) { cursor ->
         parseSmsFromCursor(cursor, messages, blockStatus, blockedNumbers)
     }
@@ -143,6 +144,7 @@ fun Context.getMessages(
     // 如果传入了号码，且 (threadId 结果少 或 是短号码)，则强制按 address 直接查询
     val targetAddress = address ?: if (threadId != 0L) getPhoneNumbersFromSmsTable(threadId).firstOrNull() else null
     if (targetAddress != null && (messages.size < 2 || targetAddress.length < 11)) {
+        android.util.Log.d("MessagingDebug", "getMessages fallback query for address: $targetAddress")
         val addrSelection = "${Sms.ADDRESS} = ? $rangeQuery"
         val addrArgs = arrayOf(targetAddress)
         contentResolver.query(uri, projection, addrSelection, addrArgs, sortOrder)?.use { cursor ->
@@ -151,6 +153,7 @@ fun Context.getMessages(
                 do {
                     val id = cursor.getLongValue(Sms._ID)
                     if (!existingIds.contains(id)) {
+                        android.util.Log.d("MessagingDebug", "getMessages found message via address: msgId=$id")
                         parseSmsFromCursor(cursor, messages, blockStatus, blockedNumbers, forceThreadId = threadId)
                     }
                 } while (cursor.moveToNext())
@@ -160,30 +163,31 @@ fun Context.getMessages(
 
     messages.addAll(getMMS(threadId, sortOrder, dateFrom))
 
+    // 始终合并 LocalDB 记录，防止系统 Provider 暂时性数据缺失导致的 UI 气泡消失
+    val localMessages = try {
+        messagesDB.getThreadMessages(threadId)
+    } catch (_: Exception) {
+        emptyList()
+    }
+    
+    // 以 ID 为准合并，如果 Provider 还没有数据，则保留 LocalDB 里的
+    val allMessagesById = (messages + localMessages).associateBy { it.id }.values.toMutableList()
+    
     if (includeScheduledMessages) {
         try {
             val scheduledMessages = messagesDB.getScheduledThreadMessages(threadId)
-            messages.addAll(scheduledMessages)
+            allMessagesById.addAll(scheduledMessages)
         } catch (e: Exception) {
             e.printStackTrace()
         }
     }
 
-    val finalMessages = messages
+    val finalMessages = allMessagesById
         .filter { it.participants.isNotEmpty() }
         .filterNot { it.isScheduled && it.millis() < System.currentTimeMillis() }
         .sortedWith(compareBy<Message> { it.date }.thenBy { it.id })
         .takeLast(limit)
         .toMutableList() as ArrayList<Message>
-
-    if (finalMessages.isEmpty() && !includeScheduledMessages) {
-        try {
-            val localMessages = messagesDB.getThreadMessages(threadId)
-            if (localMessages.isNotEmpty()) {
-                finalMessages.addAll(localMessages)
-            }
-        } catch (_: Exception) { }
-    }
 
     return finalMessages
 }
@@ -331,10 +335,9 @@ fun Context.getMMSSender(msgId: Long): String {
     val selectionArgs = arrayOf(PduHeaders.FROM.toString())
 
     try {
-        val cursor = contentResolver.query(uri, projection, selection, selectionArgs, null)
-        cursor?.use {
-            if (it.moveToFirst()) {
-                return it.getStringValue(Mms.Addr.ADDRESS)
+        contentResolver.query(uri, projection, selection, selectionArgs, null)?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                return cursor.getStringValue(Mms.Addr.ADDRESS)
             }
         }
     } catch (_: Exception) {
@@ -603,9 +606,8 @@ fun Context.getThreadSnippet(threadId: Long): String {
         latestMms?.date?.toString() ?: "0"
     )
     try {
-        val cursor = contentResolver.query(uri, projection, selection, selectionArgs, sortOrder)
-        cursor?.use {
-            if (it.moveToFirst()) {
+        contentResolver.query(uri, projection, selection, selectionArgs, sortOrder)?.use { cursor ->
+            if (cursor.moveToFirst()) {
                 snippet = cursor.getStringValue(Sms.BODY)
             }
         }
@@ -624,10 +626,9 @@ fun Context.getMessageRecipientAddress(messageId: Long): String {
     val selectionArgs = arrayOf(messageId.toString())
 
     try {
-        val cursor = contentResolver.query(uri, projection, selection, selectionArgs, null)
-        cursor?.use {
-            if (it.moveToFirst()) {
-                return it.getStringValue(Sms.ADDRESS)
+        contentResolver.query(uri, projection, selection, selectionArgs, null)?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                return cursor.getStringValue(Sms.ADDRESS)
             }
         }
     } catch (_: Exception) {
@@ -766,10 +767,9 @@ fun Context.getPhoneNumberFromAddressId(canonicalAddressId: Int): String {
     val selection = "${Mms._ID} = ?"
     val selectionArgs = arrayOf(canonicalAddressId.toString())
     try {
-        val cursor = contentResolver.query(uri, projection, selection, selectionArgs, null)
-        cursor?.use {
-            if (it.moveToFirst()) {
-                return it.getStringValue(Mms.Addr.ADDRESS)
+        contentResolver.query(uri, projection, selection, selectionArgs, null)?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                return cursor.getStringValue(Mms.Addr.ADDRESS)
             }
         }
     } catch (e: Exception) {
@@ -1248,16 +1248,17 @@ fun Context.getFileSizeFromUri(uri: Uri): Long {
     if (uri.scheme.equals(ContentResolver.SCHEME_CONTENT)) {
         return contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)
             ?.use { cursor ->
-                // maybe shouldn't trust ContentResolver for size:
-                // https://stackoverflow.com/questions/48302972/content-resolver-returns-wrong-size
                 val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
                 if (sizeIndex == -1) {
                     return@use FILE_SIZE_NONE
                 }
-                cursor.moveToFirst()
-                return try {
-                    cursor.getLong(sizeIndex)
-                } catch (_: Throwable) {
+                if (cursor.moveToFirst()) {
+                    try {
+                        cursor.getLong(sizeIndex)
+                    } catch (_: Throwable) {
+                        FILE_SIZE_NONE
+                    }
+                } else {
                     FILE_SIZE_NONE
                 }
             } ?: FILE_SIZE_NONE

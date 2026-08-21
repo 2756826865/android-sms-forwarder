@@ -15,6 +15,11 @@ abstract class SendStatusReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         val resultCode = resultCode
+        val msgId = intent.data?.lastPathSegment
+        val threadId = intent.getLongExtra(EXTRA_THREAD_ID, -1L)
+        val address = intent.getStringExtra(EXTRA_ADDRESS)
+        android.util.Log.d("MessagingDebug", "SentIntent extras: msgId=$msgId, threadId=$threadId, address=$address")
+        
         HonorSmsCompatibility.complete(context, intent.getStringExtra(EXTRA_SEND_GUARD_KEY))
         ensureBackgroundThread {
             updateAndroidDatabase(context, intent, resultCode)
@@ -30,6 +35,8 @@ abstract class SendStatusReceiver : BroadcastReceiver() {
         const val EXTRA_ERROR_CODE = "errorCode"
         const val EXTRA_SUB_ID = "subId"
         const val EXTRA_SEND_GUARD_KEY = "sendGuardKey"
+        const val EXTRA_THREAD_ID = "threadId"
+        const val EXTRA_ADDRESS = "address"
 
         const val NO_ERROR_CODE = -1
     }

@@ -1750,15 +1750,26 @@ class ThreadActivity : SimpleActivity() {
 
         try {
             refreshedSinceSent = false
-            sendMessageCompat(text, addresses, subscriptionId, attachments, messageToResend)
             ensureBackgroundThread {
+                // 1. 在后台线程执行发送，避免 Room 主线程访问异常
+                sendMessageCompat(text, addresses, subscriptionId, attachments, messageToResend)
+                
                 val number = addresses.firstOrNull()
+                android.util.Log.d("MessagingDebug", "ThreadActivity reload START: threadId=$threadId, number=$number")
+                
+                // 2. 智能合并：获取 Provider 最新数据的同时，保留本地尚未归档的记录
                 val synced = syncThreadToLocal(threadId, address = number)
-                val byId = messages.associateBy { it.id }.toMutableMap()
-                for (message in synced) {
-                    byId[message.id] = message
-                }
-                messages = byId.values.toSortedMessages()
+                val localMsgs = messagesDB.getThreadMessages(threadId)
+                
+                android.util.Log.d("MessagingDebug", "Thread reload provider ids=${synced.map { it.id }}")
+                android.util.Log.d("MessagingDebug", "Thread reload local pending ids=${localMsgs.filter { it.type == android.provider.Telephony.Sms.MESSAGE_TYPE_OUTBOX || it.type == android.provider.Telephony.Sms.MESSAGE_TYPE_SENT }.map { it.id }}")
+                
+                // 以 ID 为准去重合并，LocalDB 的记录具有更高优先级（保留 pending 状态）
+                val byId = (localMsgs + synced).associateBy { it.id }.toMutableMap()
+                messages = byId.values.toList().toSortedMessages()
+                
+                android.util.Log.d("MessagingDebug", "Thread reload merged ids=${messages.map { it.id }}")
+                
                 val newItems = getThreadItems()
                 runOnUiThread {
                     threadItems = newItems
@@ -1770,13 +1781,8 @@ class ThreadActivity : SimpleActivity() {
                 refreshConversations()
             }
             clearCurrentMessage()
-
         } catch (e: Exception) {
             showErrorToast(e)
-        } catch (e: Error) {
-            showErrorToast(
-                e.localizedMessage ?: getString(org.fossify.commons.R.string.unknown_error_occurred)
-            )
         }
     }
 

@@ -24,6 +24,8 @@ import org.fossify.messages.helpers.refreshConversations
 import org.fossify.messages.helpers.refreshMessages
 import org.fossify.messages.remote.RemoteControlReceiptForwarder
 import org.fossify.messages.receivers.SendStatusReceiver
+import org.fossify.commons.models.SimpleContact
+import org.fossify.commons.models.PhoneNumber
 
 /** Handles updating databases and states when a SMS message is sent. */
 class SmsStatusSentReceiver : SendStatusReceiver() {
@@ -51,6 +53,9 @@ class SmsStatusSentReceiver : SendStatusReceiver() {
         Log.i(TAG, "updateAppDatabase: uri=$messageUri, resultCode=$receiverResultCode")
         if (messageUri != null) {
             val messageId = messageUri.lastPathSegment?.toLong() ?: 0L
+            val intentThreadId = intent.getLongExtra(SendStatusReceiver.EXTRA_THREAD_ID, 0L)
+            val intentAddress = intent.getStringExtra(SendStatusReceiver.EXTRA_ADDRESS) ?: ""
+
             ensureBackgroundThread {
                 val type = if (receiverResultCode == Activity.RESULT_OK) {
                     Sms.MESSAGE_TYPE_SENT
@@ -59,12 +64,63 @@ class SmsStatusSentReceiver : SendStatusReceiver() {
                     Sms.MESSAGE_TYPE_FAILED
                 }
 
-                context.messagesDB.updateType(messageId, type)
-                val threadId = context.getSmsThreadId(messageId)
-                if (threadId != 0L) {
-                    val address = context.getMessageRecipientAddress(messageId)
-                    context.syncThreadToLocal(threadId, address = address)
+                // Log local state before update
+                val localBefore = context.messagesDB.getMessageWithId(messageId)
+                Log.d("MessagingDebug", "SmsStatusSent LocalDB Before: msgId=$messageId, thread_id=${localBefore?.threadId}, address=${localBefore?.senderPhoneNumber}")
+
+                // 1. Repair from Intent if local record is missing
+                if (localBefore == null && intentThreadId != 0L && intentAddress.isNotBlank()) {
+                    val participant = SimpleContact(
+                        rawId = 0, contactId = 0, name = intentAddress, photoUri = "",
+                        phoneNumbers = arrayListOf(PhoneNumber(intentAddress, 0, "", intentAddress)),
+                        birthdays = ArrayList(), anniversaries = ArrayList()
+                    )
+                    // We don't have the body easily here without querying Android Provider, 
+                    // but we can try to fetch it from Provider now that some time has passed.
+                    val androidBody = context.contentResolver.query(messageUri, arrayOf(Sms.BODY), null, null, null)?.use {
+                        if (it.moveToFirst()) it.getString(0) else ""
+                    } ?: ""
+                    
+                    val repairedMsg = org.fossify.messages.models.Message(
+                        id = messageId, body = androidBody, type = type, status = Sms.STATUS_NONE,
+                        participants = arrayListOf(participant), date = (System.currentTimeMillis() / 1000).toInt(),
+                        read = true, threadId = intentThreadId, isMMS = false, attachment = null,
+                        senderPhoneNumber = intentAddress, senderName = intentAddress, senderPhotoUri = "",
+                        subscriptionId = intent.getIntExtra(SendStatusReceiver.EXTRA_SUB_ID, -1)
+                    )
+                    context.messagesDB.insertOrUpdate(repairedMsg)
+                    val verifyRepaired = context.messagesDB.getMessageWithId(messageId)
+                    Log.d("MessagingDebug", "LocalDB repaired from Intent: msgId=$messageId, threadId=${verifyRepaired?.threadId}, address=${verifyRepaired?.senderPhoneNumber}")
+                } else {
+                    // 2. Standard update
+                    context.messagesDB.updateType(messageId, type)
                 }
+
+                // Log local state after update
+                val localAfter = context.messagesDB.getMessageWithId(messageId)
+                Log.d("MessagingDebug", "SmsStatusSent LocalDB After: msgId=$messageId, thread_id=${localAfter?.threadId}, address=${localAfter?.senderPhoneNumber}")
+                
+                // 3. System Provider info (for comparison only)
+                val androidThreadId = context.getSmsThreadId(messageId)
+                val androidAddress = context.getMessageRecipientAddress(messageId)
+                Log.d("MessagingDebug", "SmsStatusSent AndroidProvider row: id=$messageId, thread_id=$androidThreadId, address=$androidAddress")
+
+                // 4. Final Sync/Refresh
+                val finalThreadId = when {
+                    androidThreadId != 0L -> androidThreadId
+                    localAfter?.threadId != null && localAfter.threadId != 0L -> localAfter.threadId
+                    else -> intentThreadId
+                }
+                val finalAddress = when {
+                    androidAddress.isNotBlank() -> androidAddress
+                    localAfter?.senderPhoneNumber != null && localAfter.senderPhoneNumber.isNotBlank() -> localAfter.senderPhoneNumber
+                    else -> intentAddress
+                }
+
+                if (finalThreadId != 0L) {
+                    context.syncThreadToLocal(finalThreadId, address = finalAddress)
+                }
+
                 RemoteControlReceiptForwarder.onSendResult(
                     context = context,
                     messageId = messageId,

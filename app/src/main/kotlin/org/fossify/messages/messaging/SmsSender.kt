@@ -21,15 +21,13 @@ class SmsSender(val app: Application) {
     // This should be called from a RequestWriter queue thread
     fun sendMessage(
         subId: Int, destination: String, body: String, serviceCenter: String?,
-        requireDeliveryReport: Boolean, messageUri: Uri
+        requireDeliveryReport: Boolean, messageUri: Uri, threadId: Long = 0L
     ) {
         var dest = destination
         if (body.isEmpty()) {
             throw IllegalArgumentException("SmsSender: empty text message")
         }
         // remove spaces and dashes from destination number
-        // (e.g. "801 555 1212" -> "8015551212")
-        // (e.g. "+8211-123-4567" -> "+82111234567")
         dest = PhoneNumberUtils.stripSeparators(dest)
 
         if (dest.isEmpty()) {
@@ -43,7 +41,7 @@ class SmsSender(val app: Application) {
         }
         // Actually send the sms
         sendInternal(
-            subId, dest, messages, serviceCenter, requireDeliveryReport, messageUri
+            subId, dest, messages, serviceCenter, requireDeliveryReport, messageUri, threadId
         )
     }
 
@@ -51,7 +49,7 @@ class SmsSender(val app: Application) {
     private fun sendInternal(
         subId: Int, dest: String,
         messages: ArrayList<String>, serviceCenter: String?,
-        requireDeliveryReport: Boolean, messageUri: Uri
+        requireDeliveryReport: Boolean, messageUri: Uri, threadId: Long
     ) {
         val smsManager = getSmsManager(app, subId)
         val messageCount = messages.size
@@ -89,7 +87,7 @@ class SmsSender(val app: Application) {
                     PendingIntent.getBroadcast(
                         app,
                         partId,
-                        getSendStatusIntent(messageUri, subId, guardKey),
+                        getSendStatusIntent(messageUri, subId, guardKey, threadId, dest),
                         flags
                     )
                 )
@@ -124,9 +122,11 @@ class SmsSender(val app: Application) {
         }
     }
 
-    private fun getSendStatusIntent(requestUri: Uri, subId: Int, guardKey: String): Intent {
+    private fun getSendStatusIntent(requestUri: Uri, subId: Int, guardKey: String, threadId: Long, address: String): Intent {
         val intent = Intent(SendStatusReceiver.SMS_SENT_ACTION, requestUri, app, SmsStatusSentReceiver::class.java)
         intent.putExtra(SendStatusReceiver.EXTRA_SUB_ID, subId)
+        intent.putExtra(SendStatusReceiver.EXTRA_THREAD_ID, threadId)
+        intent.putExtra(SendStatusReceiver.EXTRA_ADDRESS, address)
         if (guardKey.isNotBlank()) intent.putExtra(SendStatusReceiver.EXTRA_SEND_GUARD_KEY, guardKey)
         return intent
     }

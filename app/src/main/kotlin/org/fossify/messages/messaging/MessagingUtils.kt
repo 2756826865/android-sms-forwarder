@@ -34,8 +34,6 @@ class MessagingUtils(val context: Context) {
 
     /**
      * Insert an SMS to the given URI with thread_id specified.
-     * Xiaomi/HyperOS conversation UI keys off sim_id + thread_id; without them
-     * outbound rows can sit in a send queue and never appear under the recipient thread.
      */
     private fun insertSmsMessage(
         subId: Int,
@@ -58,6 +56,7 @@ class MessagingUtils(val context: Context) {
         val response: Uri?
         val values = ContentValues().apply {
             put(Sms.ADDRESS, dest)
+            android.util.Log.d("MessagingDebug", "insertSmsMessage: address=$dest, threadId=$resolvedThreadId")
             put(Sms.DATE, timestamp)
             put(Sms.DATE_SENT, timestamp)
             put(Sms.READ, 1)
@@ -66,35 +65,23 @@ class MessagingUtils(val context: Context) {
             put(Sms.THREAD_ID, resolvedThreadId)
             put(Sms.CREATOR, context.packageName)
 
-            // insert subscription id only if it is a valid one.
             if (subId != Settings.DEFAULT_SUBSCRIPTION_ID) {
                 put(Sms.SUBSCRIPTION_ID, subId)
-                // HyperOS/MIUI uses sim_id (often same numeric value as subscription_id).
                 if (needsOemSimIdColumn()) {
                     put(COLUMN_SIM_ID, subId.toLong())
                 }
             }
 
-            if (status != Sms.STATUS_NONE) {
-                put(Sms.STATUS, status)
-            }
-            if (type != Sms.MESSAGE_TYPE_ALL) {
-                put(Sms.TYPE, type)
-            }
+            if (status != Sms.STATUS_NONE) put(Sms.STATUS, status)
+            if (type != Sms.MESSAGE_TYPE_ALL) put(Sms.TYPE, type)
         }
 
         try {
             if (messageId != null) {
                 val selection = "${Sms._ID} = ?"
                 val selectionArgs = arrayOf(messageId.toString())
-                val count = context.contentResolver.update(
-                    Sms.CONTENT_URI, values, selection, selectionArgs
-                )
-                response = if (count > 0) {
-                    Uri.parse("${Sms.CONTENT_URI}/${messageId}")
-                } else {
-                    null
-                }
+                val count = context.contentResolver.update(Sms.CONTENT_URI, values, selection, selectionArgs)
+                response = if (count > 0) Uri.parse("${Sms.CONTENT_URI}/${messageId}") else null
             } else {
                 response = context.contentResolver.insert(Sms.CONTENT_URI, values)
             }
@@ -108,7 +95,7 @@ class MessagingUtils(val context: Context) {
         return inserted
     }
 
-    /** Send an SMS message given [text] and [addresses]. A [SmsException] is thrown in case any errors occur. */
+    /** Send an SMS message and ensures LocalDB identity is established first. */
     fun sendSmsMessage(
         text: String,
         addresses: Set<String>,
@@ -118,7 +105,6 @@ class MessagingUtils(val context: Context) {
     ): List<Uri> {
         val sentUris = mutableListOf<Uri>()
         if (addresses.size > 1) {
-            // insert a dummy message for this thread if it is a group message
             val broadCastThreadId = context.getThreadId(addresses.toSet())
             val mergedAddresses = addresses.joinToString(ADDRESS_SEPARATOR)
             insertSmsMessage(
@@ -131,45 +117,50 @@ class MessagingUtils(val context: Context) {
 
         for (address in addresses) {
             val threadId = context.getThreadId(address)
-            if (threadId <= 0L) {
-                throw SmsException(ERROR_PERSISTING_MESSAGE)
-            }
+            if (threadId <= 0L) throw SmsException(ERROR_PERSISTING_MESSAGE)
+            
             val messageUri = insertSmsMessage(
                 subId = subId, dest = address, text = text,
                 timestamp = System.currentTimeMillis(), threadId = threadId,
                 messageId = messageId
             )
-            // Sync sent message to local messagesDB so ThreadActivity can display it
+            
             val insertedId = messageUri.lastPathSegment?.toLongOrNull() ?: 0L
             if (insertedId > 0L) {
+                android.util.Log.d("MessagingDebug", "LocalDB preinsert START: msgId=$insertedId, threadId=$threadId, address=$address")
                 val participant = SimpleContact(
                     rawId = 0, contactId = 0, name = address, photoUri = "",
-                    phoneNumbers = arrayListOf(
-                        PhoneNumber(value = address, type = 0, label = "", normalizedNumber = address)
-                    ),
+                    phoneNumbers = arrayListOf(PhoneNumber(address, 0, "", address)),
                     birthdays = ArrayList(), anniversaries = ArrayList()
                 )
                 val localMessage = org.fossify.messages.models.Message(
-                    id = insertedId, body = text,
-                    type = Sms.MESSAGE_TYPE_SENT, // 既然已经写库了，先强制标记为 Sent 避免消失
-                    status = Sms.STATUS_NONE,
-                    participants = arrayListOf(participant),
-                    date = (System.currentTimeMillis() / 1000).toInt(),
+                    id = insertedId, body = text, type = Sms.MESSAGE_TYPE_SENT, status = Sms.STATUS_NONE,
+                    participants = arrayListOf(participant), date = (System.currentTimeMillis() / 1000).toInt(),
                     read = true, threadId = threadId, isMMS = false, attachment = null,
-                    senderPhoneNumber = address, senderName = address,
-                    senderPhotoUri = "", subscriptionId = subId
+                    senderPhoneNumber = address, senderName = address, senderPhotoUri = "", subscriptionId = subId
                 )
-                runCatching { context.messagesDB.insertOrUpdate(localMessage) }
+                
+                context.messagesDB.insertOrUpdate(localMessage)
+                val verify = context.messagesDB.getMessageWithId(insertedId)
+                val isVerified = verify != null && verify.threadId == threadId && verify.senderPhoneNumber == address
+                android.util.Log.d("MessagingDebug", "LocalDB preinsert VERIFY: exists=${verify != null}, threadId=${verify?.threadId}, address=${verify?.senderPhoneNumber}")
+                
+                if (!isVerified) {
+                    android.util.Log.e("MessagingDebug", "LocalDB preinsert VERIFY FAILED! Aborting send to prevent bubble disappearance.")
+                    return emptyList()
+                }
             }
+
             try {
                 context.smsSender.sendMessage(
                     subId = subId, destination = address, body = text, serviceCenter = null,
-                    requireDeliveryReport = requireDeliveryReport, messageUri = messageUri
+                    requireDeliveryReport = requireDeliveryReport, messageUri = messageUri, threadId = threadId
                 )
+                android.util.Log.d("MessagingDebug", "sendSmsMessage: address=$address, threadId=$threadId, uri=$messageUri")
                 sentUris += messageUri
             } catch (e: Exception) {
                 updateSmsMessageSendingStatus(messageUri, Sms.Outbox.MESSAGE_TYPE_FAILED)
-                throw e // propagate error to caller
+                throw e
             }
         }
         refreshConversations()
@@ -189,31 +180,23 @@ class MessagingUtils(val context: Context) {
         val resolver = context.contentResolver
         val values = ContentValues().apply {
             put(Sms.Outbox.TYPE, type)
-            if (type == Sms.MESSAGE_TYPE_SENT) {
-                put(Sms.DATE_SENT, System.currentTimeMillis())
-            }
+            if (type == Sms.MESSAGE_TYPE_SENT) put(Sms.DATE_SENT, System.currentTimeMillis())
         }
 
         try {
             if (messageUri != null) {
                 resolver.update(messageUri, values, null, null)
             } else {
-                // mark latest sms as sent, need to check if this is still necessary (or reliable)
-                // as this was taken from android-smsmms. The messageUri shouldn't be null anyway
                 val cursor = resolver.query(Sms.Outbox.CONTENT_URI, null, null, null, null)
                 cursor?.use {
-                    if (cursor.moveToFirst()) {
+                    if (it.moveToFirst()) {
                         @SuppressLint("Range")
-                        val id = cursor.getString(cursor.getColumnIndex(Sms.Outbox._ID))
-                        val selection = "${Sms._ID} = ?"
-                        val selectionArgs = arrayOf(id.toString())
-                        resolver.update(Sms.Outbox.CONTENT_URI, values, selection, selectionArgs)
+                        val id = it.getString(it.getColumnIndex(Sms.Outbox._ID))
+                        resolver.update(Sms.Outbox.CONTENT_URI, values, "${Sms._ID} = ?", arrayOf(id))
                     }
                 }
             }
-            runCatching {
-                resolver.notifyChange(Telephony.MmsSms.CONTENT_CONVERSATIONS_URI, null)
-            }
+            runCatching { resolver.notifyChange(Telephony.MmsSms.CONTENT_CONVERSATIONS_URI, null) }
         } catch (e: Exception) {
             context.showErrorToast(e)
         }
@@ -242,20 +225,12 @@ class MessagingUtils(val context: Context) {
                 val uri = attachment.getUri()
                 context.contentResolver.openInputStream(uri)?.use {
                     val bytes = it.readBytes()
-                    val mimeType = if (attachment.mimetype.isPlainTextMimeType()) {
-                        "application/txt"
-                    } else {
-                        attachment.mimetype
-                    }
-                    val name = attachment.filename
-                    message.addMedia(bytes, mimeType, name, name)
+                    val mimeType = if (attachment.mimetype.isPlainTextMimeType()) "application/txt" else attachment.mimetype
+                    message.addMedia(bytes, mimeType, attachment.filename, attachment.filename)
                 }
             } catch (e: Exception) {
                 if (propagateErrors) throw e
                 context.showErrorToast(e)
-            } catch (e: Error) {
-                if (propagateErrors) throw e
-                context.showErrorToast(e.localizedMessage ?: context.getString(org.fossify.commons.R.string.unknown_error_occurred))
             }
         }
 
@@ -284,14 +259,11 @@ class MessagingUtils(val context: Context) {
                 }
             }
             context.toast(msg = msg, length = Toast.LENGTH_LONG)
-        } else {
-            // no-op
         }
     }
 
     companion object {
         const val ADDRESS_SEPARATOR = "|"
-        /** MIUI/HyperOS telephony column; mirrors subscription_id for dual-SIM UI. */
         private const val COLUMN_SIM_ID = "sim_id"
     }
 }
