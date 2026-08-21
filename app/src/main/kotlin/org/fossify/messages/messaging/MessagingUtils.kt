@@ -6,6 +6,7 @@ import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.provider.Telephony
 import android.provider.Telephony.Sms
 import android.telephony.SmsManager
 import android.telephony.SmsMessage
@@ -19,15 +20,22 @@ import org.fossify.messages.R
 import org.fossify.messages.extensions.getThreadId
 import org.fossify.messages.extensions.isPlainTextMimeType
 import org.fossify.messages.extensions.smsSender
+import org.fossify.messages.helpers.DeviceCompatHelper
+import org.fossify.messages.helpers.refreshConversations
 import org.fossify.messages.messaging.SmsException.Companion.ERROR_PERSISTING_MESSAGE
 import org.fossify.messages.models.Attachment
 import org.fossify.messages.receivers.MmsSentReceiver
 import org.fossify.messages.receivers.SendStatusReceiver
+import org.fossify.commons.models.PhoneNumber
+import org.fossify.commons.models.SimpleContact
+import org.fossify.messages.extensions.messagesDB
 
 class MessagingUtils(val context: Context) {
 
     /**
      * Insert an SMS to the given URI with thread_id specified.
+     * Xiaomi/HyperOS conversation UI keys off sim_id + thread_id; without them
+     * outbound rows can sit in a send queue and never appear under the recipient thread.
      */
     private fun insertSmsMessage(
         subId: Int,
@@ -39,17 +47,32 @@ class MessagingUtils(val context: Context) {
         type: Int = Sms.MESSAGE_TYPE_OUTBOX,
         messageId: Long? = null
     ): Uri {
+        val resolvedThreadId = when {
+            threadId > 0L -> threadId
+            else -> context.getThreadId(dest)
+        }
+        if (resolvedThreadId <= 0L) {
+            throw SmsException(ERROR_PERSISTING_MESSAGE)
+        }
+
         val response: Uri?
         val values = ContentValues().apply {
             put(Sms.ADDRESS, dest)
             put(Sms.DATE, timestamp)
+            put(Sms.DATE_SENT, timestamp)
             put(Sms.READ, 1)
             put(Sms.SEEN, 1)
             put(Sms.BODY, text)
+            put(Sms.THREAD_ID, resolvedThreadId)
+            put(Sms.CREATOR, context.packageName)
 
             // insert subscription id only if it is a valid one.
             if (subId != Settings.DEFAULT_SUBSCRIPTION_ID) {
                 put(Sms.SUBSCRIPTION_ID, subId)
+                // HyperOS/MIUI uses sim_id (often same numeric value as subscription_id).
+                if (needsOemSimIdColumn()) {
+                    put(COLUMN_SIM_ID, subId.toLong())
+                }
             }
 
             if (status != Sms.STATUS_NONE) {
@@ -57,9 +80,6 @@ class MessagingUtils(val context: Context) {
             }
             if (type != Sms.MESSAGE_TYPE_ALL) {
                 put(Sms.TYPE, type)
-            }
-            if (threadId > 0L) {
-                put(Sms.THREAD_ID, threadId)
             }
         }
 
@@ -81,7 +101,11 @@ class MessagingUtils(val context: Context) {
         } catch (e: Exception) {
             throw SmsException(ERROR_PERSISTING_MESSAGE, e)
         }
-        return response ?: throw SmsException(ERROR_PERSISTING_MESSAGE)
+        val inserted = response ?: throw SmsException(ERROR_PERSISTING_MESSAGE)
+        runCatching {
+            context.contentResolver.notifyChange(Telephony.MmsSms.CONTENT_CONVERSATIONS_URI, null)
+        }
+        return inserted
     }
 
     /** Send an SMS message given [text] and [addresses]. A [SmsException] is thrown in case any errors occur. */
@@ -107,11 +131,36 @@ class MessagingUtils(val context: Context) {
 
         for (address in addresses) {
             val threadId = context.getThreadId(address)
+            if (threadId <= 0L) {
+                throw SmsException(ERROR_PERSISTING_MESSAGE)
+            }
             val messageUri = insertSmsMessage(
                 subId = subId, dest = address, text = text,
                 timestamp = System.currentTimeMillis(), threadId = threadId,
                 messageId = messageId
             )
+            // Sync sent message to local messagesDB so ThreadActivity can display it
+            val insertedId = messageUri.lastPathSegment?.toLongOrNull() ?: 0L
+            if (insertedId > 0L) {
+                val participant = SimpleContact(
+                    rawId = 0, contactId = 0, name = address, photoUri = "",
+                    phoneNumbers = arrayListOf(
+                        PhoneNumber(value = address, type = 0, label = "", normalizedNumber = address)
+                    ),
+                    birthdays = ArrayList(), anniversaries = ArrayList()
+                )
+                val localMessage = org.fossify.messages.models.Message(
+                    id = insertedId, body = text,
+                    type = Sms.MESSAGE_TYPE_SENT, // 既然已经写库了，先强制标记为 Sent 避免消失
+                    status = Sms.STATUS_NONE,
+                    participants = arrayListOf(participant),
+                    date = (System.currentTimeMillis() / 1000).toInt(),
+                    read = true, threadId = threadId, isMMS = false, attachment = null,
+                    senderPhoneNumber = address, senderName = address,
+                    senderPhotoUri = "", subscriptionId = subId
+                )
+                runCatching { context.messagesDB.insertOrUpdate(localMessage) }
+            }
             try {
                 context.smsSender.sendMessage(
                     subId = subId, destination = address, body = text, serviceCenter = null,
@@ -123,13 +172,26 @@ class MessagingUtils(val context: Context) {
                 throw e // propagate error to caller
             }
         }
+        refreshConversations()
         return sentUris
+    }
+
+    private fun needsOemSimIdColumn(): Boolean {
+        return when (DeviceCompatHelper.detectBrand()) {
+            DeviceCompatHelper.DeviceBrand.XIAOMI,
+            DeviceCompatHelper.DeviceBrand.REDMI,
+            DeviceCompatHelper.DeviceBrand.POCO -> true
+            else -> false
+        }
     }
 
     fun updateSmsMessageSendingStatus(messageUri: Uri?, type: Int) {
         val resolver = context.contentResolver
         val values = ContentValues().apply {
             put(Sms.Outbox.TYPE, type)
+            if (type == Sms.MESSAGE_TYPE_SENT) {
+                put(Sms.DATE_SENT, System.currentTimeMillis())
+            }
         }
 
         try {
@@ -148,6 +210,9 @@ class MessagingUtils(val context: Context) {
                         resolver.update(Sms.Outbox.CONTENT_URI, values, selection, selectionArgs)
                     }
                 }
+            }
+            runCatching {
+                resolver.notifyChange(Telephony.MmsSms.CONTENT_CONVERSATIONS_URI, null)
             }
         } catch (e: Exception) {
             context.showErrorToast(e)
@@ -226,5 +291,7 @@ class MessagingUtils(val context: Context) {
 
     companion object {
         const val ADDRESS_SEPARATOR = "|"
+        /** MIUI/HyperOS telephony column; mirrors subscription_id for dual-SIM UI. */
+        private const val COLUMN_SIM_ID = "sim_id"
     }
 }

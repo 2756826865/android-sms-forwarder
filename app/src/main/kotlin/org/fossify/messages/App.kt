@@ -13,7 +13,6 @@ import org.fossify.messages.extensions.rescheduleAllScheduledMessages
 import org.fossify.messages.helpers.MessagingCache
 import org.fossify.messages.messaging.SmsRecoveryWorker
 import org.fossify.messages.helpers.LowBatteryCheckWorker
-import org.fossify.messages.helpers.YellowPageLookup
 import org.fossify.messages.services.DingTalkRemoteControlService
 import org.fossify.messages.services.SmsKeepAliveService
 
@@ -25,6 +24,12 @@ class App : FossifyApp() {
         getSharedPreferences("Prefs", MODE_PRIVATE)
             .edit()
             .remove("app_sideloading_status")
+            .apply()
+        
+        // 彻底清理黄页功能残留的配置文件
+        getSharedPreferences("yellow_pages_meta", MODE_PRIVATE)
+            .edit()
+            .clear()
             .apply()
         if (hasPermission(PERMISSION_READ_CONTACTS)) {
             listOf(
@@ -41,8 +46,7 @@ class App : FossifyApp() {
 
         ensureBackgroundThread {
             rescheduleAllScheduledMessages()
-            YellowPageLookup.warmup(this@App)
-        }
+            }
         SmsRecoveryWorker.schedule(this)
         LowBatteryCheckWorker.sync(this)
         SmsKeepAliveService.ensureStarted(this)

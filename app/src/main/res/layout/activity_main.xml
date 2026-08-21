@@ -141,23 +141,44 @@
                 tools:text="14 条未读"
                 tools:visibility="visible" />
 
-            <org.fossify.commons.views.MyEditText
-                android:id="@+id/home_search"
+            <LinearLayout
+                android:id="@+id/home_search_container"
                 android:layout_width="match_parent"
                 android:layout_height="@dimen/home_search_height"
                 android:layout_marginTop="8dp"
                 android:background="@drawable/home_search_background"
-                android:drawableStart="@drawable/ic_search_vector"
-                android:drawablePadding="8dp"
-                android:fontFamily="sans-serif"
-                android:hint="@string/home_search_sms"
-                android:imeOptions="actionSearch"
-                android:inputType="text"
-                android:maxLines="1"
-                android:paddingHorizontal="12dp"
-                android:textColor="@color/miui_primary_text"
-                android:textColorHint="@color/miui_hint_text"
-                android:textSize="17sp" />
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp">
+
+                <ImageView
+                    android:id="@+id/home_search_icon"
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
+                    android:contentDescription="@null"
+                    android:importantForAccessibility="no"
+                    android:src="@drawable/ic_search_vector" />
+
+                <org.fossify.commons.views.MyEditText
+                    android:id="@+id/home_search"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_marginStart="8dp"
+                    android:layout_weight="1"
+                    android:background="@null"
+                    android:fontFamily="sans-serif"
+                    android:gravity="center_vertical"
+                    android:hint="@string/home_search_sms"
+                    android:imeOptions="actionSearch"
+                    android:includeFontPadding="false"
+                    android:inputType="text"
+                    android:maxLines="1"
+                    android:padding="0dp"
+                    android:textColor="@color/miui_primary_text"
+                    android:textColorHint="@color/miui_hint_text"
+                    android:textSize="15sp" />
+            </LinearLayout>
         </LinearLayout>
 
         <RelativeLayout
@@ -221,22 +242,29 @@
                             android:visibility="gone" />
                     </LinearLayout>
 
-                    <com.qtalk.recyclerviewfastscroller.RecyclerViewFastScroller
-                        android:id="@+id/conversations_fastscroller"
+                    <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+                        android:id="@+id/main_swipe_refresh"
                         android:layout_width="match_parent"
-                        android:layout_height="match_parent">
+                        android:layout_height="match_parent"
+                        android:layout_below="@id/conversations_progress_bar">
 
-                        <org.fossify.commons.views.MyRecyclerView
-                            android:id="@+id/conversations_list"
+                        <com.qtalk.recyclerviewfastscroller.RecyclerViewFastScroller
+                            android:id="@+id/conversations_fastscroller"
                             android:layout_width="match_parent"
-                            android:layout_height="match_parent"
-                            android:clipToPadding="false"
-                            android:layoutAnimation="@anim/layout_animation"
-                            android:overScrollMode="ifContentScrolls"
-                            android:paddingBottom="@dimen/home_content_bottom_padding"
-                            android:scrollbars="none"
-                            app:layoutManager="org.fossify.commons.views.MyLinearLayoutManager" />
-                    </com.qtalk.recyclerviewfastscroller.RecyclerViewFastScroller>
+                            android:layout_height="match_parent">
+
+                            <org.fossify.commons.views.MyRecyclerView
+                                android:id="@+id/conversations_list"
+                                android:layout_width="match_parent"
+                                android:layout_height="match_parent"
+                                android:clipToPadding="false"
+                                android:layoutAnimation="@anim/layout_animation"
+                                android:overScrollMode="ifContentScrolls"
+                                android:paddingBottom="@dimen/home_content_bottom_padding"
+                                android:scrollbars="none"
+                                app:layoutManager="org.fossify.commons.views.MyLinearLayoutManager" />
+                        </com.qtalk.recyclerviewfastscroller.RecyclerViewFastScroller>
+                    </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
                 </RelativeLayout>
 
                 <RelativeLayout

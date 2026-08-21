@@ -189,7 +189,7 @@ class SmsRecoveryWorker(
             return Result.retry()
         }
 
-        prefs.edit().putLong(KEY_LAST_CHECKED, maxOf(newestSeen, now)).apply()
+        prefs.edit().putLong(KEY_LAST_CHECKED, newestSeen).apply()
         if (repairedAny) {
             refreshMessages()
             refreshConversations()
@@ -244,9 +244,21 @@ class SmsRecoveryWorker(
         fun enqueueNow(context: Context) {
             WorkManager.getInstance(context).enqueueUniqueWork(
                 UNIQUE_NOW,
-                ExistingWorkPolicy.KEEP,
+                ExistingWorkPolicy.REPLACE,
                 OneTimeWorkRequestBuilder<SmsRecoveryWorker>().build(),
             )
+        }
+
+        /** Force a longer lookback (for screen-off swallow / missed SMS_DELIVER). */
+        fun enqueueFullResync(context: Context) {
+            val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            val now = System.currentTimeMillis()
+            val forcedSince = now - FULL_RESYNC_LOOKBACK_MS
+            val previous = prefs.getLong(KEY_LAST_CHECKED, 0L)
+            if (previous == 0L || previous > forcedSince) {
+                prefs.edit().putLong(KEY_LAST_CHECKED, forcedSince).commit()
+            }
+            enqueueNow(context)
         }
 
         fun markObserved(context: Context, receivedAt: Long) {
@@ -254,5 +266,7 @@ class SmsRecoveryWorker(
             val previous = prefs.getLong(KEY_LAST_CHECKED, 0L)
             if (receivedAt > previous) prefs.edit().putLong(KEY_LAST_CHECKED, receivedAt).apply()
         }
+
+        private const val FULL_RESYNC_LOOKBACK_MS = 24 * 60 * 60 * 1000L
     }
 }

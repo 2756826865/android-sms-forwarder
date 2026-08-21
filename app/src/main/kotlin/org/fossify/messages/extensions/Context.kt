@@ -59,7 +59,6 @@ import org.fossify.messages.helpers.MESSAGES_LIMIT
 import org.fossify.messages.helpers.MessagingCache
 import org.fossify.messages.helpers.NotificationHelper
 import org.fossify.messages.helpers.ShortcutHelper
-import org.fossify.messages.helpers.YellowPageLookup
 import org.fossify.messages.helpers.generateRandomId
 import org.fossify.messages.interfaces.AttachmentsDao
 import org.fossify.messages.interfaces.ConversationsDao
@@ -115,21 +114,15 @@ val Context.shortcutHelper get() = ShortcutHelper(this)
 
 fun Context.getMessages(
     threadId: Long,
+    address: String? = null,
     dateFrom: Int = -1,
     includeScheduledMessages: Boolean = true,
     limit: Int = MESSAGES_LIMIT,
 ): ArrayList<Message> {
     val uri = Sms.CONTENT_URI
     val projection = arrayOf(
-        Sms._ID,
-        Sms.BODY,
-        Sms.TYPE,
-        Sms.ADDRESS,
-        Sms.DATE,
-        Sms.READ,
-        Sms.THREAD_ID,
-        Sms.SUBSCRIPTION_ID,
-        Sms.STATUS
+        Sms._ID, Sms.BODY, Sms.TYPE, Sms.ADDRESS, Sms.DATE, Sms.READ,
+        Sms.THREAD_ID, Sms.SUBSCRIPTION_ID, Sms.STATUS
     )
 
     val rangeQuery = if (dateFrom == -1) "" else "AND ${Sms.DATE} < ${dateFrom.toLong() * 1000}"
@@ -139,61 +132,30 @@ fun Context.getMessages(
 
     val blockStatus = HashMap<String, Boolean>()
     val blockedNumbers = getBlockedNumbers()
-    var messages = ArrayList<Message>()
+    val messages = ArrayList<Message>()
+
+    // 优先尝试按 threadId 查询
     queryCursor(uri, projection, selection, selectionArgs, sortOrder, showErrors = true) { cursor ->
-        val senderNumber = cursor.getStringValue(Sms.ADDRESS) ?: return@queryCursor
-        val isNumberBlocked = blockStatus.getOrPut(senderNumber) { isNumberBlocked(senderNumber, blockedNumbers) }
-        if (isNumberBlocked) {
-            return@queryCursor
-        }
+        parseSmsFromCursor(cursor, messages, blockStatus, blockedNumbers)
+    }
 
-        val id = cursor.getLongValue(Sms._ID)
-        val body = cursor.getStringValue(Sms.BODY)
-        val type = cursor.getIntValue(Sms.TYPE)
-        val namePhoto = getNameAndPhotoFromPhoneNumber(senderNumber)
-        val senderName = namePhoto.name
-        val photoUri = namePhoto.photoUri ?: ""
-        val date = (cursor.getLongValue(Sms.DATE) / 1000).toInt()
-        val read = cursor.getIntValue(Sms.READ) == 1
-        val thread = cursor.getLongValue(Sms.THREAD_ID)
-        val subscriptionId = cursor.getIntValueOr(
-            key = Sms.SUBSCRIPTION_ID,
-            defaultValue = SubscriptionManager.INVALID_SUBSCRIPTION_ID
-        )
-
-        val status = cursor.getIntValue(Sms.STATUS)
-        val participants = senderNumber.split(ADDRESS_SEPARATOR).map { number ->
-            val phoneNumber = PhoneNumber(number, 0, "", number)
-            val participantPhoto = getNameAndPhotoFromPhoneNumber(number)
-            SimpleContact(
-                rawId = 0,
-                contactId = 0,
-                name = participantPhoto.name,
-                photoUri = photoUri,
-                phoneNumbers = arrayListOf(phoneNumber),
-                birthdays = ArrayList(),
-                anniversaries = ArrayList()
-            )
+    // 小米/HyperOS 兼容性兜底：
+    // 如果传入了号码，且 (threadId 结果少 或 是短号码)，则强制按 address 直接查询
+    val targetAddress = address ?: if (threadId != 0L) getPhoneNumbersFromSmsTable(threadId).firstOrNull() else null
+    if (targetAddress != null && (messages.size < 2 || targetAddress.length < 11)) {
+        val addrSelection = "${Sms.ADDRESS} = ? $rangeQuery"
+        val addrArgs = arrayOf(targetAddress)
+        contentResolver.query(uri, projection, addrSelection, addrArgs, sortOrder)?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                val existingIds = messages.map { it.id }.toSet()
+                do {
+                    val id = cursor.getLongValue(Sms._ID)
+                    if (!existingIds.contains(id)) {
+                        parseSmsFromCursor(cursor, messages, blockStatus, blockedNumbers, forceThreadId = threadId)
+                    }
+                } while (cursor.moveToNext())
+            }
         }
-        val isMMS = false
-        val message =
-            Message(
-                id = id,
-                body = body,
-                type = type,
-                status = status,
-                participants = ArrayList(participants),
-                date = date,
-                read = read,
-                threadId = thread,
-                isMMS = isMMS,
-                attachment = null,
-                senderPhoneNumber = senderNumber,
-                senderName = senderName,
-                senderPhotoUri = photoUri,
-                subscriptionId = subscriptionId
-            )
-        messages.add(message)
     }
 
     messages.addAll(getMMS(threadId, sortOrder, dateFrom))
@@ -207,14 +169,62 @@ fun Context.getMessages(
         }
     }
 
-    messages = messages
+    val finalMessages = messages
         .filter { it.participants.isNotEmpty() }
         .filterNot { it.isScheduled && it.millis() < System.currentTimeMillis() }
         .sortedWith(compareBy<Message> { it.date }.thenBy { it.id })
         .takeLast(limit)
         .toMutableList() as ArrayList<Message>
 
-    return messages
+    if (finalMessages.isEmpty() && !includeScheduledMessages) {
+        try {
+            val localMessages = messagesDB.getThreadMessages(threadId)
+            if (localMessages.isNotEmpty()) {
+                finalMessages.addAll(localMessages)
+            }
+        } catch (_: Exception) { }
+    }
+
+    return finalMessages
+}
+
+private fun Context.parseSmsFromCursor(
+    cursor: Cursor,
+    messages: ArrayList<Message>,
+    blockStatus: HashMap<String, Boolean>,
+    blockedNumbers: ArrayList<org.fossify.commons.models.BlockedNumber>,
+    forceThreadId: Long? = null
+) {
+    val senderNumber = cursor.getStringValue(Sms.ADDRESS) ?: return
+    val isNumberBlocked = blockStatus.getOrPut(senderNumber) { isNumberBlocked(senderNumber, blockedNumbers) }
+    if (isNumberBlocked) return
+
+    val id = cursor.getLongValue(Sms._ID)
+    val body = cursor.getStringValue(Sms.BODY) ?: ""
+    val type = cursor.getIntValue(Sms.TYPE)
+    val namePhoto = getNameAndPhotoFromPhoneNumber(senderNumber)
+    val date = (cursor.getLongValue(Sms.DATE) / 1000).toInt()
+    val read = cursor.getIntValue(Sms.READ) == 1
+    val thread = forceThreadId ?: cursor.getLongValue(Sms.THREAD_ID)
+    val subscriptionId = cursor.getIntValueOr(Sms.SUBSCRIPTION_ID, SubscriptionManager.INVALID_SUBSCRIPTION_ID)
+    val status = cursor.getIntValue(Sms.STATUS)
+
+    val participants = senderNumber.split(ADDRESS_SEPARATOR).map { number ->
+        val participantPhoto = getNameAndPhotoFromPhoneNumber(number)
+        SimpleContact(
+            rawId = 0, contactId = 0, name = participantPhoto.name, photoUri = participantPhoto.photoUri ?: "",
+            phoneNumbers = arrayListOf(PhoneNumber(number, 0, "", number)),
+            birthdays = ArrayList(), anniversaries = ArrayList()
+        )
+    }
+
+    messages.add(Message(
+        id = id, body = body, type = type, status = status,
+        participants = ArrayList(participants), date = date, read = read,
+        threadId = thread, isMMS = false, attachment = null,
+        senderPhoneNumber = senderNumber, senderName = namePhoto.name,
+        senderPhotoUri = namePhoto.photoUri ?: "", subscriptionId = subscriptionId
+    ))
 }
 
 // as soon as a message contains multiple recipients it counts as an MMS instead of SMS
@@ -261,14 +271,24 @@ fun Context.getMMS(
         val participants = getThreadParticipants(threadId, contactsMap)
 
         val isMMS = true
-        val attachment = getMmsAttachment(mmsId)
+        val attachment = try {
+            getMmsAttachment(mmsId)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            MessageAttachment(mmsId, "", arrayListOf())
+        }
         val body = attachment.text
         var senderNumber = ""
         var senderName = ""
         var senderPhotoUri = ""
 
         if (type != Mms.MESSAGE_BOX_SENT && type != Mms.MESSAGE_BOX_FAILED) {
-            senderNumber = getMMSSender(mmsId)
+            senderNumber = try {
+                getMMSSender(mmsId)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                ""
+            }
             val namePhoto = getNameAndPhotoFromPhoneNumber(senderNumber)
             senderName = namePhoto.name
             senderPhotoUri = namePhoto.photoUri ?: ""
@@ -404,7 +424,13 @@ fun Context.getConversations(
             val rawIds = cursor.getStringValue(Threads.RECIPIENT_IDS)
             val recipientIds =
                 rawIds.split(" ").filter { it.areDigitsOnly() }.map { it.toInt() }.toMutableList()
-            val phoneNumbers = getThreadPhoneNumbers(recipientIds)
+            var phoneNumbers = getThreadPhoneNumbers(recipientIds)
+
+            // Fallback: on some OEMs (Xiaomi/HyperOS) RECIPIENT_IDS is empty for short codes
+            if (phoneNumbers.isEmpty()) {
+                phoneNumbers = getPhoneNumbersFromSmsTable(id)
+            }
+
             if (phoneNumbers.isEmpty() || phoneNumbers.any {
                     isNumberBlocked(
                         it,
@@ -579,7 +605,7 @@ fun Context.getThreadSnippet(threadId: Long): String {
     try {
         val cursor = contentResolver.query(uri, projection, selection, selectionArgs, sortOrder)
         cursor?.use {
-            if (cursor.moveToFirst()) {
+            if (it.moveToFirst()) {
                 snippet = cursor.getStringValue(Sms.BODY)
             }
         }
@@ -600,8 +626,8 @@ fun Context.getMessageRecipientAddress(messageId: Long): String {
     try {
         val cursor = contentResolver.query(uri, projection, selection, selectionArgs, null)
         cursor?.use {
-            if (cursor.moveToFirst()) {
-                return cursor.getStringValue(Sms.ADDRESS)
+            if (it.moveToFirst()) {
+                return it.getStringValue(Sms.ADDRESS)
             }
         }
     } catch (_: Exception) {
@@ -683,6 +709,30 @@ fun Context.getThreadPhoneNumbers(recipientIds: List<Int>): ArrayList<String> {
     return numbers
 }
 
+/**
+ * Fallback for OEM builds where Threads.RECIPIENT_IDS is empty for short codes.
+ * Reads the ADDRESS column directly from the SMS table for the given thread.
+ */
+fun Context.getPhoneNumbersFromSmsTable(threadId: Long): ArrayList<String> {
+    val numbers = ArrayList<String>()
+    try {
+        val uri = Sms.CONTENT_URI
+        val projection = arrayOf(Sms.ADDRESS)
+        val selection = "${Sms.THREAD_ID} = ?"
+        val selectionArgs = arrayOf(threadId.toString())
+        val sortOrder = "${Sms.DATE} DESC LIMIT 1"
+        queryCursor(uri, projection, selection, selectionArgs, sortOrder, showErrors = true) { cursor ->
+            val address = cursor.getStringValue(Sms.ADDRESS)
+            if (!address.isNullOrBlank()) {
+                numbers.add(address)
+            }
+        }
+    } catch (e: Exception) {
+        e.printStackTrace()
+    }
+    return numbers
+}
+
 fun Context.getThreadContactNames(
     phoneNumbers: List<String>,
     privateContacts: ArrayList<SimpleContact>,
@@ -700,11 +750,8 @@ fun Context.getThreadContactNames(
             names.add(name)
         } else {
             val privateContact = privateContacts.firstOrNull { it.doesHavePhoneNumber(number) }
-            names.add(
-                privateContact?.name
-                    ?: YellowPageLookup.displayName(this, number)
-                    ?: number
-            )
+            // 彻底删除黄页功能：如果不是私有联系人，直接返回原始号码
+            names.add(privateContact?.name ?: number)
         }
     }
     return names
@@ -721,8 +768,8 @@ fun Context.getPhoneNumberFromAddressId(canonicalAddressId: Int): String {
     try {
         val cursor = contentResolver.query(uri, projection, selection, selectionArgs, null)
         cursor?.use {
-            if (cursor.moveToFirst()) {
-                return cursor.getStringValue(Mms.Addr.ADDRESS)
+            if (it.moveToFirst()) {
+                return it.getStringValue(Mms.Addr.ADDRESS)
             }
         }
     } catch (e: Exception) {
@@ -1276,11 +1323,13 @@ fun Context.createConversationFromMessage(message: Message): Conversation {
     )
 }
 
-fun Context.syncThreadToLocal(threadId: Long, loadAll: Boolean = false): List<Message> {
+fun Context.syncThreadToLocal(threadId: Long, address: String? = null, loadAll: Boolean = false): List<Message> {
     if (threadId == 0L) return emptyList()
     val limit = if (loadAll) Int.MAX_VALUE else MESSAGES_LIMIT
+    val targetAddress = address ?: getPhoneNumbersFromSmsTable(threadId).firstOrNull()
     val providerMessages = getMessages(
         threadId = threadId,
+        address = targetAddress,
         includeScheduledMessages = false,
         limit = limit
     )

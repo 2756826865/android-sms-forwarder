@@ -18,8 +18,8 @@
     <dimen name="home_horizontal_margin">16dp</dimen>
     <dimen name="home_title_size">32sp</dimen>
     <dimen name="home_action_size">40dp</dimen>
-    <dimen name="home_search_height">40dp</dimen>
-    <dimen name="home_search_radius">20dp</dimen>
+    <dimen name="home_search_height">45dp</dimen>
+    <dimen name="home_search_radius">22.5dp</dimen>
     <dimen name="conversation_avatar_size">40dp</dimen>
     <dimen name="conversation_min_height">64dp</dimen>
     <dimen name="conversation_vertical_padding">8dp</dimen>

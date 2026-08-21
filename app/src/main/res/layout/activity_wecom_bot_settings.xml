@@ -41,13 +41,25 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
-                android:hint="Webhook 地址">
+                android:hint="@string/forwarding_webhook">
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/wecom_bot_webhook"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:inputType="text" />
+                    android:inputType="textUri" />
             </com.google.android.material.textfield.TextInputLayout>
+
+            <TextView
+                android:id="@+id/wecom_bot_webhook_tutorial"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:background="?attr/selectableItemBackground"
+                android:paddingVertical="4dp"
+                android:text="@string/wecom_bot_webhook_tutorial"
+                android:textColor="@color/miui_action_blue"
+                android:textSize="14sp" />
+
             <View
                 android:layout_width="match_parent"
                 android:layout_height="1dp"

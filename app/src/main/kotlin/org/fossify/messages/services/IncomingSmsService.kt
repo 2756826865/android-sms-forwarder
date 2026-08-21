@@ -59,7 +59,7 @@ import java.util.concurrent.Executors
  * runnable while the screen is off, verifies provider persistence before
  * notifying or forwarding, and asks Android to redeliver an interrupted intent.
  */
-class IncomingSmsService : Service() {
+open class IncomingSmsService : Service() {
     private val executor = Executors.newSingleThreadExecutor()
 
     override fun onCreate() {
@@ -90,6 +90,9 @@ class IncomingSmsService : Service() {
         }
         return START_REDELIVER_INTENT
     }
+
+    /** Visible for tests / future Context-based callers. */
+    internal fun processIncomingForReceiver(intent: Intent) = processIncoming(intent)
 
     override fun onDestroy() {
         executor.shutdown()
@@ -515,6 +518,8 @@ class IncomingSmsService : Service() {
         private const val MAX_RECENT_FINGERPRINTS = 100
         private const val DUPLICATE_WINDOW_MS = 24 * 60 * 60 * 1000L
         private val duplicateLock = Any()
+        private val receiveExecutor = Executors.newSingleThreadExecutor()
+        private const val RECEIVER_HANDOFF_HOLD_MS = 20_000L
 
         fun enqueue(context: Context, source: Intent) {
             val serviceIntent = Intent(context, IncomingSmsService::class.java).apply {
@@ -522,6 +527,34 @@ class IncomingSmsService : Service() {
                 replaceExtras(source)
             }
             ContextCompat.startForegroundService(context, serviceIntent)
+        }
+
+        /**
+         * Process under the receiver goAsync budget. Prefer a real foreground service
+         * (works while SmsKeepAliveService keeps the process warm). Avoid manually
+         * constructing Service instances — that path silently fails on HyperOS.
+         */
+        fun processFromReceiver(context: Context, source: Intent, onComplete: () -> Unit) {
+            val appContext = context.applicationContext
+            val workIntent = Intent(appContext, IncomingSmsService::class.java).apply {
+                action = source.action
+                replaceExtras(source)
+            }
+            receiveExecutor.execute {
+                try {
+                    ContextCompat.startForegroundService(appContext, workIntent)
+                    Log.i(TAG, "SMS_DELIVER handed to IncomingSmsService FGS")
+                    // Keep the receiver wake/goAsync until the service has had time to
+                    // startForeground + persist. HyperOS otherwise freezes us mid-handoff.
+                    Thread.sleep(RECEIVER_HANDOFF_HOLD_MS)
+                } catch (error: Throwable) {
+                    Log.e(TAG, "FGS handoff failed for SMS_DELIVER", error)
+                    PushPlusConfig(appContext).lastReceiverStatus =
+                        "广播已到达，前台服务启动失败：${error.message ?: error.javaClass.simpleName}"
+                } finally {
+                    onComplete()
+                }
+            }
         }
     }
 }

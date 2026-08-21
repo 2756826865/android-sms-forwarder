@@ -207,7 +207,7 @@ class DeviceCompatibilityActivity : SimpleActivity() {
     private fun readState(): CompatibilityState {
         val defaultSms = isDefaultSmsApp()
         val routedPackage = getLegacySmsRoute()
-        val route = routedPackage == packageName
+        val route = isSmsRouteAcceptable(routedPackage)
         val writeSms = isWriteSmsAllowed()
         val receiveSms = hasPermission(Manifest.permission.RECEIVE_SMS)
         val readSms = hasPermission(Manifest.permission.READ_SMS)
@@ -218,6 +218,12 @@ class DeviceCompatibilityActivity : SimpleActivity() {
         val notificationChannel = isSmsNotificationChannelEnabled()
         val battery = (getSystemService(POWER_SERVICE) as PowerManager)
             .isIgnoringBatteryOptimizations(packageName)
+        val routeLabel = when {
+            routedPackage == packageName -> routedPackage
+            routedPackage.isNullOrBlank() && defaultSms -> getString(R.string.compatibility_route_role_only)
+            routedPackage.isNullOrBlank() -> getString(R.string.compatibility_unknown)
+            else -> routedPackage
+        }
         return CompatibilityState(
             defaultSms = defaultSms,
             receiveSms = receiveSms,
@@ -227,15 +233,18 @@ class DeviceCompatibilityActivity : SimpleActivity() {
             notificationChannel = notificationChannel,
             notifications = notificationPermission && notificationsEnabled && notificationChannel,
             battery = battery,
-            routedPackage = routedPackage,
+            routedPackage = routeLabel,
             route = route,
             writeSms = writeSms,
-            smsChain = defaultSms && route && writeSms,
+            smsChain = defaultSms && writeSms && route,
         )
     }
-
     private fun hasPermission(permission: String): Boolean =
         ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
+
+    /** HyperOS may leave sms_default_application null while ROLE_SMS is held; treat that as OK. */
+    private fun isSmsRouteAcceptable(routedPackage: String?): Boolean =
+        routedPackage == packageName || (routedPackage.isNullOrBlank() && isDefaultSmsApp())
 
     private fun isSmsNotificationChannelEnabled(): Boolean {
         val manager = getSystemService(NotificationManager::class.java)
@@ -478,7 +487,7 @@ class DeviceCompatibilityActivity : SimpleActivity() {
     }.getOrDefault(false)
 
     private fun isSmsChainReady(): Boolean =
-        isDefaultSmsApp() && getLegacySmsRoute() == packageName && isWriteSmsAllowed()
+        isDefaultSmsApp() && isWriteSmsAllowed() && isSmsRouteAcceptable(getLegacySmsRoute())
 
     private fun copyAdbRepairCommands() {
         val commands = """

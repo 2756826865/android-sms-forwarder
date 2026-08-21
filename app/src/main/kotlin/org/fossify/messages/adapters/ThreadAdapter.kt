@@ -79,6 +79,7 @@ import org.fossify.messages.helpers.THREAD_SENT_MESSAGE_SENDING
 import org.fossify.messages.helpers.THREAD_SENT_MESSAGE_SENT
 import org.fossify.messages.helpers.formatThreadMessageDate
 import org.fossify.messages.helpers.generateStableId
+import org.fossify.messages.helpers.isThreadMessageDateToday
 import org.fossify.messages.helpers.setupDocumentPreview
 import org.fossify.messages.helpers.setupVCardPreview
 import org.fossify.messages.models.Attachment
@@ -553,8 +554,7 @@ class ThreadAdapter(
         messageBinding.apply {
             with(ConstraintSet()) {
                 clone(threadMessageHolder)
-                clear(threadMessageWrapper.id, ConstraintSet.END)
-                connect(threadMessageWrapper.id, ConstraintSet.START, ConstraintSet.PARENT_ID, ConstraintSet.START)
+                setHorizontalBias(threadMessageWrapper.id, 0.0f)
                 applyTo(threadMessageHolder)
             }
 
@@ -562,6 +562,10 @@ class ThreadAdapter(
             threadMessageSenderPhoto.setOnClickListener(null)
 
             threadMessageBody.apply {
+                updateLayoutParams<RelativeLayout.LayoutParams> {
+                    removeRule(RelativeLayout.ALIGN_PARENT_END)
+                    addRule(RelativeLayout.END_OF, R.id.thread_message_sender_photo)
+                }
                 background = AppCompatResources.getDrawable(activity, R.drawable.item_received_background)
                 setTextColor(textColor)
                 setLinkTextColor(activity.getProperPrimaryColor())
@@ -573,8 +577,7 @@ class ThreadAdapter(
         messageBinding.apply {
             with(ConstraintSet()) {
                 clone(threadMessageHolder)
-                clear(threadMessageWrapper.id, ConstraintSet.START)
-                connect(threadMessageWrapper.id, ConstraintSet.END, ConstraintSet.PARENT_ID, ConstraintSet.END)
+                setHorizontalBias(threadMessageWrapper.id, 1.0f)
                 applyTo(threadMessageHolder)
             }
 
@@ -705,71 +708,49 @@ class ThreadAdapter(
 
     private fun setupDateTime(view: View, dateTime: ThreadDateTime) {
         ItemThreadDateTimeBinding.bind(view).apply {
+            // Real timestamp from the message; format only differs by today vs older.
             val alignEnd = !dateTime.isIncoming
-            val sideMargin = resources.getDimensionPixelSize(org.fossify.commons.R.dimen.activity_margin)
-            val gap = resources.getDimensionPixelSize(org.fossify.commons.R.dimen.small_margin)
-            val showSim = hasMultipleSIMCards && dateTime.simID != "?"
-
             threadDateTime.apply {
                 text = formatThreadMessageDate(dateTime.date)
                 setTextSize(TypedValue.COMPLEX_UNIT_PX, fontSize)
                 setTextColor(textColor)
+                updateLayoutParams<RelativeLayout.LayoutParams> {
+                    removeRule(RelativeLayout.CENTER_HORIZONTAL)
+                    removeRule(RelativeLayout.ALIGN_PARENT_START)
+                    removeRule(RelativeLayout.ALIGN_PARENT_END)
+                    val sideMargin = resources.getDimensionPixelSize(org.fossify.commons.R.dimen.activity_margin)
+                    if (alignEnd) {
+                        addRule(RelativeLayout.ALIGN_PARENT_END)
+                        marginStart = 0
+                        marginEnd = sideMargin
+                    } else {
+                        addRule(RelativeLayout.ALIGN_PARENT_START)
+                        marginStart = sideMargin
+                        marginEnd = 0
+                    }
+                }
             }
 
+            val showSim = hasMultipleSIMCards && dateTime.simID != "?"
             threadSimIcon.beVisibleIf(showSim)
             threadSimNumber.beVisibleIf(showSim)
             if (showSim) {
                 threadSimNumber.text = dateTime.simID
                 threadSimNumber.setTextColor(Color.WHITE)
                 threadSimIcon.applyColorFilter(Color.rgb(29, 206, 56))
-            }
-
-            // Always show as [卡][时间]; only the whole group is left/right aligned.
-            if (alignEnd) {
-                threadDateTime.updateLayoutParams<RelativeLayout.LayoutParams> {
-                    removeRule(RelativeLayout.CENTER_HORIZONTAL)
-                    removeRule(RelativeLayout.ALIGN_PARENT_START)
+                val gap = resources.getDimensionPixelSize(org.fossify.commons.R.dimen.small_margin)
+                threadSimIcon.updateLayoutParams<RelativeLayout.LayoutParams> {
+                    removeRule(RelativeLayout.START_OF)
                     removeRule(RelativeLayout.END_OF)
-                    addRule(RelativeLayout.ALIGN_PARENT_END)
-                    marginStart = 0
-                    marginEnd = sideMargin
-                }
-                if (showSim) {
-                    threadSimIcon.updateLayoutParams<RelativeLayout.LayoutParams> {
-                        removeRule(RelativeLayout.ALIGN_PARENT_START)
-                        removeRule(RelativeLayout.ALIGN_PARENT_END)
-                        removeRule(RelativeLayout.END_OF)
+                    if (alignEnd) {
+                        // Sent: SIM sits left of the right-aligned time.
                         addRule(RelativeLayout.START_OF, R.id.thread_date_time)
                         marginStart = 0
                         marginEnd = gap
-                    }
-                }
-            } else {
-                if (showSim) {
-                    threadSimIcon.updateLayoutParams<RelativeLayout.LayoutParams> {
-                        removeRule(RelativeLayout.CENTER_HORIZONTAL)
-                        removeRule(RelativeLayout.ALIGN_PARENT_END)
-                        removeRule(RelativeLayout.START_OF)
-                        removeRule(RelativeLayout.END_OF)
-                        addRule(RelativeLayout.ALIGN_PARENT_START)
-                        marginStart = sideMargin
-                        marginEnd = 0
-                    }
-                    threadDateTime.updateLayoutParams<RelativeLayout.LayoutParams> {
-                        removeRule(RelativeLayout.CENTER_HORIZONTAL)
-                        removeRule(RelativeLayout.ALIGN_PARENT_START)
-                        removeRule(RelativeLayout.ALIGN_PARENT_END)
-                        addRule(RelativeLayout.END_OF, R.id.thread_sim_icon)
+                    } else {
+                        // Received: SIM sits right of the left-aligned time.
+                        addRule(RelativeLayout.END_OF, R.id.thread_date_time)
                         marginStart = gap
-                        marginEnd = 0
-                    }
-                } else {
-                    threadDateTime.updateLayoutParams<RelativeLayout.LayoutParams> {
-                        removeRule(RelativeLayout.CENTER_HORIZONTAL)
-                        removeRule(RelativeLayout.ALIGN_PARENT_END)
-                        removeRule(RelativeLayout.END_OF)
-                        addRule(RelativeLayout.ALIGN_PARENT_START)
-                        marginStart = sideMargin
                         marginEnd = 0
                     }
                 }
@@ -829,12 +810,7 @@ private class ThreadItemDiffCallback : DiffUtil.ItemCallback<ThreadItem>() {
         if (oldItem::class.java != newItem::class.java) return false
         return when (oldItem) {
             is ThreadSending -> true
-            is ThreadDateTime -> {
-                val new = newItem as ThreadDateTime
-                oldItem.date == new.date &&
-                    oldItem.simID == new.simID &&
-                    oldItem.isIncoming == new.isIncoming
-            }
+            is ThreadDateTime -> oldItem.simID == (newItem as ThreadDateTime).simID
             is ThreadError -> oldItem.messageText == (newItem as ThreadError).messageText
             is ThreadSent -> oldItem.delivered == (newItem as ThreadSent).delivered
             is Message -> Message.areContentsTheSame(oldItem, newItem as Message)

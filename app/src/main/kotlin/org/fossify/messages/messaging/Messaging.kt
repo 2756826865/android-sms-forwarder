@@ -1,6 +1,7 @@
 package org.fossify.messages.messaging
 
 import android.content.Context
+import android.net.Uri
 import android.telephony.SmsMessage
 import android.util.Patterns
 import android.widget.Toast.LENGTH_LONG
@@ -53,8 +54,8 @@ fun Context.sendMessageCompat(
     val messagingUtils = messagingUtils
     val isMms = attachments.isNotEmpty() || isLongMmsMessage(text, settings)
             || addresses.size > 1 && settings.group
+
     if (isMms) {
-        // we send all MMS attachments separately to reduces the chances of hitting provider MMS limit.
         if (attachments.isNotEmpty()) {
             val lastIndex = attachments.lastIndex
             if (attachments.size > 1) {
@@ -81,25 +82,10 @@ fun Context.sendMessageCompat(
         } catch (e: SmsException) {
             if (propagateErrors) throw e
             when (e.errorCode) {
-                EMPTY_DESTINATION_ADDRESS -> toast(
-                    id = R.string.empty_destination_address,
-                    length = LENGTH_LONG
-                )
-
-                ERROR_PERSISTING_MESSAGE -> toast(
-                    id = R.string.unable_to_save_message,
-                    length = LENGTH_LONG
-                )
-
-                ERROR_SENDING_MESSAGE -> toast(
-                    msg = getString(R.string.unknown_error_occurred_sending_message, e.errorCode),
-                    length = LENGTH_LONG
-                )
-
-                DUPLICATE_SEND_BLOCKED -> toast(
-                    id = R.string.honor_sms_duplicate_send_blocked,
-                    length = LENGTH_LONG
-                )
+                EMPTY_DESTINATION_ADDRESS -> toast(id = R.string.empty_destination_address, length = LENGTH_LONG)
+                ERROR_PERSISTING_MESSAGE -> toast(id = R.string.unable_to_save_message, length = LENGTH_LONG)
+                ERROR_SENDING_MESSAGE -> toast(msg = getString(R.string.unknown_error_occurred_sending_message, e.errorCode), length = LENGTH_LONG)
+                DUPLICATE_SEND_BLOCKED -> toast(id = R.string.honor_sms_duplicate_send_blocked, length = LENGTH_LONG)
             }
         } catch (e: Exception) {
             if (propagateErrors) throw e
@@ -112,16 +98,8 @@ fun Context.sendMessageCompat(
     }
 }
 
-/**
- * Check if a given "address" is a short code.
- * There's not much info available on these special numbers, even the wikipedia page (https://en.wikipedia.org/wiki/Short_code)
- * contains outdated information regarding max number of digits. The exact parameters for short codes can vary by country and by carrier.
- */
+/** Check if a given "address" is a short code. */
 fun isShortCodeWithLetters(address: String): Boolean {
-    if (Patterns.EMAIL_ADDRESS.matcher(address).matches()) {
-        // emails are not short codes: https://github.com/FossifyOrg/Messages/issues/115
-        return false
-    }
-
+    if (Patterns.EMAIL_ADDRESS.matcher(address).matches()) return false
     return address.any { it.isLetter() }
 }

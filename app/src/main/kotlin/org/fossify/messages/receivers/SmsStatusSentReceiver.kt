@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.provider.Telephony.Sms
+import android.util.Log
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ProcessLifecycleOwner
 import org.fossify.commons.extensions.getMyContactsCursor
@@ -30,6 +31,7 @@ class SmsStatusSentReceiver : SendStatusReceiver() {
     override fun updateAndroidDatabase(context: Context, intent: Intent, receiverResultCode: Int) {
         val messageUri: Uri? = intent.data
         val resultCode = resultCode
+        Log.i(TAG, "updateAndroidDatabase: uri=$messageUri, resultCode=$resultCode")
         val messagingUtils = context.messagingUtils
 
         val type = if (resultCode == Activity.RESULT_OK) {
@@ -46,6 +48,7 @@ class SmsStatusSentReceiver : SendStatusReceiver() {
 
     override fun updateAppDatabase(context: Context, intent: Intent, receiverResultCode: Int) {
         val messageUri = intent.data
+        Log.i(TAG, "updateAppDatabase: uri=$messageUri, resultCode=$receiverResultCode")
         if (messageUri != null) {
             val messageId = messageUri.lastPathSegment?.toLong() ?: 0L
             ensureBackgroundThread {
@@ -59,7 +62,8 @@ class SmsStatusSentReceiver : SendStatusReceiver() {
                 context.messagesDB.updateType(messageId, type)
                 val threadId = context.getSmsThreadId(messageId)
                 if (threadId != 0L) {
-                    context.syncThreadToLocal(threadId)
+                    val address = context.getMessageRecipientAddress(messageId)
+                    context.syncThreadToLocal(threadId, address = address)
                 }
                 RemoteControlReceiptForwarder.onSendResult(
                     context = context,
@@ -86,5 +90,9 @@ class SmsStatusSentReceiver : SendStatusReceiver() {
                 context.notificationHelper.showSendingFailedNotification(recipientName, threadId)
             }
         }
+    }
+
+    private companion object {
+        const val TAG = "SmsStatusSent"
     }
 }

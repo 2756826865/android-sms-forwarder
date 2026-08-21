@@ -129,12 +129,13 @@ class MainActivity : SimpleActivity() {
         setupHomeSearch()
         setupSelectionActions()
         setupBottomNavigation()
+        setupSwipeRefresh()
         applyHomeBottomNavigationPreference()
 
         setupEdgeToEdge(
             padTopSystem = listOf(binding.homeHeader),
             padBottomSystem = listOf(binding.homeBottomNavigation, binding.selectionBottomBar),
-            padBottomImeAndSystem = listOf(binding.homeSearch),
+            padBottomImeAndSystem = listOf(binding.mainCoordinatorWrapper),
         )
         // Edge-to-edge helpers may re-tint system bars; clear the bottom scrim again.
         clearHomeBottomSystemScrim()
@@ -187,7 +188,7 @@ class MainActivity : SimpleActivity() {
             getSystemService(NotificationManager::class.java)
                 ?.cancel(DEFAULT_SMS_LOST_NOTIFICATION_ID)
         }
-        SmsRecoveryWorker.enqueueNow(this)
+        SmsRecoveryWorker.enqueueFullResync(this)
         updateMenuColors()
         selectBottomNavigation(0)
         applyHomeBottomNavigationPreference()
@@ -334,6 +335,15 @@ class MainActivity : SimpleActivity() {
         binding.homeNavSettings.isSelected = selectedIndex == 3
     }
 
+    private fun setupSwipeRefresh() {
+        binding.mainSwipeRefresh.setOnRefreshListener {
+            loadMessages()
+            binding.mainSwipeRefresh.postDelayed({
+                binding.mainSwipeRefresh.isRefreshing = false
+            }, 500L)
+        }
+    }
+
     private fun applyHomeBottomNavigationPreference() = binding.apply {
         if (isConversationSelectionMode) {
             return@apply
@@ -369,9 +379,10 @@ class MainActivity : SimpleActivity() {
     private fun isSmsChainReady(): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return true
         val roleReady = getSystemService(RoleManager::class.java)?.isRoleHeld(RoleManager.ROLE_SMS) == true
-        val routeReady = runCatching {
-            Settings.Secure.getString(contentResolver, SMS_DEFAULT_APPLICATION_KEY) == packageName
-        }.getOrDefault(false)
+        val routedPackage = runCatching {
+            Settings.Secure.getString(contentResolver, SMS_DEFAULT_APPLICATION_KEY)
+        }.getOrNull()
+        val routeReady = routedPackage == packageName || (routedPackage.isNullOrBlank() && roleReady)
         val writeSmsReady = runCatching {
             val appOps = getSystemService(AppOpsManager::class.java)
             appOps?.checkOpNoThrow(WRITE_SMS_APP_OP, Process.myUid(), packageName) == AppOpsManager.MODE_ALLOWED

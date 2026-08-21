@@ -123,6 +123,9 @@
     <string name="forwarding_feishu">飞书群机器人</string>
     <string name="forwarding_wecom">企业微信应用消息</string>
     <string name="forwarding_wecom_bot">企业微信群机器人</string>
+    <string name="wecom_bot_webhook_tutorial">如何获取群机器人 Webhook？查看腾讯云教程</string>
+    <string name="wecom_bot_webhook_tutorial_url">https://cloud.tencent.com/document/product/1759/128391</string>
+    <string name="wecom_bot_webhook_tutorial_open_failed">无法打开教程链接</string>
     <string name="forwarding_email">电子邮箱（SMTP TLS）</string>
     <string name="forwarding_configured_enabled">已配置 · 已启用</string>
     <string name="forwarding_configured_disabled">已配置 · 未启用</string>
@@ -330,18 +333,19 @@
     <string name="compatibility_battery">电池与后台运行设置</string>
     <string name="compatibility_permissions">应用权限与通知设置</string>
     <string name="compatibility_refresh">重新检测短信与后台状态</string>
-    <string name="compatibility_copy_fix">复制华为 ADB 修复命令</string>
+    <string name="compatibility_copy_fix">复制 ADB 修复命令</string>
     <string name="compatibility_project">项目地址</string>
-    <string name="compatibility_adb_commands">华为短信兼容修复命令</string>
+    <string name="compatibility_adb_commands">短信兼容 ADB 修复命令</string>
     <string name="compatibility_commands_copied">ADB 修复命令已复制</string>
     <string name="compatibility_ready">正常</string>
     <string name="compatibility_not_ready">需要设置</string>
     <string name="compatibility_allowed">允许</string>
     <string name="compatibility_not_allowed">未允许</string>
     <string name="compatibility_unknown">无法读取</string>
+    <string name="compatibility_route_role_only">未写入（Role 已持有）</string>
     <string name="compatibility_chain_ready">短信接收链路：正常</string>
-    <string name="compatibility_chain_split">短信接收链路：状态异常。华为 / HarmonyOS 可能未同步底层短信路由或 WRITE_SMS；vivo / Funtouch OS 可能会因安全策略换回系统信息应用。请重新设为默认短信应用，并允许自启动和后台运行；华为状态分裂时可使用页面提供的 ADB 命令修复。</string>
-    <string name="compatibility_status">Android SMS Role：%1$s\n底层短信路由：%2$s（%3$s）\nWRITE_SMS：%4$s\n后台电池策略：%5$s\n\n%6$s\n\n各品牌均建议：允许自启动、允许后台活动、关闭电池优化（设为无限制）、允许锁屏通知。vivo / Funtouch OS 用户还需定期确认系统没有换回“信息”应用。</string>
+    <string name="compatibility_chain_split">短信接收链路：状态异常。华为 / 小米等可能出现 SMS Role、底层路由与 WRITE_SMS 不同步；息屏后还依赖自启动与电池无限制。请先重新设为默认短信应用，再允许自启动和后台；仍异常时用页面提供的 ADB 命令修复 WRITE_SMS / 路由（小米上改路由可能被系统拒绝，优先保证 Role 与 WRITE_SMS）。</string>
+    <string name="compatibility_status">Android SMS Role：%1$s\n底层短信路由：%2$s（%3$s）\nWRITE_SMS：%4$s\n后台电池策略：%5$s\n\n%6$s\n\n各品牌均建议：允许自启动、允许后台活动、关闭电池优化（设为无限制）、允许锁屏通知。小米 / HyperOS 用户还需允许后台弹出界面；vivo 用户还需定期确认系统没有换回“信息”应用。</string>
     <string name="compatibility_health_center">后台运行体检</string>
     <string name="compatibility_health_good">运行环境健康</string>
     <string name="compatibility_health_attention">还有项目需要处理</string>
@@ -366,9 +370,10 @@
     <string name="compatibility_brand_advice_title">当前品牌建议</string>
     <string name="compatibility_brand_vivo_title">vivo / iQOO 专属建议</string>
     <string name="compatibility_brand_vivo_advice">vivo / iQOO 若自动换回系统信息，请先进入系统设置 → 应用与权限 → 默认应用 → 短信，选择本应用；再到 i 管家允许自启动、后台高耗电和锁屏通知。重启、系统更新或 i 管家修复后建议回到本页重新检测。仍被回退时，可展开高级技术诊断并复制 ADB 修复命令。</string>
+    <string name="compatibility_brand_xiaomi_title">小米 / Redmi 专属建议</string>
+    <string name="compatibility_brand_xiaomi_advice">允许自启动，省电策略设为无限制，并允许后台弹出界面与锁屏通知。息屏收不到短信时，到本页确认 SMS Role 与 WRITE_SMS 为正常；若 WRITE_SMS 未允许，可展开高级诊断复制 ADB 命令修复。HyperOS 更新后建议重新确认以上项。</string>
     <string name="compatibility_brand_huawei_title">华为 / 荣耀专属建议</string>
-    <string name="compatibility_brand_huawei_advice">在应用启动管理中改为手动管理，并允许自启动、关联启动和后台活动。若 SMS Role 与底层路由不同步，请展开高级诊断使用 ADB 修复。</string>
-
+    <string name="compatibility_brand_huawei_advice">在应用启动管理中改为手动管理，并允许自启动、关联启动和后台活动。若 SMS Role、底层路由与 WRITE_SMS 不同步，请展开高级诊断使用 ADB 修复。</string>
     <string name="low_battery_reminder">低电量提醒</string>
     <string name="low_battery_reminder_summary">电量低于阈值时通过转发渠道发送提醒</string>
     <string name="low_battery_threshold_label">电量阈值</string>
@@ -380,8 +385,6 @@
     <string name="low_battery_channels_required">请至少选择一个提醒渠道，低电量提醒仍保持关闭</string>
     <string name="low_battery_system_sender">系统电量监控</string>
     <string name="bark_device_key_help">Device Key 是接收设备的推送地址。请在接收通知的 iPhone 或 iPad 上打开 Bark，从测试 URL 中复制 https://api.day.app/ 后面的 Key。备用 Android 手机是发送端；如果接收端也是 Android，建议使用 Gotify。Device Key 相当于推送密码，请勿分享或公开。</string>
-    <string name="compatibility_brand_xiaomi_title">小米 / Redmi 专属建议</string>
-    <string name="compatibility_brand_xiaomi_advice">允许自启动，将省电策略设为无限制，并允许后台弹出界面与锁屏通知；MIUI / HyperOS 更新后建议重新确认。</string>
     <string name="compatibility_brand_other_title">通用后台建议</string>
     <string name="compatibility_brand_other_advice">允许应用自启动和后台活动，将电池策略设为不限制，并确认锁屏通知可用。不同系统入口名称可能略有差异。</string>
     <string name="compatibility_tools_title">体检工具</string>

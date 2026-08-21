@@ -1,14 +1,17 @@
 package org.fossify.messages.activities
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
-import org.fossify.commons.extensions.value
 import org.fossify.commons.extensions.toast
+import org.fossify.commons.extensions.value
 import org.fossify.commons.extensions.viewBinding
 import org.fossify.commons.helpers.NavigationIcon
+import org.fossify.messages.R
 import org.fossify.messages.databinding.ActivityWecomBotSettingsBinding
 import org.fossify.messages.extensions.applyMiuiTopAppBarChrome
-import org.fossify.messages.forwarding.MultiForwardConfig
 import org.fossify.messages.forwarding.MultiChannelForwardWorker
+import org.fossify.messages.forwarding.MultiForwardConfig
 
 class WeComBotSettingsActivity : SimpleActivity() {
     private val binding by viewBinding(ActivityWecomBotSettingsBinding::inflate)
@@ -25,6 +28,10 @@ class WeComBotSettingsActivity : SimpleActivity() {
         setupTopAppBar(binding.wecomBotAppbar, NavigationIcon.Arrow)
         applyMiuiTopAppBarChrome(binding.wecomBotAppbar, binding.wecomBotToolbar)
         loadConfig()
+
+        binding.wecomBotWebhookTutorial.setOnClickListener {
+            openWebhookTutorial()
+        }
 
         binding.wecomBotSave.setOnClickListener {
             if (saveConfig()) toast("配置已保存")
@@ -47,6 +54,15 @@ class WeComBotSettingsActivity : SimpleActivity() {
     override fun onResume() {
         super.onResume()
         applyMiuiTopAppBarChrome(binding.wecomBotAppbar, binding.wecomBotToolbar)
+    }
+
+    private fun openWebhookTutorial() {
+        val url = getString(R.string.wecom_bot_webhook_tutorial_url)
+        runCatching {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        }.onFailure {
+            toast(R.string.wecom_bot_webhook_tutorial_open_failed)
+        }
     }
 
     private fun loadConfig() = with(binding) {

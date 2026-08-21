@@ -20,8 +20,9 @@ class SmsReceiver : BroadcastReceiver() {
             return
         }
         Log.i(TAG, "received ${intent.action}; handing off to IncomingSmsService")
-        SmsKeepAliveService.ensureStarted(context.applicationContext)
-        IncomingSmsService.enqueue(context.applicationContext, intent)
+        val appContext = context.applicationContext
+        SmsKeepAliveService.ensureStarted(appContext)
+        IncomingSmsService.enqueue(appContext, intent)
     }
 
     private companion object {

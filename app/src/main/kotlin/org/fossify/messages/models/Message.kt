@@ -61,11 +61,14 @@ data class Message(
             return old.body == new.body &&
                 old.threadId == new.threadId &&
                 old.date == new.date &&
+                old.type == new.type &&
+                old.status == new.status &&
                 old.isMMS == new.isMMS &&
                 old.attachment == new.attachment &&
                 old.senderPhoneNumber == new.senderPhoneNumber &&
                 old.senderName == new.senderName &&
                 old.senderPhotoUri == new.senderPhotoUri &&
+                old.subscriptionId == new.subscriptionId &&
                 old.isScheduled == new.isScheduled
         }
     }

@@ -155,6 +155,7 @@ import org.fossify.messages.extensions.restoreMessageFromRecycleBin
 import org.fossify.messages.extensions.saveSmsDraft
 import org.fossify.messages.extensions.showWithAnimation
 import org.fossify.messages.extensions.subscriptionManagerCompat
+import org.fossify.messages.extensions.syncThreadToLocal
 import org.fossify.messages.extensions.toArrayList
 import org.fossify.messages.extensions.toSortedMessages
 import org.fossify.messages.extensions.updateLastConversationMessage
@@ -276,6 +277,7 @@ class ThreadActivity : SimpleActivity() {
 
         loadConversation()
         setupAttachmentPickerView()
+        setupSwipeRefresh()
         hideAttachmentPicker()
         maybeSetupRecycleBinView()
     }
@@ -492,10 +494,12 @@ class ThreadActivity : SimpleActivity() {
         val privateCursor = getMyContactsCursor(favoritesOnly = false, withPhoneNumbersOnly = true)
         ensureBackgroundThread {
             privateContacts = MyContactsContentProvider.getSimpleContacts(this, privateCursor)
+            setupParticipants() // 提前初始化参与者，确保能拿到号码
 
             val cachedMessagesCode = messages.hashCode()
             if (!isRecycleBin) {
-                val providerMessages = getMessages(threadId)
+                val number = participants.firstOrNull()?.phoneNumbers?.firstOrNull()?.normalizedNumber
+                val providerMessages = getMessages(threadId, address = number)
                 messages = (messages + providerMessages)
                     .associateBy { it.getStableId() }
                     .values
@@ -821,7 +825,8 @@ class ThreadActivity : SimpleActivity() {
     }
 
     private fun fetchOlderMessages(cutoff: Int): List<Message> {
-        val olderFromProvider = getMessages(threadId, cutoff)
+        val number = participants.firstOrNull()?.phoneNumbers?.firstOrNull()?.normalizedNumber
+        val olderFromProvider = getMessages(threadId, address = number, dateFrom = cutoff)
         val olderFromLocal = messagesDB.getOlderThreadMessages(threadId, cutoff, MESSAGES_LIMIT)
         val messageSnapshot = messages.toSortedMessages()
         val older = (olderFromLocal + olderFromProvider)
@@ -1747,12 +1752,22 @@ class ThreadActivity : SimpleActivity() {
             refreshedSinceSent = false
             sendMessageCompat(text, addresses, subscriptionId, attachments, messageToResend)
             ensureBackgroundThread {
-                val existingMessages = messages.toSortedMessages()
-                val messages = getMessages(threadId, limit = maxOf(1, attachments.size))
-                    .filterNotInByKey(existingMessages) { it.getStableId() }
-                for (message in messages) {
-                    insertOrUpdateMessage(message)
+                val number = addresses.firstOrNull()
+                val synced = syncThreadToLocal(threadId, address = number)
+                val byId = messages.associateBy { it.id }.toMutableMap()
+                for (message in synced) {
+                    byId[message.id] = message
                 }
+                messages = byId.values.toSortedMessages()
+                val newItems = getThreadItems()
+                runOnUiThread {
+                    threadItems = newItems
+                    getOrCreateThreadAdapter().updateMessages(newItems, newItems.lastIndex)
+                    if (!refreshedSinceSent) {
+                        refreshMessages()
+                    }
+                }
+                refreshConversations()
             }
             clearCurrentMessage()
 
@@ -1934,7 +1949,8 @@ class ThreadActivity : SimpleActivity() {
         val lastMaxId = messageSnapshot.filterNot { it.isScheduled }.maxByOrNull { it.id }?.id ?: 0L
         val providerParticipantsChanged = reconcileProviderParticipants()
         val newThreadId = getThreadId(participants.getAddresses().toSet())
-        val newMessages = getMessages(newThreadId, includeScheduledMessages = false)
+        val number = participants.firstOrNull()?.phoneNumbers?.firstOrNull()?.normalizedNumber
+        val newMessages = getMessages(newThreadId, address = number, includeScheduledMessages = false)
         if (messageSnapshot.isNotEmpty() && messageSnapshot.all { it.isScheduled } && newMessages.isNotEmpty()) {
             // update scheduled messages with real thread id
             threadId = newThreadId
@@ -2221,6 +2237,14 @@ class ThreadActivity : SimpleActivity() {
             .setDuration(500L)
             .setInterpolator(OvershootInterpolator())
             .start()
+    }
+
+    private fun setupSwipeRefresh() {
+        binding.threadSwipeRefresh.setOnRefreshListener {
+            setupThread {
+                binding.threadSwipeRefresh.isRefreshing = false
+            }
+        }
     }
 
     private fun getBottomBarColor() = if (isDynamicTheme()) {

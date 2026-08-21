@@ -18,7 +18,7 @@ class RescheduleAlarmsReceiver : BroadcastReceiver() {
             try {
                 context.rescheduleAllScheduledMessages()
                 SmsRecoveryWorker.schedule(context)
-                SmsRecoveryWorker.enqueueNow(context)
+                SmsRecoveryWorker.enqueueFullResync(context)
                 SmsKeepAliveService.ensureStarted(context)
             } finally {
                 pendingResult.finish()

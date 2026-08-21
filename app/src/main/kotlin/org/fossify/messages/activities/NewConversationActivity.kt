@@ -33,6 +33,7 @@ import org.fossify.commons.extensions.hideKeyboard
 import org.fossify.commons.extensions.maybeShowNumberPickerDialog
 import org.fossify.commons.extensions.normalizeString
 import org.fossify.commons.extensions.onTextChangeListener
+import org.fossify.commons.extensions.showErrorToast
 import org.fossify.commons.extensions.toast
 import org.fossify.commons.extensions.underlineText
 import org.fossify.commons.extensions.value
@@ -72,6 +73,7 @@ import org.fossify.messages.helpers.IS_SCHEDULE_MODE
 import org.fossify.messages.helpers.OPEN_THREAD_ATTACHMENT_PICKER
 import org.fossify.messages.helpers.generateRandomId
 import org.fossify.messages.messaging.isShortCodeWithLetters
+import org.fossify.messages.messaging.sendMessageCompat
 import org.fossify.messages.messaging.BulkSendWorker
 import org.fossify.messages.forwarding.MultiForwardConfig
 import org.fossify.messages.messaging.scheduleMessage
@@ -451,15 +453,31 @@ class NewConversationActivity : SimpleActivity() {
             body.isBlank() -> toast(R.string.new_message_no_content)
             isScheduleMode -> launchScheduleDialog()
             else -> {
-                BulkSendWorker.enqueue(
-                    applicationContext,
-                    body,
-                    availableSIMCards.getOrNull(currentSIMCardIndex)?.subscriptionId
-                        ?: SubscriptionManager.INVALID_SUBSCRIPTION_ID,
-                    selectedRecipients.keys.toList()
-                )
-                toast(R.string.new_message_queued)
-                finish()
+                val recipients = selectedRecipients.keys.toList()
+                val subId = availableSIMCards.getOrNull(currentSIMCardIndex)?.subscriptionId
+                    ?: SubscriptionManager.INVALID_SUBSCRIPTION_ID
+                if (recipients.size == 1) {
+                    val address = recipients.first()
+                    ensureBackgroundThread {
+                        try {
+                            this@NewConversationActivity.sendMessageCompat(
+                                text = body,
+                                addresses = listOf(address),
+                                subId = subId,
+                                attachments = emptyList<org.fossify.messages.models.Attachment>()
+                            )
+                            runOnUiThread {
+                                finish()
+                            }
+                        } catch (e: Exception) {
+                            runOnUiThread { showErrorToast(e) }
+                        }
+                    }
+                } else {
+                    BulkSendWorker.enqueue(applicationContext, body, subId, recipients)
+                    toast(R.string.new_message_queued)
+                    finish()
+                }
             }
         }
     }

@@ -9,9 +9,9 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
-import android.provider.Telephony
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
+import org.fossify.messages.helpers.DeviceCompatHelper
 import org.fossify.messages.R
 import org.fossify.messages.activities.MainActivity
 
@@ -81,7 +81,7 @@ class SmsKeepAliveService : Service() {
         private const val NOTIFICATION_ID = 19081
 
         fun ensureStarted(context: Context) {
-            if (Telephony.Sms.getDefaultSmsPackage(context) != context.packageName) return
+            if (!DeviceCompatHelper.isDefaultSmsApp(context)) return
             runCatching {
                 ContextCompat.startForegroundService(
                     context.applicationContext,

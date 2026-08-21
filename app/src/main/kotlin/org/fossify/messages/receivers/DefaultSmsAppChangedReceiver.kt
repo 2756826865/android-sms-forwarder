@@ -24,7 +24,7 @@ class DefaultSmsAppChangedReceiver : BroadcastReceiver() {
 
         val isDefault = intent.getBooleanExtra(
             Telephony.Sms.Intents.EXTRA_IS_DEFAULT_SMS_APP,
-            Telephony.Sms.getDefaultSmsPackage(context) == context.packageName,
+            org.fossify.messages.helpers.DeviceCompatHelper.isDefaultSmsApp(context),
         )
         if (isDefault) {
             NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID)

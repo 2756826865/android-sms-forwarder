@@ -261,12 +261,12 @@ object DeviceCompatHelper {
     }
 
     fun isDefaultSmsApp(context: Context): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val roleManager = context.getSystemService(android.app.role.RoleManager::class.java)
-            roleManager?.isRoleHeld(android.app.role.RoleManager.ROLE_SMS) == true
-        } else {
-            Telephony.Sms.getDefaultSmsPackage(context) == context.packageName
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val roleHeld = context.getSystemService(android.app.role.RoleManager::class.java)
+                ?.isRoleHeld(android.app.role.RoleManager.ROLE_SMS) == true
+            if (roleHeld) return true
         }
+        return Telephony.Sms.getDefaultSmsPackage(context) == context.packageName
     }
 
     fun isBatteryOptimizationIgnored(context: Context): Boolean {
