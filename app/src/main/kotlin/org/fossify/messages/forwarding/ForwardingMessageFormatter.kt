@@ -27,11 +27,19 @@ object ForwardingMessageFormatter {
             context.getNameAndPhotoFromPhoneNumber(sender).name
         }.getOrNull()?.takeIf { it.isNotBlank() && it != sender }
         val senderTitle = contactName ?: sender.ifBlank { "新短信" }
+        
         val sim = if (includeSim && subscriptionId >= 0) {
             getSimDescription(context, config, subscriptionId)
         } else {
             ""
         }
+        
+        val receiverNumber = if (subscriptionId >= 0) {
+            getReceiverNumber(context, config, subscriptionId)
+        } else {
+            ""
+        }
+
         val title = buildList {
             if (titlePrefix.isNotBlank()) add(titlePrefix.trim())
             if (sim.isNotBlank()) add("【$sim】")
@@ -40,39 +48,60 @@ object ForwardingMessageFormatter {
 
         val formattedTime = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
             .format(Date(receivedAt))
+            
         val content = when (config.templateMode) {
             MultiForwardConfig.TEMPLATE_STANDARD -> buildList {
                 add(body)
                 if (includeSender && contactName != null && sender.isNotBlank()) add("号码：$sender")
+                if (receiverNumber.isNotBlank()) add("接收号码：$receiverNumber")
                 if (includeTime) add("接收时间：$formattedTime")
             }
 
             MultiForwardConfig.TEMPLATE_DETAILED -> buildList {
                 add(body)
                 if (includeSender && sender.isNotBlank()) add("发送号码：$sender")
-                if (includeSim && sim.isNotBlank()) add("SIM：$sim")
+                if (includeSim && sim.isNotBlank()) add("卡槽：$sim")
+                if (receiverNumber.isNotBlank()) add("接收号码：$receiverNumber")
                 if (includeTime) add("接收时间：$formattedTime")
+                add("设备：${TemplateDataRetriever.getDeviceName()}")
             }
 
             MultiForwardConfig.TEMPLATE_EMOJI -> buildList {
                 add("📩新短信通知")
                 if (includeSender && sender.isNotBlank()) add("📞号码：$sender")
+                if (receiverNumber.isNotBlank()) add("📲接收：$receiverNumber")
                 if (includeTime) add("⏰时间：$formattedTime")
                 add("💬消息：$body")
-                if (includeSim && sim.isNotBlank()) add("📶SIM 卡：$sim")
+                if (includeSim && sim.isNotBlank()) add("📶卡槽：$sim")
+                add("🔋电池：${TemplateDataRetriever.getBatteryInfo(context)}")
             }
 
             MultiForwardConfig.TEMPLATE_CUSTOM -> {
                 val customTemplate = config.customTemplate
                 if (customTemplate.isNotBlank()) {
-                    listOf(
-                        customTemplate
-                            .replace("{sender}", sender)
-                            .replace("{name}", contactName ?: sender)
-                            .replace("{body}", body)
-                            .replace("{time}", formattedTime)
-                            .replace("{sim}", sim)
-                    )
+                    val result = customTemplate
+                        // Support old-style placeholders
+                        .replace("{sender}", sender)
+                        .replace("{name}", contactName ?: sender)
+                        .replace("{body}", body)
+                        .replace("{time}", formattedTime)
+                        .replace("{sim}", sim)
+                        .replace("{receiver}", receiverNumber)
+                        // Support new-style placeholders (double braces)
+                        .replace("{{FROM}}", sender)
+                        .replace("{{SMS}}", body)
+                        .replace("{{RECEIVE_TIME}}", formattedTime)
+                        .replace("{{CONTACT_NAME}}", contactName ?: sender)
+                        .replace("{{SIM_SLOT}}", sim)
+                        .replace("{{RECEIVER_NUMBER}}", receiverNumber)
+                        .replace("{{DEVICE_NAME}}", TemplateDataRetriever.getDeviceName())
+                        .replace("{{BATTERY_INFO}}", TemplateDataRetriever.getBatteryInfo(context))
+                        .replace("{{IP_LIST}}", TemplateDataRetriever.getIpAddress())
+                        .replace("{{NET_TYPE}}", TemplateDataRetriever.getNetworkType(context))
+                        .replace("{{APP_VERSION}}", TemplateDataRetriever.getAppVersion())
+                        .replace("{{CURRENT_TIME}}", TemplateDataRetriever.getCurrentTime())
+                    
+                    listOf(result)
                 } else {
                     buildList {
                         add(body)
@@ -86,6 +115,7 @@ object ForwardingMessageFormatter {
                 if (includeTime) add("接收时间：$formattedTime")
             }
         }.joinToString("\n")
+        
         return ForwardingPayload(title, content)
     }
 
@@ -103,4 +133,19 @@ object ForwardingMessageFormatter {
         val carrier = info?.carrierName?.toString().orEmpty()
         listOf(slot, carrier).filter(String::isNotBlank).joinToString(" · ")
     }.getOrDefault("SIM")
+
+    @SuppressLint("MissingPermission", "HardwareIds")
+    private fun getReceiverNumber(
+        context: Context,
+        config: MultiForwardConfig,
+        subscriptionId: Int,
+    ): String = runCatching {
+        if (subscriptionId < 0) return ""
+        val manager = context.getSystemService(SubscriptionManager::class.java)
+        val info = manager.getActiveSubscriptionInfo(subscriptionId)
+        val custom = info?.simSlotIndex?.let(config::customSimNumber).orEmpty()
+        if (custom.isNotBlank()) return@runCatching custom
+        @Suppress("DEPRECATION")
+        info?.number ?: ""
+    }.getOrDefault("")
 }

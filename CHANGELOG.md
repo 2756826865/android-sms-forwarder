@@ -6,12 +6,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.9.1] - 2026-07-19
-### Changed
-- Updated translations
+## [1.0.9] - 2026-08-26
+### Added
+- 全新的自定义转发模板系统，支持 {{FROM}}, {{SMS}}, {{RECEIVER_NUMBER}} 等 12 种动态标签。
+- 自定义模板设置中增加快捷插入面板，提升配置效率。
+- 首页及对话详情页增加下拉刷新（Swipe to Refresh）功能。
 
 ### Fixed
-- Fixed missing private contact names in message list and threads ([#829])
+- **小米/HyperOS 深度兼容**：解决 10086 等服务号发送短信后气泡消失的顽疾。
+- **MMS SMIL 容错**：修复部分彩信解析 XML 时导致的崩溃及日志堆栈堆积问题。
+- **性能优化**：优化 getMessages 查询逻辑，大幅减少系统 Provider 的冗余访问。
+- **资源泄露**：修复多处 Cursor 未关闭导致的内存与系统资源泄露。
+
+### Changed
+- 移除了冗余的黄页识别功能及数据库，应用体积减小约 0.5MB。
+- 将所有数据库敏感操作迁移至后台线程，提升 UI 流畅度。
+
 
 ## [1.9.0] - 2026-07-12
 ### Added

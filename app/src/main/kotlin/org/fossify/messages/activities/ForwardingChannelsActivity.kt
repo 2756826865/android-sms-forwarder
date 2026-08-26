@@ -4,11 +4,18 @@ import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import android.text.InputType
+import android.util.TypedValue
+import android.view.Gravity
 import android.view.ViewGroup
+import android.widget.Button
 import android.widget.EditText
+import android.widget.GridLayout
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.Switch
+import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
+import androidx.core.content.ContextCompat
 import org.fossify.commons.extensions.toast
 import org.fossify.commons.extensions.viewBinding
 import org.fossify.commons.helpers.NavigationIcon
@@ -221,49 +228,85 @@ class ForwardingChannelsActivity : SimpleActivity() {
     }
 
     private fun showCustomTemplateDialog() {
-        val container = android.widget.LinearLayout(this).apply {
-            orientation = android.widget.LinearLayout.VERTICAL
-            setPadding(48, 32, 48, 16)
+        val density = resources.displayMetrics.density
+        val paddingLarge = (24 * density).toInt()
+        val paddingSmall = (12 * density).toInt()
+        
+        val scroll = ScrollView(this)
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(paddingLarge, paddingSmall, paddingLarge, paddingSmall)
         }
+        scroll.addView(container)
 
-        val templateInput = android.widget.EditText(this).apply {
+        val tipText = TextView(this).apply {
+            text = getString(R.string.forwarding_custom_template_hint)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            setTextColor(Color.GRAY)
+            setPadding(0, 0, 0, (8 * density).toInt())
+        }
+        container.addView(tipText)
+
+        val templateInput = EditText(this).apply {
             hint = getString(R.string.forwarding_template_custom_hint)
             setText(multiConfig.customTemplate)
-            setPadding(0, 16, 0, 16)
-            minLines = 3
+            minLines = 6
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+            gravity = Gravity.TOP
+            setBackgroundResource(R.drawable.message_input_background)
+            setPadding(paddingSmall, paddingSmall, paddingSmall, paddingSmall)
         }
         container.addView(templateInput)
 
-        // 占位符快捷按钮
-        val buttonContainer = android.widget.LinearLayout(this).apply {
-            orientation = android.widget.LinearLayout.HORIZONTAL
-            setPadding(0, 8, 0, 0)
+        val grid = GridLayout(this).apply {
+            columnCount = 4
+            alignmentMode = GridLayout.ALIGN_BOUNDS
+            setPadding(0, paddingSmall, 0, 0)
         }
-
-        val placeholders = listOf(
-            Pair("{sender}", "号码"),
-            Pair("{name}", "姓名"),
-            Pair("{body}", "内容"),
-            Pair("{time}", "时间"),
-            Pair("{sim}", "SIM")
+        
+        val tags = listOf(
+            Pair("{{FROM}}", R.string.forwarding_template_tag_from),
+            Pair("{{SMS}}", R.string.forwarding_template_tag_sms),
+            Pair("{{RECEIVE_TIME}}", R.string.forwarding_template_tag_receive_time),
+            Pair("{{CONTACT_NAME}}", R.string.forwarding_template_tag_contact_name),
+            Pair("{{RECEIVER_NUMBER}}", R.string.forwarding_template_tag_receiver_number),
+            Pair("{{SIM_SLOT}}", R.string.forwarding_template_tag_sim_slot),
+            Pair("{{DEVICE_NAME}}", R.string.forwarding_template_tag_device_name),
+            Pair("{{BATTERY_INFO}}", R.string.forwarding_template_tag_battery_info),
+            Pair("{{NET_TYPE}}", R.string.forwarding_template_tag_net_type),
+            Pair("{{IP_LIST}}", R.string.forwarding_template_tag_ip_list),
+            Pair("{{APP_VERSION}}", R.string.forwarding_template_tag_app_version),
+            Pair("{{CURRENT_TIME}}", R.string.forwarding_template_tag_current_time),
         )
 
-        placeholders.forEach { (placeholder, label) ->
-            val btn = android.widget.Button(this).apply {
-                text = label
-                textSize = 12f
-                setPadding(16, 8, 16, 8)
+        val blueColor = Color.parseColor("#2196F3")
+        tags.forEach { (tag, stringRes) ->
+            val btn = Button(this).apply {
+                text = getString(stringRes)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                setTextColor(Color.WHITE)
+                isAllCaps = false
+                setBackgroundResource(R.drawable.send_button_background)
+                backgroundTintList = android.content.res.ColorStateList.valueOf(blueColor)
                 setOnClickListener {
-                    templateInput.append(placeholder)
+                    val start = templateInput.selectionStart
+                    val end = templateInput.selectionEnd
+                    templateInput.text.replace(Math.min(start, end), Math.max(start, end), tag)
                 }
             }
-            buttonContainer.addView(btn)
+            val params = GridLayout.LayoutParams().apply {
+                width = 0
+                height = ViewGroup.LayoutParams.WRAP_CONTENT
+                columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f)
+                setMargins((2 * density).toInt(), (2 * density).toInt(), (2 * density).toInt(), (2 * density).toInt())
+            }
+            grid.addView(btn, params)
         }
-        container.addView(buttonContainer)
+        container.addView(grid)
 
         AlertDialog.Builder(this)
             .setTitle(R.string.forwarding_template_custom)
-            .setView(container)
+            .setView(scroll)
             .setPositiveButton(R.string.forwarding_save) { _, _ ->
                 val template = templateInput.text.toString().trim()
                 if (template.isBlank()) {
@@ -450,7 +493,7 @@ class ForwardingChannelsActivity : SimpleActivity() {
             MultiForwardConfig.TEMPLATE_CUSTOM -> {
                 val custom = multiConfig.customTemplate
                 if (custom.isNotBlank()) {
-                    getString(R.string.forwarding_template_custom_summary, custom.take(20) + if (custom.length > 20) "…" else "")
+                    getString(R.string.forwarding_template_custom_summary, custom.take(60) + if (custom.length > 60) "…" else "")
                 } else {
                     getString(R.string.forwarding_template_custom)
                 }
