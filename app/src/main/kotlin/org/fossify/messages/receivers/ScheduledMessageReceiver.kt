@@ -59,7 +59,13 @@ class ScheduledMessageReceiver : BroadcastReceiver() {
 
         try {
             Handler(Looper.getMainLooper()).post {
-                context.sendMessageCompat(message.body, addresses, message.subscriptionId, attachments)
+                context.sendMessageCompat(
+                    text = message.body,
+                    addresses = addresses,
+                    subId = message.subscriptionId,
+                    attachments = attachments,
+                    triggerType = org.fossify.messages.models.SmsSendTriggerType.SCHEDULED_ALARM
+                )
             }
 
             // delete temporary conversation and message as it's already persisted to the telephony db now

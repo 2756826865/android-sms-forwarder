@@ -259,4 +259,12 @@ class Config(context: Context) : BaseConfig(context) {
             LOW_BATTERY_CHANNELS,
             value.intersect(ForwardingChannels.lowBatteryChannels.toSet()),
         ).apply()
+
+    var shadowOperationTrackingEnabled: Boolean
+        get() = prefs.getBoolean("shadow_operation_tracking_enabled", true)
+        set(value) = prefs.edit().putBoolean("shadow_operation_tracking_enabled", value).apply()
+
+    var smsSendOperationShadowEnabled: Boolean
+        get() = prefs.getBoolean("sms_send_operation_shadow_enabled", true)
+        set(value) = prefs.edit().putBoolean("sms_send_operation_shadow_enabled", value).apply()
 }

@@ -242,7 +242,12 @@ class MainActivity : SimpleActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        bus?.unregister(this)
+        try {
+            if (bus?.isRegistered(eventSubscriber) == true) {
+                bus?.unregister(eventSubscriber)
+            }
+        } catch (_: Throwable) {
+        }
     }
 
     override fun onBackPressedCompat(): Boolean {
@@ -467,10 +472,12 @@ class MainActivity : SimpleActivity() {
                             }
 
                             initMessenger()
-                            bus = EventBus.getDefault()
                             try {
-                                bus!!.register(this)
-                            } catch (_: Exception) {
+                                bus = EventBus.getDefault()
+                                if (bus?.isRegistered(eventSubscriber) == false) {
+                                    bus?.register(eventSubscriber)
+                                }
+                            } catch (_: Throwable) {
                             }
                         }
                     } else {
@@ -976,9 +983,11 @@ class MainActivity : SimpleActivity() {
         startActivity(Intent(applicationContext, AboutActivity::class.java))
     }
 
-    @Subscribe(threadMode = ThreadMode.MAIN)
-    fun refreshConversations(@Suppress("unused") event: Events.RefreshConversations) {
-        initMessenger()
+    private val eventSubscriber = object {
+        @Subscribe(threadMode = ThreadMode.MAIN)
+        fun refreshConversations(@Suppress("unused") event: Events.RefreshConversations) {
+            initMessenger()
+        }
     }
 
 }

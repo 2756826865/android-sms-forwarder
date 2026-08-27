@@ -344,9 +344,13 @@
 
         <service android:name="com.android.mms.transaction.TransactionService" />
 
-        <receiver android:name=".receivers.SmsStatusSentReceiver" />
+        <receiver
+            android:name=".receivers.SmsStatusSentReceiver"
+            android:exported="false" />
 
-        <receiver android:name=".receivers.SmsStatusDeliveredReceiver" />
+        <receiver
+            android:name=".receivers.SmsStatusDeliveredReceiver"
+            android:exported="false" />
 
         <receiver
             android:name=".receivers.SmsReceiver"
@@ -422,7 +426,7 @@
         <receiver
             android:name=".receivers.RescheduleAlarmsReceiver"
             android:enabled="true"
-            android:exported="false">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />

@@ -53,6 +53,9 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.security.MessageDigest
 import java.util.concurrent.Executors
+import org.fossify.messages.helpers.ShadowRepository
+import org.fossify.messages.helpers.ShadowHmacHelper
+import org.fossify.messages.models.MessageOperation
 
 /**
  * Serial foreground owner for incoming SMS processing. The service remains
@@ -129,9 +132,32 @@ open class IncomingSmsService : Service() {
             .firstOrNull { it != SubscriptionManager.INVALID_SUBSCRIPTION_ID }
             ?: SubscriptionManager.INVALID_SUBSCRIPTION_ID
         Log.d(TAG, "subscriptionId resolved: $subscriptionId from ${intent.action}")
+
+        // 1A: Initialize Shadow Operation (Fail-open, non-blocking)
+        val operationId = java.util.UUID.randomUUID().toString()
+        ShadowRepository.recordOperation(
+            this,
+            MessageOperation(
+                operationId = operationId,
+                direction = "INCOMING",
+                source = "BROADCAST",
+                addressHmac = ShadowHmacHelper.calculateHmac(address, normalize = true),
+                bodyHmac = ShadowHmacHelper.calculateHmac(body, normalize = true),
+                bodyLength = body.length,
+                subscriptionId = subscriptionId,
+                pduCount = parts.size,
+                messageTimestamp = sentAt,
+                receivedAt = receivedAt
+            )
+        )
+        ShadowRepository.recordStep(this, operationId, "OPERATION_CREATED", "SUCCESS")
+        ShadowRepository.recordStep(this, operationId, "RECEIVER_ARRIVED", "SUCCESS")
+        ShadowRepository.recordStep(this, operationId, "PDU_PARSED", "SUCCESS")
+
         val fingerprint = fingerprint(address, body, sentAt, subscriptionId)
         if (wasPersisted(fingerprint)) {
             Log.i(TAG, "duplicate ${intent.action} ignored after successful persistence")
+            ShadowRepository.recordStep(this, operationId, "DUPLICATE_CHECK", "SKIPPED", "Already persisted")
             return
         }
 
@@ -141,23 +167,41 @@ open class IncomingSmsService : Service() {
 
         if (isFiltered(address, body)) {
             Log.i(TAG, "incoming SMS from $address was filtered by user rules")
+            ShadowRepository.recordStep(this, operationId, "FILTER_MATCHED", "OBSERVED")
             return
         }
 
         val requestedThreadId = getThreadId(address)
-        val insertedMessageId = persistWithRetry(
-            address = address,
-            subject = parts.last().pseudoSubject.orEmpty(),
-            body = body,
-            receivedAt = receivedAt,
-            sentAt = sentAt,
-            threadId = requestedThreadId,
-            subscriptionId = subscriptionId,
-        )
+        ShadowRepository.recordStep(this, operationId, "PROVIDER_INSERT", "STARTED")
+        val insertedMessageId = try {
+            val id = persistWithRetry(
+                address = address,
+                subject = parts.last().pseudoSubject.orEmpty(),
+                body = body,
+                receivedAt = receivedAt,
+                sentAt = sentAt,
+                threadId = requestedThreadId,
+                subscriptionId = subscriptionId,
+            )
+            ShadowRepository.recordStep(this, operationId, "PROVIDER_INSERT", "SUCCEEDED", "msgId=$id")
+            id
+        } catch (e: Exception) {
+            ShadowRepository.recordStep(this, operationId, "PROVIDER_INSERT", "FAILED", e.message)
+            throw e
+        }
+
         val resolvedThreadId = getSmsThreadId(insertedMessageId)
             .takeIf { it > 0L }
             ?: requestedThreadId.takeIf { it > 0L }
             ?: error("短信已写入，但无法取得 thread_id")
+
+        ShadowRepository.updateOperation(this, operationId) {
+            it.copy(
+                providerMessageId = insertedMessageId,
+                threadId = resolvedThreadId,
+                providerInsertedAt = System.currentTimeMillis()
+            )
+        }
 
         // Only a verified provider insert can suppress a second delivery action.
         markPersisted(fingerprint)
@@ -176,9 +220,11 @@ open class IncomingSmsService : Service() {
                 threadId = resolvedThreadId,
                 subscriptionId = subscriptionId,
                 status = parts.last().status,
+                operationId = operationId
             )
         }.onFailure { error ->
             Log.e(TAG, "system SMS persisted, local refresh failed", error)
+            ShadowRepository.recordStep(this, operationId, "LOCAL_SYNC_OBSERVED", "FAILED", error.message)
             SmsRecoveryWorker.enqueueNow(applicationContext)
         }
 
@@ -222,6 +268,8 @@ open class IncomingSmsService : Service() {
             !rulesConfig.enabled ||
             rulesConfig.rules.none { it.enabled } ||
             ruleDecision?.matchedRules?.isNotEmpty() == true
+        
+        ShadowRepository.recordStep(this, operationId, "REMOTE_COMMAND_OBSERVED", "STARTED")
         val remoteCommandConsumed = RemoteSmsCommandProcessor.tryConsume(
             context = this,
             sender = address,
@@ -231,6 +279,9 @@ open class IncomingSmsService : Service() {
             messageId = insertedMessageId,
             allowExecution = remoteCommandAllowed,
         )
+        if (remoteCommandConsumed) {
+            ShadowRepository.recordStep(this, operationId, "REMOTE_COMMAND_OBSERVED", "SUCCESS", "Consumed")
+        }
 
         if (!remoteCommandConsumed && ruleDecision != null) {
             val history = ForwardingHistoryStore(applicationContext)
@@ -249,33 +300,47 @@ open class IncomingSmsService : Service() {
                 }
         }
 
+        ShadowRepository.recordStep(this, operationId, "FORWARDING_OBSERVED", "STARTED")
         if (receiverStatus.enabled && !remoteCommandConsumed && (allowedForwardChannels == null || ForwardingChannels.PUSHPLUS in allowedForwardChannels)) {
+            ShadowRepository.recordDelivery(this, operationId, ForwardingChannels.PUSHPLUS, "QUEUED")
             PushPlusWorker.enqueue(
-                this,
-                address,
-                body,
-                receivedAt,
-                subscriptionId,
-                uniqueId,
+                context = this,
+                sender = address,
+                body = body,
+                receivedAt = receivedAt,
+                subscriptionId = subscriptionId,
+                uniqueId = uniqueId,
+                operationId = operationId
             )
         }
         if (!remoteCommandConsumed && MultiForwardConfig(this).anyEnabled()) {
+            val multiConfig = MultiForwardConfig(this)
+            val channels = buildMultiChannelAllowedChannels(
+                rulesConfig = rulesConfig,
+                allowedForwardChannels = allowedForwardChannels,
+                multiConfig = multiConfig,
+            )
+            val activeChannels = channels ?: multiConfig.enabledChannelIds()
+            activeChannels.forEach { channel ->
+                ShadowRepository.recordDelivery(this, operationId, channel, "QUEUED")
+            }
+            
             MultiChannelForwardWorker.enqueue(
-                this,
-                address,
-                body,
-                receivedAt,
-                subscriptionId,
-                uniqueId,
-                allowedChannels = buildMultiChannelAllowedChannels(
-                    rulesConfig = rulesConfig,
-                    allowedForwardChannels = allowedForwardChannels,
-                    multiConfig = MultiForwardConfig(this),
-                ),
+                context = this,
+                sender = address,
+                body = body,
+                receivedAt = receivedAt,
+                subscriptionId = subscriptionId,
+                uniqueId = uniqueId,
+                targetChannel = "",
+                allowedChannels = channels,
+                operationId = operationId
             )
         }
         receiverStatus.lastReceiverStatus =
             "已接收并写入短信库，短信ID：$insertedMessageId，发送方：$address"
+            
+        ShadowRepository.recordStep(this, operationId, "LEGACY_PIPELINE_RETURNED", "SUCCESS")
     }
 
     private fun buildMultiChannelAllowedChannels(
@@ -350,6 +415,7 @@ open class IncomingSmsService : Service() {
         threadId: Long,
         subscriptionId: Int,
         status: Int,
+        operationId: String? = null
     ) {
         val contact = getNameAndPhotoFromPhoneNumber(address)
         val photoUri = contact.photoUri.orEmpty()
@@ -390,6 +456,11 @@ open class IncomingSmsService : Service() {
         syncThreadToLocal(threadId)
         refreshMessages()
         refreshConversations()
+        
+        operationId?.let { 
+            ShadowRepository.recordStep(this@IncomingSmsService, it, "LOCAL_SYNC_OBSERVED", "SUCCESS")
+        }
+        
         showReceivedMessageNotification(
             messageId = messageId,
             address = address,
@@ -398,6 +469,10 @@ open class IncomingSmsService : Service() {
             threadId = threadId,
             bitmap = getNotificationBitmap(photoUri),
         )
+        
+        operationId?.let { 
+            ShadowRepository.recordStep(this@IncomingSmsService, it, "NOTIFICATION_OBSERVED", "SUCCESS")
+        }
     }
 
     private fun wasPersisted(fingerprint: String): Boolean = synchronized(duplicateLock) {

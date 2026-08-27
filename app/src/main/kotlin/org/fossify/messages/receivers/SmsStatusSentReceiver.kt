@@ -24,6 +24,7 @@ import org.fossify.messages.helpers.refreshConversations
 import org.fossify.messages.helpers.refreshMessages
 import org.fossify.messages.remote.RemoteControlReceiptForwarder
 import org.fossify.messages.receivers.SendStatusReceiver
+import org.fossify.messages.helpers.SmsSendRepository
 import org.fossify.commons.models.SimpleContact
 import org.fossify.commons.models.PhoneNumber
 
@@ -50,7 +51,24 @@ class SmsStatusSentReceiver : SendStatusReceiver() {
 
     override fun updateAppDatabase(context: Context, intent: Intent, receiverResultCode: Int) {
         val messageUri = intent.data
-        Log.i(TAG, "updateAppDatabase: uri=$messageUri, resultCode=$receiverResultCode")
+        val sendOperationId = intent.getStringExtra(SendStatusReceiver.EXTRA_SEND_OPERATION_ID)
+        val partIndex = if (intent.hasExtra(SendStatusReceiver.EXTRA_PART_INDEX)) {
+            intent.getIntExtra(SendStatusReceiver.EXTRA_PART_INDEX, 0)
+        } else {
+            null
+        }
+
+        // 1B-3B: Record to shadow repository (Fail-open, non-blocking)
+        if (!sendOperationId.isNullOrBlank()) {
+            SmsSendRepository.recordSentResult(
+                context = context,
+                operationId = sendOperationId,
+                partIndex = partIndex,
+                resultCode = receiverResultCode
+            )
+        }
+
+        Log.i(TAG, "updateAppDatabase: uri=$messageUri, resultCode=$receiverResultCode, opId=$sendOperationId, part=$partIndex")
         if (messageUri != null) {
             val messageId = messageUri.lastPathSegment?.toLong() ?: 0L
             val intentThreadId = intent.getLongExtra(SendStatusReceiver.EXTRA_THREAD_ID, 0L)

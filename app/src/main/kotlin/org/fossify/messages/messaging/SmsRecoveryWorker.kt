@@ -30,6 +30,7 @@ import org.fossify.messages.helpers.refreshConversations
 import org.fossify.messages.helpers.refreshMessages
 import org.fossify.messages.remote.RemoteSmsCommandProcessor
 import java.util.concurrent.TimeUnit
+import org.fossify.messages.helpers.ShadowRepository
 
 /** Repairs SMS broadcasts delayed or suppressed by aggressive OEM background policies. */
 class SmsRecoveryWorker(
@@ -79,6 +80,8 @@ class SmsRecoveryWorker(
                 val readIndex = cursor.getColumnIndexOrThrow(Telephony.Sms.READ)
 
                 val threadIdsToSync = mutableSetOf<Long>()
+                ShadowRepository.incrementCounter(applicationContext, "RECOVERY_SCAN_STARTED")
+                
                 while (cursor.moveToNext()) {
                     val id = cursor.getLong(idIndex)
                     val address = cursor.getString(addressIndex).orEmpty()
@@ -92,8 +95,13 @@ class SmsRecoveryWorker(
                     }
                     val isRead = cursor.getInt(readIndex) == 1
                     newestSeen = maxOf(newestSeen, date)
-                    if (id in localIds || address.isBlank()) continue
+                    
+                    if (id in localIds || address.isBlank()) {
+                        ShadowRepository.incrementCounter(applicationContext, "RECOVERY_ITEM_SKIPPED")
+                        continue
+                    }
 
+                    ShadowRepository.incrementCounter(applicationContext, "RECOVERY_ITEM_FOUND")
                     threadIdsToSync.add(threadId)
                     repairedAny = true
                     val uniqueId = "sms-$id"
@@ -118,9 +126,12 @@ class SmsRecoveryWorker(
                         null
                     }
                     if (ruleDecision?.blockedChannels?.isNotEmpty() == true) {
-                        rulesConfig.lastDecision = "补偿恢复 · $address · ${
-                            ruleDecision.blockedChannels.map(ForwardingChannels::displayName).joinToString("、")
-                        } · ${ruleDecision.reason}"
+                        val decisionTime = java.text.SimpleDateFormat("MM-dd HH:mm:ss", java.util.Locale.getDefault())
+                            .format(java.util.Date())
+                        val blockedNames = ruleDecision.blockedChannels
+                            .map(ForwardingChannels::displayName)
+                            .joinToString("、")
+                        rulesConfig.lastDecision = "补偿恢复 · $address · $blockedNames · ${ruleDecision.reason}"
                     }
                     val remoteCommandAllowed = !rulesConfig.affectsRemoteCommands() ||
                         !rulesConfig.enabled ||
@@ -159,12 +170,12 @@ class SmsRecoveryWorker(
                     }
                     if (!remoteCommandConsumed && multiConfig.anyEnabled()) {
                         MultiChannelForwardWorker.enqueue(
-                            applicationContext,
-                            address,
-                            body,
-                            date,
-                            subscriptionId,
-                            uniqueId,
+                            context = applicationContext,
+                            sender = address,
+                            body = body,
+                            receivedAt = date,
+                            subscriptionId = subscriptionId,
+                            uniqueId = uniqueId,
                             allowedChannels = buildMultiChannelAllowedChannels(rulesConfig, allowedForwardChannels, multiConfig),
                         )
                     }
@@ -188,8 +199,11 @@ class SmsRecoveryWorker(
                 
                 // 对本轮扫描出的 threadId 批量去重后执行同步，避免查询放大
                 threadIdsToSync.forEach { threadId ->
+                    ShadowRepository.incrementCounter(applicationContext, "LEGACY_RECOVERY_ACTION_OBSERVED")
                     applicationContext.syncThreadToLocal(threadId)
                 }
+                
+                ShadowRepository.incrementCounter(applicationContext, "RECOVERY_SCAN_COMPLETED")
             }
         }.onFailure {
             return Result.retry()

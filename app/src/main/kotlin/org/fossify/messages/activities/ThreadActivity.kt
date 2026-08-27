@@ -272,8 +272,13 @@ class ThreadActivity : SimpleActivity() {
         isRecycleBin = intent.getBooleanExtra(IS_RECYCLE_BIN, false)
         isLaunchedFromShortcut = intent.getBooleanExtra(IS_LAUNCHED_FROM_SHORTCUT, false)
 
-        bus = EventBus.getDefault()
-        bus!!.register(this)
+        try {
+            bus = EventBus.getDefault()
+            if (bus?.isRegistered(threadEventSubscriber) == false) {
+                bus?.register(threadEventSubscriber)
+            }
+        } catch (_: Throwable) {
+        }
 
         loadConversation()
         setupAttachmentPickerView()
@@ -351,7 +356,12 @@ class ThreadActivity : SimpleActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        bus?.unregister(this)
+        try {
+            if (bus?.isRegistered(threadEventSubscriber) == true) {
+                bus?.unregister(threadEventSubscriber)
+            }
+        } catch (_: Throwable) {
+        }
     }
 
     private fun saveDraftMessage() {
@@ -1752,7 +1762,14 @@ class ThreadActivity : SimpleActivity() {
             refreshedSinceSent = false
             ensureBackgroundThread {
                 // 1. 在后台线程执行发送，避免 Room 主线程访问异常
-                sendMessageCompat(text, addresses, subscriptionId, attachments, messageToResend)
+                sendMessageCompat(
+                    text = text,
+                    addresses = addresses,
+                    subId = subscriptionId,
+                    attachments = attachments,
+                    messageId = messageToResend,
+                    triggerType = org.fossify.messages.models.SmsSendTriggerType.THREAD
+                )
                 
                 val number = addresses.firstOrNull()
                 val synced = syncThreadToLocal(threadId, address = number)
@@ -1930,8 +1947,14 @@ class ThreadActivity : SimpleActivity() {
         }
     }
 
-    @Subscribe(threadMode = ThreadMode.ASYNC)
-    fun refreshMessages(@Suppress("unused") event: Events.RefreshMessages) {
+    private val threadEventSubscriber = object {
+        @Subscribe(threadMode = ThreadMode.ASYNC)
+        fun onRefreshMessages(@Suppress("unused") event: Events.RefreshMessages) {
+            refreshMessages()
+        }
+    }
+
+    fun refreshMessages() {
         if (isRecycleBin) {
             return
         }

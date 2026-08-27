@@ -15,6 +15,10 @@ import org.fossify.messages.helpers.THREAD_ID
 import org.fossify.messages.helpers.THREAD_NUMBER
 import org.fossify.messages.messaging.sendMessageCompat
 
+import org.fossify.messages.messaging.SimResolutionRequest
+import org.fossify.messages.messaging.SubscriptionResolver
+import org.fossify.messages.models.SmsSendTriggerType
+
 class DirectReplyReceiver : BroadcastReceiver() {
     @SuppressLint("MissingPermission")
     override fun onReceive(context: Context, intent: Intent) {
@@ -25,20 +29,25 @@ class DirectReplyReceiver : BroadcastReceiver() {
         body = context.removeDiacriticsIfNeeded(body)
 
         if (address != null) {
-            var subscriptionId: Int? = null
-            val availableSIMs = context.subscriptionManagerCompat().activeSubscriptionInfoList
-            if ((availableSIMs?.size ?: 0) > 1) {
-                val currentSIMCardIndex = context.config.getUseSIMIdAtNumber(address)
-                val wantedId = availableSIMs?.getOrNull(currentSIMCardIndex)
-                if (wantedId != null) {
-                    subscriptionId = wantedId.subscriptionId
-                }
-            }
+            val simResult = SubscriptionResolver.resolve(
+                context,
+                SimResolutionRequest(
+                    targetAddress = address,
+                    allowFallback = true
+                )
+            )
+            val subscriptionId: Int? = if (simResult.isSuccessful) simResult.resolvedSubscriptionId else null
 
             ensureBackgroundThread {
                 var messageId = 0L
                 try {
-                    context.sendMessageCompat(body, listOf(address), subscriptionId, emptyList())
+                    context.sendMessageCompat(
+                        text = body,
+                        addresses = listOf(address),
+                        subId = subscriptionId,
+                        attachments = emptyList(),
+                        triggerType = SmsSendTriggerType.DIRECT_REPLY
+                    )
                     val message = context.getMessages(
                         threadId = threadId, includeScheduledMessages = false, limit = 1
                     ).lastOrNull()

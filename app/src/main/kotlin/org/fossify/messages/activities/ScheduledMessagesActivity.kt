@@ -133,10 +133,11 @@ class ScheduledMessagesActivity : SimpleActivity() {
     private fun sendNow(message: Message) {
         ensureBackgroundThread {
             sendMessageCompat(
-                message.body,
-                message.participants.getAddresses(),
-                message.subscriptionId,
-                emptyList(),
+                text = message.body,
+                addresses = message.participants.getAddresses(),
+                subId = message.subscriptionId,
+                attachments = emptyList(),
+                triggerType = org.fossify.messages.models.SmsSendTriggerType.SCHEDULED_SEND_NOW
             )
             removeScheduledMessage(message)
             runOnUiThread { loadMessages() }

@@ -15,6 +15,9 @@ import org.fossify.messages.messaging.SmsRecoveryWorker
 import org.fossify.messages.helpers.LowBatteryCheckWorker
 import org.fossify.messages.services.DingTalkRemoteControlService
 import org.fossify.messages.services.SmsKeepAliveService
+import org.fossify.messages.recovery.RecoveryEngine
+import org.fossify.messages.recovery.RecoveryWorker
+import org.fossify.messages.models.RecoveryTriggerSource
 
 class App : FossifyApp() {
     override val isAppLockFeatureAvailable = true
@@ -46,9 +49,14 @@ class App : FossifyApp() {
 
         ensureBackgroundThread {
             rescheduleAllScheduledMessages()
+            kotlinx.coroutines.runBlocking {
+                RecoveryEngine.runRecoveryScan(this@App, RecoveryTriggerSource.STARTUP)
             }
+        }
+        RecoveryWorker.schedule(this)
         SmsRecoveryWorker.schedule(this)
         LowBatteryCheckWorker.sync(this)
+        org.fossify.messages.helpers.ShadowCleanupWorker.schedule(this)
         SmsKeepAliveService.ensureStarted(this)
         DingTalkRemoteControlService.ensureStarted(this)
     }

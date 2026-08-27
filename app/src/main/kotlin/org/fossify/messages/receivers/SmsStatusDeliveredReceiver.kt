@@ -6,10 +6,12 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.Telephony.Sms
+import android.util.Log
 import org.fossify.commons.helpers.ensureBackgroundThread
 import org.fossify.messages.extensions.messagesDB
 import org.fossify.messages.extensions.messagingUtils
 import org.fossify.messages.helpers.refreshMessages
+import org.fossify.messages.helpers.SmsSendRepository
 import org.fossify.messages.remote.RemoteControlReceiptForwarder
 
 /** Handles updating databases and states when a sent SMS message is delivered. */
@@ -72,22 +74,32 @@ class SmsStatusDeliveredReceiver : SendStatusReceiver() {
         if (messageUri != null) {
             resolver.update(messageUri, values, null, null)
         } else {
-            // mark latest sms as delivered, need to check if this is still necessary (or reliable)
-            val cursor = resolver.query(Sms.Sent.CONTENT_URI, null, null, null, "date desc")
-            cursor?.use {
-                if (cursor.moveToFirst()) {
-                    @SuppressLint("Range")
-                    val id = cursor.getString(cursor.getColumnIndex(Sms.Sent._ID))
-                    val selection = "${Sms._ID} = ?"
-                    val selectionArgs = arrayOf(id.toString())
-                    resolver.update(Sms.Sent.CONTENT_URI, values, selection, selectionArgs)
-                }
-            }
+            // 1B-3C: Prohibit blind "date desc" guesswork update to avoid corrupting unrelated SMS records
+            Log.w(TAG, "updateSmsStatusAndDateSent skipped: messageUri is null, avoiding blind date desc update")
         }
     }
 
     override fun updateAppDatabase(context: Context, intent: Intent, receiverResultCode: Int) {
         val messageUri: Uri? = intent.data
+        val sendOperationId = intent.getStringExtra(SendStatusReceiver.EXTRA_SEND_OPERATION_ID)
+        val partIndex = if (intent.hasExtra(SendStatusReceiver.EXTRA_PART_INDEX)) {
+            intent.getIntExtra(SendStatusReceiver.EXTRA_PART_INDEX, 0)
+        } else {
+            null
+        }
+
+        // 1B-3C: Record delivered status to shadow repository (Fail-open, non-blocking)
+        if (!sendOperationId.isNullOrBlank()) {
+            SmsSendRepository.recordDeliveredResult(
+                context = context,
+                operationId = sendOperationId,
+                partIndex = partIndex,
+                resultCode = status
+            )
+        }
+
+        Log.i(TAG, "updateAppDatabase: uri=$messageUri, status=$status, opId=$sendOperationId, part=$partIndex")
+
         if (messageUri != null) {
             val messageId = messageUri.lastPathSegment?.toLong() ?: 0L
             ensureBackgroundThread {
@@ -103,4 +115,9 @@ class SmsStatusDeliveredReceiver : SendStatusReceiver() {
             }
         }
     }
+
+    private companion object {
+        const val TAG = "SmsStatusDelivered"
+    }
 }
+

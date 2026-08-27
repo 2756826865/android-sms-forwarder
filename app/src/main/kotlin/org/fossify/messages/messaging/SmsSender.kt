@@ -21,7 +21,8 @@ class SmsSender(val app: Application) {
     // This should be called from a RequestWriter queue thread
     fun sendMessage(
         subId: Int, destination: String, body: String, serviceCenter: String?,
-        requireDeliveryReport: Boolean, messageUri: Uri, threadId: Long = 0L
+        requireDeliveryReport: Boolean, messageUri: Uri, threadId: Long = 0L,
+        sendOperationId: String? = null
     ) {
         var dest = destination
         if (body.isEmpty()) {
@@ -41,7 +42,8 @@ class SmsSender(val app: Application) {
         }
         // Actually send the sms
         sendInternal(
-            subId, dest, messages, serviceCenter, requireDeliveryReport, messageUri, threadId
+            subId, dest, messages, serviceCenter, requireDeliveryReport, messageUri, threadId,
+            sendOperationId
         )
     }
 
@@ -49,7 +51,8 @@ class SmsSender(val app: Application) {
     private fun sendInternal(
         subId: Int, dest: String,
         messages: ArrayList<String>, serviceCenter: String?,
-        requireDeliveryReport: Boolean, messageUri: Uri, threadId: Long
+        requireDeliveryReport: Boolean, messageUri: Uri, threadId: Long,
+        sendOperationId: String?
     ) {
         val smsManager = getSmsManager(app, subId)
         val messageCount = messages.size
@@ -68,15 +71,24 @@ class SmsSender(val app: Application) {
         }
 
         try {
+            SmsSendCoordinator.observeSubmitting(app, sendOperationId)
             for (i in 0 until messageCount) {
                 // Make pending intents different for each message part
                 val partId = if (messageCount <= 1) 0 else i + 1
-                if (effectiveDeliveryReport && i == messageCount - 1) {
+                val isLastPart = (i == messageCount - 1)
+                if (effectiveDeliveryReport && isLastPart) {
                     deliveryIntents.add(
                         PendingIntent.getBroadcast(
                             app,
                             partId,
-                            getDeliveredStatusIntent(messageUri, subId),
+                            getDeliveredStatusIntent(
+                                requestUri = messageUri,
+                                subId = subId,
+                                sendOperationId = sendOperationId,
+                                partIndex = i,
+                                partCount = messageCount,
+                                isLastPart = true
+                            ),
                             flags
                         )
                     )
@@ -87,7 +99,17 @@ class SmsSender(val app: Application) {
                     PendingIntent.getBroadcast(
                         app,
                         partId,
-                        getSendStatusIntent(messageUri, subId, guardKey, threadId, dest),
+                        getSendStatusIntent(
+                            requestUri = messageUri,
+                            subId = subId,
+                            guardKey = guardKey,
+                            threadId = threadId,
+                            address = dest,
+                            sendOperationId = sendOperationId,
+                            partIndex = i,
+                            partCount = messageCount,
+                            isLastPart = isLastPart
+                        ),
                         flags
                     )
                 )
@@ -116,24 +138,51 @@ class SmsSender(val app: Application) {
                     dest, serviceCenter, messages, sentIntents, deliveryIntents
                 )
             }
+            SmsSendCoordinator.observeApiSubmitted(app, sendOperationId, messageCount)
         } catch (e: Exception) {
             HonorSmsCompatibility.complete(app, guardKey)
+            SmsSendCoordinator.observeFailure(app, sendOperationId, e.javaClass.name)
             throw SmsException(ERROR_SENDING_MESSAGE, e)
         }
     }
 
-    private fun getSendStatusIntent(requestUri: Uri, subId: Int, guardKey: String, threadId: Long, address: String): Intent {
+    internal fun getSendStatusIntent(
+        requestUri: Uri,
+        subId: Int,
+        guardKey: String,
+        threadId: Long,
+        address: String,
+        sendOperationId: String? = null,
+        partIndex: Int = 0,
+        partCount: Int = 1,
+        isLastPart: Boolean = true,
+    ): Intent {
         val intent = Intent(SendStatusReceiver.SMS_SENT_ACTION, requestUri, app, SmsStatusSentReceiver::class.java)
         intent.putExtra(SendStatusReceiver.EXTRA_SUB_ID, subId)
         intent.putExtra(SendStatusReceiver.EXTRA_THREAD_ID, threadId)
         intent.putExtra(SendStatusReceiver.EXTRA_ADDRESS, address)
         if (guardKey.isNotBlank()) intent.putExtra(SendStatusReceiver.EXTRA_SEND_GUARD_KEY, guardKey)
+        if (!sendOperationId.isNullOrBlank()) intent.putExtra(SendStatusReceiver.EXTRA_SEND_OPERATION_ID, sendOperationId)
+        intent.putExtra(SendStatusReceiver.EXTRA_PART_INDEX, partIndex)
+        intent.putExtra(SendStatusReceiver.EXTRA_PART_COUNT, partCount)
+        intent.putExtra(SendStatusReceiver.EXTRA_IS_LAST_PART, isLastPart)
         return intent
     }
 
-    private fun getDeliveredStatusIntent(requestUri: Uri, subId: Int): Intent {
+    internal fun getDeliveredStatusIntent(
+        requestUri: Uri,
+        subId: Int,
+        sendOperationId: String? = null,
+        partIndex: Int = 0,
+        partCount: Int = 1,
+        isLastPart: Boolean = true,
+    ): Intent {
         val intent = Intent(SendStatusReceiver.SMS_DELIVERED_ACTION, requestUri, app, SmsStatusDeliveredReceiver::class.java)
         intent.putExtra(SendStatusReceiver.EXTRA_SUB_ID, subId)
+        if (!sendOperationId.isNullOrBlank()) intent.putExtra(SendStatusReceiver.EXTRA_SEND_OPERATION_ID, sendOperationId)
+        intent.putExtra(SendStatusReceiver.EXTRA_PART_INDEX, partIndex)
+        intent.putExtra(SendStatusReceiver.EXTRA_PART_COUNT, partCount)
+        intent.putExtra(SendStatusReceiver.EXTRA_IS_LAST_PART, isLastPart)
         return intent
     }
 

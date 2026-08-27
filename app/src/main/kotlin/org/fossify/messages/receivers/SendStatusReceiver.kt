@@ -38,6 +38,13 @@ abstract class SendStatusReceiver : BroadcastReceiver() {
         const val EXTRA_THREAD_ID = "threadId"
         const val EXTRA_ADDRESS = "address"
 
+        // Standardized extras for SmsSendOperation & multipart correlation
+        const val EXTRA_SEND_OPERATION_ID = "sendOperationId"
+        const val EXTRA_PART_INDEX = "partIndex"
+        const val EXTRA_PART_COUNT = "partCount"
+        const val EXTRA_IS_LAST_PART = "isLastPart"
+
         const val NO_ERROR_CODE = -1
     }
 }
+
