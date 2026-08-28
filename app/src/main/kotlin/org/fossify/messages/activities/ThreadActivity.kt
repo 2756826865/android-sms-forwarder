@@ -215,6 +215,12 @@ class ThreadActivity : SimpleActivity() {
     private var refreshedSinceSent = false
     private var threadItems: List<ThreadItem> = emptyList()
     private var bus: EventBus? = null
+    private val eventListener = object {
+        @Subscribe(threadMode = ThreadMode.ASYNC)
+        fun onRefreshMessages(@Suppress("unused") event: Events.RefreshMessages) {
+            refreshMessages(event)
+        }
+    }
     private var conversation: Conversation? = null
     private var participants = ArrayList<SimpleContact>()
     private var privateContacts = ArrayList<SimpleContact>()
@@ -272,10 +278,10 @@ class ThreadActivity : SimpleActivity() {
         isRecycleBin = intent.getBooleanExtra(IS_RECYCLE_BIN, false)
         isLaunchedFromShortcut = intent.getBooleanExtra(IS_LAUNCHED_FROM_SHORTCUT, false)
 
+        bus = EventBus.getDefault()
         try {
-            bus = EventBus.getDefault()
-            if (bus?.isRegistered(threadEventSubscriber) == false) {
-                bus?.register(threadEventSubscriber)
+            if (!bus!!.isRegistered(eventListener)) {
+                bus!!.register(eventListener)
             }
         } catch (_: Throwable) {
         }
@@ -357,8 +363,8 @@ class ThreadActivity : SimpleActivity() {
     override fun onDestroy() {
         super.onDestroy()
         try {
-            if (bus?.isRegistered(threadEventSubscriber) == true) {
-                bus?.unregister(threadEventSubscriber)
+            if (bus?.isRegistered(eventListener) == true) {
+                bus?.unregister(eventListener)
             }
         } catch (_: Throwable) {
         }
@@ -1762,14 +1768,7 @@ class ThreadActivity : SimpleActivity() {
             refreshedSinceSent = false
             ensureBackgroundThread {
                 // 1. 在后台线程执行发送，避免 Room 主线程访问异常
-                sendMessageCompat(
-                    text = text,
-                    addresses = addresses,
-                    subId = subscriptionId,
-                    attachments = attachments,
-                    messageId = messageToResend,
-                    triggerType = org.fossify.messages.models.SmsSendTriggerType.THREAD
-                )
+                sendMessageCompat(text, addresses, subscriptionId, attachments, messageToResend)
                 
                 val number = addresses.firstOrNull()
                 val synced = syncThreadToLocal(threadId, address = number)
@@ -1947,14 +1946,7 @@ class ThreadActivity : SimpleActivity() {
         }
     }
 
-    private val threadEventSubscriber = object {
-        @Subscribe(threadMode = ThreadMode.ASYNC)
-        fun onRefreshMessages(@Suppress("unused") event: Events.RefreshMessages) {
-            refreshMessages()
-        }
-    }
-
-    fun refreshMessages() {
+    fun refreshMessages(@Suppress("unused") event: Events.RefreshMessages) {
         if (isRecycleBin) {
             return
         }

@@ -19,8 +19,6 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.TimeUnit
-import org.fossify.messages.helpers.ShadowRepository
-import org.fossify.messages.models.ForwardingShadowAttempt
 
 class PushPlusWorker(
     appContext: Context,
@@ -52,11 +50,6 @@ class PushPlusWorker(
         val body = inputData.getString(KEY_BODY).orEmpty()
         val receivedAt = inputData.getLong(KEY_RECEIVED_AT, System.currentTimeMillis())
         val subscriptionId = inputData.getInt(KEY_SUBSCRIPTION_ID, -1)
-        val operationId = inputData.getString(KEY_OPERATION_ID)
-
-        // Shadow observation: Worker started
-        operationId?.let { ShadowRepository.recordStep(applicationContext, it, "PUSHPLUS_WORKER", "STARTED") }
-
         val payload = ForwardingMessageFormatter.format(
             context = applicationContext,
             sender = sender,
@@ -70,52 +63,20 @@ class PushPlusWorker(
         )
 
         return try {
-            operationId?.let { ShadowRepository.recordStep(applicationContext, it, "PUSHPLUS_REQUEST", "STARTED") }
             val response = postMessage(token, payload.title, payload.content)
             val json = JSONObject(response)
             if (json.optInt("code") == 200) {
                 config.lastStatus = "发送成功：${SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault()).format(Date())}"
                 if (historyRecordId.isNotBlank()) history.markSuccess(historyRecordId, "PushPlus 发送成功")
-                operationId?.let { 
-                    ShadowRepository.recordStep(applicationContext, it, "PUSHPLUS_REQUEST", "SUCCESS")
-                    ShadowRepository.recordAttempt(applicationContext, it, ForwardingChannels.PUSHPLUS, 
-                        ForwardingShadowAttempt(
-                            attemptNumber = runAttemptCount + 1,
-                            state = "SUCCESS",
-                            httpStatus = 200
-                        )
-                    )
-                }
                 Result.success()
             } else {
                 val detail = json.optString("msg", "PushPlus 拒绝请求")
                 config.lastStatus = "发送失败：$detail"
                 if (historyRecordId.isNotBlank()) history.markFailed(historyRecordId, detail)
-                operationId?.let { 
-                    ShadowRepository.recordStep(applicationContext, it, "PUSHPLUS_REQUEST", "FAILED", detail)
-                    ShadowRepository.recordAttempt(applicationContext, it, ForwardingChannels.PUSHPLUS, 
-                        ForwardingShadowAttempt(
-                            attemptNumber = runAttemptCount + 1,
-                            state = "FAILED",
-                            httpStatus = json.optInt("code", 0),
-                            errorClass = "PushPlusError"
-                        )
-                    )
-                }
                 Result.failure()
             }
         } catch (error: Exception) {
             val detail = error.message ?: error.javaClass.simpleName
-            operationId?.let { 
-                ShadowRepository.recordStep(applicationContext, it, "PUSHPLUS_REQUEST", "EXCEPTION", detail)
-                ShadowRepository.recordAttempt(applicationContext, it, ForwardingChannels.PUSHPLUS, 
-                    ForwardingShadowAttempt(
-                        attemptNumber = runAttemptCount + 1,
-                        state = "EXCEPTION",
-                        errorClass = error.javaClass.simpleName
-                    )
-                )
-            }
             if (runAttemptCount < MAX_RETRY_INDEX) {
                 config.lastStatus = "发送失败，等待重试：$detail"
                 if (historyRecordId.isNotBlank()) history.markRetry(historyRecordId, detail)
@@ -158,7 +119,6 @@ class PushPlusWorker(
         private const val KEY_SUBSCRIPTION_ID = "subscription_id"
         private const val KEY_IS_TEST = "is_test"
         private const val KEY_HISTORY_RECORD_ID = "history_record_id"
-        private const val KEY_OPERATION_ID = "operation_id"
         private const val MAX_RETRY_INDEX = 2
 
         fun enqueue(
@@ -167,8 +127,7 @@ class PushPlusWorker(
             body: String,
             receivedAt: Long,
             subscriptionId: Int,
-            uniqueId: String,
-            operationId: String? = null
+            uniqueId: String
         ) {
             val history = ForwardingHistoryStore(context)
             val historyRecordId = history.registerQueued(
@@ -188,7 +147,6 @@ class PushPlusWorker(
                         KEY_RECEIVED_AT to receivedAt,
                         KEY_SUBSCRIPTION_ID to subscriptionId,
                         KEY_HISTORY_RECORD_ID to historyRecordId,
-                        KEY_OPERATION_ID to operationId
                     )
                 )
                 .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())

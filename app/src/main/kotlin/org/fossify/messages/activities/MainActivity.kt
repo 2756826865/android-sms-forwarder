@@ -98,6 +98,12 @@ class MainActivity : SimpleActivity() {
     private var storedHomeListDensity = 0
     private var lastSearchedText = ""
     private var bus: EventBus? = null
+    private val eventListener = object {
+        @Subscribe(threadMode = ThreadMode.MAIN)
+        fun onRefreshConversations(@Suppress("unused") event: Events.RefreshConversations) {
+            initMessenger()
+        }
+    }
     private var isConversationSelectionMode = false
 
     private val binding by viewBinding(ActivityMainBinding::inflate)
@@ -243,8 +249,8 @@ class MainActivity : SimpleActivity() {
     override fun onDestroy() {
         super.onDestroy()
         try {
-            if (bus?.isRegistered(eventSubscriber) == true) {
-                bus?.unregister(eventSubscriber)
+            if (bus?.isRegistered(eventListener) == true) {
+                bus?.unregister(eventListener)
             }
         } catch (_: Throwable) {
         }
@@ -472,10 +478,10 @@ class MainActivity : SimpleActivity() {
                             }
 
                             initMessenger()
+                            bus = EventBus.getDefault()
                             try {
-                                bus = EventBus.getDefault()
-                                if (bus?.isRegistered(eventSubscriber) == false) {
-                                    bus?.register(eventSubscriber)
+                                if (!bus!!.isRegistered(eventListener)) {
+                                    bus!!.register(eventListener)
                                 }
                             } catch (_: Throwable) {
                             }
@@ -982,12 +988,4 @@ class MainActivity : SimpleActivity() {
     private fun launchAbout() {
         startActivity(Intent(applicationContext, AboutActivity::class.java))
     }
-
-    private val eventSubscriber = object {
-        @Subscribe(threadMode = ThreadMode.MAIN)
-        fun refreshConversations(@Suppress("unused") event: Events.RefreshConversations) {
-            initMessenger()
-        }
-    }
-
 }

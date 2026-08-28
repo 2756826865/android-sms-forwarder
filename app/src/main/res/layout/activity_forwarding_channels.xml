@@ -167,6 +167,46 @@
                     </LinearLayout>
                     <ImageView style="@style/SmsForwardingChevron" />
                 </LinearLayout>
+
+                <View style="@style/SmsSettingsDivider" />
+
+                <LinearLayout android:id="@+id/forwarding_wechat_test_holder" style="@style/SmsForwardingRow">
+                    <LinearLayout style="@style/SmsForwardingTextColumn">
+                        <TextView style="@style/SmsForwardingTitle" android:text="@string/forwarding_wechat_test" />
+                        <TextView android:id="@+id/forwarding_wechat_test_summary" style="@style/SmsForwardingSummary" />
+                    </LinearLayout>
+                    <ImageView style="@style/SmsForwardingChevron" />
+                </LinearLayout>
+
+                <View style="@style/SmsSettingsDivider" />
+
+                <LinearLayout android:id="@+id/forwarding_telegram_holder" style="@style/SmsForwardingRow">
+                    <LinearLayout style="@style/SmsForwardingTextColumn">
+                        <TextView style="@style/SmsForwardingTitle" android:text="@string/forwarding_telegram" />
+                        <TextView android:id="@+id/forwarding_telegram_summary" style="@style/SmsForwardingSummary" />
+                    </LinearLayout>
+                    <ImageView style="@style/SmsForwardingChevron" />
+                </LinearLayout>
+
+                <View style="@style/SmsSettingsDivider" />
+
+                <LinearLayout android:id="@+id/forwarding_custom_webhook_holder" style="@style/SmsForwardingRow">
+                    <LinearLayout style="@style/SmsForwardingTextColumn">
+                        <TextView style="@style/SmsForwardingTitle" android:text="@string/forwarding_custom_webhook" />
+                        <TextView android:id="@+id/forwarding_custom_webhook_summary" style="@style/SmsForwardingSummary" />
+                    </LinearLayout>
+                    <ImageView style="@style/SmsForwardingChevron" />
+                </LinearLayout>
+
+                <View style="@style/SmsSettingsDivider" />
+
+                <LinearLayout android:id="@+id/forwarding_discord_holder" style="@style/SmsForwardingRow">
+                    <LinearLayout style="@style/SmsForwardingTextColumn">
+                        <TextView style="@style/SmsForwardingTitle" android:text="@string/forwarding_discord" />
+                        <TextView android:id="@+id/forwarding_discord_summary" style="@style/SmsForwardingSummary" />
+                    </LinearLayout>
+                    <ImageView style="@style/SmsForwardingChevron" />
+                </LinearLayout>
             </LinearLayout>
 
             <TextView

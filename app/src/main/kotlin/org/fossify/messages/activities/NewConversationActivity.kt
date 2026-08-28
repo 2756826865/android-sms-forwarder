@@ -464,8 +464,7 @@ class NewConversationActivity : SimpleActivity() {
                                 text = body,
                                 addresses = listOf(address),
                                 subId = subId,
-                                attachments = emptyList<org.fossify.messages.models.Attachment>(),
-                                triggerType = org.fossify.messages.models.SmsSendTriggerType.NEW_CONVERSATION
+                                attachments = emptyList<org.fossify.messages.models.Attachment>()
                             )
                             runOnUiThread {
                                 finish()

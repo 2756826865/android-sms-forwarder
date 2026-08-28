@@ -29,6 +29,12 @@ import org.greenrobot.eventbus.ThreadMode
 
 class RecycleBinConversationsActivity : SimpleActivity() {
     private var bus: EventBus? = null
+    private val eventListener = object {
+        @Subscribe(threadMode = ThreadMode.MAIN)
+        fun onRefreshConversations(@Suppress("unused") event: Events.RefreshConversations) {
+            loadRecycleBinConversations()
+        }
+    }
     private val binding by viewBinding(ActivityRecycleBinConversationsBinding::inflate)
 
     @SuppressLint("InlinedApi")
@@ -58,7 +64,12 @@ class RecycleBinConversationsActivity : SimpleActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        bus?.unregister(this)
+        try {
+            if (bus?.isRegistered(eventListener) == true) {
+                bus?.unregister(eventListener)
+            }
+        } catch (_: Throwable) {
+        }
     }
 
     private fun setupOptionsMenu() {
@@ -94,8 +105,10 @@ class RecycleBinConversationsActivity : SimpleActivity() {
 
         bus = EventBus.getDefault()
         try {
-            bus!!.register(this)
-        } catch (ignored: Exception) {
+            if (!bus!!.isRegistered(eventListener)) {
+                bus!!.register(eventListener)
+            }
+        } catch (_: Throwable) {
         }
     }
 
@@ -169,10 +182,5 @@ class RecycleBinConversationsActivity : SimpleActivity() {
             putExtra(IS_RECYCLE_BIN, true)
             startActivity(this)
         }
-    }
-
-    @Subscribe(threadMode = ThreadMode.MAIN)
-    fun refreshConversations(@Suppress("unused") event: Events.RefreshConversations) {
-        loadRecycleBinConversations()
     }
 }

@@ -32,8 +32,6 @@ import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 import javax.net.ssl.SSLSocket
 import javax.net.ssl.SSLSocketFactory
-import org.fossify.messages.helpers.ShadowRepository
-import org.fossify.messages.models.ForwardingShadowAttempt
 
 class MultiChannelForwardWorker(
     appContext: Context,
@@ -53,15 +51,10 @@ class MultiChannelForwardWorker(
         val body = inputData.getString(KEY_BODY).orEmpty()
         val receivedAt = inputData.getLong(KEY_RECEIVED_AT, System.currentTimeMillis())
         val subscriptionId = inputData.getInt(KEY_SUBSCRIPTION_ID, -1)
-        val operationId = inputData.getString(KEY_OPERATION_ID)
-
-        // Shadow observation: Worker started
-        operationId?.let { ShadowRepository.recordStep(applicationContext, it, "MULTICHANNEL_WORKER", "STARTED", "target=$targetChannel") }
-
         if (historyRecordId.isNotBlank()) history.markRunning(historyRecordId)
         if (targetChannel.isBlank() && !config.anyEnabled()) {
             val workId = inputData.getString(KEY_HISTORY_RECORD_ID).orEmpty().ifBlank { "empty-${System.currentTimeMillis()}" }
-            val historyId = history.registerQueued(
+            val historyRecordId = history.registerQueued(
                 workId = workId,
                 channel = "system",
                 sender = sender,
@@ -70,7 +63,7 @@ class MultiChannelForwardWorker(
                 subscriptionId = subscriptionId,
                 isTest = isTest,
             )
-            history.markSkipped(historyId, "所有转发通道已关闭，无需发送")
+            history.markSkipped(historyRecordId, "所有转发通道已关闭，无需发送")
             Log.d(TAG, "all channels disabled, skip")
             return@withContext Result.success()
         }
@@ -102,37 +95,15 @@ class MultiChannelForwardWorker(
         val successes = mutableListOf<String>()
         val failures = mutableListOf<String>()
 
-        suspend fun runChannel(name: String, channelKey: String, action: suspend () -> Unit) {
-            operationId?.let { ShadowRepository.recordStep(applicationContext, it, "CHANNEL_REQUEST", "STARTED", name) }
+        suspend fun runChannel(name: String, action: suspend () -> Unit) {
             runCatching { action() }
                 .onSuccess {
                     successes += name
-                    operationId?.let { 
-                        ShadowRepository.recordStep(applicationContext, it, "CHANNEL_REQUEST", "SUCCESS", name)
-                        ShadowRepository.recordAttempt(applicationContext, it, channelKey, 
-                            ForwardingShadowAttempt(
-                                attemptNumber = runAttemptCount + 1,
-                                state = "SUCCESS",
-                                httpStatus = 200
-                            )
-                        )
-                    }
                     Log.d(TAG, "channel success: $name")
                 }
                 .onFailure {
-                    val detail = it.message ?: it.javaClass.simpleName
-                    failures += "$name：$detail"
-                    operationId?.let { 
-                        ShadowRepository.recordStep(applicationContext, it, "CHANNEL_REQUEST", "FAILED", "$name: $detail")
-                        ShadowRepository.recordAttempt(applicationContext, it, channelKey, 
-                            ForwardingShadowAttempt(
-                                attemptNumber = runAttemptCount + 1,
-                                state = "FAILED",
-                                errorClass = it.javaClass.simpleName
-                            )
-                        )
-                    }
-                    Log.d(TAG, "channel failed: $name -> $detail")
+                    failures += "$name：${it.message ?: it.javaClass.simpleName}"
+                    Log.d(TAG, "channel failed: $name -> ${it.message ?: it.javaClass.simpleName}")
                 }
         }
 
@@ -145,26 +116,26 @@ class MultiChannelForwardWorker(
             if (onlyOnNoNetwork) {
                 // 仅断网时发送模式
                 if (!networkAvailable) {
-                    runChannel("短信直发", ForwardingChannels.SMS_DIRECT) {
-                        sendSmsDirect(config.smsDirectPhone(), content, subscriptionId, isTest = isTest)
+                    runChannel("短信直发") {
+                        sendSmsDirect(config.smsDirectPhone(), content, subscriptionId)
                     }
                 }
             } else {
                 // 始终发送模式
-                runChannel("短信直发", ForwardingChannels.SMS_DIRECT) {
-                    sendSmsDirect(config.smsDirectPhone(), content, subscriptionId, isTest = isTest)
+                runChannel("短信直发") {
+                    sendSmsDirect(config.smsDirectPhone(), content, subscriptionId)
                 }
             }
         }
 
         // 网络渠道直接尝试发送，依赖 HTTP 超时和 WorkManager 约束
-        if (shouldRun(ForwardingChannels.DINGTALK, config.dingTalkEnabled)) runChannel("钉钉", ForwardingChannels.DINGTALK) {
+        if (shouldRun(ForwardingChannels.DINGTALK, config.dingTalkEnabled)) runChannel("钉钉") {
             sendDingTalk(config.dingTalkWebhook(), config.dingTalkSecret(), content)
         }
-        if (shouldRun(ForwardingChannels.FEISHU, config.feishuEnabled)) runChannel("飞书", ForwardingChannels.FEISHU) {
+        if (shouldRun(ForwardingChannels.FEISHU, config.feishuEnabled)) runChannel("飞书") {
             sendFeishu(config.feishuWebhook(), config.feishuSecret(), content)
         }
-        if (shouldRun(ForwardingChannels.WECOM, config.weComEnabled)) runChannel("企业微信", ForwardingChannels.WECOM) {
+        if (shouldRun(ForwardingChannels.WECOM, config.weComEnabled)) runChannel("企业微信") {
             sendWeCom(
                 config.weComCorpId(),
                 config.weComAgentId(),
@@ -173,10 +144,10 @@ class MultiChannelForwardWorker(
                 content
             )
         }
-        if (shouldRun(ForwardingChannels.WECOM_BOT, config.weComBotEnabled)) runChannel("企业微信群机器人", ForwardingChannels.WECOM_BOT) {
+        if (shouldRun(ForwardingChannels.WECOM_BOT, config.weComBotEnabled)) runChannel("企业微信群机器人") {
             sendWeComBot(config.weComBotWebhook(), content)
         }
-        if (shouldRun(ForwardingChannels.EMAIL, config.emailEnabled)) runChannel("邮箱", ForwardingChannels.EMAIL) {
+        if (shouldRun(ForwardingChannels.EMAIL, config.emailEnabled)) runChannel("邮箱") {
             sendEmail(
                 config.emailHost(),
                 config.emailPort,
@@ -188,11 +159,46 @@ class MultiChannelForwardWorker(
                 content
             )
         }
-        if (shouldRun(ForwardingChannels.BARK, config.barkEnabled)) runChannel("Bark", ForwardingChannels.BARK) {
+        if (shouldRun(ForwardingChannels.BARK, config.barkEnabled)) runChannel("Bark") {
             sendBark(config.barkServerUrl(), config.barkDeviceKey(), title, content, config.barkAllowHttp)
         }
-        if (shouldRun(ForwardingChannels.GOTIFY, config.gotifyEnabled)) runChannel("Gotify", ForwardingChannels.GOTIFY) {
+        if (shouldRun(ForwardingChannels.GOTIFY, config.gotifyEnabled)) runChannel("Gotify") {
             sendGotify(config.gotifyServerUrl(), config.gotifyToken(), title, content, config.gotifyAllowHttp)
+        }
+        if (shouldRun(ForwardingChannels.WECHAT_TEST, config.weChatTestEnabled)) runChannel("微信测试号") {
+            sendWeChatTest(
+                config.weChatTestAppId(),
+                config.weChatTestAppSecret(),
+                config.weChatTestTemplateId(),
+                config.weChatTestOpenId(),
+                title,
+                content
+            )
+        }
+        if (shouldRun(ForwardingChannels.TELEGRAM, config.telegramEnabled)) runChannel("Telegram") {
+            sendTelegram(
+                config.telegramBotToken(),
+                config.telegramChatId(),
+                config.telegramApiHost(),
+                title,
+                content
+            )
+        }
+        if (shouldRun(ForwardingChannels.CUSTOM_WEBHOOK, config.customWebhookEnabled)) runChannel("自定义 Webhook") {
+            sendCustomWebhook(
+                config.customWebhookUrl(),
+                config.customWebhookMethod,
+                config.customWebhookHeaders(),
+                config.customWebhookBodyTemplate(),
+                title,
+                content,
+                sender,
+                body,
+                config.customWebhookAllowHttp
+            )
+        }
+        if (shouldRun(ForwardingChannels.DISCORD, config.discordEnabled)) runChannel("Discord") {
+            sendDiscord(config.discordWebhookUrl(), title, content)
         }
 
         val now = SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
@@ -483,6 +489,158 @@ class MultiChannelForwardWorker(
         check(result.optLong("id", -1L) > 0L) { "Gotify 请求失败" }
     }
 
+    private fun sendWeChatTest(appId: String, appSecret: String, templateId: String, openId: String, title: String, content: String) {
+        require(appId.isNotBlank() && appSecret.isNotBlank() && templateId.isNotBlank() && openId.isNotBlank()) {
+            "微信测试号配置不完整"
+        }
+        val tokenUrl = "https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=" +
+            URLEncoder.encode(appId.trim(), "UTF-8") + "&secret=" + URLEncoder.encode(appSecret.trim(), "UTF-8")
+        val tokenResult = getJson(tokenUrl)
+        val errcode = tokenResult.optInt("errcode", 0)
+        check(errcode == 0) {
+            tokenResult.optString("errmsg", "获取微信 access_token 失败 ($errcode)")
+        }
+        val token = tokenResult.optString("access_token")
+        check(token.isNotBlank()) { "获取到的微信 access_token 为空" }
+
+        val sendUrl = "https://api.weixin.qq.com/cgi-bin/message/template/send?access_token=" +
+            URLEncoder.encode(token, "UTF-8")
+
+        val templateData = JSONObject().apply {
+            put("title", JSONObject().put("value", title))
+            put("content", JSONObject().put("value", content))
+            put("text", JSONObject().put("value", content))
+            put("remark", JSONObject().put("value", "转发自 SMS Forwarder"))
+        }
+
+        val payload = JSONObject().apply {
+            put("touser", openId.trim())
+            put("template_id", templateId.trim())
+            put("data", templateData)
+        }
+
+        val result = postJson(sendUrl, payload)
+        val sendErrCode = result.optInt("errcode", -1)
+        check(sendErrCode == 0) {
+            result.optString("errmsg", "微信测试号模板消息发送失败 ($sendErrCode)")
+        }
+    }
+
+    private fun sendTelegram(botToken: String, chatId: String, apiHost: String, title: String, content: String) {
+        require(botToken.isNotBlank() && chatId.isNotBlank()) { "Telegram 配置不完整" }
+        val host = apiHost.trim().trimEnd('/').ifBlank { "https://api.telegram.org" }
+        requireHttps(host)
+        val url = "$host/bot${botToken.trim()}/sendMessage"
+        val text = buildString {
+            if (title.isNotBlank()) {
+                append("*").append(escapeTelegramMarkdown(title)).append("*\n\n")
+            }
+            append(escapeTelegramMarkdown(content))
+        }
+        val payload = JSONObject().apply {
+            put("chat_id", chatId.trim())
+            put("text", text)
+            put("parse_mode", "Markdown")
+        }
+        val result = postJson(url, payload)
+        check(result.optBoolean("ok", false)) {
+            result.optString("description", "Telegram 接口返回失败")
+        }
+    }
+
+    private fun escapeTelegramMarkdown(text: String): String {
+        return text.replace("_", "\\_")
+            .replace("*", "\\*")
+            .replace("[", "\\[")
+            .replace("`", "\\`")
+    }
+
+    private fun sendCustomWebhook(
+        url: String,
+        method: String,
+        headersJson: String,
+        bodyTemplate: String,
+        title: String,
+        content: String,
+        sender: String,
+        body: String,
+        allowHttp: Boolean
+    ) {
+        require(url.isNotBlank()) { "自定义 Webhook 地址不能为空" }
+        val targetUrl = url.trim()
+        requireHttpsOrAllowedHttp(targetUrl, allowHttp)
+
+        val upperMethod = method.trim().uppercase().ifBlank { "POST" }
+        val headersMap = mutableMapOf<String, String>()
+        if (headersJson.isNotBlank()) {
+            runCatching {
+                val json = JSONObject(headersJson)
+                val keys = json.keys()
+                while (keys.hasNext()) {
+                    val k = keys.next()
+                    headersMap[k] = json.optString(k)
+                }
+            }
+        }
+
+        val renderedBody = if (bodyTemplate.isNotBlank()) {
+            bodyTemplate
+                .replace("{{TITLE}}", JSONObject.quote(title).let { it.substring(1, it.length - 1) })
+                .replace("{{CONTENT}}", JSONObject.quote(content).let { it.substring(1, it.length - 1) })
+                .replace("{{FROM}}", JSONObject.quote(sender).let { it.substring(1, it.length - 1) })
+                .replace("{{SMS}}", JSONObject.quote(body).let { it.substring(1, it.length - 1) })
+                .replace("{{TIME}}", SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date()))
+        } else {
+            JSONObject().apply {
+                put("title", title)
+                put("content", content)
+                put("sender", sender)
+                put("body", body)
+                put("time", System.currentTimeMillis())
+            }.toString()
+        }
+
+        val connection = URL(targetUrl).openConnection() as HttpURLConnection
+        connection.run {
+            requestMethod = upperMethod
+            connectTimeout = 10_000
+            readTimeout = 12_000
+            setRequestProperty("Accept", "application/json, text/plain, */*")
+            headersMap.forEach { (k, v) -> setRequestProperty(k, v) }
+            if (upperMethod == "POST" || upperMethod == "PUT" || upperMethod == "PATCH") {
+                doOutput = true
+                if (!headersMap.containsKey("Content-Type")) {
+                    setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                }
+                outputStream.bufferedWriter(StandardCharsets.UTF_8).use { it.write(renderedBody) }
+            }
+            val statusCode = responseCode
+            val response = (if (statusCode in 200..299) inputStream else errorStream)
+                ?.bufferedReader(StandardCharsets.UTF_8)
+                ?.use { it.readText() }
+                .orEmpty()
+            disconnect()
+            check(statusCode in 200..299) {
+                "HTTP $statusCode: ${response.take(200)}"
+            }
+        }
+    }
+
+    private fun sendDiscord(webhookUrl: String, title: String, content: String) {
+        require(webhookUrl.isNotBlank()) { "Discord Webhook 地址不能为空" }
+        requireHttps(webhookUrl.trim())
+        val message = buildString {
+            if (title.isNotBlank()) {
+                append("**").append(title).append("**\n")
+            }
+            append(content)
+        }
+        val payload = JSONObject().apply {
+            put("content", message)
+        }
+        postJson(webhookUrl.trim(), payload)
+    }
+
     private fun getJson(url: String) = requestJson(url, "GET", null)
 
     private fun postJson(url: String, payload: JSONObject) = requestJson(url, "POST", payload)
@@ -493,7 +651,7 @@ class MultiChannelForwardWorker(
             requestMethod = method
             connectTimeout = 10_000
             readTimeout = 12_000
-            setRequestProperty("Accept", "application/json")
+            setRequestProperty("Accept", "application/json, text/plain, */*")
             if (payload != null) {
                 doOutput = true
                 setRequestProperty("Content-Type", "application/json; charset=utf-8")
@@ -511,8 +669,11 @@ class MultiChannelForwardWorker(
                 }.getOrDefault("").ifBlank { response.take(200) }
                 "HTTP $statusCode${detail.takeIf(String::isNotBlank)?.let { ": $it" }.orEmpty()}"
             }
-            check(response.isNotBlank()) { "接口返回空响应" }
-            JSONObject(response)
+            if (response.isBlank()) {
+                JSONObject()
+            } else {
+                runCatching { JSONObject(response) }.getOrElse { JSONObject().put("response", response) }
+            }
         }
     }
 
@@ -532,22 +693,16 @@ class MultiChannelForwardWorker(
         return internet || validated
     }
 
-    private fun sendSmsDirect(phone: String, content: String, receiveSubId: Int, isTest: Boolean = false) {
+    private fun sendSmsDirect(phone: String, content: String, receiveSubId: Int) {
         require(phone.isNotBlank()) { "目标手机号不能为空" }
         val normalized = phone.trim()
         require(normalized.isNotEmpty()) { "目标手机号格式无效" }
-        val triggerType = if (isTest) {
-            org.fossify.messages.models.SmsSendTriggerType.SMS_DIRECT_TEST
-        } else {
-            org.fossify.messages.models.SmsSendTriggerType.FORWARDING_SMS_DIRECT
-        }
         applicationContext.sendMessageCompat(
             text = content,
             addresses = listOf(normalized),
             subId = receiveSubId.takeIf { it >= 0 },
             attachments = emptyList(),
             propagateErrors = true,
-            triggerType = triggerType
         )
     }
 
@@ -561,7 +716,6 @@ class MultiChannelForwardWorker(
         private const val KEY_ALLOWED_CHANNELS = "allowed_channels"
         private const val KEY_IS_TEST = "is_test"
         private const val KEY_HISTORY_RECORD_ID = "history_record_id"
-        private const val KEY_OPERATION_ID = "operation_id"
         private const val SMTP_TIMEOUT_MS = 12_000
         /** 规则启用但无任何渠道命中时，与 null（未启用规则）区分 */
         const val RULE_BLOCK_ALL = "__BLOCK_ALL__"
@@ -587,7 +741,6 @@ class MultiChannelForwardWorker(
             uniqueId: String,
             targetChannel: String = "",
             allowedChannels: Set<String>? = null,
-            operationId: String? = null
         ) {
             Log.d(TAG, "enqueue: uniqueId=$uniqueId, targetChannel=$targetChannel, allowedChannels=$allowedChannels")
             if (targetChannel.isBlank()) {
@@ -607,7 +760,6 @@ class MultiChannelForwardWorker(
                         targetChannel = channel,
                         allowedChannels = setOf(channel),
                         isTest = false,
-                        operationId = operationId
                     )
                 }
                 return
@@ -622,7 +774,6 @@ class MultiChannelForwardWorker(
                 targetChannel = targetChannel,
                 allowedChannels = allowedChannels,
                 isTest = false,
-                operationId = operationId
             )
         }
 
@@ -636,7 +787,6 @@ class MultiChannelForwardWorker(
             targetChannel: String,
             allowedChannels: Set<String>?,
             isTest: Boolean,
-            operationId: String? = null
         ) {
             val history = ForwardingHistoryStore(context)
             val historyRecordId = history.registerQueued(
@@ -660,7 +810,6 @@ class MultiChannelForwardWorker(
                         KEY_ALLOWED_CHANNELS to encodeRuleAllowedChannels(allowedChannels),
                         KEY_IS_TEST to isTest,
                         KEY_HISTORY_RECORD_ID to historyRecordId,
-                        KEY_OPERATION_ID to operationId
                     )
                 )
                 .setConstraints(

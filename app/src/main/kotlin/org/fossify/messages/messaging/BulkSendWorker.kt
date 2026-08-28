@@ -9,8 +9,6 @@ import androidx.work.workDataOf
 import kotlinx.coroutines.delay
 import org.fossify.messages.helpers.refreshConversations
 import org.fossify.messages.extensions.config
-import android.util.Log
-import org.fossify.messages.models.SmsSendTriggerType
 import org.json.JSONArray
 
 class BulkSendWorker(
@@ -24,17 +22,12 @@ class BulkSendWorker(
         if (body.isBlank() || numbers.isEmpty()) return Result.failure()
 
         numbers.forEachIndexed { index, number ->
-            try {
-                applicationContext.sendMessageCompat(
-                    text = body,
-                    addresses = listOf(number),
-                    subId = subId,
-                    attachments = emptyList(),
-                    triggerType = SmsSendTriggerType.BULK
-                )
-            } catch (e: Exception) {
-                Log.e(TAG, "Bulk send failed for recipient $number: ${e.message}", e)
-            }
+            applicationContext.sendMessageCompat(
+                text = body,
+                addresses = listOf(number),
+                subId = subId,
+                attachments = emptyList()
+            )
             if (index < numbers.lastIndex) {
                 delay(applicationContext.config.bulkSendDelaySeconds * 1_000L)
             }
@@ -51,7 +44,6 @@ class BulkSendWorker(
     }
 
     companion object {
-        private const val TAG = "BulkSendWorker"
         private const val KEY_BODY = "body"
         private const val KEY_SUB_ID = "sub_id"
         private const val KEY_NUMBERS = "numbers"

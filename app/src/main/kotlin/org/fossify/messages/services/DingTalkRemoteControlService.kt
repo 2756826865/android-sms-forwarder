@@ -24,11 +24,6 @@ import org.fossify.messages.remote.DingTalkRemoteCommand
 import org.fossify.messages.remote.DingTalkStreamClient
 import org.fossify.messages.remote.RemoteSmsCommandWorker
 import org.fossify.messages.remote.SOURCE_DINGTALK
-import org.fossify.messages.helpers.RemoteCommandRepository
-import org.fossify.messages.models.RemoteCommandContext
-import org.fossify.messages.models.RemoteCommandSourceType
-import org.fossify.messages.models.RemoteCommandType
-import kotlinx.coroutines.runBlocking
 import java.security.MessageDigest
 
 class DingTalkRemoteControlService : Service() {
@@ -78,33 +73,6 @@ class DingTalkRemoteControlService : Service() {
     private fun handleCommand(event: DingTalkRemoteCommand) {
         val command = event.command
         val config = MultiForwardConfig(applicationContext)
-        val messageKey = event.messageId.takeIf(String::isNotBlank)
-            ?: "dingtalk-${command.targetNumber}-${command.content.hashCode()}"
-        val sendMode = command.effectiveSendMode(config.dingTalkRemoteSendSimMode)
-
-        // 1C-2: 优先持久化事实与永久幂等声明
-        val cmdContext = RemoteCommandContext(
-            sourceType = RemoteCommandSourceType.DINGTALK,
-            sourceMessageKey = messageKey,
-            commandType = RemoteCommandType.SEND_SMS,
-            rawTarget = command.targetNumber,
-            rawPayload = command.content,
-            requestedSimMode = sendMode,
-            rawRequester = "dingtalk-stream",
-            receivedAt = System.currentTimeMillis()
-        )
-
-        val claimResult = runBlocking {
-            RemoteCommandRepository.claimOrGetDuplicate(applicationContext, cmdContext)
-        }
-
-        if (claimResult is RemoteCommandRepository.ClaimResult.Duplicate) {
-            config.appendDingTalkRemoteLog("抑制重复指令 -> ${command.targetNumber}")
-            return
-        }
-
-        val commandId = (claimResult as? RemoteCommandRepository.ClaimResult.NewCommand)?.commandId.orEmpty()
-
         if (event.messageId.isNotBlank() && !DingTalkCommandDeduplicator(applicationContext).claim(event.messageId)) {
             config.appendDingTalkRemoteLog("抑制重复指令 -> ${command.targetNumber}")
             return
@@ -112,6 +80,7 @@ class DingTalkRemoteControlService : Service() {
         val fingerprint = event.messageId.takeIf(String::isNotBlank)
             ?.let { "dingtalk-${sha256(it)}" }
             ?: "dingtalk-${command.targetNumber}-${command.content.hashCode()}"
+        val sendMode = command.effectiveSendMode(config.dingTalkRemoteSendSimMode)
         val simSuffix = " · ${SimSendResolver.describeForLog(applicationContext, null, sendMode)}"
         config.appendDingTalkRemoteLog("收到指令 -> ${command.targetNumber}$simSuffix")
         val rulesConfig = ForwardingRulesConfig(applicationContext)
@@ -124,16 +93,9 @@ class DingTalkRemoteControlService : Service() {
                 simSlotIndex = null,
             )
             if (decision.matchedRules.isEmpty()) {
-                if (commandId.isNotBlank()) {
-                    RemoteCommandRepository.recordAuthorization(applicationContext, commandId, authorized = false, reason = "RULE_BLOCKED")
-                }
                 config.appendDingTalkRemoteLog("规则阻止执行 -> ${command.targetNumber}$simSuffix")
                 return
             }
-        }
-
-        if (commandId.isNotBlank()) {
-            RemoteCommandRepository.recordAuthorization(applicationContext, commandId, authorized = true, reason = "DINGTALK_AUTHORIZED")
         }
 
         RemoteSmsCommandWorker.enqueue(
@@ -144,7 +106,6 @@ class DingTalkRemoteControlService : Service() {
             uniqueId = fingerprint,
             sendMode = sendMode,
             source = SOURCE_DINGTALK,
-            commandId = commandId,
         )
     }
 

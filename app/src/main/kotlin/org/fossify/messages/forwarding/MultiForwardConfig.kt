@@ -27,6 +27,11 @@ class MultiForwardConfig(context: Context) {
     var barkAllowHttp by booleanPreference(KEY_BARK_ALLOW_HTTP)
     var gotifyEnabled by booleanPreference(KEY_GOTIFY_ENABLED)
     var gotifyAllowHttp by booleanPreference(KEY_GOTIFY_ALLOW_HTTP)
+    var weChatTestEnabled by booleanPreference(KEY_WECHAT_TEST_ENABLED)
+    var telegramEnabled by booleanPreference(KEY_TELEGRAM_ENABLED)
+    var customWebhookEnabled by booleanPreference(KEY_CUSTOM_WEBHOOK_ENABLED)
+    var customWebhookAllowHttp by booleanPreference(KEY_CUSTOM_WEBHOOK_ALLOW_HTTP)
+    var discordEnabled by booleanPreference(KEY_DISCORD_ENABLED)
     var dingTalkRemoteControlEnabled by booleanPreference(KEY_DINGTALK_REMOTE_CONTROL_ENABLED)
 
     var dingTalkRemoteSendSimMode: Int
@@ -209,10 +214,51 @@ class MultiForwardConfig(context: Context) {
         saveSecret(KEY_SMS_DIRECT_PHONE, phone)
     }
 
-    fun smsDirectPhone() = getSecret(KEY_SMS_DIRECT_PHONE)
+    fun saveWeChatTest(appId: String, appSecret: String, templateId: String, openId: String) {
+        saveSecret(KEY_WECHAT_TEST_APP_ID, appId)
+        saveSecret(KEY_WECHAT_TEST_APP_SECRET, appSecret)
+        saveSecret(KEY_WECHAT_TEST_TEMPLATE_ID, templateId)
+        saveSecret(KEY_WECHAT_TEST_OPEN_ID, openId)
+    }
+
+    fun weChatTestAppId() = getSecret(KEY_WECHAT_TEST_APP_ID)
+    fun weChatTestAppSecret() = getSecret(KEY_WECHAT_TEST_APP_SECRET)
+    fun weChatTestTemplateId() = getSecret(KEY_WECHAT_TEST_TEMPLATE_ID)
+    fun weChatTestOpenId() = getSecret(KEY_WECHAT_TEST_OPEN_ID)
+
+    fun saveTelegram(botToken: String, chatId: String, apiHost: String = "") {
+        saveSecret(KEY_TELEGRAM_BOT_TOKEN, botToken)
+        saveSecret(KEY_TELEGRAM_CHAT_ID, chatId)
+        saveSecret(KEY_TELEGRAM_API_HOST, apiHost)
+    }
+
+    fun telegramBotToken() = getSecret(KEY_TELEGRAM_BOT_TOKEN)
+    fun telegramChatId() = getSecret(KEY_TELEGRAM_CHAT_ID)
+    fun telegramApiHost() = getSecret(KEY_TELEGRAM_API_HOST)
+
+    fun saveCustomWebhook(url: String, method: String, headers: String, bodyTemplate: String) {
+        saveSecret(KEY_CUSTOM_WEBHOOK_URL, url)
+        prefs.edit().putString(KEY_CUSTOM_WEBHOOK_METHOD, method.ifBlank { "POST" }).apply()
+        saveSecret(KEY_CUSTOM_WEBHOOK_HEADERS, headers)
+        saveSecret(KEY_CUSTOM_WEBHOOK_BODY_TEMPLATE, bodyTemplate)
+    }
+
+    fun customWebhookUrl() = getSecret(KEY_CUSTOM_WEBHOOK_URL)
+    var customWebhookMethod: String
+        get() = prefs.getString(KEY_CUSTOM_WEBHOOK_METHOD, "POST").orEmpty().ifBlank { "POST" }
+        set(value) = prefs.edit().putString(KEY_CUSTOM_WEBHOOK_METHOD, value.ifBlank { "POST" }).apply()
+    fun customWebhookHeaders() = getSecret(KEY_CUSTOM_WEBHOOK_HEADERS)
+    fun customWebhookBodyTemplate() = getSecret(KEY_CUSTOM_WEBHOOK_BODY_TEMPLATE)
+
+    fun saveDiscord(webhookUrl: String) {
+        saveSecret(KEY_DISCORD_WEBHOOK_URL, webhookUrl)
+    }
+
+    fun discordWebhookUrl() = getSecret(KEY_DISCORD_WEBHOOK_URL)
 
     fun anyEnabled() = dingTalkEnabled || feishuEnabled || weComEnabled || weComBotEnabled ||
-        emailEnabled || smsDirectEnabled || barkEnabled || gotifyEnabled
+        emailEnabled || smsDirectEnabled || barkEnabled || gotifyEnabled ||
+        weChatTestEnabled || telegramEnabled || customWebhookEnabled || discordEnabled
 
     fun enabledChannelIds(includePushPlus: Boolean = false): Set<String> = buildSet {
         if (includePushPlus) add(ForwardingChannels.PUSHPLUS)
@@ -224,6 +270,10 @@ class MultiForwardConfig(context: Context) {
         if (smsDirectEnabled) add(ForwardingChannels.SMS_DIRECT)
         if (barkEnabled) add(ForwardingChannels.BARK)
         if (gotifyEnabled) add(ForwardingChannels.GOTIFY)
+        if (weChatTestEnabled) add(ForwardingChannels.WECHAT_TEST)
+        if (telegramEnabled) add(ForwardingChannels.TELEGRAM)
+        if (customWebhookEnabled) add(ForwardingChannels.CUSTOM_WEBHOOK)
+        if (discordEnabled) add(ForwardingChannels.DISCORD)
     }
 
     private fun booleanPreference(key: String) = object : kotlin.properties.ReadWriteProperty<Any?, Boolean> {
@@ -285,6 +335,23 @@ class MultiForwardConfig(context: Context) {
         private const val KEY_GOTIFY_SERVER_URL = "gotify_server_url"
         private const val KEY_GOTIFY_TOKEN = "gotify_token"
         private const val KEY_GOTIFY_ALLOW_HTTP = "gotify_allow_http"
+        private const val KEY_WECHAT_TEST_ENABLED = "wechat_test_enabled"
+        private const val KEY_WECHAT_TEST_APP_ID = "wechat_test_app_id"
+        private const val KEY_WECHAT_TEST_APP_SECRET = "wechat_test_app_secret"
+        private const val KEY_WECHAT_TEST_TEMPLATE_ID = "wechat_test_template_id"
+        private const val KEY_WECHAT_TEST_OPEN_ID = "wechat_test_open_id"
+        private const val KEY_TELEGRAM_ENABLED = "telegram_enabled"
+        private const val KEY_TELEGRAM_BOT_TOKEN = "telegram_bot_token"
+        private const val KEY_TELEGRAM_CHAT_ID = "telegram_chat_id"
+        private const val KEY_TELEGRAM_API_HOST = "telegram_api_host"
+        private const val KEY_CUSTOM_WEBHOOK_ENABLED = "custom_webhook_enabled"
+        private const val KEY_CUSTOM_WEBHOOK_URL = "custom_webhook_url"
+        private const val KEY_CUSTOM_WEBHOOK_METHOD = "custom_webhook_method"
+        private const val KEY_CUSTOM_WEBHOOK_HEADERS = "custom_webhook_headers"
+        private const val KEY_CUSTOM_WEBHOOK_BODY_TEMPLATE = "custom_webhook_body_template"
+        private const val KEY_CUSTOM_WEBHOOK_ALLOW_HTTP = "custom_webhook_allow_http"
+        private const val KEY_DISCORD_ENABLED = "discord_enabled"
+        private const val KEY_DISCORD_WEBHOOK_URL = "discord_webhook_url"
         private const val KEY_DINGTALK_REMOTE_CONTROL_ENABLED = "dingtalk_remote_control_enabled"
         private const val KEY_DINGTALK_REMOTE_CLIENT_ID = "dingtalk_remote_client_id"
         private const val KEY_DINGTALK_REMOTE_CLIENT_SECRET = "dingtalk_remote_client_secret"

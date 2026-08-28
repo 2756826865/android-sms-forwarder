@@ -85,6 +85,18 @@ class ForwardingChannelsActivity : SimpleActivity() {
         forwardingGotifyHolder.setOnClickListener {
             startActivity(Intent(this@ForwardingChannelsActivity, GotifySettingsActivity::class.java))
         }
+        forwardingWechatTestHolder.setOnClickListener {
+            startActivity(Intent(this@ForwardingChannelsActivity, WeChatTestSettingsActivity::class.java))
+        }
+        forwardingTelegramHolder.setOnClickListener {
+            startActivity(Intent(this@ForwardingChannelsActivity, TelegramSettingsActivity::class.java))
+        }
+        forwardingCustomWebhookHolder.setOnClickListener {
+            startActivity(Intent(this@ForwardingChannelsActivity, CustomWebhookSettingsActivity::class.java))
+        }
+        forwardingDiscordHolder.setOnClickListener {
+            startActivity(Intent(this@ForwardingChannelsActivity, DiscordSettingsActivity::class.java))
+        }
         forwardingRulesHolder.setOnClickListener {
             startActivity(Intent(this@ForwardingChannelsActivity, ForwardingRulesSettingsActivity::class.java))
         }
@@ -475,6 +487,23 @@ class ForwardingChannelsActivity : SimpleActivity() {
         forwardingGotifySummary.text = statusText(
             multiConfig.gotifyServerUrl().isNotBlank() && multiConfig.gotifyToken().isNotBlank(),
             multiConfig.gotifyEnabled,
+        )
+        forwardingWechatTestSummary.text = statusText(
+            multiConfig.weChatTestAppId().isNotBlank() && multiConfig.weChatTestAppSecret().isNotBlank() &&
+                multiConfig.weChatTestTemplateId().isNotBlank() && multiConfig.weChatTestOpenId().isNotBlank(),
+            multiConfig.weChatTestEnabled,
+        )
+        forwardingTelegramSummary.text = statusText(
+            multiConfig.telegramBotToken().isNotBlank() && multiConfig.telegramChatId().isNotBlank(),
+            multiConfig.telegramEnabled,
+        )
+        forwardingCustomWebhookSummary.text = statusText(
+            multiConfig.customWebhookUrl().isNotBlank(),
+            multiConfig.customWebhookEnabled,
+        )
+        forwardingDiscordSummary.text = statusText(
+            multiConfig.discordWebhookUrl().isNotBlank(),
+            multiConfig.discordEnabled,
         )
         forwardingRulesSummary.text = ForwardingRulesConfig(applicationContext).summary()
         val historyRecords = org.fossify.messages.forwarding.ForwardingHistoryStore(applicationContext).records()

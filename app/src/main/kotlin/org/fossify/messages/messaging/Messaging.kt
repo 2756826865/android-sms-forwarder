@@ -20,8 +20,6 @@ import org.fossify.messages.messaging.SmsException.Companion.ERROR_PERSISTING_ME
 import org.fossify.messages.messaging.SmsException.Companion.ERROR_SENDING_MESSAGE
 import org.fossify.messages.models.Attachment
 
-import org.fossify.messages.models.SmsSendTriggerType
-
 @Deprecated("TODO: Move/rewrite messaging config code into the app.")
 fun Context.getSendMessageSettings(): Settings {
     val settings = Settings()
@@ -47,7 +45,6 @@ fun Context.sendMessageCompat(
     attachments: List<Attachment>,
     messageId: Long? = null,
     propagateErrors: Boolean = false,
-    triggerType: SmsSendTriggerType = SmsSendTriggerType.LEGACY_UNKNOWN,
 ) {
     val settings = getSendMessageSettings()
     if (subId != null) {
@@ -80,8 +77,7 @@ fun Context.sendMessageCompat(
                 addresses = addresses.toSet(),
                 subId = settings.subscriptionId,
                 requireDeliveryReport = settings.deliveryReports,
-                messageId = messageId,
-                triggerType = triggerType
+                messageId = messageId
             )
         } catch (e: SmsException) {
             if (propagateErrors) throw e

@@ -16,21 +16,19 @@ import com.klinker.android.send_message.Settings
 import com.klinker.android.send_message.Transaction
 import org.fossify.commons.extensions.showErrorToast
 import org.fossify.commons.extensions.toast
-import org.fossify.commons.models.PhoneNumber
-import org.fossify.commons.models.SimpleContact
 import org.fossify.messages.R
 import org.fossify.messages.extensions.getThreadId
 import org.fossify.messages.extensions.isPlainTextMimeType
-import org.fossify.messages.extensions.messagesDB
 import org.fossify.messages.extensions.smsSender
 import org.fossify.messages.helpers.DeviceCompatHelper
 import org.fossify.messages.helpers.refreshConversations
 import org.fossify.messages.messaging.SmsException.Companion.ERROR_PERSISTING_MESSAGE
 import org.fossify.messages.models.Attachment
-import org.fossify.messages.models.SmsSendContext
-import org.fossify.messages.models.SmsSendTriggerType
 import org.fossify.messages.receivers.MmsSentReceiver
 import org.fossify.messages.receivers.SendStatusReceiver
+import org.fossify.commons.models.PhoneNumber
+import org.fossify.commons.models.SimpleContact
+import org.fossify.messages.extensions.messagesDB
 
 class MessagingUtils(val context: Context) {
 
@@ -102,8 +100,7 @@ class MessagingUtils(val context: Context) {
         addresses: Set<String>,
         subId: Int,
         requireDeliveryReport: Boolean,
-        messageId: Long? = null,
-        triggerType: SmsSendTriggerType = SmsSendTriggerType.LEGACY_UNKNOWN
+        messageId: Long? = null
     ): List<Uri> {
         val sentUris = mutableListOf<Uri>()
         if (addresses.size > 1) {
@@ -151,24 +148,10 @@ class MessagingUtils(val context: Context) {
                 }
             }
 
-            val sendOperationId = SmsSendCoordinator.beginSend(
-                context,
-                SmsSendContext(
-                    triggerType = triggerType,
-                    address = address,
-                    body = text,
-                    subscriptionId = subId,
-                    threadId = threadId,
-                    requireDeliveryReport = requireDeliveryReport,
-                    messageUri = messageUri.toString()
-                )
-            )
-
             try {
                 context.smsSender.sendMessage(
                     subId = subId, destination = address, body = text, serviceCenter = null,
-                    requireDeliveryReport = requireDeliveryReport, messageUri = messageUri, threadId = threadId,
-                    sendOperationId = sendOperationId
+                    requireDeliveryReport = requireDeliveryReport, messageUri = messageUri, threadId = threadId
                 )
                 sentUris += messageUri
             } catch (e: Exception) {

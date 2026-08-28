@@ -11,10 +11,23 @@ object ForwardingChannels {
     const val SMS_DIRECT = "sms_direct"
     const val BARK = "bark"
     const val GOTIFY = "gotify"
+    const val WECHAT_TEST = "wechat_test"
+    const val TELEGRAM = "telegram"
+    const val CUSTOM_WEBHOOK = "custom_webhook"
+    const val DISCORD = "discord"
 
-    val networkChannels = setOf(PUSHPLUS, DINGTALK, FEISHU, WECOM, WECOM_BOT, EMAIL, BARK, GOTIFY)
-    val allRuleChannels = listOf(PUSHPLUS, DINGTALK, FEISHU, WECOM, WECOM_BOT, EMAIL, SMS_DIRECT, BARK, GOTIFY)
-    val lowBatteryChannels = listOf(PUSHPLUS, BARK, GOTIFY, DINGTALK, FEISHU, WECOM, WECOM_BOT, EMAIL, SMS_DIRECT)
+    val networkChannels = setOf(
+        PUSHPLUS, DINGTALK, FEISHU, WECOM, WECOM_BOT, EMAIL, BARK, GOTIFY,
+        WECHAT_TEST, TELEGRAM, CUSTOM_WEBHOOK, DISCORD
+    )
+    val allRuleChannels = listOf(
+        PUSHPLUS, DINGTALK, FEISHU, WECOM, WECOM_BOT, EMAIL, SMS_DIRECT, BARK, GOTIFY,
+        WECHAT_TEST, TELEGRAM, CUSTOM_WEBHOOK, DISCORD
+    )
+    val lowBatteryChannels = listOf(
+        PUSHPLUS, BARK, GOTIFY, WECHAT_TEST, TELEGRAM, CUSTOM_WEBHOOK, DISCORD,
+        DINGTALK, FEISHU, WECOM, WECOM_BOT, EMAIL, SMS_DIRECT
+    )
 
     fun displayName(channel: String): String = when (channel) {
         PUSHPLUS -> "PushPlus"
@@ -26,6 +39,10 @@ object ForwardingChannels {
         SMS_DIRECT -> "短信直发"
         BARK -> "Bark"
         GOTIFY -> "Gotify"
+        WECHAT_TEST -> "微信测试号"
+        TELEGRAM -> "Telegram"
+        CUSTOM_WEBHOOK -> "自定义 Webhook"
+        DISCORD -> "Discord"
         else -> channel
     }
 }

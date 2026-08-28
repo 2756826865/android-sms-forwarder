@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/miui_page_background">
+
+    <org.fossify.commons.views.MyAppBarLayout
+        android:id="@+id/custom_webhook_appbar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/miui_page_background">
+
+        <com.google.android.material.appbar.MaterialToolbar
+            android:id="@+id/custom_webhook_toolbar"
+            android:layout_width="match_parent"
+            android:layout_height="?attr/actionBarSize"
+            android:background="@color/miui_page_background"
+            app:navigationIconTint="@color/miui_primary_text"
+            app:title="@string/forwarding_custom_webhook"
+            app:titleTextColor="@color/miui_primary_text" />
+    </org.fossify.commons.views.MyAppBarLayout>
+
+    <androidx.core.widget.NestedScrollView
+        android:id="@+id/custom_webhook_scrollview"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <com.google.android.material.switchmaterial.SwitchMaterial
+                android:id="@+id/custom_webhook_enabled"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/custom_webhook_enable"
+                android:textColor="@color/miui_primary_text" />
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:hint="@string/custom_webhook_url">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/custom_webhook_url"
+                    style="@style/SmsChannelInputText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="textUri"
+                    android:maxLines="1" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:hint="@string/custom_webhook_method">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/custom_webhook_method"
+                    style="@style/SmsChannelInputText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="textCapCharacters"
+                    android:maxLines="1" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:hint="@string/custom_webhook_headers"
+                app:helperText="@string/custom_webhook_headers_hint"
+                app:helperTextTextColor="@color/miui_secondary_text">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/custom_webhook_headers"
+                    style="@style/SmsChannelInputText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="textMultiLine"
+                    android:minLines="2" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:hint="@string/custom_webhook_body_template"
+                app:helperText="@string/custom_webhook_body_template_hint"
+                app:helperTextTextColor="@color/miui_secondary_text">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/custom_webhook_body_template"
+                    style="@style/SmsChannelInputText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="textMultiLine"
+                    android:minLines="3" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.switchmaterial.SwitchMaterial
+                android:id="@+id/custom_webhook_allow_http"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/custom_webhook_allow_http"
+                android:textColor="@color/miui_primary_text" />
+
+            <View style="@style/SmsChannelDivider" />
+
+            <TextView
+                style="@style/SmsChannelSectionTitle"
+                android:text="@string/channel_section_test" />
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:hint="@string/bark_test_sender">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/custom_webhook_test_sender"
+                    style="@style/SmsChannelInputText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="phone"
+                    android:maxLines="1" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:hint="@string/bark_test_body">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/custom_webhook_test_body"
+                    style="@style/SmsChannelInputText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="textCapSentences|textMultiLine"
+                    android:minLines="2" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/custom_webhook_test"
+                style="@style/SmsChannelTestButton"
+                android:text="@string/channel_test_send" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/custom_webhook_save"
+                style="@style/SmsChannelSaveButton"
+                android:text="@string/channel_save_config" />
+
+            <View style="@style/SmsChannelDivider" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/channel_legal_notice"
+                android:textColor="@color/miui_secondary_text"
+                android:textSize="13sp" />
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

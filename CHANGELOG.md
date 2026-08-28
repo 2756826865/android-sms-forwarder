@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-08-28
+### Added
+- **新增 4 大高价值原生推送通道**：
+  - **微信测试号**：个人无需企业资质，通过微信官方公众号模板消息直推个人微信，支持置顶且不折叠。
+  - **Telegram Bot**：支持 Markdown 排版、图片与极速推送，支持自定义 API 反代 Host 解决国内网络限制。
+  - **自定义通用 Webhook**：支持 GET/POST/PUT/PATCH 请求方法、自定义请求头 (Headers) 与动态 Body 模板，无缝对接 `message-pusher`、Server 酱、PushDeer 及用户自建后端。
+  - **Discord Webhook**：在 Discord 频道内生成 Webhook 即可即时接收短信转发。
+
+### Fixed
+- **修复 Android 10/11 闪退**：彻底解决因 EventBus 反射扫描 Activity 继承树导致缺失 `PictureInPictureUiState` 类而抛出 `NoClassDefFoundError` 的闪退顽疾。重构为独立轻量监听器与 `Throwable` 双重兜底架构。
+
 ## [1.0.9] - 2026-08-26
 ### Added
 - 全新的自定义转发模板系统，支持 {{FROM}}, {{SMS}}, {{RECEIVER_NUMBER}} 等 12 种动态标签。
