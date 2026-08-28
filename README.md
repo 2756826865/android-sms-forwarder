@@ -5,8 +5,8 @@
 </p>
 
 <p align="center">
-  基于 Fossify Messages 深度二次开发，面向 Android 平台的开源现代化默认短信客户端与多渠道转发网关。
-  支持<b>「经典日常模式」</b>与<b>「现代化 SMS Gateway 开发版工作台」</b>双模式无缝切换。
+面向 Android 平台的开源现代化默认短信客户端与多渠道转发网关。
+支持<b>「经典日常模式」</b>与<b>「现代化 SMS Gateway 开发版工作台」</b>双模式无缝切换。
 </p>
 
 <p align="center">
