@@ -1,12 +1,12 @@
-# SMS Forwarder · Android 默认短信与多渠道转发
+# SMS Forwarder · Android 默认短信与多渠道转发网关
 
 <p align="center">
   <img src="graphics/icon.webp" width="112" alt="SMS Forwarder 图标" />
 </p>
 
 <p align="center">
-  基于 Fossify Messages 二次开发，面向标准 Android 设备的开源短信客户端。
-  界面采用 MIUI 风格浅色设计；首页可选底部「短信 · 转发 · 设置」快捷导航。
+  基于 Fossify Messages 深度二次开发，面向 Android 平台的开源现代化默认短信客户端与多渠道转发网关。
+  支持<b>「经典日常模式」</b>与<b>「现代化 SMS Gateway 开发版工作台」</b>双模式无缝切换。
 </p>
 
 <p align="center">
@@ -21,321 +21,105 @@
 
 > 本项目是独立维护的 GPL-3.0 开源分支，不是 Fossify 官方版本，也不隶属于华为、小米、PushPlus 或任何运营商、消息平台。
 
-## 项目定位
+---
 
-SMS Forwarder 既是可设置为系统默认应用的短信客户端，也是本地运行的短信转发工具。它能够完成短信收发、会话管理、双卡选择、批量发送和定时发送，并把新短信转发到用户自行配置的第三方渠道。
+## 🔄 双模式架构与自由切换
 
-当前重点适配仍能安装 Android APK 的华为 EMUI / HarmonyOS 4.x。项目同时使用 Android 标准短信、通知、默认应用和后台任务接口，兼容小米 MIUI / HyperOS 及其他 Android 系统；不同厂商的后台限制可能导致实际表现不同。
+本项目采用 **「经典短信模式」** 与 **「开发模式（SMS Gateway 工作台）」** 双视图架构，底层数据 100% 双向实时互通：
 
+| 模式 | 核心定位 | 适用场景 | 切换方式 |
+| :--- | :--- | :--- | :--- |
+| **📱 经典模式 (Classic)** | 完整的默认短信应用体验，支持气泡会话、双卡收发、批量群发与轻量级转发。 | 主力机日常发信收信、备用机日常短信管理。 | 主界面右上角菜单 → 点击 **「切换到开发版工作台」**。 |
+| **🖥️ 开发模式 (SMS Gateway)** | Jetpack Compose 现代化工作台，提供流水监视、运行大盘看板、通道中枢、规则沙箱与自愈运维。 | 备用机做短信转发服务器、极客监控、系统集成。 | 开发版任意界面顶栏 → 点击 **「返回经典版」**。 |
 
-## 功能清单
+---
 
-### 短信客户端
+## 🌟 核心功能特性
 
-- 会话列表、全文搜索、单条会话查看与回复。
-- 新建短信支持联系人和手动号码，例如 `10086`、`10000`。
-- 系统短信通知、未读状态、标为已读、置顶、删除和多选操作。
-- 通讯录名称与头像读取；无头像时显示统一默认头像。
-- 双卡发送与接收，显示 SIM1/SIM2，并可手动填写卡名称和本机号码。
-- 系统短信库重新同步与遗漏短信补偿同步。
+### 1. 现代化 SMS Gateway 5 大核心工作台 (Compose)
+- 💬 **【信息中心】(Message Center)**：短信出入站全生命周期实时报文监控流水。
+- 📊 **【大盘监控】(Dashboard)**：今日收发成功率看板、环形统计图表、Outbox 离线事务队列深度与卡槽吞吐率监控，通道在线测试发送自动归档入库。
+- 🛠️ **【规则工坊】(Rule Studio)**：全新模板系统，支持 5 大预设模式（紧凑/标准/详细/Emoji/自定义）、12 大变量一键插值与智能提取验证码实时预览沙箱。
+- 🔌 **【通道中枢】(Channel Hub)**：集中管理 11 大原生推送通道，状态指示灯与快捷测试一键直达。
+- 🧰 **【运维诊断】(Operations)**：内置 500 条环形内存日志监视器，支持实时滚动与等级过滤（INFO/WARN/ERROR）、一键手动自愈补偿与诊断包导出。
 
-### 发送能力
+### 2. 11 大主流推送通道矩阵 (All Supported Channels)
+- 🟢 **微信测试号 (WeChat Test Account)**：个人无需企业资质，通过微信官方公众号模板消息直推个人微信，支持置顶且不折叠。
+- ✈️ **Telegram Bot**：支持富文本 Markdown 排版、图片与极速推送，内置支持自定义 API 反代 Host 解决国内网络限制。
+- 🌐 **通用自定义 Webhook**：支持 GET/POST/PUT/PATCH 请求方法、自定义请求头 (Headers) 与动态 Body 模板变量（`{{TITLE}}`、`{{CONTENT}}`、`{{FROM}}`、`{{SMS}}`、`{{TIME}}`），无缝对接 message-pusher、Server 酱、PushDeer 及用户自建后端。
+- 🎮 **Discord Webhook**：频道群组即时推送。
+- 💬 **企业微信应用/机器人 (WeCom)**：支持群机器人 Webhook 与企业应用消息直推。
+- 📌 **钉钉群机器人 (DingTalk)**：支持签名密钥加签与自定义关键词过滤。
+- 🕊️ **飞书群机器人 (Feishu)**：支持飞书 Webhook 与签名校验推送。
+- 🍏 **Bark (iOS)**：支持 iPhone/iPad/Apple Watch 极速推送与分组管理。
+- 📬 **PushPlus (微信推送)**：支持一对一微信公众号推送与群组订阅。
+- 📧 **邮件 SMTP (Email)**：支持 SSL/TLS 加密与各大国内外邮箱服务器。
+- 🔔 **Gotify 自建推送**：支持私有化部署通知服务器。
 
-- 普通短信发送。
-- **批量发送**（`设置 → 批量发送`，或首页绿色 **+ → 批量发送**）：选择联系人、手动录入或从 TXT/CSV 导入号码；**发送设置**（SIM 卡 + 发送间隔，默认折叠）与短信正文同页配置；单次最多 30 个号码。
-- 定时发送，按系统精确闹钟能力执行；与批量发送间隔互不影响。
+### 3. 消息模板与智能变量插值
+- **两版无缝共享**：经典版「设置 -> 功能 -> 消息模板」直接直通开发版「规则工坊」，双端配置实时同步。
+- **支持 12 大动态模板变量**：
+  - `{{FROM}}` 发信号码、`{{SMS}}` 短信正文、`{{RECEIVE_TIME}}` 接收时间、`{{CONTACT_NAME}}` 联系人姓名
+  - `{{SIM_SLOT}}` 卡槽标识、`{{RECEIVER_NUMBER}}` 接收卡号
+  - `{{DEVICE_NAME}}` 设备型号、`{{BATTERY_INFO}}` 电池电量状态、`{{IP_LIST}}` 当前 IP 地址、`{{NET_TYPE}}` 网络类型、`{{APP_VERSION}}` 应用版本、`{{CURRENT_TIME}}` 当前时间
+- **智能验证码提取沙箱**：内置正则与前后瞻匹配引擎，精准提取 4~8 位数字/字母验证码。
 
-### 界面与导航
+### 4. 离线事务队列与自愈恢复引擎
+- **Outbox 事务队列 (`OutboxDispatcher`)**：断网或息屏休眠时自动暂存（`PENDING / RETRY / FAILED`），网络恢复后按指数退避策略自动重试。
+- **Recovery 自动补偿 (`RecoveryEngine`)**：后台周期性巡检与自愈补偿机制，杜绝偶发性漏发与状态丢失。
 
-- 首页底部胶囊导航（短信 / 转发 / 设置）默认开启，可在 **设置 → 功能 → 显示首页底部导航** 关闭。
-- 关闭后首页仅保留短信列表与绿色 **+** 新建按钮；**+** 位置不变，仍可从右上角进入设置。
-- 转发渠道、Bark/Gotify、转发规则、远程转发功能等设置页采用统一 MIUI 浅色风格（灰底、描边输入框、绿色测试 / 黑色保存按钮）。
+### 5. 极致视觉与细节打磨
+- 🛸 **全新悬浮式毛玻璃胶囊 Dock 导航**：采用 `RoundedCornerShape(36.dp)` 悬浮圆角胶囊与动态高刷光斑，列表底部统一垫高 `100.dp` 彻底解决遮挡。
+- 📱 **通道卡片防挤压重构**：按钮精简为「测试」两字并锁定最小安全宽度，彻底解决窄屏文字竖排挤压问题。
+- ⏱️ **会话时间戳与卡槽智能对齐**：接收短信靠左、发出短信靠右，卡槽标识 `[1] / [2]` 始终固定在时间戳最前部。
 
-### 短信转发
+---
 
-| 渠道 | 配置内容 | 典型用途 |
-|---|---|---|
-| PushPlus | Token | 微信公众号接收个人通知 |
-| 钉钉群机器人 | Webhook、可选签名密钥 | 钉钉群通知 |
-| 飞书群机器人 | Webhook、可选签名密钥 | 飞书群通知 |
-| 企业微信应用消息 | Corp ID、Agent ID、Secret、接收对象 | 企业内部消息 |
-| 企业微信群机器人 | Webhook | 企业微信群通知 |
-| 电子邮箱 | SMTP SSL/STARTTLS 主机、端口、账号、授权码、收件人 | 邮件归档和跨设备接收 |
-| 短信直发 | 目标号码、可选「仅断网时发送」 | 无网络时通过第二条短信兜底 |
-| Bark | 服务地址、Device Key | iOS Bark 推送 |
-| Gotify | 服务地址、Application Token | 自建 Gotify 推送 |
+## 🛡️ 隐私、安全与兼容性
 
-转发页面提供免责声明。只有用户主动同意、配置并启用渠道后，应用才会向对应第三方服务发送短信内容。转发模板支持自定义 SIM 显示名称、号码和消息排版（简洁 / 标准 / 详细 / Emoji / 自定义占位符）。
+### 1. 硬件级安全加密 (Keystore AES-GCM)
+- 所有通道密钥（AppSecret、Bot Token、Headers 等）均采用 **Android Keystore AES-GCM 硬件级加密** 存储；
+- 具备旧版本无缝平滑迁移与硬件不可用时的内存加密自动回退机制。
 
-各渠道设置页支持发送测试；Bark、Gotify 及 HTTP 内网地址可单独开启「允许 HTTP」。
+### 2. Android 10~14 全平台防闪退加固
+- 全面重构主界面 (`MainActivity`)、回收站 (`RecycleBinConversationsActivity`) 与对话页 (`ThreadActivity`) 的事件订阅架构，彻底杜绝华为 nova 5z、红米 9a 等低版本 Android 10/11 因 EventBus 反射扫描 `PictureInPictureUiState` 导致的启动闪退。
 
-### 转发规则（默认关闭）
+### 3. 多卡分流与低电量告警
+- 重构底层 `SubscriptionResolver`，完美兼容小米 HyperOS、华为/荣耀 EMUI/MagicOS、OPPO/vivo 的 SIM1/SIM2 双卡规则分流与发信权限。
+- 支持低电量智能检测与告警分流推送。
 
-入口：**转发 → 转发规则**。可按关键词、正则、来源 SIM 卡过滤短信，并指定规则作用的转发渠道。支持三种作用范围：
+---
 
-| 范围 | 说明 |
-|---|---|
-| 仅规则转发（默认） | 只影响 PushPlus、钉钉、飞书、企业微信、邮箱、Bark、Gotify 等扩展渠道 |
-| 规则 + 短信直发 | 在上述基础上，短信直发也受规则约束 |
-| 全部功能受规则控制 | 扩展渠道、短信直发、远程短信指令均受规则影响 |
+## ⚙️ 息屏保活与后台设置指南
 
-- 多个关键词可用 **逗号、竖线 `|`、分号或换行** 分隔，例如 `验证码|快递|银行`。
-- 设置页提供 **填写示例** 与 **规则测试**，便于核对匹配结果。
-- 规则默认关闭；未启用规则时，所有已开启的转发渠道按原逻辑工作。仅当作用范围为 **「全部功能受规则控制」** 且规则已启用时，远程短信指令才会被规则拦截（未命中规则则不执行远程发送）。
+为了确保备用机或主力机在长时间息屏休眠时稳定转发，请确保开启以下系统权限（可在应用内「设置 -> 后台运行/设备兼容」中一键跳转设置）：
 
-### 远程转发功能（默认关闭）
+1. 🔋 **电池优化**：设置为 **「无限制」 / 「允许后台高耗电」**；
+2. 🚀 **自启动权限**：设置为 **「允许自启动」 / 「允许关联启动」**；
+3. 🔒 **后台多任务加锁**：在多任务界面给应用卡片加上 **「锁头 🔒」**；
+4. 📱 **设为默认短信应用**：推荐设置为系统默认短信 App，以获得最高系统保活优先级。
 
-入口：**转发 → 远程转发功能**，内含 **短信远程指令** 与 **钉钉 Stream 远程指令** 两项子设置。
+---
 
-**短信远程指令**
-
-- 命令格式：`/短信发送 [SIM1|SIM2|默认|系统默认] 手机号 内容`
-- 示例：
-  - `/短信发送 13800138000 测试内容` — 跟随收到命令的 SIM 卡发送
-  - `/短信发送 SIM1 13800138000 测试内容` — 强制 SIM1
-  - `/短信发送 SIM2 10086 查流量` — 强制 SIM2
-  - `/短信发送 默认 13800138000 测试内容` — 系统默认短信卡（`系统默认` 同义）
-- 授权号码白名单；同一号码 **1 小时最多 5 次**；**10 分钟内**相同命令去重
-- 命令短信**不会进入正常转发流程**，避免循环转发
-- **执行日志**（「短信远程指令」页内可见）始终记录入队、提交、回执及所用 SIM，例如 `已提交发送：138… · SIM1→SIM1`
-
-**钉钉 Stream 远程指令**
-
-- 通过钉钉开放平台 Client ID / Client Secret 建立 Stream 长连接
-- 群聊 `@机器人 /短信发送 SIM2 13800138000 测试` 或私聊发送相同格式命令
-- 命令中可指定 `SIM1` / `SIM2` / `默认`；省略时使用设置页中的发送 SIM 卡
-
-**发送回执**
-
-| 类型 | 说明 |
-|---|---|
-| 本地执行日志 | 始终写入「短信远程指令」页；钉钉来源会同步写入「钉钉远程」页 |
-| 渠道回执转发（默认关闭） | 在「短信远程指令 → 发送回执转发」中启用后，将提交/成功/失败/送达推送到所选渠道（钉钉远程指令共用同一回执配置） |
-
-- 渠道回执与正常短信转发相互独立，可选 PushPlus、钉钉、飞书、企业微信、邮箱、Bark、Gotify 等
-- 「回执包含送达报告」需同时开启应用内送达报告；许多运营商不提供或不可靠
-- **「已提交发送」** 仅表示交给系统短信栈；**发送成功/失败** 来自系统回调；**已送达** 来自运营商送达报告
-
-### 后台可靠性
-
-- `SMS_DELIVER` 到达后立即交给串行前台服务处理。
-- 使用部分唤醒锁完成息屏下的解析、系统短信库入库、通知和转发入队。
-- 系统短信库写入失败时进行短间隔重试，成功后才保存去重记录。
-- 使用 WorkManager 保存并重试网络转发任务。
-- 开机、解锁、回到前台和定期任务触发补偿同步。
-- 提供自启动、电池优化、通知权限和厂商后台设置入口。
-
-核心接收流程：
-
-```text
-SMS_DELIVER
-  → SmsReceiver
-  → IncomingSmsService
-  → 远程指令解析（若匹配则执行并跳过正常转发）
-  → 转发规则匹配（若启用）
-  → 写入系统短信库
-  → 更新本地会话
-  → 生成系统通知
-  → 转发任务入队（按规则过滤渠道）
-  → 成功发送或后台重试
-```
-
-远程发送回执由 `SmsStatusSentReceiver` / `SmsStatusDeliveredReceiver` 触发；本地日志始终更新，启用「发送回执转发」后才会经 `RemoteControlReceiptForwarder` 推送到第三方渠道。
-
-## 安装与首次设置
-
-1. 从 [Releases](https://github.com/2756826865/android-sms-forwarder/releases) 下载正式 APK。
-2. 安装后按系统提示将本应用设置为默认短信应用。
-3. 允许短信、电话状态、联系人和通知权限。
-4. 进入 **设置 → 系统 → 后台运行与系统兼容**。
-5. 开启自启动、后台活动，取消电池优化，并允许锁屏通知。
-6. 检查 Android SMS Role、底层短信路由和 WRITE_SMS 是否全部正常。
-7. 如需转发，进入 **转发**（首页底部导航或设置），阅读免责声明并配置渠道。
-8. 可选：配置转发规则、远程转发功能（短信远程指令 / 钉钉远程指令，均默认关闭）。
-9. 用另一部手机分别向 SIM1、SIM2 发送测试短信，验证会话、通知和转发。
-
-## 华为 / HarmonyOS 默认短信状态分裂
-
-### 现象
-
-部分 HarmonyOS 4.x 设备在系统界面中已经选择本应用为默认短信应用，但三个底层状态并不一致：
-
-| 检查项 | 正常值 |
-|---|---|
-| Android SMS Role | `com.helyu.smsforwarder` |
-| `sms_default_application` | `com.helyu.smsforwarder` |
-| WRITE_SMS AppOp | `allow` |
-
-现场测试确认，HarmonyOS 可能只切换 Android SMS Role 并授予 WRITE_SMS，却仍把 `sms_default_application` 保留为 `com.android.mms`。此时界面看似切换成功，底层短信投递仍可能异常。
-
-### 为什么应用不能自动修复
-
-Android 10–16 应通过 `RoleManager.ROLE_SMS` 请求默认短信角色，并由用户在系统弹窗中确认。普通 APK 无权静默修改 `Settings.Secure` 或 AppOps。旧的 `ACTION_CHANGE_DEFAULT` 从 Android 10 起不再是可靠方案，在已测试的 HarmonyOS 4.x 设备上也无法同步底层路由。
-
-因此，应用只负责准确检测、显示问题并提供修复命令，不会绕过系统权限自动修改安全设置。
-
-### ADB 修复
-
-连接电脑并确认 `adb devices` 显示设备状态为 `device`，然后执行：
-
-```cmd
-adb shell settings --user 0 put secure sms_default_application com.helyu.smsforwarder
-adb shell appops set com.helyu.smsforwarder WRITE_SMS allow
-```
-
-如果页面已经显示 `WRITE_SMS：允许`，通常只需要第一条命令：
-
-```cmd
-adb shell settings --user 0 put secure sms_default_application com.helyu.smsforwarder
-```
-
-复查：
-
-```cmd
-adb shell settings --user 0 get secure sms_default_application
-adb shell dumpsys role | findstr /i "android.app.role.SMS smsforwarder com.android.mms"
-adb shell appops get com.helyu.smsforwarder WRITE_SMS
-```
-
-Windows PowerShell 若提示找不到 `adb`，请在 platform-tools 目录使用 `./adb` 或 `.\adb`。
-
-### 恢复华为“信息”
-
-先在系统默认应用中重新选择华为“信息”，必要时执行：
-
-```cmd
-adb shell settings --user 0 put secure sms_default_application com.android.mms
-adb shell appops set com.android.mms WRITE_SMS allow
-```
-
-重新安装应用、切换默认短信应用或系统更新后，HarmonyOS 可能再次出现状态分裂。遇到收不到短信时，应先进入兼容页面重新检测。
-
-## 华为与小米后台设置
-
-### 华为 / 荣耀
-
-- “应用启动管理”关闭自动管理。
-- 开启自启动、关联启动和后台活动。
-- 电池优化设为允许后台运行或不限制。
-- 开启锁屏通知和横幅通知。
-- 如系统提供“休眠时始终保持网络连接”，建议开启。
-
-### 小米 / Redmi / POCO
-
-- 开启自启动。
-- 省电策略设为无限制。
-- 允许后台弹出界面、通知和锁屏显示。
-- 在任务界面锁定应用可进一步降低被清理概率。
-
-系统设置只能改善厂商后台限制；短信是否真正投递，还应以兼容页面显示的三项短信状态为准。
-
-## 隐私、安全与使用责任
-
-- 本项目本身不提供云端短信服务，不建立开发者控制的短信数据库。
-- 转发凭据保存在设备本地（敏感字段经 Android Keystore 加密）；启用转发后，短信内容会发送至用户配置的第三方平台。
-- 远程转发功能与钉钉 Stream 凭据同样保存在本机；启用后，授权方或钉钉机器人可触发本机发送短信。
-- 短信可能包含验证码、账单、身份信息等敏感内容，请勿转发到多人群聊或不可信服务。
-- 请妥善保管 Token、Webhook、Secret、Client Secret、SMTP 授权码和签名文件，提交 Issue 时不要上传这些内容。
-- 批量发送、远程指令发送均会产生运营商资费，也可能触发运营商限制。请遵守当地法律、运营商规则和接收方意愿。
-- 禁止将本项目用于未经授权的监控、信息窃取、骚扰发送或其他违法用途。
-
-## 下载、签名与升级
-
-正式 APK 请从 [GitHub Releases](https://github.com/2756826865/android-sms-forwarder/releases) 下载。
-
-只要包名和签名证书保持一致，后续版本可以直接覆盖升级。Debug 包使用不同签名；从 Debug 迁移到正式版时，通常需要先卸载 Debug 包。
-
-## 本地构建
-
-环境要求：
-
-- JDK 17
-- Android SDK 36
-- 可访问 Google Maven 与 Maven Central
+## 🛠️ 本地构建
 
 ```bash
+# 克隆仓库
 git clone https://github.com/2756826865/android-sms-forwarder.git
 cd android-sms-forwarder
+
+# 编译 Core Debug APK
 ./gradlew :app:assembleCoreDebug
+
+# 编译 Release APK
+./gradlew :app:assembleCoreRelease
 ```
 
-Debug APK 输出目录与命名：
+编译输出目录：`app/build/outputs/apk/core/`
 
-```text
-app/build/outputs/apk/core/debug/SMS-Forwarder-<版本号>-core-debug.apk
-```
+---
 
-Debug 包名为 `com.helyu.smsforwarder.debug`，与正式版 `com.helyu.smsforwarder` 签名不同，通常无法直接覆盖安装正式版。
+## 📄 开源许可与致谢
 
-## GitHub Actions 签名构建
-
-正式版通过 `.github/workflows/build-custom-apk.yml` 构建。签名文件和密码只能放入 GitHub Actions Secrets，不得提交到仓库。
-
-流水线负责：
-
-1. 配置 JDK 和 Android 构建环境。
-2. 编译 Release APK。
-3. 执行 R8 与资源裁剪。
-4. 使用 Secrets 注入的正式证书签名。
-5. 验证 APK 包名、版本和签名。
-6. 扫描并阻止包含 Fossify 假版本警告文本的产物上传。
-7. 上传可下载的构建产物。
-
-完整的 Secrets 名称、Codex 接手提示、签名验证和真机回归命令见 [CODEX-RUN.md](CODEX-RUN.md) 与 [CUSTOM_BUILD.md](CUSTOM_BUILD.md)。
-
-## 真机回归清单
-
-每次发布前至少验证：
-
-- [ ] 安装或覆盖升级无签名冲突。
-- [ ] 版本号和包名正确（`com.helyu.smsforwarder`）。
-- [ ] Android SMS Role、底层短信路由、WRITE_SMS 全部正常。
-- [ ] 亮屏接收、入库、会话刷新、通知、回复正常。
-- [ ] 息屏接收、入库、锁屏通知、转发正常。
-- [ ] 每条短信只通知一次、只转发一次。
-- [ ] SIM1/SIM2 接收、显示和发送选择正确。
-- [ ] PushPlus 及已启用的其他渠道（含 Bark、Gotify）测试成功。
-- [ ] 转发规则：启用/关闭、关键词/`|` 分隔、三种作用范围、规则测试行为正确。
-- [ ] 短信远程指令：白名单、命令格式、SIM 指定/跟随接收卡、不进入正常转发。
-- [ ] 钉钉远程：Stream 连接、群聊 `@机器人` 命令、指定 SIM 发送。
-- [ ] 远程发送回执：本地日志含 SIM；渠道回执（若开启）含提交/成功/失败/送达。
-- [ ] 断网后任务保留，恢复联网后能够重试；短信直发「仅断网时发送」逻辑正确。
-- [ ] 重启、解锁和应用重新进入前台后会话无遗漏。
-- [ ] 批量发送：可折叠发送设置、SIM 与间隔生效；定时发送独立正常。
-- [ ] 转发模板：自定义模式无正文重复；取消编辑不误切换模式。
-
-## 已知限制
-
-### 荣耀部分机型发送短信后异常重启
-
-荣耀 90 GT（MAG-AN00，MagicOS 7.2 / Android 13）存在个别设备在短信请求进入系统 IMS 链路后异常重启的报告。日志未发现应用崩溃，重启原因由系统记录为 `shutdown,battery`，因此应用无法替换或修复厂商的 IMS / 基带实现。
-
-项目在荣耀设备上采用更保守的兼容路径：单段短信明确使用 Android 标准 `sendTextMessage`、关闭发送送达报告，并持久记录正在发送的短信。如果设备在发送过程中重启，相同短信不会被后台任务立即重复提交。该保护不影响短信接收以及 Bark、Gotify、邮箱、机器人等网络转发渠道。仍建议问题机型优先选择“系统默认短信卡”并先进行少量真机测试。
-
-- 华为 EMUI / HarmonyOS 可能出现默认短信状态分裂，普通 APK 无法静默修复。
-- 厂商后台策略可能延迟网络转发；必须允许自启动、后台活动并取消电池优化。
-- 钉钉 Stream 远程依赖长连接前台服务，部分厂商可能限制后台保活。
-- 远程发送「已提交」表示已交给系统 SMS 栈，最终成功/失败/送达以运营商与系统回执为准。
-- 部分运营商不会向 Android 提供 SIM 本机号码，需要用户手动填写。
-- 大量历史短信首次同步受设备性能和短信数量影响，可能需要数分钟。
-- 定时发送的准点程度受精确闹钟权限、SIM 状态、系统调度和运营商网络影响。
-- 第三方转发渠道的可用性、限流和隐私策略由对应平台决定。
-
-## 问题反馈
-
-请在 [GitHub Issues](https://github.com/2756826865/android-sms-forwarder/issues) 提供：
-
-- 手机品牌与型号。
-- Android、EMUI、HarmonyOS、MIUI 或 HyperOS 版本。
-- 应用版本号。
-- 三项默认短信状态。
-- 亮屏或息屏场景。
-- 可复现步骤和已脱敏日志。
-
-请勿提交真实短信内容、手机号码、验证码、Token、Webhook、Secret、邮箱密码、签名文件或签名密码。
-
-## 开源许可与致谢
-
-本项目基于 [Fossify Messages](https://github.com/FossifyOrg/Messages) 二次开发，并依据 [GNU General Public License v3.0](LICENSE) 开源。公开分发修改版时，必须继续提供对应源代码并遵守 GPL-3.0。
-
-第三方组件及许可信息可在应用“关于 → 第三方许可”中查看。感谢 Fossify 社区及所有相关开源项目贡献者。
+- 本项目基于 [Fossify Messages](https://github.com/FossifyOrg/Messages) 衍生开发，遵循 **GPL-3.0** 开源协议；
+- 部分 Webhook 及推送通道实现借鉴并优化自 [message-pusher](https://github.com/songquanpeng/message-pusher) 优秀方案。
