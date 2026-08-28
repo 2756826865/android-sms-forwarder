@@ -58,7 +58,9 @@ class RecycleBinConversationsActivity : SimpleActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        bus?.unregister(this)
+        if (bus?.isRegistered(recycleBinEventSubscriber) == true) {
+            bus?.unregister(recycleBinEventSubscriber)
+        }
     }
 
     private fun setupOptionsMenu() {
@@ -94,8 +96,10 @@ class RecycleBinConversationsActivity : SimpleActivity() {
 
         bus = EventBus.getDefault()
         try {
-            bus!!.register(this)
-        } catch (ignored: Exception) {
+            if (bus?.isRegistered(recycleBinEventSubscriber) == false) {
+                bus?.register(recycleBinEventSubscriber)
+            }
+        } catch (ignored: Throwable) {
         }
     }
 
@@ -171,8 +175,10 @@ class RecycleBinConversationsActivity : SimpleActivity() {
         }
     }
 
-    @Subscribe(threadMode = ThreadMode.MAIN)
-    fun refreshConversations(@Suppress("unused") event: Events.RefreshConversations) {
-        loadRecycleBinConversations()
+    private val recycleBinEventSubscriber = object {
+        @Subscribe(threadMode = ThreadMode.MAIN)
+        fun refreshConversations(@Suppress("unused") event: Events.RefreshConversations) {
+            loadRecycleBinConversations()
+        }
     }
 }

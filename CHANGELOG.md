@@ -14,11 +14,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 统一 PushPlus、微信测试号、钉钉、飞书、企业微信、QQ、邮件、Bark、Telegram、Gotify 等 15 大通道底层加密 Token 仓库与开关状态，两版任意切换数据 100% 实时同步。
 - **消息模板全面升级与两版共享 (Unified Message Template & Sandbox)**：
   - 经典版「设置 -> 功能」正式加入「消息模板」独立入口，与开发版【规则】共用强大的模板工作台 `MessageTemplateActivity`。
-  - 支持 5 大预设模式（紧凑/标准/详细/Emoji/自定义）、7 大变量一键插值与智能提取验证码实时预览沙箱。
+  - 支持 5 大预设模式（紧凑/标准/详细/Emoji/自定义）、12 大变量一键插值与智能提取验证码实时预览沙箱。
 - **对话时间戳与卡槽智能对齐**：
   - 重构 `item_thread_date_time` 与 `ThreadAdapter`，接收短信靠左对齐、发出短信靠右对齐，卡槽标识 `[1] / [2]` 始终固定在时间戳最前。
 - **顶栏底色与沉浸融合**：
-  - 开发版 5 大页面顶栏�---
+  - 开发版 5 大页面顶栏底色全面还原品牌深色背景，沉浸式状态栏与内容流无缝衔接。
+- **通道测试数据实时入库大盘**：
+  - `ChannelTestSender` 在线测试结果自动归档至 `ForwardingHistoryStore`，大盘页面切换前台自动触发实时刷新，测试记录立即可见。
+- **通道卡片防挤压重构**：
+  - 按钮精简为「测试」两字，配置固定安全宽度，长状态提示自动折行，彻底解决文字竖排挤压问题。
+
+### 🐛 问题修复 (Fixed)
+- **全工程反射与生命周期安全加固**：
+  - 排查并重构回收站 (`RecycleBinConversationsActivity`)、主界面 (`MainActivity`)、对话页 (`ThreadActivity`) 的 EventBus 订阅结构，彻底杜绝低版本 Android 因反射 `PictureInPictureUiState` 导致的闪退。
+
+---
 
 ## [1.1.1] - 2026-08-28
 
@@ -54,33 +64,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 修复了部分 Webhook 服务返回 HTTP 204 No Content 空响应时误判失败的问题。
   - 优化了网络异常与鉴权失败时的提示信息解析。
 
---- - `ChannelTestSender` 在线测试结果自动归档至 `ForwardingHistoryStore`，大盘页面切换前台自动触发实时刷新，测试记录立即可见。
-- **通道卡片防挤压重构**：
-  - 按钮精简为「测试」两字，配置固定安全宽度，长状态提示自动折行，彻底解决文字竖排挤压问题。
-
 ---
 
-## [1.1.0] - 2026-08-27
-
-### 🌟 新增功能 (Added)
-- **新增 4 大高价值原生推送通道（借鉴 message-pusher 优秀方案）**：
-  - 🟢 **微信测试号 (WeChat Test Account)**：个人无需企业资质，通过微信官方公众号模板消息直推个人微信，支持置顶且不折叠。
-  - ✈️ **Telegram Bot**：支持富文本 Markdown 排版、图片与极速推送，内置支持自定义 API 反代 Host 解决国内网络限制。
-  - 🌐 **自定义通用 Webhook**：支持 GET/POST/PUT/PATCH 请求方法、自定义请求头 (Headers) 与动态 Body 模板变量（`{{TITLE}}`、`{{CONTENT}}`、`{{FROM}}`、`{{SMS}}`、`{{TIME}}`），无缝对接 message-pusher、Server 酱、PushDeer 及用户自建后端。
-  - 🎮 **Discord Webhook**：在 Discord 频道内生成 Webhook 即可即时接收短信转发。
-- **安全存储与多卡分流**：
-  - 所有新通道密钥（AppSecret、Bot Token、Headers 等）均采用 Android Keystore AES-GCM 安全硬件加密存储。
-  - 全量适配 SIM1/SIM2 卡槽规则分流引擎与设备低电量告警通知。
-
-### 🐛 问题修复 (Fixed)
-- **彻底解决 Android 10/11 闪退顽疾**：
-  - 修复了华为 nova 5z、红米 9a 等 Android 10/11 机型上因 EventBus 反射扫描 Activity 继承树缺失 `PictureInPictureUiState` 类而引发 `NoClassDefFoundError` 崩溃的问题（关联 GitHub Issue [#20](https://github.com/2756826865/android-sms-forwarder/issues/20)）。
-  - 重构为独立轻量监听器与全局 Throwable 双重兜底架构。
-- **网络与接口容错增强**：
-  - 修复了部分 Webhook 服务返回 HTTP 204 No Content 空响应时误判失败的问题。
-  - 优化了网络异常与鉴权失败时的提示信息解析。
-
----
 
 ## [1.0.9] - 2026-08-26
 ### Added
