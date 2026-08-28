@@ -708,51 +708,36 @@ class ThreadAdapter(
 
     private fun setupDateTime(view: View, dateTime: ThreadDateTime) {
         ItemThreadDateTimeBinding.bind(view).apply {
-            // Real timestamp from the message; format only differs by today vs older.
-            val alignEnd = !dateTime.isIncoming
             threadDateTime.apply {
                 text = formatThreadMessageDate(dateTime.date)
-                setTextSize(TypedValue.COMPLEX_UNIT_PX, fontSize)
-                setTextColor(textColor)
-                updateLayoutParams<RelativeLayout.LayoutParams> {
-                    removeRule(RelativeLayout.CENTER_HORIZONTAL)
-                    removeRule(RelativeLayout.ALIGN_PARENT_START)
-                    removeRule(RelativeLayout.ALIGN_PARENT_END)
-                    val sideMargin = resources.getDimensionPixelSize(org.fossify.commons.R.dimen.activity_margin)
-                    if (alignEnd) {
-                        addRule(RelativeLayout.ALIGN_PARENT_END)
-                        marginStart = 0
-                        marginEnd = sideMargin
-                    } else {
-                        addRule(RelativeLayout.ALIGN_PARENT_START)
-                        marginStart = sideMargin
-                        marginEnd = 0
-                    }
-                }
+                setTextSize(TypedValue.COMPLEX_UNIT_PX, fontSize * 0.85f)
+                setTextColor(activity.getColor(R.color.miui_secondary_text))
             }
 
             val showSim = hasMultipleSIMCards && dateTime.simID != "?"
+            threadSimHolder.beVisibleIf(showSim)
             threadSimIcon.beVisibleIf(showSim)
             threadSimNumber.beVisibleIf(showSim)
             if (showSim) {
                 threadSimNumber.text = dateTime.simID
                 threadSimNumber.setTextColor(Color.WHITE)
                 threadSimIcon.applyColorFilter(Color.rgb(29, 206, 56))
-                val gap = resources.getDimensionPixelSize(org.fossify.commons.R.dimen.small_margin)
-                threadSimIcon.updateLayoutParams<RelativeLayout.LayoutParams> {
-                    removeRule(RelativeLayout.START_OF)
-                    removeRule(RelativeLayout.END_OF)
-                    if (alignEnd) {
-                        // Sent: SIM sits left of the right-aligned time.
-                        addRule(RelativeLayout.START_OF, R.id.thread_date_time)
-                        marginStart = 0
-                        marginEnd = gap
-                    } else {
-                        // Received: SIM sits right of the left-aligned time.
-                        addRule(RelativeLayout.END_OF, R.id.thread_date_time)
-                        marginStart = gap
-                        marginEnd = 0
-                    }
+            }
+
+            // 对面发的靠左对齐 (isIncoming = true -> ALIGN_PARENT_START)
+            // 我发的靠右对齐 (isIncoming = false -> ALIGN_PARENT_END)
+            val sideMargin = resources.getDimensionPixelSize(org.fossify.commons.R.dimen.activity_margin)
+            threadDateTimeContainer.updateLayoutParams<RelativeLayout.LayoutParams> {
+                removeRule(RelativeLayout.ALIGN_PARENT_START)
+                removeRule(RelativeLayout.ALIGN_PARENT_END)
+                if (dateTime.isIncoming) {
+                    addRule(RelativeLayout.ALIGN_PARENT_START)
+                    marginStart = sideMargin
+                    marginEnd = 0
+                } else {
+                    addRule(RelativeLayout.ALIGN_PARENT_END)
+                    marginStart = 0
+                    marginEnd = sideMargin
                 }
             }
         }

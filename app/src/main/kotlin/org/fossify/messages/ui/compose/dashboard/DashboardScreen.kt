@@ -56,7 +56,8 @@ import java.util.Locale
 @Composable
 fun DashboardScreen(
     viewModel: DashboardViewModel,
-    onNavigateToOperations: () -> Unit = {}
+    onNavigateToOperations: () -> Unit = {},
+    onSwitchToClassic: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
@@ -71,14 +72,30 @@ fun DashboardScreen(
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "SMS Forwarder v1.1.1 · 节点保活态势感知",
+                            text = "SMS Forwarder v1.1.2 · 节点保活态势感知",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 },
+                actions = {
+                    Surface(
+                        onClick = onSwitchToClassic,
+                        color = androidx.compose.ui.graphics.Color(0xFFE8F5E9),
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.padding(end = 8.dp)
+                    ) {
+                        Text(
+                            text = "📱 经典版",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = androidx.compose.ui.graphics.Color(0xFF159447),
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                        )
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
+                    containerColor = MaterialTheme.colorScheme.background
                 )
             )
         }
@@ -115,7 +132,8 @@ fun DashboardScreen(
                         .fillMaxSize()
                         .padding(innerPadding),
                     onRefresh = { viewModel.loadStats() },
-                    onNavigateToOperations = onNavigateToOperations
+                    onNavigateToOperations = onNavigateToOperations,
+                    onSwitchToClassic = onSwitchToClassic
                 )
             }
             UiState.Idle -> {
@@ -130,7 +148,8 @@ fun DashboardContent(
     stats: DashboardStats,
     modifier: Modifier = Modifier,
     onRefresh: () -> Unit = {},
-    onNavigateToOperations: () -> Unit = {}
+    onNavigateToOperations: () -> Unit = {},
+    onSwitchToClassic: () -> Unit = {}
 ) {
     val timeFormat = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
 
@@ -163,7 +182,60 @@ fun DashboardContent(
     ) {
         item { Spacer(modifier = Modifier.height(2.dp)) }
 
-        // 顶部保活预警条 (如果分数低于90或未加电池白名单)
+        // 0. 最顶部置顶：一键切换到经典原生极简短信版
+        item {
+            Surface(
+                color = androidx.compose.ui.graphics.Color(0xFFF0F8F3),
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onSwitchToClassic() }
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text("📱", fontSize = 22.sp)
+                        Column {
+                            Text(
+                                text = "切换到经典原生极简短信版",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = androidx.compose.ui.graphics.Color(0xFF0A4F24)
+                            )
+                            Text(
+                                text = "点击 0.1 秒切回纯粹会话列表、MIUI 搜索栏与绿色 FAB",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = androidx.compose.ui.graphics.Color(0xFF2E7D32)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Surface(
+                        color = androidx.compose.ui.graphics.Color(0xFF159447),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(
+                            text = "立即切换 👉",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = androidx.compose.ui.graphics.Color.White,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        // 顶部保活预警条
         if (healthScore < 90) {
             item {
                 Surface(
@@ -376,7 +448,7 @@ fun DashboardContent(
             }
         }
 
-        // 5. 最新发送与转发记录 (发送记录流水)
+        // 5. 最新发送与转发记录
         item {
             GatewayCard(
                 title = "📜 最新发送与转发记录",
@@ -506,6 +578,6 @@ fun DashboardContent(
             }
         }
 
-        item { Spacer(modifier = Modifier.height(80.dp)) }
+        item { Spacer(modifier = Modifier.height(100.dp)) }
     }
 }

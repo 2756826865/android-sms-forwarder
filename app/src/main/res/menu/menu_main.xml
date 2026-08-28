@@ -4,6 +4,11 @@
     xmlns:tools="http://schemas.android.com/tools"
     tools:ignore="AppCompatResource,AlwaysShowAction">
     <item
+        android:id="@+id/switch_gateway_ui"
+        android:showAsAction="never"
+        android:title="🚀 开启 SMS Gateway 网关开发版"
+        app:showAsAction="never" />
+    <item
         android:id="@+id/show_recycle_bin"
         android:showAsAction="never"
         android:title="@string/show_the_recycle_bin"

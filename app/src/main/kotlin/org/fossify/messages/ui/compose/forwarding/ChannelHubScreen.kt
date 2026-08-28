@@ -364,7 +364,7 @@ fun ChannelHubScreen() {
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
+                    containerColor = MaterialTheme.colorScheme.background
                 )
             )
         }
@@ -378,7 +378,7 @@ fun ChannelHubScreen() {
             ScrollableTabRow(
                 selectedTabIndex = ChannelCategory.values().indexOf(selectedCategory),
                 edgePadding = 16.dp,
-                containerColor = MaterialTheme.colorScheme.surface
+                containerColor = MaterialTheme.colorScheme.background
             ) {
                 ChannelCategory.values().forEach { cat ->
                     Tab(
@@ -450,6 +450,14 @@ fun ChannelHubScreen() {
                                 )
                             }
 
+                            if (pingText != null) {
+                                Spacer(modifier = Modifier.height(6.dp))
+                                StatusBadge(
+                                    text = pingText,
+                                    color = if (pingText.contains("失败")) GatewayRed else GatewayGreen
+                                )
+                            }
+
                             Spacer(modifier = Modifier.height(8.dp))
 
                             Row(
@@ -457,27 +465,19 @@ fun ChannelHubScreen() {
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    if (pingText != null) {
-                                        StatusBadge(
-                                            text = pingText,
-                                            color = if (pingText.contains("失败")) GatewayRed else GatewayGreen
-                                        )
-                                    } else {
-                                        StatusBadge(
-                                            text = if (channel.isSmsChannel) "SIM直发" else if (channel.isGroupChannel) "群组聚合" else "KEYSTORE加密",
-                                            color = GatewayPurple
-                                        )
-                                    }
-                                }
+                                StatusBadge(
+                                    text = if (channel.isSmsChannel) "SIM直发" else if (channel.isGroupChannel) "群组聚合" else "KEYSTORE加密",
+                                    color = GatewayPurple
+                                )
 
-                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     OutlinedButton(
                                         onClick = {
                                             if (channel.isGroupChannel) showGroupDialog = true
                                             else editingChannel = channel
                                         },
-                                        shape = RoundedCornerShape(8.dp)
+                                        shape = RoundedCornerShape(8.dp),
+                                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                                     ) {
                                         Text("⚙️ 配置", fontSize = 12.sp)
                                     }
@@ -486,6 +486,7 @@ fun ChannelHubScreen() {
                                         onClick = { performSendTestMessage(channel) },
                                         shape = RoundedCornerShape(8.dp),
                                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 6.dp),
                                         enabled = !isTesting
                                     ) {
                                         if (isTesting) {
@@ -495,7 +496,7 @@ fun ChannelHubScreen() {
                                                 color = MaterialTheme.colorScheme.onPrimary
                                             )
                                         } else {
-                                            Text("🧪 发测试", fontSize = 12.sp, color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold)
+                                            Text("测试", fontSize = 12.sp, color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold)
                                         }
                                     }
                                 }
@@ -504,7 +505,7 @@ fun ChannelHubScreen() {
                     }
                 }
 
-                item { Spacer(modifier = Modifier.height(80.dp)) }
+                item { Spacer(modifier = Modifier.height(100.dp)) }
             }
         }
     }

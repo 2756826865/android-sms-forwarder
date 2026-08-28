@@ -1388,12 +1388,16 @@ class ThreadActivity : SimpleActivity() {
 
     private fun shouldShowThreadDateTime(
         message: Message,
+        prevMessage: Message?,
         prevDateTime: Int,
         prevSIMId: Int,
     ): Boolean {
+        if (prevMessage == null) return true
+        val isDirectionChanged = message.isReceivedMessage() != prevMessage.isReceivedMessage()
         val isSentFromDifferentKnownSIM =
             prevSIMId != -1 && message.subscriptionId != -1 && prevSIMId != message.subscriptionId
-        return message.date - prevDateTime > MIN_DATE_TIME_DIFF_SECS || isSentFromDifferentKnownSIM
+        val isTimeDiffLarge = message.date - prevDateTime > MIN_DATE_TIME_DIFF_SECS
+        return isTimeDiffLarge || isDirectionChanged || isSentFromDifferentKnownSIM
     }
 
     @SuppressLint("MissingPermission")
@@ -1411,6 +1415,7 @@ class ThreadActivity : SimpleActivity() {
             subscriptionIdToSimId[subscriptionInfo.subscriptionId] = "${index + 1}"
         }
 
+        var prevMessage: Message? = null
         var prevDateTime = 0
         var prevSIMId = -2
         var hadUnreadItems = false
@@ -1418,13 +1423,14 @@ class ThreadActivity : SimpleActivity() {
         for (i in 0 until cnt) {
             val message = messageSnapshot.getOrNull(i) ?: continue
             // do not show the date/time above every message, only if the difference between the 2 messages is at least MIN_DATE_TIME_DIFF_SECS,
-            // or if the message is sent from a different SIM
-            if (shouldShowThreadDateTime(message, prevDateTime, prevSIMId)) {
+            // or if the message is sent from a different SIM / direction changed
+            if (shouldShowThreadDateTime(message, prevMessage, prevDateTime, prevSIMId)) {
                 val simCardID = subscriptionIdToSimId[message.subscriptionId] ?: "?"
                 items.add(ThreadDateTime(message.date, simCardID, message.isReceivedMessage()))
                 prevDateTime = message.date
             }
             items.add(message)
+            prevMessage = message
 
             if (message.type == Telephony.Sms.MESSAGE_TYPE_FAILED) {
                 items.add(ThreadError(message.id, message.body))

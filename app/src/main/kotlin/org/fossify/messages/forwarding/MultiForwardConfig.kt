@@ -307,6 +307,51 @@ class MultiForwardConfig(context: Context) {
         telegramEnabled || discordEnabled || tencentCloudEnabled || emailEnabled || smsDirectEnabled ||
         customWebhookEnabled || channelGroupEnabled || gotifyEnabled
 
+    fun isChannelEnabled(channel: String): Boolean = when (channel) {
+        ForwardingChannels.PUSHPLUS -> pushPlusEnabled
+        ForwardingChannels.WECHAT_TEST -> wechatTestEnabled
+        ForwardingChannels.QQ -> qqEnabled
+        ForwardingChannels.WECOM, ForwardingChannels.WECOM_APP -> weComEnabled
+        ForwardingChannels.WECOM_BOT -> weComBotEnabled
+        ForwardingChannels.FEISHU_APP -> feishuAppEnabled
+        ForwardingChannels.FEISHU, ForwardingChannels.FEISHU_BOT -> feishuEnabled
+        ForwardingChannels.DINGTALK -> dingTalkEnabled
+        ForwardingChannels.BARK -> barkEnabled
+        ForwardingChannels.WEBSOCKET -> websocketEnabled
+        ForwardingChannels.TELEGRAM -> telegramEnabled
+        ForwardingChannels.DISCORD -> discordEnabled
+        ForwardingChannels.TENCENT_CLOUD -> tencentCloudEnabled
+        ForwardingChannels.EMAIL -> emailEnabled
+        ForwardingChannels.SMS_DIRECT -> smsDirectEnabled
+        ForwardingChannels.CUSTOM_WEBHOOK -> customWebhookEnabled
+        ForwardingChannels.CHANNEL_GROUP -> channelGroupEnabled
+        ForwardingChannels.GOTIFY -> gotifyEnabled
+        else -> false
+    }
+
+    fun setChannelEnabled(channel: String, enabled: Boolean) {
+        when (channel) {
+            ForwardingChannels.PUSHPLUS -> pushPlusEnabled = enabled
+            ForwardingChannels.WECHAT_TEST -> wechatTestEnabled = enabled
+            ForwardingChannels.QQ -> qqEnabled = enabled
+            ForwardingChannels.WECOM, ForwardingChannels.WECOM_APP -> weComEnabled = enabled
+            ForwardingChannels.WECOM_BOT -> weComBotEnabled = enabled
+            ForwardingChannels.FEISHU_APP -> feishuAppEnabled = enabled
+            ForwardingChannels.FEISHU, ForwardingChannels.FEISHU_BOT -> feishuEnabled = enabled
+            ForwardingChannels.DINGTALK -> dingTalkEnabled = enabled
+            ForwardingChannels.BARK -> barkEnabled = enabled
+            ForwardingChannels.WEBSOCKET -> websocketEnabled = enabled
+            ForwardingChannels.TELEGRAM -> telegramEnabled = enabled
+            ForwardingChannels.DISCORD -> discordEnabled = enabled
+            ForwardingChannels.TENCENT_CLOUD -> tencentCloudEnabled = enabled
+            ForwardingChannels.EMAIL -> emailEnabled = enabled
+            ForwardingChannels.SMS_DIRECT -> smsDirectEnabled = enabled
+            ForwardingChannels.CUSTOM_WEBHOOK -> customWebhookEnabled = enabled
+            ForwardingChannels.CHANNEL_GROUP -> channelGroupEnabled = enabled
+            ForwardingChannels.GOTIFY -> gotifyEnabled = enabled
+        }
+    }
+
     fun enabledChannelIds(includePushPlus: Boolean = false): Set<String> = buildSet {
         if (includePushPlus || pushPlusEnabled) add(ForwardingChannels.PUSHPLUS)
         if (wechatTestEnabled) add(ForwardingChannels.WECHAT_TEST)

@@ -42,22 +42,24 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="8dp"
-                android:layout_marginTop="18dp"
-                android:layout_marginBottom="30dp"
+                android:layout_marginTop="16dp"
+                android:layout_marginBottom="20dp"
                 android:fontFamily="sans-serif"
                 android:text="@string/forwarding_title"
                 android:textColor="@color/miui_primary_text"
-                android:textSize="38sp" />
+                android:textSize="32sp"
+                android:textStyle="bold" />
 
+            <!-- 1. 微信与国内即时通讯 -->
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="8dp"
                 android:layout_marginBottom="8dp"
-                android:fontFamily="sans-serif"
-                android:text="@string/forwarding_channels"
+                android:fontFamily="sans-serif-medium"
+                android:text="🟢 微信与即时通讯"
                 android:textColor="@color/miui_section_text"
-                android:textSize="15sp" />
+                android:textSize="14sp" />
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -66,11 +68,9 @@
                 android:orientation="vertical"
                 android:paddingVertical="4dp">
 
-                <LinearLayout
-                    android:id="@+id/forwarding_pushplus_holder"
-                    style="@style/SmsForwardingRow">
+                <LinearLayout android:id="@+id/forwarding_pushplus_holder" style="@style/SmsForwardingRow">
                     <LinearLayout style="@style/SmsForwardingTextColumn">
-                        <TextView style="@style/SmsForwardingTitle" android:text="@string/forwarding_pushplus" />
+                        <TextView style="@style/SmsForwardingTitle" android:text="PushPlus 微信推送" />
                         <TextView android:id="@+id/forwarding_pushplus_summary" style="@style/SmsForwardingSummary" />
                     </LinearLayout>
                     <ImageView style="@style/SmsForwardingChevron" />
@@ -78,35 +78,57 @@
 
                 <View style="@style/SmsSettingsDivider" />
 
-                <LinearLayout
-                    android:id="@+id/forwarding_dingtalk_holder"
-                    style="@style/SmsForwardingRow">
+                <LinearLayout android:id="@+id/forwarding_wxtest_holder" style="@style/SmsForwardingRow">
                     <LinearLayout style="@style/SmsForwardingTextColumn">
-                        <TextView style="@style/SmsForwardingTitle" android:text="@string/forwarding_dingtalk" />
-                        <TextView android:id="@+id/forwarding_dingtalk_summary" style="@style/SmsForwardingSummary" />
+                        <TextView style="@style/SmsForwardingTitle" android:text="微信公众平台测试号" />
+                        <TextView android:id="@+id/forwarding_wxtest_summary" style="@style/SmsForwardingSummary" />
                     </LinearLayout>
                     <ImageView style="@style/SmsForwardingChevron" />
                 </LinearLayout>
 
                 <View style="@style/SmsSettingsDivider" />
 
-                <LinearLayout
-                    android:id="@+id/forwarding_feishu_holder"
-                    style="@style/SmsForwardingRow">
+                <LinearLayout android:id="@+id/forwarding_qq_holder" style="@style/SmsForwardingRow">
                     <LinearLayout style="@style/SmsForwardingTextColumn">
-                        <TextView style="@style/SmsForwardingTitle" android:text="@string/forwarding_feishu" />
-                        <TextView android:id="@+id/forwarding_feishu_summary" style="@style/SmsForwardingSummary" />
+                        <TextView style="@style/SmsForwardingTitle" android:text="QQ 消息推送" />
+                        <TextView android:id="@+id/forwarding_qq_summary" style="@style/SmsForwardingSummary" />
                     </LinearLayout>
                     <ImageView style="@style/SmsForwardingChevron" />
                 </LinearLayout>
 
                 <View style="@style/SmsSettingsDivider" />
 
-                <LinearLayout
-                    android:id="@+id/forwarding_wecom_holder"
-                    style="@style/SmsForwardingRow">
+                <LinearLayout android:id="@+id/forwarding_email_holder" style="@style/SmsForwardingRow">
                     <LinearLayout style="@style/SmsForwardingTextColumn">
-                        <TextView style="@style/SmsForwardingTitle" android:text="@string/forwarding_wecom" />
+                        <TextView style="@style/SmsForwardingTitle" android:text="邮件消息 (SMTP)" />
+                        <TextView android:id="@+id/forwarding_email_summary" style="@style/SmsForwardingSummary" />
+                    </LinearLayout>
+                    <ImageView style="@style/SmsForwardingChevron" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- 2. 办公协同工作台 -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_marginTop="20dp"
+                android:layout_marginBottom="8dp"
+                android:fontFamily="sans-serif-medium"
+                android:text="🏢 办公协同工作台"
+                android:textColor="@color/miui_section_text"
+                android:textSize="14sp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/settings_card_background"
+                android:orientation="vertical"
+                android:paddingVertical="4dp">
+
+                <LinearLayout android:id="@+id/forwarding_wecom_holder" style="@style/SmsForwardingRow">
+                    <LinearLayout style="@style/SmsForwardingTextColumn">
+                        <TextView style="@style/SmsForwardingTitle" android:text="企业微信自建应用" />
                         <TextView android:id="@+id/forwarding_wecom_summary" style="@style/SmsForwardingSummary" />
                     </LinearLayout>
                     <ImageView style="@style/SmsForwardingChevron" />
@@ -114,11 +136,9 @@
 
                 <View style="@style/SmsSettingsDivider" />
 
-                <LinearLayout
-                    android:id="@+id/forwarding_wecom_bot_holder"
-                    style="@style/SmsForwardingRow">
+                <LinearLayout android:id="@+id/forwarding_wecom_bot_holder" style="@style/SmsForwardingRow">
                     <LinearLayout style="@style/SmsForwardingTextColumn">
-                        <TextView style="@style/SmsForwardingTitle" android:text="@string/forwarding_wecom_bot" />
+                        <TextView style="@style/SmsForwardingTitle" android:text="企业微信群机器人" />
                         <TextView android:id="@+id/forwarding_wecom_bot_summary" style="@style/SmsForwardingSummary" />
                     </LinearLayout>
                     <ImageView style="@style/SmsForwardingChevron" />
@@ -126,34 +146,88 @@
 
                 <View style="@style/SmsSettingsDivider" />
 
-                <LinearLayout
-                    android:id="@+id/forwarding_email_holder"
-                    style="@style/SmsForwardingRow">
+                <LinearLayout android:id="@+id/forwarding_feishu_app_holder" style="@style/SmsForwardingRow">
                     <LinearLayout style="@style/SmsForwardingTextColumn">
-                        <TextView style="@style/SmsForwardingTitle" android:text="@string/forwarding_email" />
-                        <TextView android:id="@+id/forwarding_email_summary" style="@style/SmsForwardingSummary" />
+                        <TextView style="@style/SmsForwardingTitle" android:text="飞书自建应用" />
+                        <TextView android:id="@+id/forwarding_feishu_app_summary" style="@style/SmsForwardingSummary" />
                     </LinearLayout>
                     <ImageView style="@style/SmsForwardingChevron" />
                 </LinearLayout>
 
                 <View style="@style/SmsSettingsDivider" />
 
-                <LinearLayout
-                    android:id="@+id/forwarding_sms_direct_holder"
-                    style="@style/SmsForwardingRow">
+                <LinearLayout android:id="@+id/forwarding_feishu_holder" style="@style/SmsForwardingRow">
                     <LinearLayout style="@style/SmsForwardingTextColumn">
-                        <TextView style="@style/SmsForwardingTitle" android:text="短信直发" />
-                        <TextView android:id="@+id/forwarding_sms_direct_summary" style="@style/SmsForwardingSummary" />
+                        <TextView style="@style/SmsForwardingTitle" android:text="飞书群机器人" />
+                        <TextView android:id="@+id/forwarding_feishu_summary" style="@style/SmsForwardingSummary" />
                     </LinearLayout>
                     <ImageView style="@style/SmsForwardingChevron" />
                 </LinearLayout>
 
                 <View style="@style/SmsSettingsDivider" />
+
+                <LinearLayout android:id="@+id/forwarding_dingtalk_holder" style="@style/SmsForwardingRow">
+                    <LinearLayout style="@style/SmsForwardingTextColumn">
+                        <TextView style="@style/SmsForwardingTitle" android:text="钉钉群机器人" />
+                        <TextView android:id="@+id/forwarding_dingtalk_summary" style="@style/SmsForwardingSummary" />
+                    </LinearLayout>
+                    <ImageView style="@style/SmsForwardingChevron" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- 3. 极客通讯与海外全生态 -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_marginTop="20dp"
+                android:layout_marginBottom="8dp"
+                android:fontFamily="sans-serif-medium"
+                android:text="⚡ 极客通讯与海外生态"
+                android:textColor="@color/miui_section_text"
+                android:textSize="14sp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/settings_card_background"
+                android:orientation="vertical"
+                android:paddingVertical="4dp">
 
                 <LinearLayout android:id="@+id/forwarding_bark_holder" style="@style/SmsForwardingRow">
                     <LinearLayout style="@style/SmsForwardingTextColumn">
-                        <TextView style="@style/SmsForwardingTitle" android:text="@string/forwarding_bark" />
+                        <TextView style="@style/SmsForwardingTitle" android:text="Bark App (iOS)" />
                         <TextView android:id="@+id/forwarding_bark_summary" style="@style/SmsForwardingSummary" />
+                    </LinearLayout>
+                    <ImageView style="@style/SmsForwardingChevron" />
+                </LinearLayout>
+
+                <View style="@style/SmsSettingsDivider" />
+
+                <LinearLayout android:id="@+id/forwarding_websocket_holder" style="@style/SmsForwardingRow">
+                    <LinearLayout style="@style/SmsForwardingTextColumn">
+                        <TextView style="@style/SmsForwardingTitle" android:text="WebSocket 客户端" />
+                        <TextView android:id="@+id/forwarding_websocket_summary" style="@style/SmsForwardingSummary" />
+                    </LinearLayout>
+                    <ImageView style="@style/SmsForwardingChevron" />
+                </LinearLayout>
+
+                <View style="@style/SmsSettingsDivider" />
+
+                <LinearLayout android:id="@+id/forwarding_telegram_holder" style="@style/SmsForwardingRow">
+                    <LinearLayout style="@style/SmsForwardingTextColumn">
+                        <TextView style="@style/SmsForwardingTitle" android:text="Telegram 机器人" />
+                        <TextView android:id="@+id/forwarding_telegram_summary" style="@style/SmsForwardingSummary" />
+                    </LinearLayout>
+                    <ImageView style="@style/SmsForwardingChevron" />
+                </LinearLayout>
+
+                <View style="@style/SmsSettingsDivider" />
+
+                <LinearLayout android:id="@+id/forwarding_discord_holder" style="@style/SmsForwardingRow">
+                    <LinearLayout style="@style/SmsForwardingTextColumn">
+                        <TextView style="@style/SmsForwardingTitle" android:text="Discord 群机器人" />
+                        <TextView android:id="@+id/forwarding_discord_summary" style="@style/SmsForwardingSummary" />
                     </LinearLayout>
                     <ImageView style="@style/SmsForwardingChevron" />
                 </LinearLayout>
@@ -162,71 +236,24 @@
 
                 <LinearLayout android:id="@+id/forwarding_gotify_holder" style="@style/SmsForwardingRow">
                     <LinearLayout style="@style/SmsForwardingTextColumn">
-                        <TextView style="@style/SmsForwardingTitle" android:text="@string/forwarding_gotify" />
+                        <TextView style="@style/SmsForwardingTitle" android:text="Gotify 自建服务" />
                         <TextView android:id="@+id/forwarding_gotify_summary" style="@style/SmsForwardingSummary" />
                     </LinearLayout>
                     <ImageView style="@style/SmsForwardingChevron" />
                 </LinearLayout>
             </LinearLayout>
 
+            <!-- 4. 云服务与高级路由 -->
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="8dp"
-                android:layout_marginTop="24dp"
+                android:layout_marginTop="20dp"
                 android:layout_marginBottom="8dp"
-                android:text="@string/forwarding_rules_section"
+                android:fontFamily="sans-serif-medium"
+                android:text="☁️ 云服务与高级路由"
                 android:textColor="@color/miui_section_text"
-                android:textSize="15sp" />
-
-            <LinearLayout
-                android:id="@+id/forwarding_rules_holder"
-                style="@style/SmsForwardingRow"
-                android:background="@drawable/settings_card_background">
-                <LinearLayout style="@style/SmsForwardingTextColumn">
-                    <TextView style="@style/SmsForwardingTitle" android:text="@string/forwarding_rules_title" />
-                    <TextView android:id="@+id/forwarding_rules_summary" style="@style/SmsForwardingSummary" />
-                </LinearLayout>
-                <ImageView style="@style/SmsForwardingChevron" />
-            </LinearLayout>
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:layout_marginTop="24dp"
-                android:layout_marginBottom="8dp"
-                android:text="@string/remote_forwarding_section"
-                android:textColor="@color/miui_section_text"
-                android:textSize="15sp" />
-
-            <LinearLayout
-                android:id="@+id/forwarding_remote_forwarding_holder"
-                style="@style/SmsForwardingRow"
-                android:background="@drawable/settings_card_background">
-
-                <LinearLayout style="@style/SmsForwardingTextColumn">
-                    <TextView
-                        style="@style/SmsForwardingTitle"
-                        android:text="@string/remote_forwarding_title" />
-
-                    <TextView
-                        android:id="@+id/forwarding_remote_forwarding_summary"
-                        style="@style/SmsForwardingSummary" />
-                </LinearLayout>
-
-                <ImageView style="@style/SmsForwardingChevron" />
-            </LinearLayout>
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:layout_marginTop="24dp"
-                android:layout_marginBottom="8dp"
-                android:text="@string/forwarding_display"
-                android:textColor="@color/miui_section_text"
-                android:textSize="15sp" />
+                android:textSize="14sp" />
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -235,9 +262,87 @@
                 android:orientation="vertical"
                 android:paddingVertical="4dp">
 
+                <LinearLayout android:id="@+id/forwarding_tencent_sms_holder" style="@style/SmsForwardingRow">
+                    <LinearLayout style="@style/SmsForwardingTextColumn">
+                        <TextView style="@style/SmsForwardingTitle" android:text="腾讯云告警 (免费短信)" />
+                        <TextView android:id="@+id/forwarding_tencent_sms_summary" style="@style/SmsForwardingSummary" />
+                    </LinearLayout>
+                    <ImageView style="@style/SmsForwardingChevron" />
+                </LinearLayout>
+
+                <View style="@style/SmsSettingsDivider" />
+
+                <LinearLayout android:id="@+id/forwarding_sms_direct_holder" style="@style/SmsForwardingRow">
+                    <LinearLayout style="@style/SmsForwardingTextColumn">
+                        <TextView style="@style/SmsForwardingTitle" android:text="短信直发 (副卡/备用机)" />
+                        <TextView android:id="@+id/forwarding_sms_direct_summary" style="@style/SmsForwardingSummary" />
+                    </LinearLayout>
+                    <ImageView style="@style/SmsForwardingChevron" />
+                </LinearLayout>
+
+                <View style="@style/SmsSettingsDivider" />
+
+                <LinearLayout android:id="@+id/forwarding_custom_webhook_holder" style="@style/SmsForwardingRow">
+                    <LinearLayout style="@style/SmsForwardingTextColumn">
+                        <TextView style="@style/SmsForwardingTitle" android:text="自定义 Webhook" />
+                        <TextView android:id="@+id/forwarding_custom_webhook_summary" style="@style/SmsForwardingSummary" />
+                    </LinearLayout>
+                    <ImageView style="@style/SmsForwardingChevron" />
+                </LinearLayout>
+
+                <View style="@style/SmsSettingsDivider" />
+
+                <LinearLayout android:id="@+id/forwarding_group_broadcast_holder" style="@style/SmsForwardingRow">
+                    <LinearLayout style="@style/SmsForwardingTextColumn">
+                        <TextView style="@style/SmsForwardingTitle" android:text="👥 群组消息 (多路聚合分发)" />
+                        <TextView android:id="@+id/forwarding_group_broadcast_summary" style="@style/SmsForwardingSummary" />
+                    </LinearLayout>
+                    <ImageView style="@style/SmsForwardingChevron" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- 5. 规则、卡槽与模板 -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_marginTop="20dp"
+                android:layout_marginBottom="8dp"
+                android:fontFamily="sans-serif-medium"
+                android:text="⚡ 规则与模板设置"
+                android:textColor="@color/miui_section_text"
+                android:textSize="14sp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/settings_card_background"
+                android:orientation="vertical"
+                android:paddingVertical="4dp">
+
+                <LinearLayout android:id="@+id/forwarding_rules_holder" style="@style/SmsForwardingRow">
+                    <LinearLayout style="@style/SmsForwardingTextColumn">
+                        <TextView style="@style/SmsForwardingTitle" android:text="⚡ 转发规则管理" />
+                        <TextView android:id="@+id/forwarding_rules_summary" style="@style/SmsForwardingSummary" />
+                    </LinearLayout>
+                    <ImageView style="@style/SmsForwardingChevron" />
+                </LinearLayout>
+
+                <View style="@style/SmsSettingsDivider" />
+
+                <LinearLayout android:id="@+id/forwarding_template_holder" style="@style/SmsForwardingRow">
+                    <LinearLayout style="@style/SmsForwardingTextColumn">
+                        <TextView style="@style/SmsForwardingTitle" android:text="自定义转发消息模板" />
+                        <TextView android:id="@+id/forwarding_template_summary" style="@style/SmsForwardingSummary" />
+                    </LinearLayout>
+                    <ImageView style="@style/SmsForwardingChevron" />
+                </LinearLayout>
+
+                <View style="@style/SmsSettingsDivider" />
+
                 <LinearLayout android:id="@+id/forwarding_sim_one_holder" style="@style/SmsForwardingRow">
                     <LinearLayout style="@style/SmsForwardingTextColumn">
-                        <TextView style="@style/SmsForwardingTitle" android:text="@string/forwarding_sim_one_label" />
+                        <TextView style="@style/SmsForwardingTitle" android:text="SIM卡 1 槽位标识" />
                         <TextView android:id="@+id/forwarding_sim_one_summary" style="@style/SmsForwardingSummary" />
                     </LinearLayout>
                     <ImageView style="@style/SmsForwardingChevron" />
@@ -247,18 +352,8 @@
 
                 <LinearLayout android:id="@+id/forwarding_sim_two_holder" style="@style/SmsForwardingRow">
                     <LinearLayout style="@style/SmsForwardingTextColumn">
-                        <TextView style="@style/SmsForwardingTitle" android:text="@string/forwarding_sim_two_label" />
+                        <TextView style="@style/SmsForwardingTitle" android:text="SIM卡 2 槽位标识" />
                         <TextView android:id="@+id/forwarding_sim_two_summary" style="@style/SmsForwardingSummary" />
-                    </LinearLayout>
-                    <ImageView style="@style/SmsForwardingChevron" />
-                </LinearLayout>
-
-                <View style="@style/SmsSettingsDivider" />
-
-                <LinearLayout android:id="@+id/forwarding_template_holder" style="@style/SmsForwardingRow">
-                    <LinearLayout style="@style/SmsForwardingTextColumn">
-                        <TextView style="@style/SmsForwardingTitle" android:text="@string/forwarding_template" />
-                        <TextView android:id="@+id/forwarding_template_summary" style="@style/SmsForwardingSummary" />
                     </LinearLayout>
                     <ImageView style="@style/SmsForwardingChevron" />
                 </LinearLayout>
@@ -267,10 +362,10 @@
             <LinearLayout
                 android:id="@+id/forwarding_history_holder"
                 style="@style/SmsForwardingRow"
-                android:layout_marginTop="18dp"
+                android:layout_marginTop="16dp"
                 android:background="@drawable/settings_card_background">
                 <LinearLayout style="@style/SmsForwardingTextColumn">
-                    <TextView style="@style/SmsForwardingTitle" android:text="@string/forwarding_history_title" />
+                    <TextView style="@style/SmsForwardingTitle" android:text="📜 转发历史流水记录" />
                     <TextView android:id="@+id/forwarding_history_summary" style="@style/SmsForwardingSummary" />
                 </LinearLayout>
                 <ImageView style="@style/SmsForwardingChevron" />
@@ -279,7 +374,7 @@
             <LinearLayout
                 android:id="@+id/forwarding_disclaimer_holder"
                 style="@style/SmsForwardingRow"
-                android:layout_marginTop="18dp"
+                android:layout_marginTop="12dp"
                 android:background="@drawable/settings_card_background">
                 <LinearLayout style="@style/SmsForwardingTextColumn">
                     <TextView style="@style/SmsForwardingTitle" android:text="@string/forwarding_disclaimer_title" />
@@ -292,9 +387,9 @@
                 android:id="@+id/forwarding_test"
                 android:layout_width="match_parent"
                 android:layout_height="54dp"
-                android:layout_marginTop="22dp"
+                android:layout_marginTop="20dp"
                 android:fontFamily="sans-serif-medium"
-                android:text="@string/forwarding_test_all"
+                android:text="⚡ 触发已开启通道全量测试发信"
                 android:textColor="@android:color/white"
                 app:backgroundTint="@color/miui_fab_green"
                 app:cornerRadius="27dp" />
@@ -311,8 +406,8 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:layout_marginBottom="20dp"
+                android:layout_marginTop="10dp"
+                android:layout_marginBottom="24dp"
                 android:fontFamily="sans-serif"
                 android:text="@string/forwarding_privacy_note"
                 android:textColor="@color/miui_secondary_text"

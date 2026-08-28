@@ -58,6 +58,10 @@ class Config(context: Context) : BaseConfig(context) {
         set(showCharacterCounter) = prefs.edit()
             .putBoolean(SHOW_CHARACTER_COUNTER, showCharacterCounter).apply()
 
+    var useGatewayDeveloperUi: Boolean
+        get() = prefs.getBoolean(USE_GATEWAY_DEVELOPER_UI, false)
+        set(value) = prefs.edit().putBoolean(USE_GATEWAY_DEVELOPER_UI, value).apply()
+
     var useSimpleCharacters: Boolean
         get() = prefs.getBoolean(USE_SIMPLE_CHARACTERS, false)
         set(useSimpleCharacters) = prefs.edit()

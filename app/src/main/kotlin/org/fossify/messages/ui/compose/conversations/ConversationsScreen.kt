@@ -1,6 +1,8 @@
 package org.fossify.messages.ui.compose.conversations
 
 import android.content.Intent
+import android.graphics.Bitmap
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -21,6 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -30,6 +33,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -39,11 +43,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.bumptech.glide.Glide
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import org.fossify.messages.R
 import org.fossify.messages.activities.NewConversationActivity
 import org.fossify.messages.activities.ThreadActivity
 import org.fossify.messages.helpers.THREAD_ID
@@ -59,7 +70,8 @@ import java.util.Locale
 @Composable
 fun ConversationsScreen(
     conversationsViewModel: ConversationsViewModel,
-    onRequestDefaultSms: () -> Unit = {}
+    onRequestDefaultSms: () -> Unit = {},
+    onSwitchToClassic: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val uiState by conversationsViewModel.uiState.collectAsState()
@@ -95,12 +107,26 @@ fun ConversationsScreen(
                     }
                 },
                 actions = {
+                    Surface(
+                        onClick = onSwitchToClassic,
+                        color = Color(0xFFE8F5E9),
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.padding(end = 4.dp)
+                    ) {
+                        Text(
+                            text = "📱 经典版",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF159447),
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
                     IconButton(onClick = { conversationsViewModel.refresh(isInitial = false) }) {
                         Text("🔄", fontSize = 18.sp)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
+                    containerColor = MaterialTheme.colorScheme.background
                 )
             )
         },
@@ -109,10 +135,17 @@ fun ConversationsScreen(
                 onClick = {
                     context.startActivity(Intent(context, NewConversationActivity::class.java))
                 },
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary
+                containerColor = Color(0xFF159447),
+                contentColor = Color.White,
+                shape = CircleShape,
+                modifier = Modifier.size(56.dp)
             ) {
-                Text("✏️", fontSize = 20.sp)
+                Icon(
+                    painter = painterResource(id = org.fossify.commons.R.drawable.ic_plus_vector),
+                    contentDescription = "新建会话",
+                    tint = Color.White,
+                    modifier = Modifier.size(24.dp)
+                )
             }
         }
     ) { innerPadding ->
@@ -207,7 +240,7 @@ fun ConversationsScreen(
                         )
                     }
 
-                    item { Spacer(modifier = Modifier.height(80.dp)) }
+                    item { Spacer(modifier = Modifier.height(100.dp)) }
                 }
             }
         }
@@ -219,9 +252,28 @@ fun ConversationItem(
     conversation: Conversation,
     onClick: () -> Unit
 ) {
+    val context = LocalContext.current
     val dateFormat = remember { SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()) }
     val formattedDate = remember(conversation.date) {
         dateFormat.format(Date(conversation.date.toLong() * 1000L))
+    }
+
+    var contactBitmap by remember(conversation.photoUri) { mutableStateOf<Bitmap?>(null) }
+    LaunchedEffect(conversation.photoUri) {
+        if (conversation.photoUri.isNotBlank()) {
+            withContext(Dispatchers.IO) {
+                val bmp = runCatching {
+                    Glide.with(context)
+                        .asBitmap()
+                        .load(conversation.photoUri)
+                        .submit(120, 120)
+                        .get()
+                }.getOrNull()
+                contactBitmap = bmp
+            }
+        } else {
+            contactBitmap = null
+        }
     }
 
     Surface(
@@ -236,20 +288,31 @@ fun ConversationItem(
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 联系人头像圆形缩写
-            Box(
-                modifier = Modifier
-                    .size(46.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primaryContainer),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = conversation.title.take(1).uppercase(),
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
+            // 联系人头像：如果有联系人真实头像则显示真实头像；否则展示原生经典默认头像
+            if (contactBitmap != null) {
+                Image(
+                    bitmap = contactBitmap!!.asImageBitmap(),
+                    contentDescription = conversation.title,
+                    modifier = Modifier
+                        .size(46.dp)
+                        .clip(CircleShape),
+                    contentScale = ContentScale.Crop
                 )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .size(46.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFFE8ECEF)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_person_vector),
+                        contentDescription = null,
+                        tint = Color(0xFF8A96A0),
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.width(12.dp))
