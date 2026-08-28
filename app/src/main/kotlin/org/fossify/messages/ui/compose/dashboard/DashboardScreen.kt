@@ -61,6 +61,10 @@ fun DashboardScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        viewModel.loadStats()
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(

@@ -19,11 +19,22 @@ import javax.crypto.spec.SecretKeySpec
 object ChannelTestSender {
     suspend fun sendTest(context: Context, channelId: String): Result<String> = withContext(Dispatchers.IO) {
         val config = MultiForwardConfig(context)
+        val history = ForwardingHistoryStore(context)
         val now = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
         val title = "【SMS Forwarder 测试通知】"
         val content = "这是一条来自 SMS Forwarder 的测试消息\n发送时间: $now\n如果您收到此消息，说明该通道已成功打通！"
 
-        runCatching {
+        val historyId = history.registerQueued(
+            workId = "test-${System.currentTimeMillis()}::$channelId",
+            channel = channelId,
+            sender = "10086",
+            body = "【通道测试】$content",
+            receivedAt = System.currentTimeMillis(),
+            subscriptionId = 1,
+            isTest = true
+        )
+
+        val res = runCatching {
             when (channelId) {
                 ForwardingChannels.PUSHPLUS -> {
                     val token = config.pushPlusToken()
@@ -238,6 +249,12 @@ object ChannelTestSender {
                 else -> "通道测试已完成"
             }
         }
+        if (res.isSuccess) {
+            history.markSuccess(historyId, res.getOrNull().orEmpty())
+        } else {
+            history.markFailed(historyId, res.exceptionOrNull()?.message ?: "测试发送失败")
+        }
+        res
     }
 
     private fun postJson(urlString: String, payload: JSONObject, headers: Map<String, String> = emptyMap()): JSONObject {
