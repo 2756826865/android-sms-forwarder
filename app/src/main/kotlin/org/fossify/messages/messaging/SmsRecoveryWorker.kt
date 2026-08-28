@@ -165,10 +165,7 @@ class SmsRecoveryWorker(
                     }
 
                     val allowedForwardChannels = ruleDecision?.allowedChannels
-                    if (pushPlus.enabled && !remoteCommandConsumed && (allowedForwardChannels == null || ForwardingChannels.PUSHPLUS in allowedForwardChannels)) {
-                        PushPlusWorker.enqueue(applicationContext, address, body, date, subscriptionId, uniqueId)
-                    }
-                    if (!remoteCommandConsumed && multiConfig.anyEnabled()) {
+                    if (!remoteCommandConsumed && (multiConfig.anyEnabled() || pushPlus.enabled)) {
                         MultiChannelForwardWorker.enqueue(
                             context = applicationContext,
                             sender = address,
@@ -233,10 +230,7 @@ class SmsRecoveryWorker(
         multiConfig: MultiForwardConfig,
     ): Set<String>? {
         if (!rulesConfig.enabled) return null
-        var channels = allowedForwardChannels
-            ?.filter { it != ForwardingChannels.PUSHPLUS }
-            ?.toSet()
-            ?: emptySet()
+        var channels = allowedForwardChannels ?: emptySet()
         if (rulesConfig.scope == ForwardingRulesConfig.SCOPE_FORWARDING_ONLY && multiConfig.smsDirectEnabled) {
             channels = channels + ForwardingChannels.SMS_DIRECT
         }

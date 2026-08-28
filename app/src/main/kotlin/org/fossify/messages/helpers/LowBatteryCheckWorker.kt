@@ -14,7 +14,6 @@ import org.fossify.messages.forwarding.ForwardingChannels
 import org.fossify.messages.forwarding.MultiChannelForwardWorker
 import org.fossify.messages.forwarding.MultiForwardConfig
 import org.fossify.messages.forwarding.PushPlusConfig
-import org.fossify.messages.forwarding.PushPlusWorker
 import java.util.concurrent.TimeUnit
 
 class LowBatteryCheckWorker(
@@ -57,7 +56,11 @@ class LowBatteryCheckWorker(
                 config.lowBatteryLastNotifiedLevel = batteryLevel
                 val uniqueId = "low-battery-$threshold"
                 val now = System.currentTimeMillis()
-                if (enabledMultiChannels.isNotEmpty()) {
+                val allSelectedEnabled = buildSet {
+                    addAll(enabledMultiChannels)
+                    if (pushPlusEnabled) add(ForwardingChannels.PUSHPLUS)
+                }
+                if (allSelectedEnabled.isNotEmpty()) {
                     MultiChannelForwardWorker.enqueue(
                         context = appContext,
                         sender = appContext.getString(R.string.low_battery_system_sender),
@@ -65,17 +68,7 @@ class LowBatteryCheckWorker(
                         receivedAt = now,
                         subscriptionId = -1,
                         uniqueId = uniqueId,
-                        allowedChannels = enabledMultiChannels,
-                    )
-                }
-                if (pushPlusEnabled) {
-                    PushPlusWorker.enqueue(
-                        context = appContext,
-                        sender = appContext.getString(R.string.low_battery_system_sender),
-                        body = content,
-                        receivedAt = now,
-                        subscriptionId = -1,
-                        uniqueId = uniqueId,
+                        allowedChannels = allSelectedEnabled,
                     )
                 }
             } catch (_: Exception) {

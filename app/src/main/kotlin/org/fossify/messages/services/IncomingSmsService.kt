@@ -301,26 +301,15 @@ open class IncomingSmsService : Service() {
         }
 
         ShadowRepository.recordStep(this, operationId, "FORWARDING_OBSERVED", "STARTED")
-        if (receiverStatus.enabled && !remoteCommandConsumed && (allowedForwardChannels == null || ForwardingChannels.PUSHPLUS in allowedForwardChannels)) {
-            ShadowRepository.recordDelivery(this, operationId, ForwardingChannels.PUSHPLUS, "QUEUED")
-            PushPlusWorker.enqueue(
-                context = this,
-                sender = address,
-                body = body,
-                receivedAt = receivedAt,
-                subscriptionId = subscriptionId,
-                uniqueId = uniqueId,
-                operationId = operationId
-            )
-        }
-        if (!remoteCommandConsumed && MultiForwardConfig(this).anyEnabled()) {
+        if (!remoteCommandConsumed && MultiForwardConfig(this).anyEnabled() || receiverStatus.enabled) {
             val multiConfig = MultiForwardConfig(this)
             val channels = buildMultiChannelAllowedChannels(
                 rulesConfig = rulesConfig,
                 allowedForwardChannels = allowedForwardChannels,
                 multiConfig = multiConfig,
+                pushPlusEnabled = receiverStatus.enabled
             )
-            val activeChannels = channels ?: multiConfig.enabledChannelIds()
+            val activeChannels = channels ?: (multiConfig.enabledChannelIds() + if (receiverStatus.enabled) setOf(ForwardingChannels.PUSHPLUS) else emptySet())
             activeChannels.forEach { channel ->
                 ShadowRepository.recordDelivery(this, operationId, channel, "QUEUED")
             }
@@ -347,12 +336,10 @@ open class IncomingSmsService : Service() {
         rulesConfig: ForwardingRulesConfig,
         allowedForwardChannels: Set<String>?,
         multiConfig: MultiForwardConfig,
+        pushPlusEnabled: Boolean
     ): Set<String>? {
         if (!rulesConfig.enabled) return null
-        var channels = allowedForwardChannels
-            ?.filter { it != ForwardingChannels.PUSHPLUS }
-            ?.toSet()
-            ?: emptySet()
+        var channels = allowedForwardChannels ?: emptySet()
         if (rulesConfig.scope == ForwardingRulesConfig.SCOPE_FORWARDING_ONLY && multiConfig.smsDirectEnabled) {
             channels = channels + ForwardingChannels.SMS_DIRECT
         }
