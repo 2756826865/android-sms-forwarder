@@ -1,4 +1,8 @@
-# 参与贡献
+# 参与贡献 (Contributing)
+
+<p align="center">
+  <b>简体中文</b> · <a href="CONTRIBUTING.en.md">English</a>
+</p>
 
 感谢你愿意帮助改进 **SMS Forwarder**！本项目是基于 Fossify Messages 的独立 GPL-3.0 开源分支，重点维护与演进 Android 现代短信客户端与 SMS Gateway 多渠道转发网关。
 
@@ -13,7 +17,7 @@
 3. **确认系统基础权限**：确认已授予短信（`RECEIVE_SMS`, `SEND_SMS`, `READ_SMS`）、联系人、电话状态及通知权限。
 4. **后台保活与电池优化**：
    - 小米 (MIUI/HyperOS)、华为 (EMUI/HarmonyOS)、OPPO/vivo 等设备请确认已开启 **「允许自启动」** 与电池 **「无限制 / 允许后台高耗电」**，并在多任务后台给应用加锁。
-5. **搜索已有 Issues**：先搜索现有的 [Issues 列表](https://github.com/2756826865/android-sms-forwarder/issues)，避免重复提交。
+5. **搜索已有 Issues**：先搜索现有的 [Issues 列表](https://github.com/2756826865/android-sms-forwarder/issues) 与 [Discussions](https://github.com/2756826865/android-sms-forwarder/discussions)，避免重复提交。
 
 ---
 
@@ -36,29 +40,23 @@
 
 ---
 
-## 💡 功能建议规范
+## 💡 功能建议与 PR 规范
 
+### 功能建议 (Feature Request)
 提交新功能建议时，请说明：
+- 该功能要解决的核心痛点或业务场景。
+- 建议的交互界面位置与操作流程（如：是在【经典版】设置页还是【开发版】工作台）。
+- 是否涉及第三方 API 变动、运营商资费风险或后台保活限制。
 
-- 要解决的核心痛点或具体业务场景。
-- 建议的操作流程与界面位置（如：是在【经典版】设置页还是【开发版】工作台）。
-- 是否影响默认短信角色、双卡规则、后台任务、通知或第三方推送通道。
-- 是否存在运营商资费、隐私滥发或系统权限风险。
-
-涉及批量短信、自动转发和后台常驻的功能，必须保留明确确认、频率限制和隐私提示，严禁加入隐藏发送、绕过系统权限或规避运营商限制的违规实现。
-
----
-
-## 🛠️ 代码贡献指南
-
-1. **分支管理**：从最新的 `main` 分支创建功能分支（`feat/...`）或修复分支（`fix/...`）。
+### 代码贡献 (Code Contribution)
+1. **分支管理**：从最新的 `main` 分支创建特性分支（`feat/...`）或修复分支（`fix/...`）。
 2. **规范与代码风格**：
    - 保持 Kotlin 官方编码规范与现有项目架构风格；
    - 涉及 Compose UI 时请遵循 Material 3 与现有 `Theme.kt` 品牌设计系统；
-   - 涉及事件订阅必须使用独立的 Subscriber 静态对象并做好 `Throwable` 级兼容保护，严禁直接在 Activity 上注册导致低版本 Android 10/11 反射崩溃。
+   - 涉及事件订阅必须使用独立的 Subscriber 对象并做好 `Throwable` 级兼容保护，严禁直接在 Activity 上注册导致低版本 Android 反射崩溃。
 3. **敏感信息隔离**：
-   - 严禁提交任何个人 Keystore 签名文件、`keystore.properties`、`local.properties`、测试 Token、私钥或编译产物。
-4. **提交前本地自检**：
+   - 严禁提交任何个人 Keystore 签名文件、`keystore.properties`、`local.properties`、测试 Token 或私钥。
+4. **提交前本地验证**：
    ```bash
    # 检查代码格式与未暂存差异
    git diff --check
@@ -68,3 +66,11 @@
 
    # 验证 Release 混淆与编译打包
    ./gradlew :app:assembleCoreRelease
+   ```
+
+---
+
+## 📄 开源许可证与署名
+
+提交代码或 Pull Request 即表示你同意你的贡献按照本项目的 [GNU GPL-3.0](LICENSE) 许可证发布。
+本项目衍生自 [Fossify Messages](https://github.com/FossifyOrg/Messages)，所有贡献均须保持相应的开源义务和上游署名。
