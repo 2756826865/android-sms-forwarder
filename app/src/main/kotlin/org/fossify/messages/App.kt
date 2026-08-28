@@ -19,11 +19,15 @@ import org.fossify.messages.recovery.RecoveryEngine
 import org.fossify.messages.recovery.RecoveryWorker
 import org.fossify.messages.models.RecoveryTriggerSource
 
+import org.fossify.messages.extensions.config
+
 class App : FossifyApp() {
     override val isAppLockFeatureAvailable = true
 
     override fun onCreate() {
         super.onCreate()
+        config.primaryColor = getColor(R.color.miui_action_blue)
+        config.accentColor = getColor(R.color.miui_fab_green)
         getSharedPreferences("Prefs", MODE_PRIVATE)
             .edit()
             .remove("app_sideloading_status")

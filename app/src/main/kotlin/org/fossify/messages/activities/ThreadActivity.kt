@@ -246,6 +246,8 @@ class ThreadActivity : SimpleActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        config.primaryColor = getColor(R.color.miui_action_blue)
+        config.accentColor = getColor(R.color.miui_fab_green)
         setContentView(binding.root)
         setupOptionsMenu()
         refreshMenuItems()

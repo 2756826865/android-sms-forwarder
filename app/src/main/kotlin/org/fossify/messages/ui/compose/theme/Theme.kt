@@ -4,23 +4,25 @@ import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
+
+// 经典品牌极简绿调 (MIUI / 微信绿体系)
+val ClassicGreen = Color(0xFF159447)
+val ClassicFabGreen = Color(0xFF1DCE38)
+val ClassicBadgeGreen = Color(0xFF20C45A)
 
 // Gateway Industrial Colors
-val GatewayGreen = Color(0xFF2E7D32)
+val GatewayGreen = Color(0xFF159447)
 val GatewayBlue = Color(0xFF1565C0)
 val GatewayOrange = Color(0xFFEF6C00)
 val GatewayRed = Color(0xFFC62828)
 val GatewayPurple = Color(0xFF6A1B9A)
 
-// Dark Palette
-val DarkPrimary = Color(0xFF90CAF9)
-val DarkOnPrimary = Color(0xFF0D47A1)
+// Dark Palette (还原原有深色体系)
+val DarkPrimary = Color(0xFF81C784)
+val DarkOnPrimary = Color(0xFF003915)
 val DarkPrimaryContainer = Color(0xFF1E3A5F)
 val DarkOnPrimaryContainer = Color(0xFFD1E4FF)
 val DarkSecondary = Color(0xFF80CBC4)
@@ -29,8 +31,8 @@ val DarkSurface = Color(0xFF1A1D21)
 val DarkSurfaceVariant = Color(0xFF262A30)
 val DarkOutline = Color(0xFF3F444D)
 
-// Light Palette
-val LightPrimary = Color(0xFF1976D2)
+// Light Palette (底色与卡片完全还原回原有层次体系，主品牌色保留经典翡翠绿)
+val LightPrimary = Color(0xFF159447)
 val LightOnPrimary = Color(0xFFFFFFFF)
 val LightPrimaryContainer = Color(0xFFD1E4FF)
 val LightOnPrimaryContainer = Color(0xFF001D36)
@@ -67,17 +69,10 @@ private val LightColorScheme = lightColorScheme(
 @Composable
 fun GatewayTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = true,
+    dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
-        darkTheme -> DarkColorScheme
-        else -> LightColorScheme
-    }
+    val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
 
     MaterialTheme(
         colorScheme = colorScheme,

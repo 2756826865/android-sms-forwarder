@@ -3,7 +3,13 @@
     <style name="AppTheme" parent="AppTheme.Base">
         <item name="android:alertDialogTheme">@style/SmsAlertDialogTheme</item>
         <item name="alertDialogTheme">@style/SmsAlertDialogTheme</item>
+        <item name="colorPrimary">@color/miui_action_blue</item>
+        <item name="android:colorPrimary">@color/miui_action_blue</item>
         <item name="colorAccent">@color/miui_fab_green</item>
+        <item name="android:colorAccent">@color/miui_fab_green</item>
+        <item name="actionModeBackground">@color/miui_action_blue</item>
+        <item name="android:actionModeBackground">@color/miui_action_blue</item>
+        <item name="windowActionModeOverlay">true</item>
     </style>
 
     <style name="SmsAlertDialogTheme" parent="ThemeOverlay.AppCompat.Dialog.Alert">
