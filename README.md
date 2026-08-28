@@ -10,6 +10,10 @@
 </p>
 
 <p align="center">
+  <b>简体中文</b>
+  ·
+  <a href="README.en.md">English</a>
+  ·
   <a href="https://github.com/2756826865/android-sms-forwarder">项目地址</a>
   ·
   <a href="https://github.com/2756826865/android-sms-forwarder/releases/latest">下载最新版</a>
