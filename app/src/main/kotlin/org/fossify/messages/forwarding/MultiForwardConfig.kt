@@ -214,6 +214,8 @@ class MultiForwardConfig(context: Context) {
         saveSecret(KEY_SMS_DIRECT_PHONE, phone)
     }
 
+    fun smsDirectPhone() = getSecret(KEY_SMS_DIRECT_PHONE)
+
     fun saveWeChatTest(appId: String, appSecret: String, templateId: String, openId: String) {
         saveSecret(KEY_WECHAT_TEST_APP_ID, appId)
         saveSecret(KEY_WECHAT_TEST_APP_SECRET, appSecret)
