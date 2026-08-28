@@ -67,7 +67,9 @@ enum class TemplatePreset(val mode: Int, val label: String, val emoji: String) {
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-fun RuleStudioScreen() {
+fun RuleStudioScreen(
+    onBack: (() -> Unit)? = null
+) {
     val context = LocalContext.current
     val config = remember { MultiForwardConfig(context) }
 
@@ -135,10 +137,21 @@ fun RuleStudioScreen() {
     Scaffold(
         topBar = {
             TopAppBar(
+                navigationIcon = {
+                    if (onBack != null) {
+                        androidx.compose.material3.IconButton(onClick = onBack) {
+                            androidx.compose.material3.Icon(
+                                painter = androidx.compose.ui.res.painterResource(id = org.fossify.commons.R.drawable.ic_arrow_left_vector),
+                                contentDescription = "返回",
+                                tint = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+                },
                 title = {
                     Column {
                         Text(
-                            text = "转发模板与规则编排",
+                            text = if (onBack != null) "消息模板" else "转发模板与规则编排",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )

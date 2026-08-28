@@ -12,11 +12,16 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 import org.fossify.messages.messaging.SimSendResolver
 
-class MultiForwardConfig(context: Context) {
+class MultiForwardConfig(private val context: Context) {
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     // 15 大通道开关
-    var pushPlusEnabled by booleanPreference(KEY_PUSHPLUS_ENABLED)
+    var pushPlusEnabled: Boolean
+        get() = prefs.getBoolean(KEY_PUSHPLUS_ENABLED, false) || context.getSharedPreferences("pushplus_forwarding", Context.MODE_PRIVATE).getBoolean("enabled", false)
+        set(value) {
+            prefs.edit().putBoolean(KEY_PUSHPLUS_ENABLED, value).apply()
+            context.getSharedPreferences("pushplus_forwarding", Context.MODE_PRIVATE).edit().putBoolean("enabled", value).apply()
+        }
     var wechatTestEnabled by booleanPreference(KEY_WECHAT_TEST_ENABLED)
     var qqEnabled by booleanPreference(KEY_QQ_ENABLED)
     var weComEnabled by booleanPreference(KEY_WECOM_ENABLED)
@@ -141,7 +146,11 @@ class MultiForwardConfig(context: Context) {
         saveSecret(KEY_PUSHPLUS_TOKEN, token)
         saveSecret(KEY_PUSHPLUS_TOPIC, topic)
     }
-    fun pushPlusToken() = getSecret(KEY_PUSHPLUS_TOKEN)
+    fun pushPlusToken(): String {
+        val token = getSecret(KEY_PUSHPLUS_TOKEN)
+        if (token.isNotBlank()) return token
+        return ""
+    }
     fun pushPlusTopic() = getSecret(KEY_PUSHPLUS_TOPIC)
 
     // 2. 微信测试号

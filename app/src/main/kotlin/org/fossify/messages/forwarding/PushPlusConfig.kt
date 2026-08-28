@@ -11,12 +11,16 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
-class PushPlusConfig(context: Context) {
+class PushPlusConfig(private val context: Context) {
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private val multiConfig by lazy { MultiForwardConfig(context) }
 
     var enabled: Boolean
-        get() = prefs.getBoolean(KEY_ENABLED, false)
-        set(value) = prefs.edit().putBoolean(KEY_ENABLED, value).apply()
+        get() = multiConfig.pushPlusEnabled || prefs.getBoolean(KEY_ENABLED, false)
+        set(value) {
+            multiConfig.pushPlusEnabled = value
+            prefs.edit().putBoolean(KEY_ENABLED, value).apply()
+        }
 
     var titlePrefix: String
         get() = prefs.getString(KEY_TITLE_PREFIX, "").orEmpty()
@@ -35,14 +39,18 @@ class PushPlusConfig(context: Context) {
         set(value) = prefs.edit().putBoolean(KEY_INCLUDE_TIME, value).apply()
 
     var lastStatus: String
-        get() = prefs.getString(KEY_LAST_STATUS, "").orEmpty()
-        set(value) = prefs.edit().putString(KEY_LAST_STATUS, value).apply()
+        get() = multiConfig.lastStatus.ifBlank { prefs.getString(KEY_LAST_STATUS, "").orEmpty() }
+        set(value) {
+            multiConfig.lastStatus = value
+            prefs.edit().putString(KEY_LAST_STATUS, value).apply()
+        }
 
     var lastReceiverStatus: String
         get() = prefs.getString(KEY_LAST_RECEIVER_STATUS, "").orEmpty()
         set(value) = prefs.edit().putString(KEY_LAST_RECEIVER_STATUS, value).apply()
 
     fun saveToken(token: String) {
+        multiConfig.savePushPlus(token, multiConfig.pushPlusTopic())
         if (token.isBlank()) {
             prefs.edit().remove(KEY_TOKEN).apply()
             return
@@ -50,12 +58,20 @@ class PushPlusConfig(context: Context) {
         prefs.edit().putString(KEY_TOKEN, TokenCipher.encrypt(token.trim())).apply()
     }
 
-    fun getToken(): String = prefs.getString(KEY_TOKEN, null)?.let { encrypted ->
-        TokenCipher.decrypt(encrypted).ifEmpty {
-            prefs.edit().remove(KEY_TOKEN).apply()
-            ""
+    fun getToken(): String {
+        val multiToken = multiConfig.pushPlusToken()
+        if (multiToken.isNotBlank()) return multiToken
+        val legacy = prefs.getString(KEY_TOKEN, null)?.let { encrypted ->
+            TokenCipher.decrypt(encrypted).ifEmpty {
+                prefs.edit().remove(KEY_TOKEN).apply()
+                ""
+            }
+        }.orEmpty()
+        if (legacy.isNotBlank()) {
+            multiConfig.savePushPlus(legacy, multiConfig.pushPlusTopic())
         }
-    }.orEmpty()
+        return legacy
+    }
 
     companion object {
         private const val PREFS_NAME = "pushplus_forwarding"

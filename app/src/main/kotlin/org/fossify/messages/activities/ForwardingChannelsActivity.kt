@@ -142,11 +142,7 @@ class ForwardingChannelsActivity : SimpleActivity() {
             startActivity(Intent(this@ForwardingChannelsActivity, ForwardingRulesSettingsActivity::class.java))
         }
         forwardingTemplateHolder.setOnClickListener {
-            if (multiConfig.templateMode == MultiForwardConfig.TEMPLATE_CUSTOM) {
-                showCustomTemplateDialog()
-            } else {
-                showTemplateDialog()
-            }
+            startActivity(Intent(this@ForwardingChannelsActivity, MessageTemplateActivity::class.java))
         }
         forwardingSimOneHolder.setOnClickListener { showSimLabelDialog(0) }
         forwardingSimTwoHolder.setOnClickListener { showSimLabelDialog(1) }
@@ -156,7 +152,7 @@ class ForwardingChannelsActivity : SimpleActivity() {
         forwardingDisclaimerHolder.setOnClickListener { showForwardingDisclaimer(requireAcceptance = false) }
 
         forwardingTest.setOnClickListener {
-            val pushPlusEnabled = pushPlusConfig.enabled && pushPlusConfig.getToken().isNotBlank()
+            val pushPlusEnabled = multiConfig.pushPlusEnabled && multiConfig.pushPlusToken().isNotBlank()
             if (!pushPlusEnabled && !multiConfig.anyEnabled()) {
                 toast(R.string.forwarding_no_enabled)
                 return@setOnClickListener
@@ -179,8 +175,8 @@ class ForwardingChannelsActivity : SimpleActivity() {
         val unconfigured = "未配置"
 
         // 微信生态
-        val pushPlusConfigured = pushPlusConfig.getToken().isNotBlank()
-        forwardingPushplusSummary.text = if (pushPlusConfigured) (if (pushPlusConfig.enabled) "微信公众号模板消息$greenText" else "已配置$offText") else unconfigured
+        val pushPlusConfigured = multiConfig.pushPlusToken().isNotBlank()
+        forwardingPushplusSummary.text = if (pushPlusConfigured) (if (multiConfig.pushPlusEnabled) "微信公众号模板消息$greenText" else "已配置$offText") else unconfigured
 
         val wxTestConfigured = multiConfig.wechatTestAppId().isNotBlank() && multiConfig.wechatTestAppSecret().isNotBlank()
         forwardingWxtestSummary.text = if (wxTestConfigured) (if (multiConfig.isChannelEnabled(ForwardingChannels.WECHAT_TEST)) "微信测试号$greenText" else "已配置$offText") else unconfigured

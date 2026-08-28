@@ -228,7 +228,19 @@ class MultiChannelForwardWorker(
             if (successes.isNotEmpty()) append(" 成功：${successes.joinToString("、")}")
             if (failures.isNotEmpty()) append(" 失败：${failures.joinToString("；")}")
         }
-        Log.d(TAG, "result: successes=$successes, failures=$failures, attempt=$runAttemptCount")
+        Log.d(TAG, "result: successes=$successes, failures=$failures, attempt=$runAttemptCount, isTest=$isTest")
+
+        // 识别是否属于永久性凭据/配置错误（不可通过无脑重试解决）
+        fun isPermanentError(msg: String): Boolean {
+            val permanentKeywords = listOf(
+                "令牌不正确", "Token", "token", "未配置", "配置不完整", "401", "403", "400", "404",
+                "invalid", "unauthorized", "Secret", "secret", "不正确", "不存在", "拒绝请求", "签名"
+            )
+            return permanentKeywords.any { msg.contains(it, ignoreCase = true) }
+        }
+
+        val allFailuresArePermanent = failures.isNotEmpty() && failures.all { isPermanentError(it) }
+        val canRetry = !isTest && !allFailuresArePermanent && runAttemptCount < 2
 
         when {
             failures.isEmpty() && successes.isNotEmpty() -> {
@@ -245,14 +257,14 @@ class MultiChannelForwardWorker(
                 Log.d(TAG, "result: skipped")
                 Result.success()
             }
-            runAttemptCount < 2 -> {
+            canRetry -> {
                 if (historyRecordId.isNotBlank()) history.markRetry(historyRecordId, failures.joinToString("；"))
-                Log.d(TAG, "result: retry")
+                Log.d(TAG, "result: retry (transient network error)")
                 Result.retry()
             }
             else -> {
                 if (historyRecordId.isNotBlank()) history.markFailed(historyRecordId, failures.joinToString("；"))
-                Log.d(TAG, "result: failed")
+                Log.d(TAG, "result: failed (permanent or test error, no loop retry)")
                 Result.failure()
             }
         }

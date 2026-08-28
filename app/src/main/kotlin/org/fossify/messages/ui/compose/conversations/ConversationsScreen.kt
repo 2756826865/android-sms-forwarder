@@ -247,6 +247,10 @@ fun ConversationsScreen(
     }
 }
 
+private val avatarLruCache = object : android.util.LruCache<String, Bitmap>(128) {
+    override fun sizeOf(key: String, value: Bitmap): Int = 1
+}
+
 @Composable
 fun ConversationItem(
     conversation: Conversation,
@@ -258,18 +262,28 @@ fun ConversationItem(
         dateFormat.format(Date(conversation.date.toLong() * 1000L))
     }
 
-    var contactBitmap by remember(conversation.photoUri) { mutableStateOf<Bitmap?>(null) }
+    var contactBitmap by remember(conversation.photoUri) {
+        mutableStateOf<Bitmap?>(avatarLruCache.get(conversation.photoUri))
+    }
     LaunchedEffect(conversation.photoUri) {
         if (conversation.photoUri.isNotBlank()) {
-            withContext(Dispatchers.IO) {
-                val bmp = runCatching {
-                    Glide.with(context)
-                        .asBitmap()
-                        .load(conversation.photoUri)
-                        .submit(120, 120)
-                        .get()
-                }.getOrNull()
-                contactBitmap = bmp
+            val cached = avatarLruCache.get(conversation.photoUri)
+            if (cached != null) {
+                contactBitmap = cached
+            } else {
+                withContext(Dispatchers.IO) {
+                    val bmp = runCatching {
+                        Glide.with(context)
+                            .asBitmap()
+                            .load(conversation.photoUri)
+                            .submit(120, 120)
+                            .get()
+                    }.getOrNull()
+                    if (bmp != null) {
+                        avatarLruCache.put(conversation.photoUri, bmp)
+                    }
+                    contactBitmap = bmp
+                }
             }
         } else {
             contactBitmap = null

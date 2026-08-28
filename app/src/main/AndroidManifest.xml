@@ -143,6 +143,12 @@
             android:parentActivityName=".activities.SettingsActivity" />
 
         <activity
+            android:name=".activities.MessageTemplateActivity"
+            android:exported="false"
+            android:label="消息模板"
+            android:parentActivityName=".activities.SettingsActivity" />
+
+        <activity
             android:name=".activities.PushPlusSettingsActivity"
             android:exported="false"
             android:label="@string/pushplus_forwarding"

@@ -64,6 +64,11 @@
                     android:text="@string/settings_forwarding" />
 
                 <TextView
+                    android:id="@+id/settings_template_holder"
+                    style="@style/SmsSettingsRow"
+                    android:text="消息模板" />
+
+                <TextView
                     android:id="@+id/settings_scheduled_holder"
                     style="@style/SmsSettingsRow"
                     android:text="@string/scheduled_management" />
