@@ -55,8 +55,9 @@ class HeadlessSendMigrationTest {
         val opId = SmsSendCoordinator.beginSend(context, sendContext)
         assertNotNull(opId)
 
+        Thread.sleep(200)
         val dao = context.getMessagesDB().SmsSendDao()
-        val op = dao.getOperationById(opId!!)
+        val op = runBlocking { dao.getOperationById(opId!!) }
         assertNotNull(op)
         assertEquals(SmsSendTriggerType.HEADLESS.name, op?.triggerType)
     }
@@ -78,8 +79,9 @@ class HeadlessSendMigrationTest {
         val opId = SmsSendCoordinator.beginSend(context, sendContext)
         assertNotNull(opId)
 
+        Thread.sleep(200)
         val dao = context.getMessagesDB().SmsSendDao()
-        val op = dao.getOperationById(opId!!)
+        val op = runBlocking { dao.getOperationById(opId!!) }
         assertNotNull(op)
         assertEquals(SmsSendTriggerType.HEADLESS.name, op?.triggerType)
     }

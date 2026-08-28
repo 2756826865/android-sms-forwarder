@@ -10,21 +10,31 @@ import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
-
 import org.fossify.messages.messaging.SimSendResolver
 
 class MultiForwardConfig(context: Context) {
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-    var dingTalkEnabled by booleanPreference(KEY_DINGTALK_ENABLED)
-    var feishuEnabled by booleanPreference(KEY_FEISHU_ENABLED)
+    // 15 大通道开关
+    var pushPlusEnabled by booleanPreference(KEY_PUSHPLUS_ENABLED)
+    var wechatTestEnabled by booleanPreference(KEY_WECHAT_TEST_ENABLED)
+    var qqEnabled by booleanPreference(KEY_QQ_ENABLED)
     var weComEnabled by booleanPreference(KEY_WECOM_ENABLED)
     var weComBotEnabled by booleanPreference(KEY_WECOM_BOT_ENABLED)
+    var feishuAppEnabled by booleanPreference(KEY_FEISHU_APP_ENABLED)
+    var feishuEnabled by booleanPreference(KEY_FEISHU_ENABLED)
+    var dingTalkEnabled by booleanPreference(KEY_DINGTALK_ENABLED)
+    var barkEnabled by booleanPreference(KEY_BARK_ENABLED)
+    var barkAllowHttp by booleanPreference(KEY_BARK_ALLOW_HTTP)
+    var websocketEnabled by booleanPreference(KEY_WEBSOCKET_ENABLED)
+    var telegramEnabled by booleanPreference(KEY_TELEGRAM_ENABLED)
+    var discordEnabled by booleanPreference(KEY_DISCORD_ENABLED)
+    var tencentCloudEnabled by booleanPreference(KEY_TENCENT_CLOUD_ENABLED)
     var emailEnabled by booleanPreference(KEY_EMAIL_ENABLED)
     var smsDirectEnabled by booleanPreference(KEY_SMS_DIRECT_ENABLED)
     var smsDirectOnlyOnNoNetwork by booleanPreference(KEY_SMS_DIRECT_ONLY_ON_NO_NETWORK)
-    var barkEnabled by booleanPreference(KEY_BARK_ENABLED)
-    var barkAllowHttp by booleanPreference(KEY_BARK_ALLOW_HTTP)
+    var customWebhookEnabled by booleanPreference(KEY_CUSTOM_WEBHOOK_ENABLED)
+    var channelGroupEnabled by booleanPreference(KEY_CHANNEL_GROUP_ENABLED)
     var gotifyEnabled by booleanPreference(KEY_GOTIFY_ENABLED)
     var gotifyAllowHttp by booleanPreference(KEY_GOTIFY_ALLOW_HTTP)
     var dingTalkRemoteControlEnabled by booleanPreference(KEY_DINGTALK_REMOTE_CONTROL_ENABLED)
@@ -126,64 +136,124 @@ class MultiForwardConfig(context: Context) {
         get() = prefs.getString(KEY_LAST_STATUS, "").orEmpty()
         set(value) = prefs.edit().putString(KEY_LAST_STATUS, value).apply()
 
-    fun saveDingTalk(webhook: String, secret: String) {
-        saveSecret(KEY_DINGTALK_WEBHOOK, webhook)
-        saveSecret(KEY_DINGTALK_SECRET, secret)
+    // 1. PushPlus
+    fun savePushPlus(token: String, topic: String = "") {
+        saveSecret(KEY_PUSHPLUS_TOKEN, token)
+        saveSecret(KEY_PUSHPLUS_TOPIC, topic)
     }
+    fun pushPlusToken() = getSecret(KEY_PUSHPLUS_TOKEN)
+    fun pushPlusTopic() = getSecret(KEY_PUSHPLUS_TOPIC)
 
-    fun dingTalkWebhook() = getSecret(KEY_DINGTALK_WEBHOOK)
-    fun dingTalkSecret() = getSecret(KEY_DINGTALK_SECRET)
-
-    fun saveFeishu(webhook: String, secret: String) {
-        saveSecret(KEY_FEISHU_WEBHOOK, webhook)
-        saveSecret(KEY_FEISHU_SECRET, secret)
+    // 2. 微信测试号
+    fun saveWechatTest(appId: String, appSecret: String, templateId: String, openId: String) {
+        saveSecret(KEY_WECHAT_TEST_APP_ID, appId)
+        saveSecret(KEY_WECHAT_TEST_APP_SECRET, appSecret)
+        saveSecret(KEY_WECHAT_TEST_TEMPLATE_ID, templateId)
+        saveSecret(KEY_WECHAT_TEST_OPEN_ID, openId)
     }
+    fun wechatTestAppId() = getSecret(KEY_WECHAT_TEST_APP_ID)
+    fun wechatTestAppSecret() = getSecret(KEY_WECHAT_TEST_APP_SECRET)
+    fun wechatTestTemplateId() = getSecret(KEY_WECHAT_TEST_TEMPLATE_ID)
+    fun wechatTestOpenId() = getSecret(KEY_WECHAT_TEST_OPEN_ID)
 
-    fun feishuWebhook() = getSecret(KEY_FEISHU_WEBHOOK)
-    fun feishuSecret() = getSecret(KEY_FEISHU_SECRET)
-
-    fun saveBark(serverUrl: String, deviceKey: String) {
-        saveSecret(KEY_BARK_SERVER_URL, serverUrl)
-        saveSecret(KEY_BARK_DEVICE_KEY, deviceKey)
+    // 3. QQ (Qmsg / OneBot)
+    fun saveQq(webhookOrKey: String, type: String = "qmsg") {
+        saveSecret(KEY_QQ_WEBHOOK, webhookOrKey)
+        saveSecret(KEY_QQ_TYPE, type)
     }
+    fun qqWebhook() = getSecret(KEY_QQ_WEBHOOK)
+    fun qqType() = getSecret(KEY_QQ_TYPE).ifBlank { "qmsg" }
 
-    fun barkServerUrl() = getSecret(KEY_BARK_SERVER_URL)
-    fun barkDeviceKey() = getSecret(KEY_BARK_DEVICE_KEY)
-
-    fun saveGotify(serverUrl: String, token: String) {
-        saveSecret(KEY_GOTIFY_SERVER_URL, serverUrl)
-        saveSecret(KEY_GOTIFY_TOKEN, token)
-    }
-
-    fun gotifyServerUrl() = getSecret(KEY_GOTIFY_SERVER_URL)
-    fun gotifyToken() = getSecret(KEY_GOTIFY_TOKEN)
-
-    fun saveDingTalkRemoteControl(clientId: String, clientSecret: String) {
-        saveSecret(KEY_DINGTALK_REMOTE_CLIENT_ID, clientId)
-        saveSecret(KEY_DINGTALK_REMOTE_CLIENT_SECRET, clientSecret)
-    }
-
-    fun dingTalkRemoteClientId() = getSecret(KEY_DINGTALK_REMOTE_CLIENT_ID)
-    fun dingTalkRemoteClientSecret() = getSecret(KEY_DINGTALK_REMOTE_CLIENT_SECRET)
-
+    // 4. 企业微信应用号
     fun saveWeCom(corpId: String, agentId: String, secret: String, toUser: String) {
         saveSecret(KEY_WECOM_CORP_ID, corpId)
         saveSecret(KEY_WECOM_AGENT_ID, agentId)
         saveSecret(KEY_WECOM_SECRET, secret)
         saveSecret(KEY_WECOM_TO_USER, toUser)
     }
-
     fun weComCorpId() = getSecret(KEY_WECOM_CORP_ID)
     fun weComAgentId() = getSecret(KEY_WECOM_AGENT_ID)
     fun weComSecret() = getSecret(KEY_WECOM_SECRET)
     fun weComToUser() = getSecret(KEY_WECOM_TO_USER)
 
+    // 5. 企业微信群机器人
     fun saveWeComBot(webhook: String) {
         saveSecret(KEY_WECOM_BOT_WEBHOOK, webhook)
     }
-
     fun weComBotWebhook() = getSecret(KEY_WECOM_BOT_WEBHOOK)
 
+    // 6. 飞书自建应用
+    fun saveFeishuApp(appId: String, appSecret: String, receiveId: String) {
+        saveSecret(KEY_FEISHU_APP_ID, appId)
+        saveSecret(KEY_FEISHU_APP_SECRET, appSecret)
+        saveSecret(KEY_FEISHU_RECEIVE_ID, receiveId)
+    }
+    fun feishuAppId() = getSecret(KEY_FEISHU_APP_ID)
+    fun feishuAppSecret() = getSecret(KEY_FEISHU_APP_SECRET)
+    fun feishuReceiveId() = getSecret(KEY_FEISHU_RECEIVE_ID)
+
+    // 7. 飞书群机器人
+    fun saveFeishu(webhook: String, secret: String) {
+        saveSecret(KEY_FEISHU_WEBHOOK, webhook)
+        saveSecret(KEY_FEISHU_SECRET, secret)
+    }
+    fun feishuWebhook() = getSecret(KEY_FEISHU_WEBHOOK)
+    fun feishuSecret() = getSecret(KEY_FEISHU_SECRET)
+
+    // 8. 钉钉群机器人
+    fun saveDingTalk(webhook: String, secret: String) {
+        saveSecret(KEY_DINGTALK_WEBHOOK, webhook)
+        saveSecret(KEY_DINGTALK_SECRET, secret)
+    }
+    fun dingTalkWebhook() = getSecret(KEY_DINGTALK_WEBHOOK)
+    fun dingTalkSecret() = getSecret(KEY_DINGTALK_SECRET)
+
+    fun saveDingTalkRemoteControl(clientId: String, clientSecret: String) {
+        saveSecret(KEY_DINGTALK_REMOTE_CLIENT_ID, clientId)
+        saveSecret(KEY_DINGTALK_REMOTE_CLIENT_SECRET, clientSecret)
+    }
+    fun dingTalkRemoteClientId() = getSecret(KEY_DINGTALK_REMOTE_CLIENT_ID)
+    fun dingTalkRemoteClientSecret() = getSecret(KEY_DINGTALK_REMOTE_CLIENT_SECRET)
+
+    // 9. Bark
+    fun saveBark(serverUrl: String, deviceKey: String) {
+        saveSecret(KEY_BARK_SERVER_URL, serverUrl)
+        saveSecret(KEY_BARK_DEVICE_KEY, deviceKey)
+    }
+    fun barkServerUrl() = getSecret(KEY_BARK_SERVER_URL).ifBlank { "https://api.day.app" }
+    fun barkDeviceKey() = getSecret(KEY_BARK_DEVICE_KEY)
+
+    // 10. WebSocket 客户端
+    fun saveWebsocket(serverUrl: String, token: String = "") {
+        saveSecret(KEY_WEBSOCKET_URL, serverUrl)
+        saveSecret(KEY_WEBSOCKET_TOKEN, token)
+    }
+    fun websocketUrl() = getSecret(KEY_WEBSOCKET_URL)
+    fun websocketToken() = getSecret(KEY_WEBSOCKET_TOKEN)
+
+    // 11. Telegram 机器人
+    fun saveTelegram(botToken: String, chatId: String) {
+        saveSecret(KEY_TELEGRAM_BOT_TOKEN, botToken)
+        saveSecret(KEY_TELEGRAM_CHAT_ID, chatId)
+    }
+    fun telegramBotToken() = getSecret(KEY_TELEGRAM_BOT_TOKEN)
+    fun telegramChatId() = getSecret(KEY_TELEGRAM_CHAT_ID)
+
+    // 12. Discord 机器人
+    fun saveDiscord(webhook: String) {
+        saveSecret(KEY_DISCORD_WEBHOOK, webhook)
+    }
+    fun discordWebhook() = getSecret(KEY_DISCORD_WEBHOOK)
+
+    // 13. 腾讯云自定义告警
+    fun saveTencentCloud(webhook: String, secret: String = "") {
+        saveSecret(KEY_TENCENT_CLOUD_WEBHOOK, webhook)
+        saveSecret(KEY_TENCENT_CLOUD_SECRET, secret)
+    }
+    fun tencentCloudWebhook() = getSecret(KEY_TENCENT_CLOUD_WEBHOOK)
+    fun tencentCloudSecret() = getSecret(KEY_TENCENT_CLOUD_SECRET)
+
+    // 14. 邮件 SMTP
     fun saveEmail(
         host: String,
         port: Int,
@@ -199,30 +269,62 @@ class MultiForwardConfig(context: Context) {
         saveSecret(KEY_EMAIL_PASSWORD, password)
         saveSecret(KEY_EMAIL_RECIPIENTS, recipients)
     }
-
     fun emailHost() = getSecret(KEY_EMAIL_HOST)
     fun emailUser() = getSecret(KEY_EMAIL_USER)
     fun emailPassword() = getSecret(KEY_EMAIL_PASSWORD)
     fun emailRecipients() = getSecret(KEY_EMAIL_RECIPIENTS)
 
+    // 15. 短信直发
     fun saveSmsDirect(phone: String) {
         saveSecret(KEY_SMS_DIRECT_PHONE, phone)
     }
-
     fun smsDirectPhone() = getSecret(KEY_SMS_DIRECT_PHONE)
 
-    fun anyEnabled() = dingTalkEnabled || feishuEnabled || weComEnabled || weComBotEnabled ||
-        emailEnabled || smsDirectEnabled || barkEnabled || gotifyEnabled
+    // 16. 自定义 Webhook
+    fun saveCustomWebhook(url: String, headers: String = "") {
+        saveSecret(KEY_CUSTOM_WEBHOOK_URL, url)
+        saveSecret(KEY_CUSTOM_WEBHOOK_HEADERS, headers)
+    }
+    fun customWebhookUrl() = getSecret(KEY_CUSTOM_WEBHOOK_URL)
+    fun customWebhookHeaders() = getSecret(KEY_CUSTOM_WEBHOOK_HEADERS)
+
+    // 17. 群组消息成员
+    fun saveChannelGroupMembers(members: Set<String>) {
+        prefs.edit().putStringSet(KEY_CHANNEL_GROUP_MEMBERS, members).apply()
+    }
+    fun channelGroupMembers(): Set<String> = prefs.getStringSet(KEY_CHANNEL_GROUP_MEMBERS, emptySet()).orEmpty()
+
+    // Gotify
+    fun saveGotify(serverUrl: String, token: String) {
+        saveSecret(KEY_GOTIFY_SERVER_URL, serverUrl)
+        saveSecret(KEY_GOTIFY_TOKEN, token)
+    }
+    fun gotifyServerUrl() = getSecret(KEY_GOTIFY_SERVER_URL)
+    fun gotifyToken() = getSecret(KEY_GOTIFY_TOKEN)
+
+    fun anyEnabled() = pushPlusEnabled || wechatTestEnabled || qqEnabled || weComEnabled || weComBotEnabled ||
+        feishuAppEnabled || feishuEnabled || dingTalkEnabled || barkEnabled || websocketEnabled ||
+        telegramEnabled || discordEnabled || tencentCloudEnabled || emailEnabled || smsDirectEnabled ||
+        customWebhookEnabled || channelGroupEnabled || gotifyEnabled
 
     fun enabledChannelIds(includePushPlus: Boolean = false): Set<String> = buildSet {
-        if (includePushPlus) add(ForwardingChannels.PUSHPLUS)
-        if (dingTalkEnabled) add(ForwardingChannels.DINGTALK)
-        if (feishuEnabled) add(ForwardingChannels.FEISHU)
-        if (weComEnabled) add(ForwardingChannels.WECOM)
+        if (includePushPlus || pushPlusEnabled) add(ForwardingChannels.PUSHPLUS)
+        if (wechatTestEnabled) add(ForwardingChannels.WECHAT_TEST)
+        if (qqEnabled) add(ForwardingChannels.QQ)
+        if (weComEnabled) add(ForwardingChannels.WECOM_APP)
         if (weComBotEnabled) add(ForwardingChannels.WECOM_BOT)
+        if (feishuAppEnabled) add(ForwardingChannels.FEISHU_APP)
+        if (feishuEnabled) add(ForwardingChannels.FEISHU_BOT)
+        if (dingTalkEnabled) add(ForwardingChannels.DINGTALK)
+        if (barkEnabled) add(ForwardingChannels.BARK)
+        if (websocketEnabled) add(ForwardingChannels.WEBSOCKET)
+        if (telegramEnabled) add(ForwardingChannels.TELEGRAM)
+        if (discordEnabled) add(ForwardingChannels.DISCORD)
+        if (tencentCloudEnabled) add(ForwardingChannels.TENCENT_CLOUD)
         if (emailEnabled) add(ForwardingChannels.EMAIL)
         if (smsDirectEnabled) add(ForwardingChannels.SMS_DIRECT)
-        if (barkEnabled) add(ForwardingChannels.BARK)
+        if (customWebhookEnabled) add(ForwardingChannels.CUSTOM_WEBHOOK)
+        if (channelGroupEnabled) add(ForwardingChannels.CHANNEL_GROUP)
         if (gotifyEnabled) add(ForwardingChannels.GOTIFY)
     }
 
@@ -254,12 +356,17 @@ class MultiForwardConfig(context: Context) {
 
     companion object {
         private const val PREFS_NAME = "multi_channel_forwarding"
-        private const val KEY_DINGTALK_ENABLED = "dingtalk_enabled"
-        private const val KEY_DINGTALK_WEBHOOK = "dingtalk_webhook"
-        private const val KEY_DINGTALK_SECRET = "dingtalk_secret"
-        private const val KEY_FEISHU_ENABLED = "feishu_enabled"
-        private const val KEY_FEISHU_WEBHOOK = "feishu_webhook"
-        private const val KEY_FEISHU_SECRET = "feishu_secret"
+        private const val KEY_PUSHPLUS_ENABLED = "pushplus_enabled"
+        private const val KEY_PUSHPLUS_TOKEN = "pushplus_token"
+        private const val KEY_PUSHPLUS_TOPIC = "pushplus_topic"
+        private const val KEY_WECHAT_TEST_ENABLED = "wechat_test_enabled"
+        private const val KEY_WECHAT_TEST_APP_ID = "wechat_test_app_id"
+        private const val KEY_WECHAT_TEST_APP_SECRET = "wechat_test_app_secret"
+        private const val KEY_WECHAT_TEST_TEMPLATE_ID = "wechat_test_template_id"
+        private const val KEY_WECHAT_TEST_OPEN_ID = "wechat_test_open_id"
+        private const val KEY_QQ_ENABLED = "qq_enabled"
+        private const val KEY_QQ_WEBHOOK = "qq_webhook"
+        private const val KEY_QQ_TYPE = "qq_type"
         private const val KEY_WECOM_ENABLED = "wecom_enabled"
         private const val KEY_WECOM_CORP_ID = "wecom_corp_id"
         private const val KEY_WECOM_AGENT_ID = "wecom_agent_id"
@@ -267,6 +374,31 @@ class MultiForwardConfig(context: Context) {
         private const val KEY_WECOM_TO_USER = "wecom_to_user"
         private const val KEY_WECOM_BOT_ENABLED = "wecom_bot_enabled"
         private const val KEY_WECOM_BOT_WEBHOOK = "wecom_bot_webhook"
+        private const val KEY_FEISHU_APP_ENABLED = "feishu_app_enabled"
+        private const val KEY_FEISHU_APP_ID = "feishu_app_id"
+        private const val KEY_FEISHU_APP_SECRET = "feishu_app_secret"
+        private const val KEY_FEISHU_RECEIVE_ID = "feishu_receive_id"
+        private const val KEY_FEISHU_ENABLED = "feishu_enabled"
+        private const val KEY_FEISHU_WEBHOOK = "feishu_webhook"
+        private const val KEY_FEISHU_SECRET = "feishu_secret"
+        private const val KEY_DINGTALK_ENABLED = "dingtalk_enabled"
+        private const val KEY_DINGTALK_WEBHOOK = "dingtalk_webhook"
+        private const val KEY_DINGTALK_SECRET = "dingtalk_secret"
+        private const val KEY_BARK_ENABLED = "bark_enabled"
+        private const val KEY_BARK_SERVER_URL = "bark_server_url"
+        private const val KEY_BARK_DEVICE_KEY = "bark_device_key"
+        private const val KEY_BARK_ALLOW_HTTP = "bark_allow_http"
+        private const val KEY_WEBSOCKET_ENABLED = "websocket_enabled"
+        private const val KEY_WEBSOCKET_URL = "websocket_url"
+        private const val KEY_WEBSOCKET_TOKEN = "websocket_token"
+        private const val KEY_TELEGRAM_ENABLED = "telegram_enabled"
+        private const val KEY_TELEGRAM_BOT_TOKEN = "telegram_bot_token"
+        private const val KEY_TELEGRAM_CHAT_ID = "telegram_chat_id"
+        private const val KEY_DISCORD_ENABLED = "discord_enabled"
+        private const val KEY_DISCORD_WEBHOOK = "discord_webhook"
+        private const val KEY_TENCENT_CLOUD_ENABLED = "tencent_cloud_enabled"
+        private const val KEY_TENCENT_CLOUD_WEBHOOK = "tencent_cloud_webhook"
+        private const val KEY_TENCENT_CLOUD_SECRET = "tencent_cloud_secret"
         private const val KEY_EMAIL_ENABLED = "email_enabled"
         private const val KEY_EMAIL_HOST = "email_host"
         private const val KEY_EMAIL_PORT = "email_port"
@@ -277,10 +409,11 @@ class MultiForwardConfig(context: Context) {
         private const val KEY_SMS_DIRECT_ENABLED = "sms_direct_enabled"
         private const val KEY_SMS_DIRECT_PHONE = "sms_direct_phone"
         private const val KEY_SMS_DIRECT_ONLY_ON_NO_NETWORK = "sms_direct_only_on_no_network"
-        private const val KEY_BARK_ENABLED = "bark_enabled"
-        private const val KEY_BARK_SERVER_URL = "bark_server_url"
-        private const val KEY_BARK_DEVICE_KEY = "bark_device_key"
-        private const val KEY_BARK_ALLOW_HTTP = "bark_allow_http"
+        private const val KEY_CUSTOM_WEBHOOK_ENABLED = "custom_webhook_enabled"
+        private const val KEY_CUSTOM_WEBHOOK_URL = "custom_webhook_url"
+        private const val KEY_CUSTOM_WEBHOOK_HEADERS = "custom_webhook_headers"
+        private const val KEY_CHANNEL_GROUP_ENABLED = "channel_group_enabled"
+        private const val KEY_CHANNEL_GROUP_MEMBERS = "channel_group_members"
         private const val KEY_GOTIFY_ENABLED = "gotify_enabled"
         private const val KEY_GOTIFY_SERVER_URL = "gotify_server_url"
         private const val KEY_GOTIFY_TOKEN = "gotify_token"

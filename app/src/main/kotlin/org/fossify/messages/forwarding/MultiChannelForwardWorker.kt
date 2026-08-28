@@ -158,13 +158,16 @@ class MultiChannelForwardWorker(
         }
 
         // 网络渠道直接尝试发送，依赖 HTTP 超时和 WorkManager 约束
-        if (shouldRun(ForwardingChannels.DINGTALK, config.dingTalkEnabled)) runChannel("钉钉", ForwardingChannels.DINGTALK) {
-            sendDingTalk(config.dingTalkWebhook(), config.dingTalkSecret(), content)
+        if (shouldRun(ForwardingChannels.PUSHPLUS, config.pushPlusEnabled)) runChannel("PushPlus", ForwardingChannels.PUSHPLUS) {
+            sendPushPlus(config.pushPlusToken(), config.pushPlusTopic(), title, content)
         }
-        if (shouldRun(ForwardingChannels.FEISHU, config.feishuEnabled)) runChannel("飞书", ForwardingChannels.FEISHU) {
-            sendFeishu(config.feishuWebhook(), config.feishuSecret(), content)
+        if (shouldRun(ForwardingChannels.WECHAT_TEST, config.wechatTestEnabled)) runChannel("微信测试号", ForwardingChannels.WECHAT_TEST) {
+            sendWechatTest(config.wechatTestAppId(), config.wechatTestAppSecret(), config.wechatTestTemplateId(), config.wechatTestOpenId(), title, content)
         }
-        if (shouldRun(ForwardingChannels.WECOM, config.weComEnabled)) runChannel("企业微信", ForwardingChannels.WECOM) {
+        if (shouldRun(ForwardingChannels.QQ, config.qqEnabled)) runChannel("QQ", ForwardingChannels.QQ) {
+            sendQq(config.qqWebhook(), config.qqType(), title, content)
+        }
+        if (shouldRun(ForwardingChannels.WECOM_APP, config.weComEnabled)) runChannel("企业微信应用号", ForwardingChannels.WECOM_APP) {
             sendWeCom(
                 config.weComCorpId(),
                 config.weComAgentId(),
@@ -175,6 +178,30 @@ class MultiChannelForwardWorker(
         }
         if (shouldRun(ForwardingChannels.WECOM_BOT, config.weComBotEnabled)) runChannel("企业微信群机器人", ForwardingChannels.WECOM_BOT) {
             sendWeComBot(config.weComBotWebhook(), content)
+        }
+        if (shouldRun(ForwardingChannels.FEISHU_APP, config.feishuAppEnabled)) runChannel("飞书自建应用", ForwardingChannels.FEISHU_APP) {
+            sendFeishuApp(config.feishuAppId(), config.feishuAppSecret(), config.feishuReceiveId(), title, content)
+        }
+        if (shouldRun(ForwardingChannels.FEISHU_BOT, config.feishuEnabled)) runChannel("飞书群机器人", ForwardingChannels.FEISHU_BOT) {
+            sendFeishu(config.feishuWebhook(), config.feishuSecret(), content)
+        }
+        if (shouldRun(ForwardingChannels.DINGTALK, config.dingTalkEnabled)) runChannel("钉钉群机器人", ForwardingChannels.DINGTALK) {
+            sendDingTalk(config.dingTalkWebhook(), config.dingTalkSecret(), content)
+        }
+        if (shouldRun(ForwardingChannels.BARK, config.barkEnabled)) runChannel("Bark", ForwardingChannels.BARK) {
+            sendBark(config.barkServerUrl(), config.barkDeviceKey(), title, content, config.barkAllowHttp)
+        }
+        if (shouldRun(ForwardingChannels.WEBSOCKET, config.websocketEnabled)) runChannel("WebSocket客户端", ForwardingChannels.WEBSOCKET) {
+            sendWebsocket(config.websocketUrl(), config.websocketToken(), title, content)
+        }
+        if (shouldRun(ForwardingChannels.TELEGRAM, config.telegramEnabled)) runChannel("Telegram", ForwardingChannels.TELEGRAM) {
+            sendTelegram(config.telegramBotToken(), config.telegramChatId(), title, content)
+        }
+        if (shouldRun(ForwardingChannels.DISCORD, config.discordEnabled)) runChannel("Discord", ForwardingChannels.DISCORD) {
+            sendDiscord(config.discordWebhook(), title, content)
+        }
+        if (shouldRun(ForwardingChannels.TENCENT_CLOUD, config.tencentCloudEnabled)) runChannel("腾讯云自定义告警", ForwardingChannels.TENCENT_CLOUD) {
+            sendTencentCloud(config.tencentCloudWebhook(), config.tencentCloudSecret(), content)
         }
         if (shouldRun(ForwardingChannels.EMAIL, config.emailEnabled)) runChannel("邮箱", ForwardingChannels.EMAIL) {
             sendEmail(
@@ -188,8 +215,8 @@ class MultiChannelForwardWorker(
                 content
             )
         }
-        if (shouldRun(ForwardingChannels.BARK, config.barkEnabled)) runChannel("Bark", ForwardingChannels.BARK) {
-            sendBark(config.barkServerUrl(), config.barkDeviceKey(), title, content, config.barkAllowHttp)
+        if (shouldRun(ForwardingChannels.CUSTOM_WEBHOOK, config.customWebhookEnabled)) runChannel("自定义Webhook", ForwardingChannels.CUSTOM_WEBHOOK) {
+            sendCustomWebhook(config.customWebhookUrl(), config.customWebhookHeaders(), content)
         }
         if (shouldRun(ForwardingChannels.GOTIFY, config.gotifyEnabled)) runChannel("Gotify", ForwardingChannels.GOTIFY) {
             sendGotify(config.gotifyServerUrl(), config.gotifyToken(), title, content, config.gotifyAllowHttp)
@@ -530,6 +557,121 @@ class MultiChannelForwardWorker(
         val validated = capabilities.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED)
         Log.d(TAG, "network check: internet=$internet, validated=$validated")
         return internet || validated
+    }
+
+    private fun sendPushPlus(token: String, topic: String, title: String, content: String) {
+        require(token.isNotBlank()) { "PushPlus Token 不能为空" }
+        val payload = JSONObject()
+            .put("token", token)
+            .put("title", title)
+            .put("content", content.replace("\n", "<br/>"))
+            .put("template", "html")
+        if (topic.isNotBlank()) payload.put("topic", topic)
+        val result = postJson("https://www.pushplus.plus/send", payload)
+        check(result.optInt("code", -1) == 200) {
+            result.optString("msg", "PushPlus 推送失败")
+        }
+    }
+
+    private fun sendWechatTest(appId: String, appSecret: String, templateId: String, openId: String, title: String, content: String) {
+        require(appId.isNotBlank() && appSecret.isNotBlank() && templateId.isNotBlank() && openId.isNotBlank()) {
+            "微信测试号配置不完整"
+        }
+        val tokenUrl = "https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=" +
+            URLEncoder.encode(appId, "UTF-8") + "&secret=" + URLEncoder.encode(appSecret, "UTF-8")
+        val tokenRes = getJson(tokenUrl)
+        val token = tokenRes.optString("access_token")
+        check(token.isNotBlank()) { tokenRes.optString("errmsg", "微信测试号获取 Token 失败") }
+
+        val dataObj = JSONObject()
+            .put("title", JSONObject().put("value", title))
+            .put("content", JSONObject().put("value", content))
+            .put("time", JSONObject().put("value", SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())))
+
+        val sendPayload = JSONObject()
+            .put("touser", openId)
+            .put("template_id", templateId)
+            .put("data", dataObj)
+
+        val sendRes = postJson("https://api.weixin.qq.com/cgi-bin/message/template/send?access_token=$token", sendPayload)
+        check(sendRes.optInt("errcode", -1) == 0) { sendRes.optString("errmsg", "微信测试号模板消息发送失败") }
+    }
+
+    private fun sendQq(webhookOrKey: String, type: String, title: String, content: String) {
+        require(webhookOrKey.isNotBlank()) { "QQ 消息配置不能为空" }
+        val text = "【$title】\n$content"
+        if (type == "qmsg" || !webhookOrKey.startsWith("http")) {
+            val url = "https://qmsg.zendee.cn/send/$webhookOrKey"
+            postJson(url, JSONObject().put("msg", text))
+        } else {
+            postJson(webhookOrKey, JSONObject().put("message", text))
+        }
+    }
+
+    private fun sendFeishuApp(appId: String, appSecret: String, receiveId: String, title: String, content: String) {
+        require(appId.isNotBlank() && appSecret.isNotBlank() && receiveId.isNotBlank()) { "飞书自建应用配置不完整" }
+        val authUrl = "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal"
+        val authRes = postJson(authUrl, JSONObject().put("app_id", appId).put("app_secret", appSecret))
+        val token = authRes.optString("tenant_access_token")
+        check(token.isNotBlank()) { authRes.optString("msg", "获取飞书 tenant_access_token 失败") }
+
+        val msgUrl = "https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=open_id"
+        val contentObj = JSONObject().put("text", "【$title】\n$content")
+        val sendPayload = JSONObject()
+            .put("receive_id", receiveId)
+            .put("msg_type", "text")
+            .put("content", contentObj.toString())
+
+        val result = postJson(msgUrl, sendPayload)
+        check(result.optInt("code", -1) == 0 || result.has("data")) { result.optString("msg", "飞书自建应用发送失败") }
+    }
+
+    private fun sendTelegram(botToken: String, chatId: String, title: String, content: String) {
+        require(botToken.isNotBlank() && chatId.isNotBlank()) { "Telegram 配置不完整" }
+        val text = "*$title*\n\n$content"
+        val url = "https://api.telegram.org/bot$botToken/sendMessage"
+        val payload = JSONObject()
+            .put("chat_id", chatId)
+            .put("text", text)
+        val result = postJson(url, payload)
+        check(result.optBoolean("ok", false) || result.optInt("error_code", 0) == 0) { result.optString("description", "Telegram 发送失败") }
+    }
+
+    private fun sendDiscord(webhook: String, title: String, content: String) {
+        requireHttps(webhook)
+        val embed = JSONObject()
+            .put("title", title)
+            .put("description", content)
+            .put("color", 5814783)
+        val payload = JSONObject().put("embeds", org.json.JSONArray().put(embed))
+        postJson(webhook, payload)
+    }
+
+    private fun sendTencentCloud(webhook: String, secret: String, content: String) {
+        requireHttps(webhook)
+        val payload = JSONObject()
+            .put("text", content)
+            .put("secret", secret)
+        postJson(webhook, payload)
+    }
+
+    private fun sendWebsocket(serverUrl: String, token: String, title: String, content: String) {
+        require(serverUrl.isNotBlank()) { "WebSocket 客户端配置不能为空" }
+        val httpEndpoint = if (serverUrl.startsWith("ws://")) serverUrl.replace("ws://", "http://")
+            else if (serverUrl.startsWith("wss://")) serverUrl.replace("wss://", "https://")
+            else serverUrl
+        val payload = JSONObject()
+            .put("title", title)
+            .put("content", content)
+            .put("token", token)
+            .put("time", System.currentTimeMillis())
+        postJson(httpEndpoint, payload)
+    }
+
+    private fun sendCustomWebhook(url: String, headersStr: String, content: String) {
+        require(url.isNotBlank()) { "自定义 Webhook URL 不能为空" }
+        val payload = JSONObject().put("content", content)
+        postJson(url, payload)
     }
 
     private fun sendSmsDirect(phone: String, content: String, receiveSubId: Int, isTest: Boolean = false) {

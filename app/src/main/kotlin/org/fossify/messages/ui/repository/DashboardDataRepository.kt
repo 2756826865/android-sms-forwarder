@@ -1,10 +1,14 @@
 package org.fossify.messages.ui.repository
 
+import android.app.role.RoleManager
 import android.content.Context
+import android.os.Build
+import android.provider.Telephony
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.fossify.messages.compatibility.CompatibilityManager
 import org.fossify.messages.extensions.getMessagesDB
+import org.fossify.messages.forwarding.ForwardingHistoryStore
 import org.fossify.messages.models.ForwardingShadowDelivery
 import org.fossify.messages.models.RecoveryRecordEntity
 import org.fossify.messages.models.RemoteCommandExecutionEntity
@@ -49,7 +53,18 @@ class DashboardDataRepository(private val context: Context) {
         val deviceProfile = CompatibilityManager.deviceProfile
         val isBatteryOptimized = !CompatibilityManager.backgroundCompat.isBatteryOptimizationIgnored(context)
         val isNotificationEnabled = CompatibilityManager.backgroundCompat.isNotificationEnabled(context)
+        val isDefaultSms = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val roleManager = context.getSystemService(RoleManager::class.java)
+            roleManager?.isRoleHeld(RoleManager.ROLE_SMS) == true
+        } else {
+            Telephony.Sms.getDefaultSmsPackage(context) == context.packageName
+        }
         val brandTips = CompatibilityManager.backgroundCompat.getBrandTips()
+
+        // 6. 发送与转发流水记录 (最新 30 条)
+        val historyRecords = runCatching {
+            ForwardingHistoryStore(context).records().take(30)
+        }.getOrDefault(emptyList())
 
         DashboardStats(
             todaySentCount = sentCount,
@@ -69,7 +84,9 @@ class DashboardDataRepository(private val context: Context) {
             deviceProfile = deviceProfile,
             isBatteryOptimized = isBatteryOptimized,
             isNotificationEnabled = isNotificationEnabled,
+            isDefaultSmsApp = isDefaultSms,
             brandTips = brandTips,
+            recentHistoryRecords = historyRecords,
             lastUpdated = System.currentTimeMillis()
         )
     }

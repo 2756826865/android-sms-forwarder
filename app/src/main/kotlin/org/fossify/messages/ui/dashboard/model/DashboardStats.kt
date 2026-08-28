@@ -1,6 +1,7 @@
 package org.fossify.messages.ui.dashboard.model
 
 import org.fossify.messages.compatibility.model.DeviceProfile
+import org.fossify.messages.forwarding.ForwardingHistoryRecord
 
 /**
  * 首页仪表盘统计聚合数据模型
@@ -32,7 +33,11 @@ data class DashboardStats(
     val deviceProfile: DeviceProfile? = null,
     val isBatteryOptimized: Boolean = false,
     val isNotificationEnabled: Boolean = true,
+    val isDefaultSmsApp: Boolean = true,
     val brandTips: List<String> = emptyList(),
+
+    // 6. 发送与转发流水记录 (最新 30 条)
+    val recentHistoryRecords: List<ForwardingHistoryRecord> = emptyList(),
 
     val lastUpdated: Long = System.currentTimeMillis()
 )

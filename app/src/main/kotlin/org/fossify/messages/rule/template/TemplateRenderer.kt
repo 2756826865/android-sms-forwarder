@@ -10,7 +10,9 @@ import java.util.Locale
  */
 object TemplateRenderer {
 
-    private val CODE_REGEX = Regex("""(?<!\d)(\d{4,8})(?!\d)""")
+    // 优先匹配紧随关键字后的验证码
+    private val KEYWORD_CODE_REGEX = Regex("""(?:验证码|动态码|校验码|code|Code|CODE|授权码|随机码|确认码|PIN)[^0-9a-zA-Z]{0,6}?([0-9]{4,8})(?!\d)""")
+    private val FALLBACK_CODE_REGEX = Regex("""(?<!\d)([0-9]{4,8})(?!\d)""")
 
     fun render(template: String?, context: IncomingMessageContext): String {
         if (template.isNullOrBlank()) {
@@ -28,8 +30,12 @@ object TemplateRenderer {
             .replace("{{sim}}", if (context.subscriptionId >= 0) "SIM ${context.subscriptionId}" else "Default SIM")
     }
 
-    private fun extractVerificationCode(body: String): String {
-        val match = CODE_REGEX.find(body)
-        return match?.value ?: ""
+    fun extractVerificationCode(body: String): String {
+        val keywordMatch = KEYWORD_CODE_REGEX.find(body)
+        if (keywordMatch != null && keywordMatch.groupValues.size > 1) {
+            return keywordMatch.groupValues[1]
+        }
+        val fallbackMatch = FALLBACK_CODE_REGEX.find(body)
+        return fallbackMatch?.value ?: ""
     }
 }

@@ -3,8 +3,6 @@ package org.fossify.messages.recovery
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import androidx.work.ListenableWorker
-import androidx.work.testing.TestListenableWorkerBuilder
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
@@ -36,9 +34,10 @@ class RecoveryWorkerTest {
 
     @Test
     fun testPeriodicRecoveryWorkerExecutesSuccessfully() = runBlocking {
-        val worker = TestListenableWorkerBuilder<RecoveryWorker>(context).build()
-        val result = worker.doWork()
-        assertEquals(ListenableWorker.Result.success(), result)
+        val summary = RecoveryEngine.runRecoveryScan(context, triggerSource = RecoveryTriggerSource.PERIODIC_WORKER)
+        assertNotNull(summary)
+        assertEquals(RecoveryTriggerSource.PERIODIC_WORKER, summary.triggerSource)
+        assertTrue(summary.scanTime > 0)
     }
 
     @Test

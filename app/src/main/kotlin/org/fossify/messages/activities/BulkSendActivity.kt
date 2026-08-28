@@ -12,6 +12,7 @@ import org.fossify.commons.extensions.onTextChangeListener
 import org.fossify.commons.extensions.toast
 import org.fossify.commons.extensions.value
 import org.fossify.commons.extensions.viewBinding
+import org.fossify.commons.helpers.ensureBackgroundThread
 import org.fossify.commons.helpers.NavigationIcon
 import org.fossify.commons.helpers.PERMISSION_READ_CONTACTS
 import org.fossify.commons.helpers.SimpleContactsHelper
@@ -151,61 +152,67 @@ class BulkSendActivity : SimpleActivity() {
     }
 
     private fun importNumbersFromFile(uri: Uri) {
-        try {
-            val imported = mutableListOf<BulkRecipient>()
-            var skipped = 0
+        ensureBackgroundThread {
+            try {
+                val imported = mutableListOf<BulkRecipient>()
+                var skipped = 0
 
-            contentResolver.openInputStream(uri)?.bufferedReader()?.useLines { lines ->
-                var isFirstLine = true
-                lines.forEach { line ->
-                    val trimmed = line.trim()
-                    if (trimmed.isBlank()) return@forEach
+                contentResolver.openInputStream(uri)?.bufferedReader()?.useLines { lines ->
+                    var isFirstLine = true
+                    lines.forEach { line ->
+                        val trimmed = line.trim()
+                        if (trimmed.isBlank()) return@forEach
 
-                    if (isFirstLine) {
-                        isFirstLine = false
-                        val lower = trimmed.lowercase()
-                        if (lower.contains("name") || lower.contains("phone") ||
-                            lower.contains("姓名") || lower.contains("号码") ||
-                            lower.contains("number")) {
+                        if (isFirstLine) {
+                            isFirstLine = false
+                            val lower = trimmed.lowercase()
+                            if (lower.contains("name") || lower.contains("phone") ||
+                                lower.contains("姓名") || lower.contains("号码") ||
+                                lower.contains("number")) {
+                                return@forEach
+                            }
+                        }
+
+                        val (name, number) = parseImportLine(trimmed)
+                        val normalized = normalizeManualNumber(number)
+
+                        if (normalized == null || allRecipients.any { it.number == normalized }) {
+                            skipped++
                             return@forEach
                         }
+
+                        imported.add(BulkRecipient(name, normalized))
                     }
+                }
 
-                    val (name, number) = parseImportLine(trimmed)
-                    val normalized = normalizeManualNumber(number)
+                runOnUiThread {
+                    if (imported.isEmpty()) {
+                        toast(R.string.bulk_send_import_empty)
+                    } else {
+                        val availableSlots = MAX_RECIPIENTS - selectedNumbers.size
+                        val toAdd = imported.take(availableSlots)
+                        val overflowSkipped = imported.size - toAdd.size
+                        val totalSkipped = skipped + overflowSkipped
 
-                    if (normalized == null || allRecipients.any { it.number == normalized }) {
-                        skipped++
-                        return@forEach
+                        if (overflowSkipped > 0) {
+                            toast(getString(R.string.bulk_send_too_many, MAX_RECIPIENTS))
+                        }
+
+                        toAdd.forEach { recipient ->
+                            allRecipients.add(0, recipient)
+                            selectedNumbers.add(recipient.number)
+                        }
+
+                        applyFilter(binding.bulkSendSearch.value)
+                        updateSelectedCount()
+                        toast(getString(R.string.bulk_send_import_result, toAdd.size, totalSkipped))
                     }
-
-                    imported.add(BulkRecipient(name, normalized))
+                }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    toast(getString(R.string.bulk_send_import_error, e.message ?: "Unknown error"))
                 }
             }
-
-            if (imported.isEmpty()) {
-                toast(R.string.bulk_send_import_empty)
-            } else {
-                val availableSlots = MAX_RECIPIENTS - selectedNumbers.size
-                val toAdd = imported.take(availableSlots)
-                val overflowSkipped = imported.size - toAdd.size
-                val totalSkipped = skipped + overflowSkipped
-
-                if (overflowSkipped > 0) {
-                    toast(getString(R.string.bulk_send_too_many, MAX_RECIPIENTS))
-                }
-
-                toAdd.forEach { recipient ->
-                    allRecipients.add(0, recipient)
-                    selectedNumbers.add(recipient.number)
-                }
-
-                applyFilter(binding.bulkSendSearch.value)
-                updateSelectedCount()
-                toast(getString(R.string.bulk_send_import_result, toAdd.size, totalSkipped))
-            }
-        } catch (e: Exception) {
-            toast(getString(R.string.bulk_send_import_error, e.message ?: "Unknown error"))
         }
     }
 

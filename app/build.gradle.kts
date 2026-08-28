@@ -44,6 +44,12 @@ android {
         }
     }
 
+    sourceSets {
+        getByName("androidTest") {
+            assets.srcDirs(files("$projectDir/schemas"))
+        }
+    }
+
     signingConfigs {
         if (keystorePropertiesFile.exists()) {
             register("release") {

@@ -35,7 +35,7 @@ object DiagnosticBundleGenerator {
         val db = context.getMessagesDB()
 
         val root = JSONObject().apply {
-            put("bundleVersion", "1.1.0")
+            put("bundleVersion", "1.1.1")
             put("generatedAt", now)
         }
 

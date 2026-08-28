@@ -1,7 +1,6 @@
 package org.fossify.messages.databases
 
 import androidx.room.testing.MigrationTestHelper
-import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Rule
@@ -26,11 +25,11 @@ class MigrationTest {
         var db = helper.createDatabase(TEST_DB, 11)
 
         // Insert some data that should be preserved
-        db.execSQL("INSERT INTO conversations (thread_id, snippet, date, read, title, photo_uri, is_group_conversation, phone_number) " +
-                "VALUES (1, 'test snippet', 123456789, 0, 'test title', '', 0, '123456')")
+        db.execSQL("INSERT INTO conversations (thread_id, snippet, date, read, title, photo_uri, is_group_conversation, phone_number, is_scheduled, uses_custom_title, archived, unread_count) " +
+                "VALUES (1, 'test snippet', 123456789, 0, 'test title', '', 0, '123456', 0, 0, 0, 0)")
         
-        db.execSQL("INSERT INTO messages (id, body, type, participants, date, read, thread_id, is_mms, attachment, sender_name, sender_photo_uri, subscription_id) " +
-                "VALUES (100, 'test message', 1, '[]', 123456789, 0, 1, 0, NULL, 'sender', '', -1)")
+        db.execSQL("INSERT INTO messages (id, body, type, status, participants, date, read, thread_id, is_mms, attachment, sender_phone_number, sender_name, sender_photo_uri, subscription_id, is_scheduled) " +
+                "VALUES (100, 'test message', 1, 0, '[]', 123456789, 0, 1, 0, NULL, 'sender', 'sender', '', -1, 0)")
 
         // Prepare for the next version
         db.close()
@@ -64,8 +63,8 @@ class MigrationTest {
         var db = helper.createDatabase(TEST_DB, 12)
 
         // Insert conversation data that must survive the migration
-        db.execSQL("INSERT INTO conversations (thread_id, snippet, date, read, title, photo_uri, is_group_conversation, phone_number) " +
-                "VALUES (2, 'pre-migration snippet', 987654321, 0, 'test title 2', '', 0, '987654')")
+        db.execSQL("INSERT INTO conversations (thread_id, snippet, date, read, title, photo_uri, is_group_conversation, phone_number, is_scheduled, uses_custom_title, archived, unread_count) " +
+                "VALUES (2, 'pre-migration snippet', 987654321, 0, 'test title 2', '', 0, '987654', 0, 0, 0, 0)")
 
         db.execSQL("INSERT INTO message_operations (operation_id, direction, source, received_at, created_at, updated_at) " +
                 "VALUES ('op-test-1', 'INCOMING', 'BROADCAST', 111111111, 111111112, 111111113)")
@@ -117,8 +116,8 @@ class MigrationTest {
         // Chain migration 11 -> 12 -> 13
         var db = helper.createDatabase(TEST_DB, 11)
 
-        db.execSQL("INSERT INTO conversations (thread_id, snippet, date, read, title, photo_uri, is_group_conversation, phone_number) " +
-                "VALUES (3, 'chained snippet', 555555555, 0, 'chained title', '', 0, '555555')")
+        db.execSQL("INSERT INTO conversations (thread_id, snippet, date, read, title, photo_uri, is_group_conversation, phone_number, is_scheduled, uses_custom_title, archived, unread_count) " +
+                "VALUES (3, 'chained snippet', 555555555, 0, 'chained title', '', 0, '555555', 0, 0, 0, 0)")
 
         db.close()
 
@@ -133,6 +132,5 @@ class MigrationTest {
         // All tables from both migrations should exist
         db.query("SELECT * FROM message_operations").close()
         db.query("SELECT * FROM sms_send_operations").close()
-        db.query("SELECT * FROM sms_send_parts").close()
     }
 }

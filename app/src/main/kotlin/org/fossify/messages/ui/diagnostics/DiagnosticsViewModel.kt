@@ -95,7 +95,7 @@ class DiagnosticsViewModel(
         }
     }
 
-    fun exportDiagnosticBundle(encryptWithKeyStore: Boolean = true) {
+    fun exportDiagnosticBundle(encryptWithKeyStore: Boolean = false) {
         viewModelScope.launch {
             try {
                 val bundleResult = DiagnosticBundleGenerator.generateBundle(context, encryptWithKeyStore)

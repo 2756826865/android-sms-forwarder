@@ -4,6 +4,10 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.fossify.messages.extensions.getMessagesDB
 import org.fossify.messages.helpers.Config
 import org.fossify.messages.helpers.OutboxRepository

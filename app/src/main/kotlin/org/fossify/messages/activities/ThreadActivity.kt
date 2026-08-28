@@ -1434,8 +1434,10 @@ class ThreadActivity : SimpleActivity() {
 
             if (!message.read) {
                 hadUnreadItems = true
-                markMessageRead(message.id, message.isMMS)
-                conversationsDB.markRead(threadId)
+                ensureBackgroundThread {
+                    markMessageRead(message.id, message.isMMS)
+                    conversationsDB.markRead(threadId)
+                }
             }
 
             if (i == cnt - 1 && (message.type == Telephony.Sms.MESSAGE_TYPE_SENT)) {
@@ -1815,11 +1817,13 @@ class ThreadActivity : SimpleActivity() {
         runOnUiThread {
             threadItems = newItems
             getOrCreateThreadAdapter().updateMessages(newItems, newItems.lastIndex)
-            if (!refreshedSinceSent) {
-                refreshMessages()
-            }
         }
-        messagesDB.insertOrUpdate(message)
+        if (!refreshedSinceSent) {
+            refreshMessages()
+        }
+        ensureBackgroundThread {
+            messagesDB.insertOrUpdate(message)
+        }
     }
 
     // show selected contacts, properly split to new lines when appropriate
@@ -1966,42 +1970,44 @@ class ThreadActivity : SimpleActivity() {
             notificationManager.cancel(threadId.hashCode())
         }
 
-        val messageSnapshot = messages.toSortedMessages()
-        val lastMaxId = messageSnapshot.filterNot { it.isScheduled }.maxByOrNull { it.id }?.id ?: 0L
-        val providerParticipantsChanged = reconcileProviderParticipants()
-        val newThreadId = getThreadId(participants.getAddresses().toSet())
-        val number = participants.firstOrNull()?.phoneNumbers?.firstOrNull()?.normalizedNumber
-        val newMessages = getMessages(newThreadId, address = number, includeScheduledMessages = false)
-        if (messageSnapshot.isNotEmpty() && messageSnapshot.all { it.isScheduled } && newMessages.isNotEmpty()) {
-            // update scheduled messages with real thread id
-            threadId = newThreadId
-            updateScheduledMessagesThreadId(
-                messages = messageSnapshot.filter { it.threadId != threadId },
-                newThreadId = threadId
-            )
-        }
-
-        messages = newMessages.apply {
-            val scheduledMessages = messagesDB.getScheduledThreadMessages(threadId)
-                .filterNot { it.isScheduled && it.millis() < System.currentTimeMillis() }
-            addAll(scheduledMessages)
-            if (config.useRecycleBin) {
-                val recycledMessages = messagesDB.getThreadMessagesFromRecycleBin(threadId).toSet()
-                removeAll(recycledMessages)
-            }
-        }.toSortedMessages()
-
-        messages.filter { !it.isScheduled && !it.isReceivedMessage() && it.id > lastMaxId }
-            .forEach { latestMessage ->
-                messagesDB.insertOrIgnore(latestMessage)
+        ensureBackgroundThread {
+            val messageSnapshot = messages.toSortedMessages()
+            val lastMaxId = messageSnapshot.filterNot { it.isScheduled }.maxByOrNull { it.id }?.id ?: 0L
+            val providerParticipantsChanged = reconcileProviderParticipants()
+            val newThreadId = getThreadId(participants.getAddresses().toSet())
+            val number = participants.firstOrNull()?.phoneNumbers?.firstOrNull()?.normalizedNumber
+            val newMessages = getMessages(newThreadId, address = number, includeScheduledMessages = false)
+            if (messageSnapshot.isNotEmpty() && messageSnapshot.all { it.isScheduled } && newMessages.isNotEmpty()) {
+                // update scheduled messages with real thread id
+                threadId = newThreadId
+                updateScheduledMessagesThreadId(
+                    messages = messageSnapshot.filter { it.threadId != threadId },
+                    newThreadId = threadId
+                )
             }
 
-        setupAdapter()
-        runOnUiThread {
-            if (providerParticipantsChanged) {
-                setupThreadTitle()
+            messages = newMessages.apply {
+                val scheduledMessages = messagesDB.getScheduledThreadMessages(threadId)
+                    .filterNot { it.isScheduled && it.millis() < System.currentTimeMillis() }
+                addAll(scheduledMessages)
+                if (config.useRecycleBin) {
+                    val recycledMessages = messagesDB.getThreadMessagesFromRecycleBin(threadId).toSet()
+                    removeAll(recycledMessages)
+                }
+            }.toSortedMessages()
+
+            messages.filter { !it.isScheduled && !it.isReceivedMessage() && it.id > lastMaxId }
+                .forEach { latestMessage ->
+                    messagesDB.insertOrIgnore(latestMessage)
+                }
+
+            setupAdapter()
+            runOnUiThread {
+                if (providerParticipantsChanged) {
+                    setupThreadTitle()
+                }
+                setupSIMSelector()
             }
-            setupSIMSelector()
         }
     }
 

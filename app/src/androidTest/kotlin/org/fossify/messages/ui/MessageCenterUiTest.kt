@@ -91,24 +91,20 @@ class MessageCenterUiTest {
 
         // 2. Insert 2 Parts
         val part0 = SmsSendPartEntity(
-            partId = "part-0-" + UUID.randomUUID(),
             sendOperationId = opId,
             partIndex = 0,
-            totalParts = 2,
-            status = "DELIVERED",
-            deliveryStatus = 0,
-            createdAt = now - 3000,
-            updatedAt = now - 1000
+            partCount = 2,
+            deliveredState = "DELIVERED",
+            deliveredResultCode = 0,
+            createdAt = now - 3000
         )
         val part1 = SmsSendPartEntity(
-            partId = "part-1-" + UUID.randomUUID(),
             sendOperationId = opId,
             partIndex = 1,
-            totalParts = 2,
-            status = "DELIVERED",
-            deliveryStatus = 0,
-            createdAt = now - 3000,
-            updatedAt = now - 1000
+            partCount = 2,
+            deliveredState = "DELIVERED",
+            deliveredResultCode = 0,
+            createdAt = now - 3000
         )
         context.getMessagesDB().SmsSendDao().insertPart(part0)
         context.getMessagesDB().SmsSendDao().insertPart(part1)

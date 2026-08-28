@@ -160,9 +160,11 @@ class ScheduledMessagesActivity : SimpleActivity() {
 
     private fun removeScheduledMessage(message: Message) {
         cancelScheduleSendPendingIntent(message.id)
-        deleteScheduledMessage(message.id)
-        if (messagesDB.getNonRecycledThreadMessages(message.threadId).isEmpty()) {
-            conversationsDB.deleteThreadId(message.threadId)
+        ensureBackgroundThread {
+            deleteScheduledMessage(message.id)
+            if (messagesDB.getNonRecycledThreadMessages(message.threadId).isEmpty()) {
+                conversationsDB.deleteThreadId(message.threadId)
+            }
         }
     }
 }

@@ -8,7 +8,7 @@ import org.fossify.messages.forwarding.plugin.impl.HttpChannelPlugin
 import org.fossify.messages.forwarding.plugin.impl.SmsDirectChannelPlugin
 import org.fossify.messages.forwarding.plugin.model.ChannelResult
 import org.fossify.messages.forwarding.plugin.model.ForwardPayload
-import org.fossify.messages.models.OutboxExecutionResult
+import org.fossify.messages.outbox.OutboxExecutionResult
 import org.fossify.messages.models.OutboxTaskEntity
 import org.fossify.messages.models.OutboxTaskState
 import org.fossify.messages.models.OutboxTaskType

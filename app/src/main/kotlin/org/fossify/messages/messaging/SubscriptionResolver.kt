@@ -328,8 +328,9 @@ object SubscriptionResolver {
             }
         }
 
-        // Level 5: 系统默认短信卡
-        if (defaultSmsSubId != SubscriptionManager.INVALID_SUBSCRIPTION_ID) {
+        // Level 5: 系统默认短信卡 (仅在无明确指定卡槽或卡号时命中)
+        val hasExplicitRequest = request.explicitSubId != null || request.explicitSlotIndex != null || request.configuredMode != null
+        if (!hasExplicitRequest && defaultSmsSubId != SubscriptionManager.INVALID_SUBSCRIPTION_ID) {
             val defaultCard = sortedActives.find { it.subscriptionId == defaultSmsSubId }
             if (defaultCard != null) {
                 return SimResolutionResult(

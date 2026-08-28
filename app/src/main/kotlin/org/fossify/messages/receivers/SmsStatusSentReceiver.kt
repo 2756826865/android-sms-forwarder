@@ -92,9 +92,11 @@ class SmsStatusSentReceiver : SendStatusReceiver() {
                         phoneNumbers = arrayListOf(PhoneNumber(intentAddress, 0, "", intentAddress)),
                         birthdays = ArrayList(), anniversaries = ArrayList()
                     )
-                    val androidBody = context.contentResolver.query(messageUri, arrayOf(Sms.BODY), null, null, null)?.use {
-                        if (it.moveToFirst()) it.getString(0) else ""
-                    } ?: ""
+                    val androidBody = try {
+                        context.contentResolver.query(messageUri, arrayOf(Sms.BODY), null, null, null)?.use {
+                            if (it.moveToFirst()) it.getString(0) else ""
+                        } ?: ""
+                    } catch (_: Exception) { "" }
                     
                     val repairedMsg = org.fossify.messages.models.Message(
                         id = messageId, body = androidBody, type = type, status = Sms.STATUS_NONE,
@@ -112,9 +114,9 @@ class SmsStatusSentReceiver : SendStatusReceiver() {
 
                 val localAfter = context.messagesDB.getMessageWithId(messageId)
                 
-                // 3. System Provider info
-                val androidThreadId = context.getSmsThreadId(messageId)
-                val androidAddress = context.getMessageRecipientAddress(messageId)
+                // 3. System Provider info (Fail-safe with try-catch)
+                val androidThreadId = try { context.getSmsThreadId(messageId) } catch (_: Exception) { 0L }
+                val androidAddress = try { context.getMessageRecipientAddress(messageId) } catch (_: Exception) { "" }
 
                 // 4. Final Sync/Refresh
                 val finalThreadId = when {
@@ -129,7 +131,10 @@ class SmsStatusSentReceiver : SendStatusReceiver() {
                 }
 
                 if (finalThreadId != 0L) {
-                    context.syncThreadToLocal(finalThreadId, address = finalAddress)
+                    try {
+                        context.syncThreadToLocal(finalThreadId, address = finalAddress)
+                    } catch (_: Exception) {
+                    }
                 }
 
                 RemoteControlReceiptForwarder.onSendResult(
