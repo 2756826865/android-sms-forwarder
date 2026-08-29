@@ -330,33 +330,104 @@ fun RuleStudioScreen(
                 }
             }
 
-            // 3. 智能规则列表与开关
+            // 3. 智能规则列表与开关（与经典版实时双向同步）
             item {
+                val rulesConfig = remember { org.fossify.messages.forwarding.ForwardingRulesConfig(context) }
+                var rulesMasterEnabled by remember { mutableStateOf(rulesConfig.enabled) }
+                var currentRulesList by remember { mutableStateOf(rulesConfig.rules) }
+
                 GatewayCard {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(
-                            text = "⚡ 智能过滤与分流规则",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold
-                        )
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "⚡ 智能过滤与分流规则",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = if (rulesMasterEnabled) "已启用 (${currentRulesList.size} 条自定义规则)" else "总开关已关闭 (所有短信全量转发)",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (rulesMasterEnabled) GatewayGreen else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Switch(
+                                checked = rulesMasterEnabled,
+                                onCheckedChange = {
+                                    rulesMasterEnabled = it
+                                    rulesConfig.enabled = it
+                                    Toast.makeText(context, "规则总开关已${if (it) "开启" else "关闭"}", Toast.LENGTH_SHORT).show()
+                                }
+                            )
+                        }
 
-                        RuleItemView(
-                            name = "银行验证码极速通道",
-                            desc = "匹配包含 [验证码/动态码] 且发件人为 955/106 的短信，优先提取 {{CODE}} 并高优先级推送",
-                            initEnabled = true
-                        )
+                        if (currentRulesList.isEmpty()) {
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    text = "💡 提示：当前尚未创建自定义分流规则。点击下方按钮可针对 SIM卡槽、发件人白名单、短信关键词（如验证码/取件码）或正则表达式创建精细化分流策略。",
+                                    fontSize = 12.sp,
+                                    lineHeight = 18.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(10.dp)
+                                )
+                            }
+                        } else {
+                            currentRulesList.forEachIndexed { index, rule ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = rule.name.ifBlank { "规则 #${index + 1}" },
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            text = buildString {
+                                                append(if (rule.simScope == org.fossify.messages.forwarding.ForwardingRule.SIM_1) "SIM1 " else if (rule.simScope == org.fossify.messages.forwarding.ForwardingRule.SIM_2) "SIM2 " else "双卡 ")
+                                                if (rule.includeKeywords.isNotEmpty()) append("包含:[${rule.includeKeywords.take(3).joinToString(",")}] ")
+                                                if (rule.excludeKeywords.isNotEmpty()) append("排除:[${rule.excludeKeywords.take(2).joinToString(",")}] ")
+                                                if (rule.includeRegex.isNotBlank()) append("正则 ")
+                                            }.ifBlank { "全量匹配" },
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Switch(
+                                        checked = rule.enabled,
+                                        onCheckedChange = { isChecked ->
+                                            val updated = currentRulesList.toMutableList()
+                                            updated[index] = rule.copy(enabled = isChecked)
+                                            currentRulesList = updated
+                                            rulesConfig.rules = updated
+                                            Toast.makeText(context, "${rule.name} 已${if (isChecked) "启用" else "禁用"}", Toast.LENGTH_SHORT).show()
+                                        }
+                                    )
+                                }
+                            }
+                        }
 
-                        RuleItemView(
-                            name = "快递取件码聚合通知",
-                            desc = "识别菜鸟驿站、丰巢快递柜取件码，自动高亮并推送到指定通道",
-                            initEnabled = true
-                        )
-
-                        RuleItemView(
-                            name = "垃圾营销短信拦截过滤",
-                            desc = "含 [回复TD退订/代开发票/办理贷款] 等营销特征短信，不触发对外转发",
-                            initEnabled = false
-                        )
+                        OutlinedButton(
+                            onClick = {
+                                context.startActivity(android.content.Intent(context, org.fossify.messages.activities.ForwardingRulesSettingsActivity::class.java))
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("打开高级规则与分流通道编辑器 🛠️")
+                        }
                     }
                 }
             }
@@ -399,43 +470,5 @@ fun RuleStudioScreen(
 
             item { Spacer(modifier = Modifier.height(100.dp)) }
         }
-    }
-}
-
-@Composable
-fun RuleItemView(
-    name: String,
-    desc: String,
-    initEnabled: Boolean
-) {
-    var enabled by remember { mutableStateOf(initEnabled) }
-    val context = LocalContext.current
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = name,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = desc,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        Spacer(modifier = Modifier.width(8.dp))
-        Switch(
-            checked = enabled,
-            onCheckedChange = {
-                enabled = it
-                Toast.makeText(context, "$name 已${if (it) "启用" else "禁用"}", Toast.LENGTH_SHORT).show()
-            }
-        )
     }
 }
