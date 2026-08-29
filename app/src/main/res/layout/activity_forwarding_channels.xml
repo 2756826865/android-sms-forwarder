@@ -340,6 +340,16 @@
 
                 <View style="@style/SmsSettingsDivider" />
 
+                <LinearLayout android:id="@+id/forwarding_remote_control_holder" style="@style/SmsForwardingRow">
+                    <LinearLayout style="@style/SmsForwardingTextColumn">
+                        <TextView style="@style/SmsForwardingTitle" android:text="@string/remote_forwarding_title" />
+                        <TextView android:id="@+id/forwarding_remote_control_summary" style="@style/SmsForwardingSummary" android:text="短信指令与钉钉机器人远程发信" />
+                    </LinearLayout>
+                    <ImageView style="@style/SmsForwardingChevron" />
+                </LinearLayout>
+
+                <View style="@style/SmsSettingsDivider" />
+
                 <LinearLayout android:id="@+id/forwarding_sim_one_holder" style="@style/SmsForwardingRow">
                     <LinearLayout style="@style/SmsForwardingTextColumn">
                         <TextView style="@style/SmsForwardingTitle" android:text="SIM卡 1 槽位标识" />

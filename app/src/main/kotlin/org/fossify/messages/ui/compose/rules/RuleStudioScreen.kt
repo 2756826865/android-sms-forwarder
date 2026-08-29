@@ -361,6 +361,42 @@ fun RuleStudioScreen(
                 }
             }
 
+            // 4. 短信远程发信与指令控制
+            item {
+                GatewayCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "📡 短信远程发信与指令控制",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                            StatusBadge("指令发信", GatewayPurple)
+                        }
+
+                        Text(
+                            text = "支持通过短信指令（如 /发信 [SIM1|SIM2] 手机号 内容）或钉钉 Stream 机器人远程控制本机发信，支持多通道回执与授权白名单。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        OutlinedButton(
+                            onClick = {
+                                context.startActivity(android.content.Intent(context, org.fossify.messages.activities.RemoteForwardingActivity::class.java))
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("配置短信远程指令与钉钉控制 ⚙️")
+                        }
+                    }
+                }
+            }
+
             item { Spacer(modifier = Modifier.height(100.dp)) }
         }
     }

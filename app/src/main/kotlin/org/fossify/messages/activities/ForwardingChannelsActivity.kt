@@ -144,6 +144,9 @@ class ForwardingChannelsActivity : SimpleActivity() {
         forwardingTemplateHolder.setOnClickListener {
             startActivity(Intent(this@ForwardingChannelsActivity, MessageTemplateActivity::class.java))
         }
+        forwardingRemoteControlHolder.setOnClickListener {
+            startActivity(Intent(this@ForwardingChannelsActivity, RemoteForwardingActivity::class.java))
+        }
         forwardingSimOneHolder.setOnClickListener { showSimLabelDialog(0) }
         forwardingSimTwoHolder.setOnClickListener { showSimLabelDialog(1) }
         forwardingHistoryHolder.setOnClickListener {
