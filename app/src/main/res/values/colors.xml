@@ -21,4 +21,5 @@
     <color name="miui_selected_background">#F0F8F3</color>
     <color name="bottom_nav_unselected">#666666</color>
     <color name="bulk_outline">#D5D5D5</color>
+    <color name="sms_save_button_bg">#111111</color>
 </resources>

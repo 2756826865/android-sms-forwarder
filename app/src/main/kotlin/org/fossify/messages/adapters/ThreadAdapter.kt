@@ -14,6 +14,7 @@ import android.widget.LinearLayout
 import android.widget.RelativeLayout
 import androidx.appcompat.content.res.AppCompatResources
 import androidx.constraintlayout.widget.ConstraintSet
+import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toDrawable
 import androidx.core.view.updateLayoutParams
 import androidx.recyclerview.widget.DiffUtil
@@ -567,7 +568,7 @@ class ThreadAdapter(
                     addRule(RelativeLayout.END_OF, R.id.thread_message_sender_photo)
                 }
                 background = AppCompatResources.getDrawable(activity, R.drawable.item_received_background)
-                setTextColor(textColor)
+                setTextColor(ContextCompat.getColor(activity, R.color.miui_primary_text))
                 setLinkTextColor(activity.getProperPrimaryColor())
             }
         }

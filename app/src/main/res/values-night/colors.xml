@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="miui_home_blue">#121212</color>
+    <color name="miui_action_blue">#159447</color>
+    <color name="miui_fab_green">#20C45A</color>
+    <color name="home_fab_light_green">#2ECC71</color>
+    <color name="launcher_icon_green">#52E115</color>
+    <color name="miui_page_background">#121212</color>
+    <color name="miui_card_background">#1E1E1E</color>
+    <color name="miui_primary_text">#EDEDED</color>
+    <color name="miui_secondary_text">#9E9E9E</color>
+    <color name="miui_hint_text">#757575</color>
+    <color name="miui_timestamp_text">#8A8A8A</color>
+    <color name="miui_search_background">#262626</color>
+    <color name="miui_search_stroke">#383838</color>
+    <color name="miui_section_text">#8B949E</color>
+    <color name="miui_divider">#2A2A2A</color>
+    <color name="miui_unread_red">#FF453A</color>
+    <color name="miui_warning_text">#FFB300</color>
+    <color name="miui_unread_badge">#20C45A</color>
+    <color name="miui_selected_background">#1B3322</color>
+    <color name="bottom_nav_unselected">#888888</color>
+    <color name="bulk_outline">#3E3E3E</color>
+    <color name="sms_save_button_bg">#2D333B</color>
+</resources>

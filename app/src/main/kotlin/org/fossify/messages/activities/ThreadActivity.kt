@@ -329,8 +329,9 @@ class ThreadActivity : SimpleActivity() {
             markThreadMessagesRead(threadId)
         }
 
-        binding.messageHolder.root.setBackgroundColor(Color.WHITE)
-        binding.shortCodeHolder.root.setBackgroundColor(Color.WHITE)
+        val composerBg = ContextCompat.getColor(this, R.color.miui_card_background)
+        binding.messageHolder.root.setBackgroundColor(composerBg)
+        binding.shortCodeHolder.root.setBackgroundColor(composerBg)
         applyComposerColors()
     }
 

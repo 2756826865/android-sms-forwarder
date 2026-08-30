@@ -5,29 +5,35 @@ import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import org.fossify.messages.R
 
+import androidx.core.content.ContextCompat
+
 fun AlertDialog.applySmsDialogColors(): AlertDialog {
     if (!isShowing) show()
 
+    val primaryText = ContextCompat.getColor(context, R.color.miui_primary_text)
+    val secondaryText = ContextCompat.getColor(context, R.color.miui_secondary_text)
+    val actionGreen = ContextCompat.getColor(context, R.color.miui_fab_green)
+
     findViewById<TextView>(androidx.appcompat.R.id.alertTitle)?.apply {
-        setTextColor(Color.rgb(17, 17, 17))
+        setTextColor(primaryText)
         alpha = 1f
     }
 
     findViewById<TextView>(android.R.id.message)?.apply {
-        setTextColor(Color.rgb(35, 35, 35))
+        setTextColor(primaryText)
         alpha = 1f
     }
 
     getButton(AlertDialog.BUTTON_POSITIVE)?.apply {
-        setTextColor(context.getColor(R.color.miui_fab_green))
+        setTextColor(actionGreen)
         alpha = 1f
     }
     getButton(AlertDialog.BUTTON_NEGATIVE)?.apply {
-        setTextColor(Color.rgb(85, 85, 85))
+        setTextColor(secondaryText)
         alpha = 1f
     }
     getButton(AlertDialog.BUTTON_NEUTRAL)?.apply {
-        setTextColor(Color.rgb(85, 85, 85))
+        setTextColor(secondaryText)
         alpha = 1f
     }
     return this
