@@ -200,7 +200,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
                 android:visibility="gone"
-                app:cardBackgroundColor="@color/miui_item_background"
+                app:cardBackgroundColor="@color/miui_card_background"
                 app:cardCornerRadius="12dp"
                 app:cardElevation="0dp">
 

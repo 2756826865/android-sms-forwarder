@@ -29,17 +29,20 @@ object ConfigBackupHelper {
         // 2. Multi-channel Forwarding Config
         val multiConfig = MultiForwardConfig(context)
         val channelsObj = JSONObject()
-            .put("dingTalkWebhook", multiConfig.dingTalkWebhook)
-            .put("feishuWebhook", multiConfig.feishuWebhook)
-            .put("weComWebhook", multiConfig.weComWebhook)
-            .put("emailHost", multiConfig.emailHost)
+            .put("dingTalkWebhook", multiConfig.dingTalkWebhook())
+            .put("dingTalkSecret", multiConfig.dingTalkSecret())
+            .put("feishuWebhook", multiConfig.feishuWebhook())
+            .put("feishuSecret", multiConfig.feishuSecret())
+            .put("weComBotWebhook", multiConfig.weComBotWebhook())
+            .put("emailHost", multiConfig.emailHost())
             .put("emailPort", multiConfig.emailPort)
-            .put("emailUsername", multiConfig.emailUsername)
-            .put("emailSender", multiConfig.emailSender)
-            .put("emailRecipient", multiConfig.emailRecipient)
-            .put("barkServerUrl", multiConfig.barkServerUrl)
-            .put("gotifyServerUrl", multiConfig.gotifyServerUrl)
-            .put("smsDirectRecipient", multiConfig.smsDirectRecipient)
+            .put("emailUser", multiConfig.emailUser())
+            .put("emailRecipients", multiConfig.emailRecipients())
+            .put("barkServerUrl", multiConfig.barkServerUrl())
+            .put("barkDeviceKey", multiConfig.barkDeviceKey())
+            .put("gotifyServerUrl", multiConfig.gotifyServerUrl())
+            .put("gotifyToken", multiConfig.gotifyToken())
+            .put("smsDirectPhone", multiConfig.smsDirectPhone())
             .put("templateMode", multiConfig.templateMode)
             .put("customTemplate", multiConfig.customTemplate)
         root.put("forwardingChannels", channelsObj)
@@ -48,9 +51,8 @@ object ConfigBackupHelper {
         val pushPlusConfig = PushPlusConfig(context)
         val pushPlusObj = JSONObject()
             .put("enabled", pushPlusConfig.enabled)
-            .put("token", pushPlusConfig.token)
-            .put("template", pushPlusConfig.template)
-            .put("channel", pushPlusConfig.channel)
+            .put("token", pushPlusConfig.getToken())
+            .put("titlePrefix", pushPlusConfig.titlePrefix)
         root.put("pushPlus", pushPlusObj)
 
         // 4. Auto Reply Config
@@ -77,15 +79,29 @@ object ConfigBackupHelper {
         if (root.has("forwardingChannels")) {
             val multiConfig = MultiForwardConfig(context)
             val obj = root.getJSONObject("forwardingChannels")
-            obj.optString("dingTalkWebhook").takeIf { it.isNotBlank() }?.let { multiConfig.dingTalkWebhook = it }
-            obj.optString("feishuWebhook").takeIf { it.isNotBlank() }?.let { multiConfig.feishuWebhook = it }
-            obj.optString("weComWebhook").takeIf { it.isNotBlank() }?.let { multiConfig.weComWebhook = it }
-            obj.optString("emailHost").takeIf { it.isNotBlank() }?.let { multiConfig.emailHost = it }
-            obj.optString("emailUsername").takeIf { it.isNotBlank() }?.let { multiConfig.emailUsername = it }
-            obj.optString("emailRecipient").takeIf { it.isNotBlank() }?.let { multiConfig.emailRecipient = it }
-            obj.optString("barkServerUrl").takeIf { it.isNotBlank() }?.let { multiConfig.barkServerUrl = it }
-            obj.optString("gotifyServerUrl").takeIf { it.isNotBlank() }?.let { multiConfig.gotifyServerUrl = it }
-            obj.optString("smsDirectRecipient").takeIf { it.isNotBlank() }?.let { multiConfig.smsDirectRecipient = it }
+            
+            val dtUrl = obj.optString("dingTalkWebhook")
+            val dtSecret = obj.optString("dingTalkSecret")
+            if (dtUrl.isNotBlank()) multiConfig.saveDingTalk(dtUrl, dtSecret)
+
+            val fsUrl = obj.optString("feishuWebhook")
+            val fsSecret = obj.optString("feishuSecret")
+            if (fsUrl.isNotBlank()) multiConfig.saveFeishu(fsUrl, fsSecret)
+
+            val wcBotUrl = obj.optString("weComBotWebhook")
+            if (wcBotUrl.isNotBlank()) multiConfig.saveWeComBot(wcBotUrl)
+
+            val barkUrl = obj.optString("barkServerUrl")
+            val barkKey = obj.optString("barkDeviceKey")
+            if (barkUrl.isNotBlank() && barkKey.isNotBlank()) multiConfig.saveBark(barkUrl, barkKey)
+
+            val gotifyUrl = obj.optString("gotifyServerUrl")
+            val gotifyToken = obj.optString("gotifyToken")
+            if (gotifyUrl.isNotBlank() && gotifyToken.isNotBlank()) multiConfig.saveGotify(gotifyUrl, gotifyToken)
+
+            val smsPhone = obj.optString("smsDirectPhone")
+            if (smsPhone.isNotBlank()) multiConfig.saveSmsDirect(smsPhone)
+
             obj.optString("customTemplate").takeIf { it.isNotBlank() }?.let { multiConfig.customTemplate = it }
             if (obj.has("templateMode")) multiConfig.templateMode = obj.getInt("templateMode")
         }
@@ -93,7 +109,8 @@ object ConfigBackupHelper {
         if (root.has("pushPlus")) {
             val pushPlusConfig = PushPlusConfig(context)
             val obj = root.getJSONObject("pushPlus")
-            obj.optString("token").takeIf { it.isNotBlank() }?.let { pushPlusConfig.token = it }
+            obj.optString("token").takeIf { it.isNotBlank() }?.let { pushPlusConfig.saveToken(it) }
+            obj.optString("titlePrefix").takeIf { it.isNotBlank() }?.let { pushPlusConfig.titlePrefix = it }
             if (obj.has("enabled")) pushPlusConfig.enabled = obj.getBoolean("enabled")
         }
 

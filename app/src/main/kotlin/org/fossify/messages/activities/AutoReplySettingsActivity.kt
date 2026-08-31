@@ -33,11 +33,7 @@ class AutoReplySettingsActivity : SimpleActivity() {
         setContentView(binding.root)
         config = AutoReplyConfig(this)
 
-        setupTopAppBar(
-            topAppBar = binding.autoReplyToolbar,
-            navigationIcon = NavigationIcon.Arrow,
-            topBarColor = ContextCompat.getColor(this, R.color.miui_page_background)
-        )
+        setupTopAppBar(binding.autoReplyAppbar, NavigationIcon.Arrow)
         binding.autoReplyToolbar.setNavigationOnClickListener { finish() }
 
         initViews()
@@ -148,15 +144,17 @@ class AutoReplySettingsActivity : SimpleActivity() {
             gravity = android.view.Gravity.END
         }
 
-        val btnEdit = MaterialButton(this, null, com.google.android.material.R.attr.borderlessButtonStyle).apply {
+        val btnEdit = MaterialButton(this).apply {
             text = "编辑"
             setTextColor(ContextCompat.getColor(this@AutoReplySettingsActivity, R.color.miui_action_blue))
+            setBackgroundColor(android.graphics.Color.TRANSPARENT)
             setOnClickListener { showEditRuleDialog(rule) }
         }
 
-        val btnDelete = MaterialButton(this, null, com.google.android.material.R.attr.borderlessButtonStyle).apply {
+        val btnDelete = MaterialButton(this).apply {
             text = "删除"
             setTextColor(ContextCompat.getColor(this@AutoReplySettingsActivity, R.color.miui_unread_red))
+            setBackgroundColor(android.graphics.Color.TRANSPARENT)
             setOnClickListener {
                 val currentRules = config.rules.toMutableList()
                 currentRules.removeAll { it.id == rule.id }

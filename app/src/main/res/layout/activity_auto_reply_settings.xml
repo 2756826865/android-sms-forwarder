@@ -6,7 +6,7 @@
     android:layout_height="match_parent"
     android:background="@color/miui_page_background">
 
-    <com.google.android.material.appbar.AppBarLayout
+    <org.fossify.commons.views.MyAppBarLayout
         android:id="@+id/auto_reply_appbar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -22,7 +22,7 @@
             app:titleCentered="true"
             app:titleTextColor="@color/miui_primary_text" />
 
-    </com.google.android.material.appbar.AppBarLayout>
+    </org.fossify.commons.views.MyAppBarLayout>
 
     <androidx.core.widget.NestedScrollView
         android:layout_width="match_parent"

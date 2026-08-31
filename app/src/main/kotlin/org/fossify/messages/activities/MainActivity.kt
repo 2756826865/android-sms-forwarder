@@ -18,6 +18,7 @@ import android.os.Process
 import android.provider.Settings
 import android.provider.Telephony
 import android.text.TextUtils
+import android.view.View
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
