@@ -79,23 +79,56 @@ object ForwardingMessageFormatter {
             MultiForwardConfig.TEMPLATE_CUSTOM -> {
                 val customTemplate = config.customTemplate
                 if (customTemplate.isNotBlank()) {
+                    val code = org.fossify.messages.rule.template.TemplateRenderer.extractVerificationCode(body)
+                    val dateOnly = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(receivedAt))
+                    val timeOnly = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(receivedAt))
+                    val simSlotIdx = if (subscriptionId >= 0) subscriptionId.toString() else "1"
+
                     val result = customTemplate
-                        // Support old-style placeholders
-                        .replace("{sender}", sender)
-                        .replace("{name}", contactName ?: sender)
-                        .replace("{body}", body)
-                        .replace("{time}", formattedTime)
-                        .replace("{sim}", sim)
-                        .replace("{receiver}", receiverNumber)
-                        // Support new-style placeholders (double braces)
+                        // 1. 验证码提取 (核心修复)
+                        .replace("{{CODE}}", code)
+                        .replace("{{code}}", code)
+                        .replace("{code}", code)
+                        .replace("{{VERIFICATION_CODE}}", code)
+                        // 2. 发件人相关
                         .replace("{{FROM}}", sender)
-                        .replace("{{SMS}}", body)
-                        .replace("{{RECEIVE_TIME}}", formattedTime)
+                        .replace("{{SENDER}}", sender)
+                        .replace("{sender}", sender)
+                        .replace("{from}", sender)
                         .replace("{{CONTACT_NAME}}", contactName ?: sender)
+                        .replace("{{NAME}}", contactName ?: sender)
+                        .replace("{name}", contactName ?: sender)
+                        // 3. 短信正文
+                        .replace("{{SMS}}", body)
+                        .replace("{{BODY}}", body)
+                        .replace("{{CONTENT}}", body)
+                        .replace("{sms}", body)
+                        .replace("{body}", body)
+                        // 4. 时间相关
+                        .replace("{{RECEIVE_TIME}}", formattedTime)
+                        .replace("{{TIME}}", formattedTime)
+                        .replace("{time}", formattedTime)
+                        .replace("{{DATE_YMD}}", dateOnly)
+                        .replace("{{DATE}}", dateOnly)
+                        .replace("{date}", dateOnly)
+                        .replace("{{DATE_HMS}}", timeOnly)
+                        .replace("{{TIME_HMS}}", timeOnly)
+                        .replace("{{TIMESTAMP}}", receivedAt.toString())
+                        // 5. 卡槽与接收号码
                         .replace("{{SIM_SLOT}}", sim)
+                        .replace("{{CARD_SLOT}}", sim)
+                        .replace("{sim}", sim)
+                        .replace("{{SIM_INDEX}}", simSlotIdx)
+                        .replace("{{SIM_ID}}", simSlotIdx)
                         .replace("{{RECEIVER_NUMBER}}", receiverNumber)
+                        .replace("{{RECEIVER}}", receiverNumber)
+                        .replace("{receiver}", receiverNumber)
+                        // 6. 设备与网络状态
                         .replace("{{DEVICE_NAME}}", TemplateDataRetriever.getDeviceName())
+                        .replace("{{DEVICE_BRAND}}", TemplateDataRetriever.getDeviceBrand())
+                        .replace("{{DEVICE_MODEL}}", TemplateDataRetriever.getDeviceModel())
                         .replace("{{BATTERY_INFO}}", TemplateDataRetriever.getBatteryInfo(context))
+                        .replace("{{BATTERY_PCT}}", TemplateDataRetriever.getBatteryPct(context))
                         .replace("{{IP_LIST}}", TemplateDataRetriever.getIpAddress())
                         .replace("{{NET_TYPE}}", TemplateDataRetriever.getNetworkType(context))
                         .replace("{{APP_VERSION}}", TemplateDataRetriever.getAppVersion())

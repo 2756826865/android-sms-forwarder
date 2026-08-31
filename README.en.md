@@ -60,13 +60,25 @@ This project features a dual-view architecture — **「Classic Mode」** and **
 - 📧 **Email SMTP**: SSL/TLS encryption and multi-server email dispatch.
 - 🔔 **Gotify**: Self-hosted notification server support.
 
-### 3. Message Template & Smart Variable Interpolation
+### 3. 🤖 Smart Anti-Loop Auto-Reply Engine (v1.1.3 New)
+- **Precise Targeting**: Supports sender phone number filtering, inclusion/exclusion keyword matching, and SIM slot routing.
+- **4-Layer Loop Protection**:
+  - **Customizable Cooldown**: Freely configure cooldown from **1 minute to any days** (e.g. 1 min, 10 mins, 24 hours, or unlimited).
+  - **Send Delay**: 0~60s natural delay to simulate real human replies.
+  - **Daily Quota Circuit Breaker**: Prevents excessive SMS charges during burst incoming messages.
+  - **Receipt Tracking**: Automatic audit and forwarding receipt notification.
+
+### 4. Message Template & Smart Variable Interpolation
 - **Shared Across Both Modes**: Access via `Settings → Features → Message Template` in Classic Mode or `Rule Studio` in Developer Mode.
-- **12 Dynamic Placeholders Supported**:
-  - `{{FROM}}` Sender Number, `{{SMS}}` Message Body, `{{RECEIVE_TIME}}` Received Time, `{{CONTACT_NAME}}` Contact Name
-  - `{{SIM_SLOT}}` SIM Card Slot, `{{RECEIVER_NUMBER}}` Receiving Phone Number
-  - `{{DEVICE_NAME}}` Device Model, `{{BATTERY_INFO}}` Battery Level & Status, `{{IP_LIST}}` IP Address, `{{NET_TYPE}}` Network Type, `{{APP_VERSION}}` Version Name, `{{CURRENT_TIME}}` Current Time
+- **18 Dynamic Placeholders Supported**:
+  - `{{CODE}}` Verification Code, `{{FROM}}` Sender Number, `{{SMS}}` Message Body, `{{RECEIVE_TIME}}` Received Time, `{{DATE_YMD}}` Date only, `{{DATE_HMS}}` Time only, `{{CONTACT_NAME}}` Contact Name
+  - `{{SIM_SLOT}}` SIM Card Slot, `{{SIM_INDEX}}` Slot Index, `{{RECEIVER_NUMBER}}` Receiving Phone Number
+  - `{{DEVICE_NAME}}` Device Model, `{{DEVICE_BRAND}}` Brand, `{{BATTERY_INFO}}` Battery Info, `{{BATTERY_PCT}}` Battery Pct, `{{IP_LIST}}` IP Address, `{{NET_TYPE}}` Network Type, `{{APP_VERSION}}` Version Name, `{{CURRENT_TIME}}` Current Time
 - **Smart Verification Code Sandbox**: Built-in regex engine with lookaround matching to accurately extract 4–8 digit verification codes.
+
+### 5. 🛡️ Dual Broadcast Fallback & Config Backup (v1.1.3 New)
+- **Dual Broadcast Fallback**: Dual `SMS_DELIVER` + `SMS_RECEIVED` listeners with SHA-256 deduplication for 100% reliable reception even when not default SMS app.
+- **One-Click Config Backup & Restore (`ConfigBackupHelper`)**: Export/import all 12 channels, rules, and templates as structured JSON.
 
 ### 4. Offline Transaction Queue & Self-Healing Engine
 - **Outbox Dispatcher**: Automatically buffers tasks (`PENDING / RETRY / FAILED`) when disconnected or screen-off, and retries with exponential backoff upon reconnection.

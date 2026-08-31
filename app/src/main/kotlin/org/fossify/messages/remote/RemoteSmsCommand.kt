@@ -118,10 +118,15 @@ class RemoteSmsCommandConfig(context: Context) {
 
     private data class FingerprintEntry(val value: String, val claimedAt: Long)
 
+    var customPrefix: String
+        get() = prefs.getString(KEY_CUSTOM_PREFIX, "").orEmpty()
+        set(value) = prefs.edit().putString(KEY_CUSTOM_PREFIX, value.trim()).apply()
+
     companion object {
         private const val PREFS_NAME = "remote_sms_command"
         private const val KEY_ENABLED = "enabled"
         private const val KEY_AUTHORIZED_NUMBERS = "authorized_numbers"
+        private const val KEY_CUSTOM_PREFIX = "custom_prefix"
         private const val KEY_LAST_STATUS = "last_status"
         private const val KEY_LOGS = "logs"
         private const val KEY_RECENT_FINGERPRINTS = "recent_fingerprints"
@@ -146,16 +151,28 @@ data class RemoteSmsCommand(
     fun sendModeLabel(): String = SimSendResolver.modeLabel(sendMode)
 
     companion object {
-        private val pattern = Regex(
-            "^/短信发送\\s+(?:(SIM1|SIM2|默认|系统默认)\\s+)?(\\S+)\\s+([\\s\\S]+)$",
-            RegexOption.IGNORE_CASE,
-        )
-
-        fun parse(text: String): RemoteSmsCommand? {
+        fun parse(text: String, customPrefix: String = ""): RemoteSmsCommand? {
             val trimmed = text.trim()
-            val commandStart = trimmed.indexOf("/短信发送")
-            val commandText = if (commandStart >= 0) trimmed.substring(commandStart) else trimmed
-            val match = pattern.matchEntire(commandText.trim()) ?: return null
+            val prefixes = mutableListOf("/短信发送", "/发信", "/发短信", "#发信", "#发短信")
+            if (customPrefix.isNotBlank()) {
+                prefixes.add(0, customPrefix.trim())
+            }
+
+            var matchedPrefix: String? = null
+            var commandText = trimmed
+            for (p in prefixes) {
+                val idx = trimmed.indexOf(p)
+                if (idx >= 0) {
+                    matchedPrefix = p
+                    commandText = trimmed.substring(idx)
+                    break
+                }
+            }
+            if (matchedPrefix == null) return null
+
+            val escaped = Regex.escape(matchedPrefix)
+            val regex = Regex("^$escaped\\s+(?:(SIM1|SIM2|默认|系统默认)\\s+)?(\\S+)\\s+([\\s\\S]+)$", RegexOption.IGNORE_CASE)
+            val match = regex.matchEntire(commandText.trim()) ?: return null
             val simToken = match.groupValues[1].trim().takeIf(String::isNotBlank)
             val target = match.groupValues[2].trim()
             val content = match.groupValues[3].trim()
@@ -183,8 +200,8 @@ object RemoteSmsCommandProcessor {
         messageId: Long = 0L,
         allowExecution: Boolean = true,
     ): Boolean {
-        val command = RemoteSmsCommand.parse(body) ?: return false
         val config = RemoteSmsCommandConfig(context)
+        val command = RemoteSmsCommand.parse(body, config.customPrefix) ?: return false
 
         // 1C-2: 优先持久化事实与永久幂等声明
         val messageKey = if (messageId > 0L) "id:$messageId" else "time:$messageTimestamp"

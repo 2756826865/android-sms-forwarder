@@ -94,21 +94,21 @@ fun RuleStudioScreen(
     // 实时预览渲染结果
     val previewOutput = remember(currentMode, customTemplateText, testSender, testBody) {
         if (currentMode == MultiForwardConfig.TEMPLATE_CUSTOM) {
-            var res = customTemplateText
-                .replace("{{FROM}}", testSender)
-                .replace("{sender}", testSender)
-                .replace("{{SMS}}", testBody)
-                .replace("{body}", testBody)
-                .replace("{{CODE}}", TemplateRenderer.extractVerificationCode(testBody))
-                .replace("{{RECEIVE_TIME}}", "2026-08-28 11:24:00")
-                .replace("{time}", "2026-08-28 11:24:00")
-                .replace("{{SIM_SLOT}}", "SIM 1 (中国移动)")
-                .replace("{sim}", "SIM 1 (中国移动)")
-                .replace("{{DEVICE_NAME}}", "HUAWEI EBG-AN00")
-                .replace("{{BATTERY_INFO}}", "85% (充电中)")
-            res
+            val prevCustom = config.customTemplate
+            val prevMode = config.templateMode
+            config.customTemplate = customTemplateText
+            config.templateMode = MultiForwardConfig.TEMPLATE_CUSTOM
+            val payload = ForwardingMessageFormatter.format(
+                context = context,
+                sender = testSender,
+                body = testBody,
+                receivedAt = System.currentTimeMillis(),
+                subscriptionId = 1
+            )
+            config.customTemplate = prevCustom
+            config.templateMode = prevMode
+            payload.content
         } else {
-            // 使用系统内置 formatter
             val prevMode = config.templateMode
             config.templateMode = currentMode
             val payload = ForwardingMessageFormatter.format(
@@ -123,15 +123,22 @@ fun RuleStudioScreen(
         }
     }
 
-    // 常用模板标签
+    // 常用模板标签（全量扩展）
     val placeholderTags = listOf(
-        "{{FROM}}" to "发信人",
-        "{{SMS}}" to "短信正文",
-        "{{CODE}}" to "智能提取验证码",
-        "{{RECEIVE_TIME}}" to "接收时间",
-        "{{SIM_SLOT}}" to "卡槽信息",
+        "{{FROM}}" to "发信号码",
+        "{{CONTACT_NAME}}" to "通讯录姓名",
+        "{{CODE}}" to "智能提取验证码 🔑",
+        "{{SMS}}" to "短信完整正文",
+        "{{RECEIVE_TIME}}" to "完整接收时间",
+        "{{DATE_YMD}}" to "仅日期",
+        "{{DATE_HMS}}" to "仅时间",
+        "{{SIM_SLOT}}" to "卡槽与运营商",
+        "{{RECEIVER_NUMBER}}" to "本机接收卡号",
         "{{DEVICE_NAME}}" to "设备型号",
-        "{{BATTERY_INFO}}" to "剩余电量"
+        "{{BATTERY_INFO}}" to "电量与充电状态",
+        "{{NET_TYPE}}" to "网络类型(WiFi/5G)",
+        "{{IP_LIST}}" to "当前IP地址",
+        "{{APP_VERSION}}" to "客户端版本"
     )
 
     Scaffold(
@@ -463,6 +470,52 @@ fun RuleStudioScreen(
                             shape = RoundedCornerShape(8.dp)
                         ) {
                             Text("配置短信远程指令与钉钉控制 ⚙️")
+                        }
+                    }
+                }
+            }
+
+            // 5. 智能防对轰短信自动回复引擎
+            item {
+                val autoReplyConfig = remember { org.fossify.messages.autoreply.AutoReplyConfig(context) }
+                var autoReplyEnabled by remember { mutableStateOf(autoReplyConfig.enabled) }
+
+                GatewayCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "🤖 智能防对轰自动回复引擎",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Switch(
+                                checked = autoReplyEnabled,
+                                onCheckedChange = { isChecked ->
+                                    autoReplyEnabled = isChecked
+                                    autoReplyConfig.enabled = isChecked
+                                    Toast.makeText(context, "自动回复已${if (isChecked) "启用" else "禁用"}", Toast.LENGTH_SHORT).show()
+                                }
+                            )
+                        }
+
+                        Text(
+                            text = "满足副卡保号、运营商业务办理（如 10086 回复 Y）、备用机留言应答。内置 4 重防对轰熔断保护（同号 24h 冷却、发信延迟、日限额与回执推送）。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        OutlinedButton(
+                            onClick = {
+                                context.startActivity(android.content.Intent(context, org.fossify.messages.activities.AutoReplySettingsActivity::class.java))
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("管理自动回复规则与风控策略 🤖")
                         }
                     }
                 }

@@ -19,11 +19,23 @@ object TemplateDataRetriever {
     fun getDeviceName(): String {
         val manufacturer = Build.MANUFACTURER
         val model = Build.MODEL
-        return if (model.startsWith(manufacturer)) {
+        return if (model.startsWith(manufacturer, ignoreCase = true)) {
             model.replaceFirstChar { it.uppercase() }
         } else {
             "${manufacturer.replaceFirstChar { it.uppercase() }} $model"
         }
+    }
+
+    fun getDeviceBrand(): String = Build.BRAND.replaceFirstChar { it.uppercase() }
+
+    fun getDeviceModel(): String = Build.MODEL
+
+    fun getBatteryPct(context: Context): String {
+        val intent = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)) ?: return "未知"
+        val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
+        val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
+        val pct = if (level != -1 && scale != -1) (level * 100 / scale) else -1
+        return if (pct != -1) "$pct%" else "未知"
     }
 
     fun getBatteryInfo(context: Context): String {

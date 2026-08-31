@@ -425,11 +425,13 @@ class DeviceCompatibilityActivity : SimpleActivity() {
             else -> "开启 · $lowBatteryWorkState · ${config.lowBatteryChannels.map(ForwardingChannels::displayName).joinToString("、")}"
         }
         val failedCount = history.count { it.status == ForwardingHistoryStore.STATUS_FAILED }
+        val autoReply = org.fossify.messages.autoreply.AutoReplyConfig(applicationContext)
         return buildString {
             appendLine("SIM：$simSummary")
             appendLine("转发渠道：")
             channelStates.forEach { appendLine("  $it") }
             appendLine("转发规则：${if (rules.enabled) "开启 · ${rules.rules.count { it.enabled }} 条启用" else "关闭"}")
+            appendLine("自动回复：${if (autoReply.enabled) "开启 · ${autoReply.rules.count { it.enabled }} 条启用 · 每日上限 ${autoReply.dailyLimit} 条" else "关闭"}")
             appendLine("低电量提醒：$lowBattery")
             appendLine("短信远程指令：${if (remoteSms.enabled) "开启 · 白名单 ${remoteSms.authorizedList().size} 个" else "关闭"}")
             appendLine("钉钉远程指令：$dingTalkRemote")

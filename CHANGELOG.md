@@ -4,6 +4,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.3] - 2026-08-31
+
+### 🌟 核心新特性与重大升级 (Major Features)
+- **🤖 智能防对轰「短信自动回复」引擎 (Smart Anti-Loop Auto-Reply)**：
+  - 支持按发件人号码过滤、关键词/排除词过滤、指定卡槽发信；
+  - **自由冷却周期**：支持 **1 分钟到任意天数**（如 1 分钟、10 分钟、24 小时、不限制）自由自定义，每条规则独立配置；
+  - **4 重防对轰熔断保护**：同号独立冷却 + 0~60 秒模拟真人发信延迟 + 单日上限全局熔断 + 回执实时上报，彻底告别机器人对轰死循环扣话费！
+  - 经典版（设置 → 功能 → 短信自动回复）与开发版（规则工坊卡片）双入口支持。
+- **🛡️ 接收链路双广播容灾降级 (Dual Broadcast Fallback)**：
+  - 接入 `SMS_DELIVER`（默认应用模式）与 `SMS_RECEIVED`（非默认模式）双广播链路，配合全局 SHA-256 指纹防重环，非默认短信应用状态下亦能 100% 兜底接收转发且零重复。
+- **🔑 自定义模板 `{{CODE}}` 修复与 18 大全能变量 (Message Template)**：
+  - 彻底修复自定义模板中 `{{CODE}}` 验证码未在发信时被调用的问题；
+  - 全量扩展支持 18 大变量（`{{CODE}}`、`{{FROM}}`、`{{CONTACT_NAME}}`、`{{SMS}}`、`{{RECEIVE_TIME}}`、`{{DATE_YMD}}`、`{{SIM_SLOT}}`、`{{DEVICE_BRAND}}`、`{{BATTERY_INFO}}`、`{{NET_TYPE}}`、`{{IP_LIST}}` 等）。
+- **📦 配置与规则一键备份 / 迁移 (`ConfigBackupHelper`)**：
+  - 支持将 12 大通道凭据、智能规则、消息模板一键导出为结构化 JSON 文件并支持换机快速导入。
+- **📡 远程发信口令自定义**：
+  - 支持用户在设置中自定义远程发信暗号前缀，原生支持 `/短信发送`、`/发信`、`/发短信`、`#发信` 等多重别名。
+
+### 🐛 问题修复与体验优化 (Fixed & Improved)
+- **🎨 深色与暗黑模式深度固化**：
+  - 新增全套 `res/values-night/colors.xml` 主题规范，彻底解决对话气泡、输入框与全局 Dialog 弹窗在深色模式下的白底白字与对比度问题。
+- **✨ 权限引导全面温和化**：
+  - 取消冷启动强行弹出系统默认短信拦截框的逻辑，经典版与开发版体验统一为轻量级无感启动，首页新增温和状态提示条。
+- **📊 设备自检报告扩展**：
+  - 权限自检报告现已覆盖自动回复与双广播容灾链路健康状态。
+
+---
+
 ## [1.1.2] - 2026-08-28
 
 ### 🌟 核心与视觉重大重构 (Major Features & Visual Redesign)

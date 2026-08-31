@@ -9,24 +9,22 @@ import org.fossify.messages.services.IncomingSmsService
 import org.fossify.messages.services.SmsKeepAliveService
 
 /**
- * Immediately hands the protected SMS broadcast to a foreground service.
- * Database, contact, notification and forwarding work must not run in the
- * receiver's short execution window, especially while an OEM device is asleep.
+ * Fallback receiver for standard SMS_RECEIVED broadcasts on OEM ROMs (ColorOS/HyperOS/HarmonyOS)
+ * or when the app is running in non-default SMS mode.
+ * Deduplication in IncomingSmsService ensures zero duplicate processing.
  */
-class SmsReceiver : BroadcastReceiver() {
+class SmsFallbackReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        val action = intent.action
-        if (action != Telephony.Sms.Intents.SMS_DELIVER_ACTION && action != Telephony.Sms.Intents.SMS_RECEIVED_ACTION) {
-            Log.w(TAG, "ignored unexpected SMS action $action")
+        if (intent.action != Telephony.Sms.Intents.SMS_RECEIVED_ACTION) {
             return
         }
-        Log.i(TAG, "received $action; handing off to IncomingSmsService")
+        Log.i(TAG, "received ${intent.action} fallback broadcast; handing off to IncomingSmsService")
         val appContext = context.applicationContext
         SmsKeepAliveService.ensureStarted(appContext)
         IncomingSmsService.enqueue(appContext, intent)
     }
 
     private companion object {
-        const val TAG = "SmsReceiver"
+        const val TAG = "SmsFallbackReceiver"
     }
 }

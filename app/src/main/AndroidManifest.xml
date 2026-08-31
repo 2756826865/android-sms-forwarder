@@ -233,6 +233,12 @@
             android:parentActivityName=".activities.RemoteForwardingActivity" />
 
         <activity
+            android:name=".activities.AutoReplySettingsActivity"
+            android:exported="false"
+            android:label="短信自动回复"
+            android:parentActivityName=".activities.SettingsActivity" />
+
+        <activity
             android:name=".activities.ForwardingChannelsActivity"
             android:exported="false"
             android:label="@string/forwarding_title"
@@ -364,6 +370,14 @@
             android:permission="android.permission.BROADCAST_SMS">
             <intent-filter android:priority="999">
                 <action android:name="android.provider.Telephony.SMS_DELIVER" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
+            android:name=".receivers.SmsFallbackReceiver"
+            android:exported="true">
+            <intent-filter android:priority="998">
+                <action android:name="android.provider.Telephony.SMS_RECEIVED" />
             </intent-filter>
         </receiver>
 

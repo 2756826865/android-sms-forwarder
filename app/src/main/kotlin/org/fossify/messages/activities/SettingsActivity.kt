@@ -105,6 +105,9 @@ class SettingsActivity : SimpleActivity() {
         settingsRemoteForwardingHolder.setOnClickListener {
             startActivity(Intent(this@SettingsActivity, RemoteForwardingActivity::class.java))
         }
+        settingsAutoReplyHolder.setOnClickListener {
+            startActivity(Intent(this@SettingsActivity, AutoReplySettingsActivity::class.java))
+        }
         settingsScheduledHolder.setOnClickListener {
             startActivity(Intent(this@SettingsActivity, ScheduledMessagesActivity::class.java))
         }

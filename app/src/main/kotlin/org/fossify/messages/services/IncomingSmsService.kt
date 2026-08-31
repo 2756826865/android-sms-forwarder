@@ -43,6 +43,7 @@ import org.fossify.messages.forwarding.MultiChannelForwardWorker
 import org.fossify.messages.forwarding.MultiForwardConfig
 import org.fossify.messages.forwarding.PushPlusConfig
 import org.fossify.messages.forwarding.PushPlusWorker
+import org.fossify.messages.autoreply.AutoReplyProcessor
 import org.fossify.messages.remote.RemoteSmsCommandProcessor
 import org.fossify.messages.helpers.ReceiverUtils.isMessageFilteredOut
 import org.fossify.messages.helpers.refreshConversations
@@ -326,6 +327,24 @@ open class IncomingSmsService : Service() {
                 operationId = operationId
             )
         }
+
+        // Automatic SMS reply engine evaluation
+        if (!remoteCommandConsumed) {
+            runCatching {
+                val autoReplyResult = AutoReplyProcessor.processIncoming(
+                    context = this,
+                    senderNumber = address,
+                    messageBody = body,
+                    incomingSubId = subscriptionId
+                )
+                if (autoReplyResult is AutoReplyProcessor.Result.Executed) {
+                    ShadowRepository.recordStep(this, operationId, "AUTO_REPLY", "SUCCESS", "Rule: ${autoReplyResult.ruleName}")
+                }
+            }.onFailure { e ->
+                Log.e(TAG, "AutoReply evaluation error", e)
+            }
+        }
+
         receiverStatus.lastReceiverStatus =
             "已接收并写入短信库，短信ID：$insertedMessageId，发送方：$address"
             

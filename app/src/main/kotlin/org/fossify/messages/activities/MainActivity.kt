@@ -276,7 +276,13 @@ class MainActivity : SimpleActivity() {
         }
 
         clearHomeBottomSystemScrim()
-        if (Telephony.Sms.getDefaultSmsPackage(this) == packageName) {
+        val isDefault = isDefaultSmsApp()
+        binding.homeNotDefaultBanner.visibility = if (isDefault) View.GONE else View.VISIBLE
+        binding.btnSetDefaultSmsHome.setOnClickListener {
+            requestDefaultSmsApp()
+        }
+
+        if (isDefault) {
             getSystemService(NotificationManager::class.java)
                 ?.cancel(DEFAULT_SMS_LOST_NOTIFICATION_ID)
         }
@@ -476,6 +482,15 @@ class MainActivity : SimpleActivity() {
         )
     }
 
+    private fun isDefaultSmsApp(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val roleManager = getSystemService(RoleManager::class.java)
+            roleManager?.isRoleHeld(RoleManager.ROLE_SMS) == true
+        } else {
+            Telephony.Sms.getDefaultSmsPackage(this) == packageName
+        }
+    }
+
     private fun isSmsChainReady(): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return true
         val roleReady = getSystemService(RoleManager::class.java)?.isRoleHeld(RoleManager.ROLE_SMS) == true
@@ -498,11 +513,6 @@ class MainActivity : SimpleActivity() {
     }.getOrDefault(false)
 
     private fun handleDefaultSmsRoleResult(resultCode: Int) {
-        if (resultCode != RESULT_OK) {
-            finish()
-            return
-        }
-
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             binding.root.postDelayed({
                 if (!isSmsChainReady() && launchLegacyDefaultSmsRequest()) {
@@ -524,28 +534,8 @@ class MainActivity : SimpleActivity() {
     private fun updateMenuColors() = Unit
 
     private fun loadMessages() {
-        if (isQPlus()) {
-            val roleManager = getSystemService(RoleManager::class.java)
-            if (roleManager!!.isRoleAvailable(RoleManager.ROLE_SMS)) {
-                if (roleManager.isRoleHeld(RoleManager.ROLE_SMS)) {
-                    askPermissions()
-                } else {
-                    val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_SMS)
-                    makeDefaultSmsAppLauncher.launch(intent)
-                }
-            } else {
-                toast(org.fossify.commons.R.string.unknown_error_occurred)
-                finish()
-            }
-        } else {
-            if (Telephony.Sms.getDefaultSmsPackage(this) == packageName) {
-                askPermissions()
-            } else {
-                val intent = Intent(Telephony.Sms.Intents.ACTION_CHANGE_DEFAULT)
-                intent.putExtra(Telephony.Sms.Intents.EXTRA_PACKAGE_NAME, packageName)
-                legacyDefaultSmsAppLauncher.launch(intent)
-            }
-        }
+        // 温和权限模式：不强弹默认短信系统弹窗，直接申请基础短信与通知权限
+        askPermissions()
     }
 
     private fun askPermissions() {
@@ -574,11 +564,11 @@ class MainActivity : SimpleActivity() {
                             }
                         }
                     } else {
-                        finish()
+                        initMessenger()
                     }
                 }
             } else {
-                finish()
+                initMessenger()
             }
         }
     }

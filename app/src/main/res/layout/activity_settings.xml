@@ -74,6 +74,11 @@
                     android:text="@string/remote_forwarding_title" />
 
                 <TextView
+                    android:id="@+id/settings_auto_reply_holder"
+                    style="@style/SmsSettingsRow"
+                    android:text="短信自动回复" />
+
+                <TextView
                     android:id="@+id/settings_scheduled_holder"
                     style="@style/SmsSettingsRow"
                     android:text="@string/scheduled_management" />
