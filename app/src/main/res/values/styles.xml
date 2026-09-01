@@ -12,6 +12,15 @@
         <item name="windowActionModeOverlay">true</item>
     </style>
 
+    <style name="ThreadTheme" parent="AppTheme" xmlns:tools="http://schemas.android.com/tools">
+        <item name="android:windowBackground">@color/classic_settings_background</item>
+        <item name="android:colorBackground">@color/classic_settings_background</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:enforceNavigationBarContrast" tools:targetApi="q">false</item>
+        <item name="android:enforceStatusBarContrast" tools:targetApi="q">false</item>
+    </style>
+
     <style name="SmsAlertDialogTheme" parent="ThemeOverlay.AppCompat.Dialog.Alert">
         <item name="android:textColorPrimary">@color/miui_primary_text</item>
         <item name="android:textColorSecondary">@color/miui_secondary_text</item>

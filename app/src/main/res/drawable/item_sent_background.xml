@@ -3,11 +3,11 @@
     android:shape="rectangle">
 
     <corners
-        android:bottomLeftRadius="16dp"
+        android:bottomLeftRadius="18dp"
         android:bottomRightRadius="4dp"
-        android:topLeftRadius="16dp"
-        android:topRightRadius="16dp" />
+        android:topLeftRadius="18dp"
+        android:topRightRadius="18dp" />
 
-    <solid android:color="@color/miui_fab_green" />
+    <solid android:color="#28C76F" />
 
 </shape>

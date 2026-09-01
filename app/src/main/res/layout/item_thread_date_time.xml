@@ -4,8 +4,9 @@
     android:id="@+id/thread_date_time_holder"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginTop="12dp"
-    android:layout_marginBottom="4dp">
+    android:layout_marginTop="3dp"
+    android:layout_marginBottom="3dp"
+    android:paddingHorizontal="16dp">
 
     <LinearLayout
         android:id="@+id/thread_date_time_container"
@@ -18,13 +19,14 @@
             android:id="@+id/thread_sim_holder"
             android:layout_width="16dp"
             android:layout_height="16dp"
-            android:layout_marginEnd="5dp">
+            android:layout_marginEnd="6dp"
+            android:background="@drawable/sim_badge_background">
 
             <ImageView
                 android:id="@+id/thread_sim_icon"
-                android:layout_width="16dp"
-                android:layout_height="16dp"
-                android:src="@drawable/ic_sim_vector" />
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:visibility="gone" />
 
             <TextView
                 android:id="@+id/thread_sim_number"
@@ -32,17 +34,17 @@
                 android:layout_height="match_parent"
                 android:gravity="center"
                 android:textColor="@android:color/white"
-                android:textSize="10sp"
+                android:textSize="10.5sp"
                 android:textStyle="bold"
-                tools:text="2" />
+                tools:text="1" />
         </FrameLayout>
 
         <TextView
             android:id="@+id/thread_date_time"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textColor="@color/miui_secondary_text"
+            android:textColor="@color/classic_text_secondary"
             android:textSize="12sp"
-            tools:text="12:54" />
+            tools:text="8月20日 19:01" />
     </LinearLayout>
 </RelativeLayout>

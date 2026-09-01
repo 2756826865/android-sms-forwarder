@@ -5,9 +5,10 @@
     android:id="@+id/thread_message_holder"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginTop="12dp"
+    android:layout_marginTop="3dp"
+    android:layout_marginBottom="3dp"
     android:foreground="@drawable/selector"
-    android:paddingHorizontal="20dp">
+    android:paddingHorizontal="16dp">
 
     <RelativeLayout
         android:id="@+id/thread_message_wrapper"
@@ -18,7 +19,7 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintHorizontal_bias="0.0"
-        app:layout_constraintWidth_percent="0.8">
+        app:layout_constraintWidth_percent="0.76">
 
         <ImageView
             android:id="@+id/thread_message_sender_photo"
@@ -58,15 +59,16 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_below="@+id/thread_message_attachments_holder"
-            android:layout_marginVertical="@dimen/tiny_margin"
+            android:layout_marginVertical="1dp"
             android:layout_toEndOf="@id/thread_message_sender_photo"
             android:autoLink="email|web"
             android:background="@drawable/item_received_background"
             android:drawablePadding="8dp"
-            android:paddingHorizontal="19dp"
-            android:paddingVertical="14dp"
-            android:textColor="@color/miui_primary_text"
-            android:textSize="17sp"
+            android:paddingHorizontal="15dp"
+            android:paddingVertical="11dp"
+            android:textColor="@color/text_primary"
+            android:textSize="15.5sp"
+            android:lineSpacingExtra="3dp"
             tools:drawableEndCompat="@drawable/scheduled_message_icon"
             tools:text="Message content" />
     </RelativeLayout>

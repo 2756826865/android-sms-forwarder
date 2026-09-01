@@ -4,9 +4,10 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:gravity="end"
-    android:paddingStart="@dimen/activity_margin"
-    android:paddingEnd="@dimen/activity_margin"
-    android:paddingBottom="@dimen/tiny_margin"
+    android:layout_marginTop="2dp"
+    android:layout_marginBottom="4dp"
+    android:paddingStart="16dp"
+    android:paddingEnd="18dp"
     android:text="@string/message_not_sent_touch_retry"
-    android:textColor="@color/theme_dark_red_primary_color"
-    android:textSize="@dimen/normal_text_size" />
+    android:textColor="#E74C3C"
+    android:textSize="12.5sp" />

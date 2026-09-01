@@ -47,6 +47,7 @@ import androidx.core.content.res.ResourcesCompat
 import androidx.core.net.toUri
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.core.view.updateLayoutParams
 import androidx.documentfile.provider.DocumentFile
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -248,6 +249,16 @@ class ThreadActivity : SimpleActivity() {
         super.onCreate(savedInstanceState)
         config.primaryColor = getColor(R.color.miui_action_blue)
         config.accentColor = getColor(R.color.miui_fab_green)
+        val threadBg = ContextCompat.getColor(this, R.color.classic_settings_background)
+        window.decorView.setBackgroundColor(threadBg)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            window.isNavigationBarContrastEnforced = false
+            window.isStatusBarContrastEnforced = false
+        }
+        @Suppress("DEPRECATION")
+        window.statusBarColor = threadBg
+        @Suppress("DEPRECATION")
+        window.navigationBarColor = Color.TRANSPARENT
         setContentView(binding.root)
         setupOptionsMenu()
         refreshMenuItems()
@@ -292,19 +303,39 @@ class ThreadActivity : SimpleActivity() {
 
     override fun onResume() {
         super.onResume()
+        val threadBg = ContextCompat.getColor(this, R.color.classic_settings_background)
         setupTopAppBar(
             topAppBar = binding.threadAppbar,
             navigationIcon = NavigationIcon.Arrow,
-            topBarColor = ContextCompat.getColor(this, R.color.miui_page_background)
+            topBarColor = Color.TRANSPARENT
         )
-        val threadHeaderGray = ContextCompat.getColor(this, R.color.miui_page_background)
-        binding.threadToolbar.setBackgroundColor(threadHeaderGray)
-        binding.threadToolbar.setTitleTextColor(ContextCompat.getColor(this, R.color.miui_primary_text))
-        binding.threadToolbar.setSubtitleTextColor(ContextCompat.getColor(this, R.color.miui_primary_text))
+        binding.threadAppbar.setBackgroundColor(Color.TRANSPARENT)
+        val iconColor = ContextCompat.getColor(this, R.color.text_primary)
+        binding.threadToolbar.setNavigationOnClickListener {
+            if (!onBackPressedCompat()) {
+                finish()
+            }
+        }
+        binding.threadToolbar.navigationIcon?.applyColorFilter(iconColor)
+        binding.threadToolbar.overflowIcon?.applyColorFilter(iconColor)
+        for (i in 0 until binding.threadToolbar.menu.size()) {
+            binding.threadToolbar.menu.getItem(i).icon?.applyColorFilter(iconColor)
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            window.isNavigationBarContrastEnforced = false
+            window.isStatusBarContrastEnforced = false
+        }
         @Suppress("DEPRECATION")
-        window.statusBarColor = threadHeaderGray
-        // Chat area gray like MIUI so white received bubbles are visible.
-        binding.threadHolder.setBackgroundColor(threadHeaderGray)
+        window.statusBarColor = threadBg
+        @Suppress("DEPRECATION")
+        window.navigationBarColor = Color.TRANSPARENT
+        window.decorView.setBackgroundColor(threadBg)
+        val insetsController = WindowInsetsControllerCompat(window, window.decorView)
+        insetsController.isAppearanceLightStatusBars = true
+        insetsController.isAppearanceLightNavigationBars = true
+        binding.threadHolder.setBackgroundColor(threadBg)
+        binding.threadCoordinator.setBackgroundColor(threadBg)
 
         isActivityVisible = true
 
@@ -330,9 +361,8 @@ class ThreadActivity : SimpleActivity() {
             markThreadMessagesRead(threadId)
         }
 
-        val composerBg = ContextCompat.getColor(this, R.color.miui_card_background)
-        binding.messageHolder.root.setBackgroundColor(composerBg)
-        binding.shortCodeHolder.root.setBackgroundColor(composerBg)
+        binding.messageHolder.root.setBackgroundColor(Color.TRANSPARENT)
+        binding.shortCodeHolder.root.setBackgroundColor(Color.TRANSPARENT)
         applyComposerColors()
     }
 
@@ -381,6 +411,9 @@ class ThreadActivity : SimpleActivity() {
 
     private fun refreshMenuItems() {
         val firstPhoneNumber = participants.firstOrNull()?.phoneNumbers?.firstOrNull()?.value
+        val iconColor = ContextCompat.getColor(this, R.color.text_primary)
+        binding.threadToolbar.navigationIcon?.applyColorFilter(iconColor)
+        binding.threadToolbar.overflowIcon?.applyColorFilter(iconColor)
         binding.threadToolbar.menu.apply {
             findItem(R.id.delete).isVisible = threadItems.isNotEmpty()
             findItem(R.id.restore).isVisible = threadItems.isNotEmpty() && isRecycleBin
@@ -400,6 +433,10 @@ class ThreadActivity : SimpleActivity() {
                 participants.size == 1 && participants.first().name == firstPhoneNumber && !isRecycleBin
             findItem(R.id.copy_number).isVisible =
                 participants.size == 1 && !firstPhoneNumber.isNullOrEmpty() && !isRecycleBin
+
+            for (i in 0 until size()) {
+                getItem(i).icon?.applyColorFilter(iconColor)
+            }
         }
     }
 
@@ -887,6 +924,11 @@ class ThreadActivity : SimpleActivity() {
 
     private fun setupButtons() = binding.apply {
         updateTextColors(threadHolder)
+        val threadBg = ContextCompat.getColor(this@ThreadActivity, R.color.classic_settings_background)
+        threadHolder.setBackgroundColor(threadBg)
+        threadCoordinator.setBackgroundColor(threadBg)
+        messageHolder.root.setBackgroundColor(Color.TRANSPARENT)
+        shortCodeHolder.root.setBackgroundColor(Color.TRANSPARENT)
         val textColor = getProperTextColor()
 
         binding.messageHolder.apply {
@@ -897,9 +939,9 @@ class ThreadActivity : SimpleActivity() {
             }
 
             confirmManageContacts.applyColorFilter(textColor)
-            threadAddAttachment.applyColorFilter(textColor)
-            threadTypeMessage.setTextColor(Color.rgb(17, 17, 17))
-            threadTypeMessage.setHintTextColor(Color.rgb(141, 141, 141))
+            threadAddAttachment.applyColorFilter(ContextCompat.getColor(this@ThreadActivity, R.color.text_primary))
+            threadTypeMessage.setTextColor(ContextCompat.getColor(this@ThreadActivity, R.color.text_primary))
+            threadTypeMessage.setHintTextColor(ContextCompat.getColor(this@ThreadActivity, R.color.text_tertiary))
 
             val properPrimaryColor = Color.rgb(29, 206, 56)
             threadMessagesFastscroller.updateColors(properPrimaryColor)
@@ -1040,20 +1082,21 @@ class ThreadActivity : SimpleActivity() {
     }
 
     private fun applyComposerColors() = binding.messageHolder.apply {
+        root.setBackgroundColor(Color.TRANSPARENT)
         threadTypeMessage.background = AppCompatResources.getDrawable(
             this@ThreadActivity,
-            R.drawable.message_input_background
+            R.drawable.floating_dock_input_background
         )
         threadAddAttachment.background = AppCompatResources.getDrawable(
             this@ThreadActivity,
-            R.drawable.message_action_background
+            R.drawable.floating_dock_circle_background
         )
         threadSendMessage.background = AppCompatResources.getDrawable(
             this@ThreadActivity,
-            R.drawable.send_button_background
+            R.drawable.floating_dock_circle_background
         )
-        threadTypeMessage.setTextColor(Color.rgb(17, 17, 17))
-        threadTypeMessage.setHintTextColor(Color.rgb(141, 141, 141))
+        threadTypeMessage.setTextColor(ContextCompat.getColor(this@ThreadActivity, R.color.text_primary))
+        threadTypeMessage.setHintTextColor(ContextCompat.getColor(this@ThreadActivity, R.color.text_tertiary))
     }
 
     private fun hasOnlyScheduledMessages(): Boolean {
@@ -1183,7 +1226,6 @@ class ThreadActivity : SimpleActivity() {
             }
 
             currentSIMCardIndex = getProperSimIndex(availableSIMs, numbers)
-            binding.messageHolder.threadSelectSimIcon.applyColorFilter(Color.rgb(29, 206, 56))
             binding.messageHolder.threadSelectSimIcon.beVisible()
             binding.messageHolder.threadSelectSimNumber.beVisible()
 
@@ -2159,8 +2201,8 @@ class ThreadActivity : SimpleActivity() {
         }
         ResourcesCompat.getDrawable(resources, drawableResId, theme)?.apply {
             applyColorFilter(
-                if (binding.messageHolder.threadSendMessage.isEnabled) Color.WHITE
-                else Color.rgb(160, 160, 160)
+                if (binding.messageHolder.threadSendMessage.isEnabled) Color.parseColor("#28C76F")
+                else Color.parseColor("#94A3B8")
             )
             binding.messageHolder.threadSendMessage.setCompoundDrawablesWithIntrinsicBounds(
                 null, this, null, null
@@ -2253,7 +2295,7 @@ class ThreadActivity : SimpleActivity() {
     }
 
     private fun showAttachmentPicker() {
-        binding.messageHolder.attachmentPickerDivider.showWithAnimation()
+        binding.messageHolder.attachmentPickerDivider.beGone()
         binding.messageHolder.attachmentPickerHolder.showWithAnimation()
         animateAttachmentButton(rotation = -135f)
     }
@@ -2291,11 +2333,7 @@ class ThreadActivity : SimpleActivity() {
         }
     }
 
-    private fun getBottomBarColor() = if (isDynamicTheme()) {
-        ContextCompat.getColor(this, org.fossify.commons.R.color.you_bottom_bar_color)
-    } else {
-        getBottomNavigationBackgroundColor()
-    }
+    private fun getBottomBarColor() = Color.TRANSPARENT
 
     fun setupMessagingEdgeToEdge() {
         ViewCompat.setOnApplyWindowInsetsListener(

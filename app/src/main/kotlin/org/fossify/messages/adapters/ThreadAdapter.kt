@@ -711,18 +711,18 @@ class ThreadAdapter(
         ItemThreadDateTimeBinding.bind(view).apply {
             threadDateTime.apply {
                 text = formatThreadMessageDate(dateTime.date)
-                setTextSize(TypedValue.COMPLEX_UNIT_PX, fontSize * 0.85f)
-                setTextColor(activity.getColor(R.color.miui_secondary_text))
+                setTextSize(TypedValue.COMPLEX_UNIT_PX, fontSize * 0.82f)
+                setTextColor(activity.getColor(R.color.classic_text_secondary))
             }
 
             val showSim = hasMultipleSIMCards && dateTime.simID != "?"
             threadSimHolder.beVisibleIf(showSim)
-            threadSimIcon.beVisibleIf(showSim)
+            threadSimIcon.beGone()
             threadSimNumber.beVisibleIf(showSim)
             if (showSim) {
+                threadSimHolder.background = AppCompatResources.getDrawable(activity, R.drawable.sim_badge_background)
                 threadSimNumber.text = dateTime.simID
                 threadSimNumber.setTextColor(Color.WHITE)
-                threadSimIcon.applyColorFilter(Color.rgb(29, 206, 56))
             }
 
             // 对面发的靠左对齐 (isIncoming = true -> ALIGN_PARENT_START)
