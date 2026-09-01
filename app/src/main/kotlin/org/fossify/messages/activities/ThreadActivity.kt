@@ -269,7 +269,8 @@ class ThreadActivity : SimpleActivity() {
 
         threadId = intent.getLongExtra(THREAD_ID, 0L)
         intent.getStringExtra(THREAD_TITLE)?.let {
-            binding.threadToolbar.title = it
+            binding.threadTitleText.text = it
+            binding.threadToolbar.title = null
         }
         isRecycleBin = intent.getBooleanExtra(IS_RECYCLE_BIN, false)
         isLaunchedFromShortcut = intent.getBooleanExtra(IS_LAUNCHED_FROM_SHORTCUT, false)
@@ -1132,14 +1133,21 @@ class ThreadActivity : SimpleActivity() {
             ?: participants.firstOrNull()?.phoneNumbers?.firstOrNull()?.value
             ?: ""
 
-        binding.threadToolbar.title = title
+        binding.threadToolbar.title = null
+        binding.threadTitleText.text = title
         // Like Huawei/MIUI: show phone under yellow-page / contact name when it differs.
         val isGroup = conversation?.isGroupConversation == true || participants.size > 1
         val showNumberAsSubtitle = !isGroup
             && number.isNotBlank()
             && !title.equals(number, ignoreCase = true)
             && !title.contains(number)
-        binding.threadToolbar.subtitle = if (showNumberAsSubtitle) number else null
+        
+        if (showNumberAsSubtitle) {
+            binding.threadSubtitleText.text = number
+            binding.threadSubtitleText.beVisible()
+        } else {
+            binding.threadSubtitleText.beGone()
+        }
     }
 
     @SuppressLint("MissingPermission")

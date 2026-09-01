@@ -40,4 +40,12 @@
     <dimen name="bulk_content_margin">16dp</dimen>
     <dimen name="bulk_title_size">35sp</dimen>
     <dimen name="bulk_field_radius">18dp</dimen>
+
+    <!-- Modern UI Dimens -->
+    <dimen name="page_horizontal_padding">20dp</dimen>
+    <dimen name="card_radius">20dp</dimen>
+    <dimen name="card_padding">16dp</dimen>
+    <dimen name="card_spacing">10dp</dimen>
+    <dimen name="bottom_nav_radius">34dp</dimen>
+    <dimen name="avatar_size">54dp</dimen>
 </resources>

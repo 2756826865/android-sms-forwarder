@@ -78,6 +78,7 @@ fun GatewayApp(
                 )
                 GatewayTab.DASHBOARD -> DashboardScreen(
                     viewModel = dashboardViewModel,
+                    onRequestDefaultSms = onRequestDefaultSmsRole,
                     onNavigateToOperations = { selectedTab = GatewayTab.OPERATIONS },
                     onSwitchToClassic = onSwitchToClassic
                 )
@@ -87,37 +88,39 @@ fun GatewayApp(
             }
         }
 
-        // 悬浮毛玻璃胶囊底部导航栏 (Floating Capsule Dock)
+        // 悬浮白色大圆角底部导航栏 (Modern Floating Capsule Dock)
+        val isDark = androidx.compose.foundation.isSystemInDarkTheme()
         Surface(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .padding(horizontal = 18.dp, vertical = 10.dp)
+                .padding(horizontal = 18.dp, vertical = 12.dp)
                 .navigationBarsPadding(),
-            shape = RoundedCornerShape(36.dp),
-            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
-            shadowElevation = 16.dp,
-            border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+            shape = RoundedCornerShape(34.dp),
+            color = if (isDark) org.fossify.messages.ui.compose.theme.DarkSurface else Color.White,
+            shadowElevation = 10.dp,
+            border = BorderStroke(1.dp, if (isDark) org.fossify.messages.ui.compose.theme.DarkOutline else org.fossify.messages.ui.compose.theme.OutlineSoft)
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                    .padding(horizontal = 6.dp, vertical = 6.dp),
                 horizontalArrangement = Arrangement.SpaceAround,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 GatewayTab.values().forEach { tab ->
                     val isSelected = selectedTab == tab
-                    val interactionSource = remember { MutableInteractionSource() }
 
                     val itemBgColor by animateColorAsState(
-                        targetValue = if (isSelected) Color(0xFFE8F5E9) else Color.Transparent,
+                        targetValue = if (isSelected) {
+                            if (isDark) Color(0xFF1B3322) else org.fossify.messages.ui.compose.theme.BrandGreenSoft
+                        } else Color.Transparent,
                         animationSpec = tween(200),
                         label = "tabBg"
                     )
 
                     val textColor by animateColorAsState(
-                        targetValue = if (isSelected) Color(0xFF159447) else Color(0xFF718096),
+                        targetValue = if (isSelected) org.fossify.messages.ui.compose.theme.BrandGreen else Color(0xFF667085),
                         animationSpec = tween(200),
                         label = "tabText"
                     )
@@ -127,24 +130,26 @@ fun GatewayApp(
                         shape = RoundedCornerShape(20.dp),
                         color = itemBgColor,
                         modifier = Modifier
-                            .padding(horizontal = 2.dp, vertical = 2.dp)
+                            .padding(horizontal = 1.dp, vertical = 2.dp)
                     ) {
                         Column(
                             modifier = Modifier
-                                .padding(horizontal = 12.dp, vertical = 6.dp),
+                                .padding(horizontal = 8.dp, vertical = 5.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center
                         ) {
                             Text(
                                 text = tab.emoji,
-                                fontSize = if (isSelected) 18.sp else 16.sp
+                                fontSize = if (isSelected) 17.sp else 15.sp
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = tab.title,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                 fontSize = 11.sp,
-                                color = textColor
+                                color = textColor,
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
                     }

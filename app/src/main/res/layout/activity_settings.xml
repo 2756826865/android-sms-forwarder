@@ -5,14 +5,14 @@
     android:id="@+id/settings_coordinator"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/miui_page_background"
+    android:background="@color/classic_settings_background"
     android:orientation="vertical">
 
     <org.fossify.commons.views.MyAppBarLayout
         android:id="@+id/settings_appbar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@color/miui_page_background"
+        android:background="@color/classic_settings_background"
         android:elevation="0dp"
         app:elevation="0dp">
 
@@ -20,11 +20,12 @@
             android:id="@+id/settings_toolbar"
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
-            android:background="@color/miui_page_background"
-            app:background="@color/miui_page_background"
-            app:navigationIconTint="@color/miui_primary_text"
+            android:background="@color/classic_settings_background"
+            app:background="@color/classic_settings_background"
+            app:navigationIconTint="@color/classic_text_primary"
             app:title="@string/settings_messages_title"
-            app:titleTextColor="@color/miui_primary_text" />
+            app:titleTextAppearance="@style/TextAppearance.Material3.TitleLarge"
+            app:titleTextColor="@color/classic_text_primary" />
     </org.fossify.commons.views.MyAppBarLayout>
 
     <androidx.core.widget.NestedScrollView
@@ -34,28 +35,29 @@
         android:layout_weight="1"
         android:clipToPadding="false"
         android:fillViewport="true"
-        android:paddingBottom="28dp">
+        android:paddingBottom="36dp">
 
         <LinearLayout
             android:id="@+id/settings_holder"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:paddingStart="16dp"
-            android:paddingTop="18dp"
-            android:paddingEnd="16dp">
+            android:paddingStart="20dp"
+            android:paddingTop="8dp"
+            android:paddingEnd="20dp">
 
+            <!-- 1. 功能分组 -->
             <TextView
                 style="@style/SmsSettingsSectionTitle"
-                android:layout_marginStart="16dp"
-                android:layout_marginTop="0dp"
-                android:layout_marginBottom="8dp"
+                android:layout_marginStart="4dp"
+                android:layout_marginTop="4dp"
                 android:text="@string/settings_functions" />
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:background="@drawable/settings_card_background"
+                android:elevation="1dp"
                 android:orientation="vertical">
 
                 <TextView
@@ -63,30 +65,42 @@
                     style="@style/SmsSettingsRow"
                     android:text="@string/settings_forwarding" />
 
+                <View style="@style/SmsSettingsDivider" />
+
                 <TextView
                     android:id="@+id/settings_template_holder"
                     style="@style/SmsSettingsRow"
                     android:text="消息模板" />
+
+                <View style="@style/SmsSettingsDivider" />
 
                 <TextView
                     android:id="@+id/settings_remote_forwarding_holder"
                     style="@style/SmsSettingsRow"
                     android:text="@string/remote_forwarding_title" />
 
+                <View style="@style/SmsSettingsDivider" />
+
                 <TextView
                     android:id="@+id/settings_auto_reply_holder"
                     style="@style/SmsSettingsRow"
                     android:text="短信自动回复" />
+
+                <View style="@style/SmsSettingsDivider" />
 
                 <TextView
                     android:id="@+id/settings_scheduled_holder"
                     style="@style/SmsSettingsRow"
                     android:text="@string/scheduled_management" />
 
+                <View style="@style/SmsSettingsDivider" />
+
                 <TextView
                     android:id="@+id/settings_bulk_send_holder"
                     style="@style/SmsSettingsRow"
                     android:text="@string/bulk_send" />
+
+                <View style="@style/SmsSettingsDivider" />
 
                 <TextView
                     android:id="@+id/settings_low_battery_holder"
@@ -94,17 +108,17 @@
                     android:text="@string/low_battery_reminder" />
             </LinearLayout>
 
+            <!-- 2. 系统分组 -->
             <TextView
                 style="@style/SmsSettingsSectionTitle"
-                android:layout_marginStart="16dp"
-                android:layout_marginTop="24dp"
-                android:layout_marginBottom="8dp"
+                android:layout_marginStart="4dp"
                 android:text="@string/settings_system" />
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:background="@drawable/settings_card_background"
+                android:elevation="1dp"
                 android:orientation="vertical">
 
                 <TextView
@@ -112,29 +126,38 @@
                     style="@style/SmsSettingsRow"
                     android:text="@string/settings_sync" />
 
+                <View style="@style/SmsSettingsDivider" />
+
                 <TextView
                     android:id="@+id/settings_compatibility_holder"
                     style="@style/SmsSettingsRow"
                     android:text="@string/compatibility_title" />
+
+                <View style="@style/SmsSettingsDivider" />
 
                 <TextView
                     android:id="@+id/settings_blocking_holder"
                     style="@style/SmsSettingsRow"
                     android:text="@string/settings_blocking" />
 
+                <View style="@style/SmsSettingsDivider" />
+
                 <TextView
                     android:id="@+id/settings_recently_deleted_holder"
                     style="@style/SmsSettingsRow"
                     android:text="@string/settings_recently_deleted" />
 
+                <View style="@style/SmsSettingsDivider" />
+
                 <LinearLayout
                     android:id="@+id/settings_home_bottom_nav_holder"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:background="?attr/selectableItemBackground"
                     android:gravity="center_vertical"
                     android:minHeight="64dp"
                     android:orientation="horizontal"
-                    android:paddingHorizontal="16dp"
+                    android:paddingHorizontal="20dp"
                     android:paddingVertical="12dp">
 
                     <LinearLayout
@@ -148,16 +171,16 @@
                             android:layout_height="wrap_content"
                             android:fontFamily="sans-serif"
                             android:text="@string/settings_home_bottom_nav"
-                            android:textColor="@color/miui_primary_text"
-                            android:textSize="16sp" />
+                            android:textColor="@color/classic_text_primary"
+                            android:textSize="17sp" />
 
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="4dp"
+                            android:layout_marginTop="3dp"
                             android:fontFamily="sans-serif"
                             android:text="@string/settings_home_bottom_nav_summary"
-                            android:textColor="@color/miui_secondary_text"
+                            android:textColor="@color/classic_text_secondary"
                             android:textSize="13sp" />
                     </LinearLayout>
 
@@ -165,8 +188,11 @@
                         android:id="@+id/settings_home_bottom_nav_switch"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginStart="12dp" />
+                        android:layout_marginStart="12dp"
+                        app:useMaterialThemeColors="true" />
                 </LinearLayout>
+
+                <View style="@style/SmsSettingsDivider" />
 
                 <LinearLayout
                     android:id="@+id/settings_home_list_density_holder"
@@ -176,7 +202,7 @@
                     android:gravity="center_vertical"
                     android:minHeight="64dp"
                     android:orientation="vertical"
-                    android:paddingHorizontal="16dp"
+                    android:paddingHorizontal="20dp"
                     android:paddingVertical="12dp">
 
                     <TextView
@@ -184,28 +210,31 @@
                         android:layout_height="wrap_content"
                         android:fontFamily="sans-serif"
                         android:text="@string/settings_home_list_density"
-                        android:textColor="@color/miui_primary_text"
-                        android:textSize="16sp" />
+                        android:textColor="@color/classic_text_primary"
+                        android:textSize="17sp" />
 
                     <TextView
                         android:id="@+id/settings_home_list_density_summary"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
+                        android:layout_marginTop="3dp"
                         android:fontFamily="sans-serif"
-                        android:textColor="@color/miui_secondary_text"
+                        android:textColor="@color/classic_text_secondary"
                         android:textSize="13sp"
                         tools:text="调节会话列表疏密，约一屏显示 8 条" />
                 </LinearLayout>
+
+                <View style="@style/SmsSettingsDivider" />
 
                 <LinearLayout
                     android:id="@+id/settings_live_island_holder"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:background="?attr/selectableItemBackground"
                     android:gravity="center_vertical"
                     android:minHeight="64dp"
                     android:orientation="horizontal"
-                    android:paddingHorizontal="16dp"
+                    android:paddingHorizontal="20dp"
                     android:paddingVertical="12dp">
 
                     <LinearLayout
@@ -219,17 +248,17 @@
                             android:layout_height="wrap_content"
                             android:fontFamily="sans-serif"
                             android:text="@string/settings_live_island"
-                            android:textColor="@color/miui_primary_text"
-                            android:textSize="16sp" />
+                            android:textColor="@color/classic_text_primary"
+                            android:textSize="17sp" />
 
                         <TextView
                             android:id="@+id/settings_live_island_summary"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="4dp"
+                            android:layout_marginTop="3dp"
                             android:fontFamily="sans-serif"
                             android:text="@string/live_island_status_disabled"
-                            android:textColor="@color/miui_secondary_text"
+                            android:textColor="@color/classic_text_secondary"
                             android:textSize="13sp" />
                     </LinearLayout>
 
@@ -237,21 +266,22 @@
                         android:id="@+id/settings_live_island_switch"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginStart="12dp" />
+                        android:layout_marginStart="12dp"
+                        app:useMaterialThemeColors="true" />
                 </LinearLayout>
             </LinearLayout>
 
+            <!-- 3. 其他分组 -->
             <TextView
                 style="@style/SmsSettingsSectionTitle"
-                android:layout_marginStart="16dp"
-                android:layout_marginTop="24dp"
-                android:layout_marginBottom="8dp"
+                android:layout_marginStart="4dp"
                 android:text="@string/settings_other" />
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:background="@drawable/settings_card_background"
+                android:elevation="1dp"
                 android:orientation="vertical">
 
                 <TextView

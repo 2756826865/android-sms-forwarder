@@ -13,6 +13,18 @@ val ClassicGreen = Color(0xFF159447)
 val ClassicFabGreen = Color(0xFF1DCE38)
 val ClassicBadgeGreen = Color(0xFF20C45A)
 
+// Modern High-Fidelity Design Tokens
+val BrandGreen = Color(0xFF159447)
+val BrandGreenDark = Color(0xFF087A36)
+val BrandGreenSoft = Color(0xFFEAF8EE)
+val AppBackground = Color(0xFFF7F9FC)
+val SurfaceCard = Color(0xFFFFFFFF)
+val TextPrimary = Color(0xFF111827)
+val TextSecondary = Color(0xFF5F6673)
+val TextTertiary = Color(0xFF8A919E)
+val OutlineSoft = Color(0xFFE5E9EF)
+val RefreshIconBlue = Color(0xFF3A7698)
+
 // Gateway Industrial Colors
 val GatewayGreen = Color(0xFF159447)
 val GatewayBlue = Color(0xFF1565C0)

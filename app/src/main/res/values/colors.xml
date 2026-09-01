@@ -22,4 +22,26 @@
     <color name="bottom_nav_unselected">#666666</color>
     <color name="bulk_outline">#D5D5D5</color>
     <color name="sms_save_button_bg">#111111</color>
+
+    <!-- Modern High-Fidelity UI Colors -->
+    <color name="app_background">#F7F9FC</color>
+    <color name="surface_card">#FFFFFF</color>
+    <color name="brand_green">#159447</color>
+    <color name="brand_green_dark">#087A36</color>
+    <color name="brand_green_soft">#EAF8EE</color>
+    <color name="text_primary">#111827</color>
+    <color name="text_secondary">#5F6673</color>
+    <color name="text_tertiary">#8A919E</color>
+    <color name="outline_soft">#E5E9EF</color>
+    <color name="refresh_icon_blue">#3A7698</color>
+
+    <!-- Classic Settings Material 3 Design Tokens -->
+    <color name="classic_settings_background">#F8FAFC</color>
+    <color name="classic_settings_surface">#FFFFFF</color>
+    <color name="classic_text_primary">#111827</color>
+    <color name="classic_text_secondary">#667085</color>
+    <color name="classic_text_tertiary">#98A2B3</color>
+    <color name="classic_divider">#EEF1F4</color>
+    <color name="classic_icon_secondary">#A4AAB3</color>
+    <color name="classic_card_stroke">#EEF1F4</color>
 </resources>

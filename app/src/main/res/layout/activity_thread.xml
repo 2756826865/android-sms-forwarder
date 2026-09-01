@@ -17,13 +17,47 @@
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
             android:background="@color/miui_page_background"
+            app:contentInsetStartWithNavigation="0dp"
             app:menu="@menu/menu_thread"
-            app:navigationIconTint="@color/miui_primary_text"
-            app:subtitleCentered="true"
-            app:subtitleTextColor="@color/miui_primary_text"
-            app:titleCentered="true"
-            app:titleTextColor="@color/miui_primary_text"
-            app:titleTextAppearance="@style/AppTheme.ActionBar.TitleTextStyle" />
+            app:navigationIconTint="@color/miui_primary_text">
+
+            <LinearLayout
+                android:id="@+id/thread_title_container"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:gravity="center"
+                android:orientation="vertical"
+                android:paddingHorizontal="4dp">
+
+                <androidx.appcompat.widget.AppCompatTextView
+                    android:id="@+id/thread_title_text"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:maxLines="1"
+                    android:textColor="@color/miui_primary_text"
+                    android:textSize="17.5sp"
+                    android:textStyle="bold"
+                    app:autoSizeMaxTextSize="18sp"
+                    app:autoSizeMinTextSize="11sp"
+                    app:autoSizeStepGranularity="1sp"
+                    app:autoSizeTextType="uniform"
+                    tools:text="10690665100062" />
+
+                <TextView
+                    android:id="@+id/thread_subtitle_text"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:maxLines="1"
+                    android:textColor="@color/miui_secondary_text"
+                    android:textSize="12sp"
+                    android:visibility="gone"
+                    tools:text="10000" />
+            </LinearLayout>
+
+        </com.google.android.material.appbar.MaterialToolbar>
 
     </org.fossify.commons.views.MyAppBarLayout>
 

@@ -1,6 +1,7 @@
 package org.fossify.messages.helpers
 
 import android.content.Context
+import org.fossify.messages.BuildConfig
 import org.fossify.messages.autoreply.AutoReplyConfig
 import org.fossify.messages.forwarding.ForwardingRulesConfig
 import org.fossify.messages.forwarding.MultiForwardConfig
@@ -15,7 +16,7 @@ object ConfigBackupHelper {
 
     fun exportToJson(context: Context): String {
         val root = JSONObject()
-        root.put("version", "1.1.3")
+        root.put("version", BuildConfig.VERSION_NAME)
         root.put("exportTime", SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date()))
 
         // 1. Forwarding Rules

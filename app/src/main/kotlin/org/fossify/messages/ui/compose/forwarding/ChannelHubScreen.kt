@@ -4,10 +4,13 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.telephony.SubscriptionManager
 import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,8 +18,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -34,6 +39,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -47,8 +53,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
@@ -59,10 +67,21 @@ import org.fossify.messages.forwarding.ForwardingChannels
 import org.fossify.messages.forwarding.MultiForwardConfig
 import org.fossify.messages.ui.compose.components.GatewayCard
 import org.fossify.messages.ui.compose.components.StatusBadge
+import org.fossify.messages.ui.compose.theme.AppBackground
+import org.fossify.messages.ui.compose.theme.BrandGreen
+import org.fossify.messages.ui.compose.theme.BrandGreenSoft
+import org.fossify.messages.ui.compose.theme.DarkBackground
+import org.fossify.messages.ui.compose.theme.DarkOutline
+import org.fossify.messages.ui.compose.theme.DarkSurface
+import org.fossify.messages.ui.compose.theme.GatewayBlue
 import org.fossify.messages.ui.compose.theme.GatewayGreen
 import org.fossify.messages.ui.compose.theme.GatewayOrange
 import org.fossify.messages.ui.compose.theme.GatewayPurple
 import org.fossify.messages.ui.compose.theme.GatewayRed
+import org.fossify.messages.ui.compose.theme.OutlineSoft
+import org.fossify.messages.ui.compose.theme.SurfaceCard
+import org.fossify.messages.ui.compose.theme.TextPrimary
+import org.fossify.messages.ui.compose.theme.TextSecondary
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -339,99 +358,162 @@ fun ChannelHubScreen() {
         }
     }
 
+    val isDark = isSystemInDarkTheme()
+    val pageBgColor = if (isDark) DarkBackground else AppBackground
+    val primaryTextColor = if (isDark) Color.White else TextPrimary
+    val secondaryTextColor = if (isDark) Color(0xFF9CA3AF) else TextSecondary
+
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text(
-                            text = "多渠道推送中心 (对标 message-pusher)",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "15 种全生态通道 · 真实测试发信 · KeyStore 硬件加密",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                },
-                actions = {
-                    TextButton(
-                        onClick = { showFullTutorialDialog = true }
-                    ) {
-                        Text("📖 教程指南", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background
-                )
-            )
-        }
+        containerColor = pageBgColor
     ) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .statusBarsPadding()
         ) {
-            // 分类选择 Tab
-            ScrollableTabRow(
-                selectedTabIndex = ChannelCategory.values().indexOf(selectedCategory),
-                edgePadding = 16.dp,
-                containerColor = MaterialTheme.colorScheme.background
+            // 顶部 Header
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                ChannelCategory.values().forEach { cat ->
-                    Tab(
-                        selected = selectedCategory == cat,
-                        onClick = { selectedCategory = cat },
-                        text = { Text("${cat.emoji} ${cat.title}", fontSize = 12.sp) }
+                Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                    Text(
+                        text = "推送中心",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = primaryTextColor,
+                        maxLines = 1,
+                        softWrap = false
                     )
+                    Spacer(modifier = Modifier.height(3.dp))
+                    Text(
+                        text = "15 种全生态通道 · 真实测试发信",
+                        fontSize = 12.sp,
+                        color = secondaryTextColor,
+                        maxLines = 2,
+                        softWrap = true
+                    )
+                }
+
+                Surface(
+                    onClick = { showFullTutorialDialog = true },
+                    shape = RoundedCornerShape(22.dp),
+                    color = if (isDark) Color(0xFF1B3322) else BrandGreenSoft,
+                    modifier = Modifier.height(34.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "📖 教程指南",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = BrandGreen,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                    }
                 }
             }
 
+            // 分类选择横向 Chips
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                items(ChannelCategory.values().toList()) { cat ->
+                    val isSelected = selectedCategory == cat
+                    Surface(
+                        onClick = { selectedCategory = cat },
+                        shape = RoundedCornerShape(16.dp),
+                        color = if (isSelected) {
+                            if (isDark) Color(0xFF1B3322) else BrandGreenSoft
+                        } else {
+                            if (isDark) DarkSurface else Color.White
+                        },
+                        border = BorderStroke(
+                            1.dp,
+                            if (isSelected) BrandGreen else (if (isDark) DarkOutline else OutlineSoft)
+                        ),
+                        modifier = Modifier.height(36.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "${cat.emoji} ${cat.title}",
+                                fontSize = 12.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                color = if (isSelected) BrandGreen else secondaryTextColor,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+
             LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp),
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                item { Spacer(modifier = Modifier.height(4.dp)) }
-
                 items(filteredChannels, key = { it.id }) { channel ->
                     val isChecked = channelStates[channel.id] == true
                     val isTesting = testingStates[channel.id] == true
                     val pingText = pingResults[channel.id]
 
-                    GatewayCard {
-                        Column {
+                    Surface(
+                        shape = RoundedCornerShape(22.dp),
+                        color = if (isDark) DarkSurface else SurfaceCard,
+                        shadowElevation = 2.dp,
+                        border = BorderStroke(1.dp, if (isDark) DarkOutline else Color(0xFFF0F3F7)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = MaterialTheme.colorScheme.surface,
-                                    modifier = Modifier.size(40.dp)
+                                    shape = RoundedCornerShape(16.dp),
+                                    color = if (isDark) Color(0xFF1B3322) else BrandGreenSoft,
+                                    modifier = Modifier.size(42.dp)
                                 ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Text(text = channel.iconEmoji, fontSize = 20.sp)
+                                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                        Text(text = channel.iconEmoji, fontSize = 18.sp)
                                     }
                                 }
 
-                                Spacer(modifier = Modifier.width(12.dp))
+                                Spacer(modifier = Modifier.width(14.dp))
 
-                                Column(modifier = Modifier.weight(1f)) {
+                                Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
                                     Text(
                                         text = channel.name,
-                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontSize = 15.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurface
+                                        color = if (isDark) Color.White else primaryTextColor,
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        overflow = TextOverflow.Ellipsis
                                     )
+                                    Spacer(modifier = Modifier.height(3.dp))
                                     Text(
                                         text = getChannelConfigSummary(channel.id),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = if (getChannelConfigSummary(channel.id).contains("未配置")) GatewayOrange else MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 1
+                                        fontSize = 12.sp,
+                                        color = if (getChannelConfigSummary(channel.id).contains("未配置")) GatewayOrange else secondaryTextColor,
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                 }
 
@@ -446,57 +528,88 @@ fun ChannelHubScreen() {
                                             setChannelEnabled(channel.id, targetState)
                                             Toast.makeText(context, "${channel.name} 已${if (targetState) "启用" else "禁用"}", Toast.LENGTH_SHORT).show()
                                         }
-                                    }
+                                    },
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = Color.White,
+                                        checkedTrackColor = BrandGreen
+                                    )
                                 )
                             }
 
                             if (pingText != null) {
-                                Spacer(modifier = Modifier.height(6.dp))
+                                Spacer(modifier = Modifier.height(8.dp))
                                 StatusBadge(
                                     text = pingText,
                                     color = if (pingText.contains("失败")) GatewayRed else GatewayGreen
                                 )
                             }
 
-                            Spacer(modifier = Modifier.height(8.dp))
+                            Spacer(modifier = Modifier.height(14.dp))
 
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                StatusBadge(
-                                    text = if (channel.isSmsChannel) "SIM直发" else if (channel.isGroupChannel) "群组聚合" else "KEYSTORE加密",
-                                    color = GatewayPurple
-                                )
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = if (isDark) Color(0xFF2C1E3A) else Color(0xFFF3E8FF)
+                                ) {
+                                    Text(
+                                        text = if (channel.isSmsChannel) "SIM直发" else if (channel.isGroupChannel) "群组聚合" else "KEYSTORE加密",
+                                        fontSize = 10.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = GatewayPurple,
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    )
+                                }
 
-                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                     OutlinedButton(
                                         onClick = {
                                             if (channel.isGroupChannel) showGroupDialog = true
                                             else editingChannel = channel
                                         },
-                                        shape = RoundedCornerShape(8.dp),
-                                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                                        shape = RoundedCornerShape(14.dp),
+                                        border = BorderStroke(1.dp, if (isDark) DarkOutline else OutlineSoft),
+                                        modifier = Modifier.height(34.dp),
+                                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp)
                                     ) {
-                                        Text("⚙️ 配置", fontSize = 12.sp)
+                                        Text(
+                                            text = "⚙️ 配置",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = if (isDark) Color.White else primaryTextColor,
+                                            maxLines = 1,
+                                            softWrap = false
+                                        )
                                     }
 
                                     Button(
                                         onClick = { performSendTestMessage(channel) },
-                                        shape = RoundedCornerShape(8.dp),
-                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                        shape = RoundedCornerShape(14.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = BrandGreen),
+                                        modifier = Modifier.height(34.dp),
+                                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp),
                                         enabled = !isTesting
                                     ) {
                                         if (isTesting) {
                                             CircularProgressIndicator(
                                                 modifier = Modifier.size(14.dp),
                                                 strokeWidth = 2.dp,
-                                                color = MaterialTheme.colorScheme.onPrimary
+                                                color = Color.White
                                             )
                                         } else {
-                                            Text("测试", fontSize = 12.sp, color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold)
+                                            Text(
+                                                text = "测试",
+                                                fontSize = 12.sp,
+                                                color = Color.White,
+                                                fontWeight = FontWeight.Bold,
+                                                maxLines = 1,
+                                                softWrap = false
+                                            )
                                         }
                                     }
                                 }
@@ -505,7 +618,7 @@ fun ChannelHubScreen() {
                     }
                 }
 
-                item { Spacer(modifier = Modifier.height(100.dp)) }
+                item { Spacer(modifier = Modifier.height(120.dp)) }
             }
         }
     }
@@ -881,7 +994,7 @@ fun ChannelFullTutorialDialog(onDismiss: () -> Unit) {
 @Composable
 private fun TutorialSection(title: String, items: List<Pair<String, String>>) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(title, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.primary)
+        Text(title, fontWeight = FontWeight.Bold, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
         items.forEach { (name, desc) ->
             Surface(
                 color = MaterialTheme.colorScheme.surface,
