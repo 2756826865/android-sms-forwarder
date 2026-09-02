@@ -5,12 +5,12 @@
     android:id="@+id/message_holder"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="@android:color/transparent"
+    android:background="@color/classic_settings_background"
     android:minHeight="58dp"
     android:paddingStart="14dp"
     android:paddingTop="4dp"
     android:paddingEnd="14dp"
-    android:paddingBottom="10dp">
+    android:paddingBottom="6dp">
 
     <RelativeLayout
         android:id="@+id/scheduled_message_holder"

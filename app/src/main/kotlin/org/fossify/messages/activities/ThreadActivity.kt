@@ -259,17 +259,13 @@ class ThreadActivity : SimpleActivity() {
         @Suppress("DEPRECATION")
         window.statusBarColor = threadBg
         @Suppress("DEPRECATION")
-        window.navigationBarColor = Color.TRANSPARENT
+        window.navigationBarColor = threadBg
         setContentView(binding.root)
         findViewById<View>(android.R.id.content)?.setBackgroundColor(threadBg)
         setupOptionsMenu()
         refreshMenuItems()
-        setupEdgeToEdge(
-            padBottomImeAndSystem = listOf(
-                binding.messageHolder.root,
-                binding.shortCodeHolder.root
-            )
-        )
+        setupEdgeToEdge(padTopSystem = listOf(binding.threadAppbar))
+        setupComposerInsets()
         setupMessagingEdgeToEdge()
         setupMaterialScrollListener(null, binding.threadAppbar)
 
@@ -331,7 +327,7 @@ class ThreadActivity : SimpleActivity() {
         @Suppress("DEPRECATION")
         window.statusBarColor = threadBg
         @Suppress("DEPRECATION")
-        window.navigationBarColor = Color.TRANSPARENT
+        window.navigationBarColor = threadBg
         window.decorView.setBackgroundColor(threadBg)
         findViewById<View>(android.R.id.content)?.setBackgroundColor(threadBg)
         updateBackgroundColor(threadBg)
@@ -365,8 +361,8 @@ class ThreadActivity : SimpleActivity() {
             markThreadMessagesRead(threadId)
         }
 
-        binding.messageHolder.root.setBackgroundColor(Color.TRANSPARENT)
-        binding.shortCodeHolder.root.setBackgroundColor(Color.TRANSPARENT)
+        binding.messageHolder.root.setBackgroundColor(threadBg)
+        binding.shortCodeHolder.root.setBackgroundColor(threadBg)
         applyComposerColors()
     }
 
@@ -931,8 +927,8 @@ class ThreadActivity : SimpleActivity() {
         val threadBg = ContextCompat.getColor(this@ThreadActivity, R.color.classic_settings_background)
         threadHolder.setBackgroundColor(threadBg)
         threadCoordinator.setBackgroundColor(threadBg)
-        messageHolder.root.setBackgroundColor(Color.TRANSPARENT)
-        shortCodeHolder.root.setBackgroundColor(Color.TRANSPARENT)
+        messageHolder.root.setBackgroundColor(threadBg)
+        shortCodeHolder.root.setBackgroundColor(threadBg)
         val textColor = getProperTextColor()
 
         binding.messageHolder.apply {
@@ -1086,7 +1082,9 @@ class ThreadActivity : SimpleActivity() {
     }
 
     private fun applyComposerColors() = binding.messageHolder.apply {
-        root.setBackgroundColor(Color.TRANSPARENT)
+        root.setBackgroundColor(
+            ContextCompat.getColor(this@ThreadActivity, R.color.classic_settings_background)
+        )
         threadTypeMessage.background = AppCompatResources.getDrawable(
             this@ThreadActivity,
             R.drawable.floating_dock_input_background
@@ -2338,6 +2336,41 @@ class ThreadActivity : SimpleActivity() {
     }
 
     private fun getBottomBarColor() = Color.TRANSPARENT
+
+    private fun setupComposerInsets() {
+        val messageHolder = binding.messageHolder.root
+        val messageStart = messageHolder.paddingStart
+        val messageTop = messageHolder.paddingTop
+        val messageEnd = messageHolder.paddingEnd
+        val messageBottom = messageHolder.paddingBottom
+        val shortCodeHolder = binding.shortCodeHolder.root
+        val shortStart = shortCodeHolder.paddingStart
+        val shortTop = shortCodeHolder.paddingTop
+        val shortEnd = shortCodeHolder.paddingEnd
+        val shortBottom = shortCodeHolder.paddingBottom
+
+        ViewCompat.setOnApplyWindowInsetsListener(messageHolder) { view, insets ->
+            val imeBottom = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
+            val systemBottom = insets.getInsets(WindowInsetsCompat.Type.systemBars()).bottom
+            val keyboardExtra = if (insets.isVisible(WindowInsetsCompat.Type.ime())) {
+                (imeBottom - systemBottom).coerceAtLeast(0)
+            } else {
+                0
+            }
+            view.setPaddingRelative(
+                messageStart,
+                messageTop,
+                messageEnd,
+                messageBottom + keyboardExtra,
+            )
+            insets
+        }
+
+        ViewCompat.setOnApplyWindowInsetsListener(shortCodeHolder) { view, insets ->
+            view.setPaddingRelative(shortStart, shortTop, shortEnd, shortBottom)
+            insets
+        }
+    }
 
     fun setupMessagingEdgeToEdge() {
         ViewCompat.setOnApplyWindowInsetsListener(
