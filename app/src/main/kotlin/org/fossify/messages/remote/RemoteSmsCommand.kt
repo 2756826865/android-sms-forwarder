@@ -346,6 +346,7 @@ class RemoteSmsCommandWorker(appContext: Context, params: WorkerParameters) : Co
             requester = requester,
             awaitDelivered = false,
             sendSimLabel = sendSimLabel,
+            commandId = commandId,
         )
         if (resolvedSubId == null && sendMode in setOf(SimSendResolver.MODE_SIM1, SimSendResolver.MODE_SIM2)) {
             val error = "未找到可用的${SimSendResolver.modeLabel(sendMode)}"
@@ -365,10 +366,15 @@ class RemoteSmsCommandWorker(appContext: Context, params: WorkerParameters) : Co
             appendRemoteLog(source, "抑制重复执行：$target$simLogSuffix")
             return Result.success()
         }
-        val triggerType = if (source == SOURCE_DINGTALK) {
-            org.fossify.messages.models.SmsSendTriggerType.REMOTE_DINGTALK_COMMAND
-        } else {
-            org.fossify.messages.models.SmsSendTriggerType.REMOTE_SMS_COMMAND
+        val triggerType = when (source) {
+            SOURCE_DINGTALK -> org.fossify.messages.models.SmsSendTriggerType.REMOTE_DINGTALK_COMMAND
+            SOURCE_FEISHU -> org.fossify.messages.models.SmsSendTriggerType.REMOTE_FEISHU_COMMAND
+            SOURCE_WECOM -> org.fossify.messages.models.SmsSendTriggerType.REMOTE_WECOM_COMMAND
+            SOURCE_EMAIL -> org.fossify.messages.models.SmsSendTriggerType.REMOTE_EMAIL_COMMAND
+            SOURCE_TELEGRAM -> org.fossify.messages.models.SmsSendTriggerType.REMOTE_TELEGRAM_COMMAND
+            SOURCE_WEBSOCKET -> org.fossify.messages.models.SmsSendTriggerType.REMOTE_WEBSOCKET_COMMAND
+            SOURCE_QQ -> org.fossify.messages.models.SmsSendTriggerType.REMOTE_QQ_COMMAND
+            else -> org.fossify.messages.models.SmsSendTriggerType.REMOTE_SMS_COMMAND
         }
         return runCatching {
             val uris = applicationContext.messagingUtils.sendSmsMessage(
@@ -405,8 +411,15 @@ class RemoteSmsCommandWorker(appContext: Context, params: WorkerParameters) : Co
 
     private fun appendRemoteLog(source: String, message: String) {
         RemoteSmsCommandConfig(applicationContext).appendLog(message)
-        if (source == SOURCE_DINGTALK) {
-            MultiForwardConfig(applicationContext).appendDingTalkRemoteLog(message)
+        val multiConfig = MultiForwardConfig(applicationContext)
+        when (source) {
+            SOURCE_DINGTALK -> multiConfig.appendDingTalkRemoteLog(message)
+            SOURCE_FEISHU -> multiConfig.appendFeishuRemoteLog(message)
+            SOURCE_WECOM -> multiConfig.appendWeComRemoteLog(message)
+            SOURCE_EMAIL -> multiConfig.appendEmailRemoteLog(message)
+            SOURCE_TELEGRAM -> multiConfig.appendTelegramRemoteLog(message)
+            SOURCE_WEBSOCKET -> multiConfig.appendWebSocketRemoteLog(message)
+            SOURCE_QQ -> multiConfig.appendQqRemoteLog(message)
         }
     }
 
@@ -453,6 +466,12 @@ class RemoteSmsCommandWorker(appContext: Context, params: WorkerParameters) : Co
 
 const val SOURCE_SMS = "短信远程指令"
 const val SOURCE_DINGTALK = "钉钉远程指令"
+const val SOURCE_FEISHU = "飞书远程指令"
+const val SOURCE_WECOM = "企业微信远程指令"
+const val SOURCE_EMAIL = "邮箱远程指令"
+const val SOURCE_TELEGRAM = "Telegram远程指令"
+const val SOURCE_WEBSOCKET = "WebSocket远程指令"
+const val SOURCE_QQ = "QQ远程指令"
 
 private fun normalizeNumber(value: String): String = value.filter(Char::isDigit).takeLast(11)
 

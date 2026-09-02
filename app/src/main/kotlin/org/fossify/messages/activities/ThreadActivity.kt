@@ -249,6 +249,7 @@ class ThreadActivity : SimpleActivity() {
         super.onCreate(savedInstanceState)
         config.primaryColor = getColor(R.color.miui_action_blue)
         config.accentColor = getColor(R.color.miui_fab_green)
+        config.backgroundColor = getColor(R.color.classic_settings_background)
         val threadBg = ContextCompat.getColor(this, R.color.classic_settings_background)
         window.decorView.setBackgroundColor(threadBg)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -260,6 +261,7 @@ class ThreadActivity : SimpleActivity() {
         @Suppress("DEPRECATION")
         window.navigationBarColor = Color.TRANSPARENT
         setContentView(binding.root)
+        findViewById<View>(android.R.id.content)?.setBackgroundColor(threadBg)
         setupOptionsMenu()
         refreshMenuItems()
         setupEdgeToEdge(
@@ -331,6 +333,8 @@ class ThreadActivity : SimpleActivity() {
         @Suppress("DEPRECATION")
         window.navigationBarColor = Color.TRANSPARENT
         window.decorView.setBackgroundColor(threadBg)
+        findViewById<View>(android.R.id.content)?.setBackgroundColor(threadBg)
+        updateBackgroundColor(threadBg)
         val insetsController = WindowInsetsControllerCompat(window, window.decorView)
         insetsController.isAppearanceLightStatusBars = true
         insetsController.isAppearanceLightNavigationBars = true

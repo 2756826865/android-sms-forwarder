@@ -140,6 +140,40 @@ class SettingsActivity : SimpleActivity() {
             config.useRecycleBin = true
             startActivity(Intent(this@SettingsActivity, RecycleBinConversationsActivity::class.java))
         }
+        settingsBackupHolder.setOnClickListener {
+            val options = arrayOf("导出全部配置到剪贴板", "从剪贴板导入配置")
+            AlertDialog.Builder(this@SettingsActivity)
+                .setTitle("配置备份与迁移")
+                .setItems(options) { _, which ->
+                    when (which) {
+                        0 -> {
+                            val json = org.fossify.messages.helpers.ConfigBackupHelper.exportToJson(applicationContext)
+                            val clipboard = getSystemService(android.content.ClipboardManager::class.java)
+                            val clip = android.content.ClipData.newPlainText("SMS_Forwarder_Config", json)
+                            clipboard?.setPrimaryClip(clip)
+                            toast("配置已复制到剪贴板，可粘贴保存")
+                        }
+                        1 -> {
+                            val clipboard = getSystemService(android.content.ClipboardManager::class.java)
+                            val text = clipboard?.primaryClip?.getItemAt(0)?.text?.toString().orEmpty()
+                            if (text.isBlank()) {
+                                toast("剪贴板中无内容")
+                                return@setItems
+                            }
+                            val success = org.fossify.messages.helpers.ConfigBackupHelper.importFromJson(applicationContext, text)
+                            if (success) {
+                                toast("配置导入成功")
+                                refreshToggleStates()
+                            } else {
+                                toast("导入失败：JSON 格式不正确")
+                            }
+                        }
+                    }
+                }
+                .setNegativeButton(android.R.string.cancel, null)
+                .create()
+                .showSmsStyled()
+        }
         settingsAboutHolder.setOnClickListener {
             startActivity(Intent(this@SettingsActivity, AboutActivity::class.java))
         }

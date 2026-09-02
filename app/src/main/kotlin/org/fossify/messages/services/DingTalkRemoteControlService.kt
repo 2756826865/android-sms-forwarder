@@ -59,6 +59,7 @@ class DingTalkRemoteControlService : Service() {
         streamClient = DingTalkStreamClient(
             clientId = clientId,
             clientSecret = clientSecret,
+            customPrefix = config.dingTalkRemoteCustomPrefix(),
             onCommand = ::handleCommand,
             onStatus = { status ->
                 MultiForwardConfig(applicationContext).appendDingTalkRemoteLog(status)

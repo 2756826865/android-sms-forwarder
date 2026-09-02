@@ -586,6 +586,8 @@ class ForwardingChannelsActivity : SimpleActivity() {
                 topMargin = (16 * density).toInt()
             }
             setOnClickListener {
+                val values = editTexts.map { it.text.toString().trim() }
+                onSave(values, channelSwitch.isChecked)
                 val progress = ProgressDialog.show(this@ForwardingChannelsActivity, "正在测试", "正在连接服务接口...", true, false)
                 lifecycleScope.launch {
                     val res = withContext(Dispatchers.IO) {

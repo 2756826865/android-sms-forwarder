@@ -43,6 +43,7 @@ class RemoteSmsCommandSettingsActivity : SimpleActivity() {
                 return@setOnClickListener
             }
             config.enabled = binding.remoteSmsEnabled.isChecked
+            config.customPrefix = binding.remoteSmsCustomPrefix.value
             config.authorizedNumbers = authorizedNumbers
             receiptConfig.enabled = binding.remoteSmsReceiptEnabled.isChecked
             receiptConfig.includeDelivered = binding.remoteSmsReceiptDelivered.isChecked
@@ -60,6 +61,7 @@ class RemoteSmsCommandSettingsActivity : SimpleActivity() {
 
     private fun loadConfig() = with(binding) {
         remoteSmsEnabled.isChecked = config.enabled
+        remoteSmsCustomPrefix.setText(config.customPrefix)
         remoteSmsAuthorized.setText(config.authorizedNumbers)
         remoteSmsReceiptEnabled.isChecked = receiptConfig.enabled
         remoteSmsReceiptDelivered.isChecked = receiptConfig.includeDelivered

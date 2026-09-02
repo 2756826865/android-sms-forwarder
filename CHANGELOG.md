@@ -4,6 +4,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.5] - 2026-09-02
+
+### 🌟 核心新特性与重大升级 (Major Features)
+- **📡 远程控制渠道矩阵重磅扩展至 8 大渠道 (Telegram / WebSocket / QQ OneBot 11)**：
+  - **✈️ Telegram Bot 远程控制**：基于官方 Bot API 的 `getUpdates` 长轮询架构，支持国内自定义 API 反代 Host（如 Cloudflare Workers），支持 ChatID / UserID 白名单与 `message_id` 去重，发信结果及运营商送达回执（DELIVERED）原路直接回复到 Telegram 原对话中。
+  - **🔌 WebSocket 全双工远程控制**：建立与用户自建服务端/网关的长连接，支持 Auth Token 鉴权，支持服务器主动下发 `send_sms` 指令载荷（指定卡槽、目标号码、内容），发信结果与回执通过同一连接实时主动上推。
+  - **🐧 QQ 远程控制 (OneBot 11)**：支持对接 OneBot 11 / NapCat / LLOneBot 标准 WebSocket 协议，监听 QQ 私聊与群聊消息；支持 QQ 号白名单、群号白名单与「群聊必须 @机器人」触发开关，发信结果原路回复至对应私聊或群聊。
+- **🔄 全渠道闭环回执直连上报**：
+  - 远程指令下发发信完成后，除推送至全局已启用的转发渠道外，特设**原路直接回执响应**（Telegram / WebSocket / QQ），实现指令发起方秒级接收发送状态与送达结果。
+
+---
+
+## [1.1.4] - 2026-09-02
+
+### 🌟 核心新特性与重大升级 (Major Features)
+- **📡 远程控制发信渠道矩阵全面扩充 (Remote SMS Command Hub)**：
+  - **🕊️ 飞书 Stream 远程控制**：基于飞书官方 OpenAPI WebSocket 长连接模式（无需公网 IP），订阅机器人消息事件，实时接收 `/发信 [SIM1|SIM2|默认] 目标号码 内容` 指令并调度发信。
+  - **💬 企业微信自建应用远程控制**：支持企业微信应用凭证（CorpID / AgentID / Secret）与指定成员 UserID 白名单安全鉴权，安全管控远程发信权限。
+  - **📧 邮箱 IMAP/SSL 远程控制**：支持通过 IMAP4/SSL 协议监听收件箱，支持发件人邮箱白名单校验，从主题或正文提取指令后调用本地 SIM 卡发信，发信后自动标记已读防止重复执行。
+  - **🎛️ 远程控制中枢升级**：在「设置 → 远程控制」中集中提供短信、钉钉 Stream、飞书 Stream、企业微信应用、邮箱 5 大渠道的独立配置入口、状态指示灯、实时测试与执行日志查看。
+- **🛡️ 全链路 4 大长连接服务保活与自愈守护**：
+  - 在应用冷启动 (`MainActivity`) 与系统重启广播 (`RescheduleAlarmsReceiver`) 中注册全套远程长连接与轮询前台服务自愈链路。
+
+### 🐛 问题修复与视觉调优 (Fixed & Improved)
+- **🎨 彻底消除 Android 10+ 底部手势区域白色蒙层 (System Scrim Fix)**：
+  - 彻底解决 Android 10（API 29+）启用了深色手势条后由系统底层 SurfaceFlinger 强行盖上的半透明白色保护蒙层（Scrim）；
+  - 针对对话详情页设置 `enforceNavigationBarContrast = false`，窗口背景与根布局统一采用 `#F8FAFC`，实现纯净通透背景。
+- **📐 会话底部输入栏悬浮间距微调**：
+  - 优化输入框底栏内边距（`paddingBottom="10dp"`）与会话列表底部垫高高度（`56dp`），彻底解决多余空白与遮挡问题。
+
+---
+
 ## [1.1.3] - 2026-08-31
 
 ### 🌟 核心新特性与重大升级 (Major Features)

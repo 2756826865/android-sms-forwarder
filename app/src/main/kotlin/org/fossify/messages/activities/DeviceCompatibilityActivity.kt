@@ -404,21 +404,32 @@ class DeviceCompatibilityActivity : SimpleActivity() {
 
         val channelStates = listOf(
             configState("PushPlus", pushPlus.enabled, pushPlus.getToken().isNotBlank()),
-            configState("钉钉", multi.dingTalkEnabled, multi.dingTalkWebhook().isNotBlank()),
-            configState("飞书", multi.feishuEnabled, multi.feishuWebhook().isNotBlank()),
-            configState("企业微信", multi.weComEnabled, multi.weComCorpId().isNotBlank() && multi.weComSecret().isNotBlank()),
+            configState("微信测试号", multi.isChannelEnabled(ForwardingChannels.WECHAT_TEST), multi.wechatTestAppId().isNotBlank()),
+            configState("QQ推送", multi.isChannelEnabled(ForwardingChannels.QQ), multi.qqWebhook().isNotBlank()),
+            configState("钉钉群机器人", multi.dingTalkEnabled, multi.dingTalkWebhook().isNotBlank()),
+            configState("飞书群机器人", multi.feishuEnabled, multi.feishuWebhook().isNotBlank()),
+            configState("飞书自建应用", multi.isChannelEnabled(ForwardingChannels.FEISHU_APP), multi.feishuAppId().isNotBlank()),
+            configState("企业微信自建应用", multi.weComEnabled, multi.weComCorpId().isNotBlank() && multi.weComSecret().isNotBlank()),
             configState("企业微信群机器人", multi.weComBotEnabled, multi.weComBotWebhook().isNotBlank()),
-            configState("邮箱", multi.emailEnabled, multi.emailHost().isNotBlank() && multi.emailUser().isNotBlank()),
+            configState("邮箱SMTP", multi.emailEnabled, multi.emailHost().isNotBlank() && multi.emailUser().isNotBlank()),
             configState("短信直发", multi.smsDirectEnabled, multi.smsDirectPhone().isNotBlank()),
             configState("Bark", multi.barkEnabled, multi.barkServerUrl().isNotBlank() && multi.barkDeviceKey().isNotBlank()),
             configState("Gotify", multi.gotifyEnabled, multi.gotifyServerUrl().isNotBlank() && multi.gotifyToken().isNotBlank()),
+            configState("Telegram", multi.isChannelEnabled(ForwardingChannels.TELEGRAM), multi.telegramBotToken().isNotBlank()),
+            configState("Discord", multi.isChannelEnabled(ForwardingChannels.DISCORD), multi.discordWebhook().isNotBlank()),
+            configState("WebSocket", multi.isChannelEnabled(ForwardingChannels.WEBSOCKET), multi.websocketUrl().isNotBlank()),
+            configState("自定义Webhook", multi.isChannelEnabled(ForwardingChannels.CUSTOM_WEBHOOK), multi.customWebhookUrl().isNotBlank()),
         )
-        val dingTalkRemote = when {
-            !multi.dingTalkRemoteControlEnabled -> "关闭"
-            multi.dingTalkRemoteClientId().isBlank() || multi.dingTalkRemoteClientSecret().isBlank() -> "开启但配置不完整"
-            multi.dingTalkRemoteConnectionStatus.contains("已连接") -> "已连接"
-            else -> "已开启，尚未确认连接"
-        }
+        val remoteStates = listOf(
+            configState("短信远程", remoteSms.enabled, remoteSms.authorizedList().isNotEmpty()),
+            configState("钉钉Stream", multi.dingTalkRemoteControlEnabled, multi.dingTalkRemoteClientId().isNotBlank()),
+            configState("飞书Stream", multi.feishuRemoteControlEnabled, multi.feishuRemoteAppId().isNotBlank()),
+            configState("企业微信应用", multi.weComRemoteControlEnabled, multi.weComRemoteCorpId().isNotBlank()),
+            configState("邮箱IMAP", multi.emailRemoteControlEnabled, multi.emailRemoteHost().isNotBlank()),
+            configState("TelegramBot", multi.telegramRemoteControlEnabled, multi.telegramRemoteBotToken().isNotBlank()),
+            configState("WebSocket", multi.websocketRemoteControlEnabled, multi.websocketRemoteUrl().isNotBlank()),
+            configState("QQ OneBot11", multi.qqRemoteControlEnabled, multi.qqRemoteWsUrl().isNotBlank()),
+        )
         val lowBattery = when {
             !config.enableLowBatteryReminder -> "关闭"
             config.lowBatteryChannels.isEmpty() -> "开启但未选择渠道"
@@ -430,11 +441,11 @@ class DeviceCompatibilityActivity : SimpleActivity() {
             appendLine("SIM：$simSummary")
             appendLine("转发渠道：")
             channelStates.forEach { appendLine("  $it") }
+            appendLine("远程指令：")
+            remoteStates.forEach { appendLine("  $it") }
             appendLine("转发规则：${if (rules.enabled) "开启 · ${rules.rules.count { it.enabled }} 条启用" else "关闭"}")
             appendLine("自动回复：${if (autoReply.enabled) "开启 · ${autoReply.rules.count { it.enabled }} 条启用 · 每日上限 ${autoReply.dailyLimit} 条" else "关闭"}")
             appendLine("低电量提醒：$lowBattery")
-            appendLine("短信远程指令：${if (remoteSms.enabled) "开启 · 白名单 ${remoteSms.authorizedList().size} 个" else "关闭"}")
-            appendLine("钉钉远程指令：$dingTalkRemote")
             append("转发记录：${history.size} 条 · 失败 $failedCount 条")
         }
     }

@@ -59,6 +59,21 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
+                android:hint="自定义指令前缀 (选填，留空默认 /发信)">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/remote_sms_custom_prefix"
+                    style="@style/SmsChannelInputText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="text"
+                    android:maxLines="1" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
                 android:hint="@string/remote_sms_authorized_hint">
 
                 <com.google.android.material.textfield.TextInputEditText

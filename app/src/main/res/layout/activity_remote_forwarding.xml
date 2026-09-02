@@ -107,6 +107,120 @@
 
                     <ImageView style="@style/SmsForwardingChevron" />
                 </LinearLayout>
+
+                <View style="@style/SmsSettingsDivider" />
+
+                <LinearLayout
+                    android:id="@+id/remote_forwarding_feishu_holder"
+                    style="@style/SmsForwardingRow">
+
+                    <LinearLayout style="@style/SmsForwardingTextColumn">
+                        <TextView
+                            style="@style/SmsForwardingTitle"
+                            android:text="@string/feishu_remote_title" />
+
+                        <TextView
+                            android:id="@+id/remote_forwarding_feishu_summary"
+                            style="@style/SmsForwardingSummary" />
+                    </LinearLayout>
+
+                    <ImageView style="@style/SmsForwardingChevron" />
+                </LinearLayout>
+
+                <View style="@style/SmsSettingsDivider" />
+
+                <LinearLayout
+                    android:id="@+id/remote_forwarding_wecom_holder"
+                    style="@style/SmsForwardingRow">
+
+                    <LinearLayout style="@style/SmsForwardingTextColumn">
+                        <TextView
+                            style="@style/SmsForwardingTitle"
+                            android:text="@string/wecom_remote_title" />
+
+                        <TextView
+                            android:id="@+id/remote_forwarding_wecom_summary"
+                            style="@style/SmsForwardingSummary" />
+                    </LinearLayout>
+
+                    <ImageView style="@style/SmsForwardingChevron" />
+                </LinearLayout>
+
+                <View style="@style/SmsSettingsDivider" />
+
+                <LinearLayout
+                    android:id="@+id/remote_forwarding_email_holder"
+                    style="@style/SmsForwardingRow">
+
+                    <LinearLayout style="@style/SmsForwardingTextColumn">
+                        <TextView
+                            style="@style/SmsForwardingTitle"
+                            android:text="@string/email_remote_title" />
+
+                        <TextView
+                            android:id="@+id/remote_forwarding_email_summary"
+                            style="@style/SmsForwardingSummary" />
+                    </LinearLayout>
+
+                    <ImageView style="@style/SmsForwardingChevron" />
+                </LinearLayout>
+
+                <View style="@style/SmsSettingsDivider" />
+
+                <LinearLayout
+                    android:id="@+id/remote_forwarding_telegram_holder"
+                    style="@style/SmsForwardingRow">
+
+                    <LinearLayout style="@style/SmsForwardingTextColumn">
+                        <TextView
+                            style="@style/SmsForwardingTitle"
+                            android:text="@string/telegram_remote_title" />
+
+                        <TextView
+                            android:id="@+id/remote_forwarding_telegram_summary"
+                            style="@style/SmsForwardingSummary" />
+                    </LinearLayout>
+
+                    <ImageView style="@style/SmsForwardingChevron" />
+                </LinearLayout>
+
+                <View style="@style/SmsSettingsDivider" />
+
+                <LinearLayout
+                    android:id="@+id/remote_forwarding_websocket_holder"
+                    style="@style/SmsForwardingRow">
+
+                    <LinearLayout style="@style/SmsForwardingTextColumn">
+                        <TextView
+                            style="@style/SmsForwardingTitle"
+                            android:text="@string/websocket_remote_title" />
+
+                        <TextView
+                            android:id="@+id/remote_forwarding_websocket_summary"
+                            style="@style/SmsForwardingSummary" />
+                    </LinearLayout>
+
+                    <ImageView style="@style/SmsForwardingChevron" />
+                </LinearLayout>
+
+                <View style="@style/SmsSettingsDivider" />
+
+                <LinearLayout
+                    android:id="@+id/remote_forwarding_qq_holder"
+                    style="@style/SmsForwardingRow">
+
+                    <LinearLayout style="@style/SmsForwardingTextColumn">
+                        <TextView
+                            style="@style/SmsForwardingTitle"
+                            android:text="@string/qq_remote_title" />
+
+                        <TextView
+                            android:id="@+id/remote_forwarding_qq_summary"
+                            style="@style/SmsForwardingSummary" />
+                    </LinearLayout>
+
+                    <ImageView style="@style/SmsForwardingChevron" />
+                </LinearLayout>
             </LinearLayout>
         </LinearLayout>
     </androidx.core.widget.NestedScrollView>

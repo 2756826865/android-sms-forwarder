@@ -56,6 +56,7 @@ data class RemoteControlPendingReceipt(
     val requester: String,
     val awaitDelivered: Boolean,
     val sendSimLabel: String = "",
+    val commandId: String = "",
 )
 
 object RemoteSmsReceiptTracker {
@@ -99,6 +100,7 @@ object RemoteSmsReceiptTracker {
         .put("requester", receipt.requester)
         .put("awaitDelivered", receipt.awaitDelivered)
         .put("sendSimLabel", receipt.sendSimLabel)
+        .put("commandId", receipt.commandId)
         .toString()
 
     private fun decodeReceipt(raw: String): RemoteControlPendingReceipt? = runCatching {
@@ -110,6 +112,7 @@ object RemoteSmsReceiptTracker {
             requester = json.optString("requester"),
             awaitDelivered = json.optBoolean("awaitDelivered"),
             sendSimLabel = json.optString("sendSimLabel"),
+            commandId = json.optString("commandId"),
         )
     }.getOrNull()
 }
@@ -179,8 +182,15 @@ object RemoteControlReceiptForwarder {
 
         val receiptSimSuffix = pending.sendSimLabel.takeIf { it.isNotBlank() }?.let { " · $it" }.orEmpty()
         RemoteSmsCommandConfig(context).appendLog("回执[$status] -> ${pending.target}$receiptSimSuffix")
-        if (pending.source == SOURCE_DINGTALK) {
-            MultiForwardConfig(context).appendDingTalkRemoteLog("回执[$status] -> ${pending.target}$receiptSimSuffix")
+        val multiConfig = MultiForwardConfig(context)
+        when (pending.source) {
+            SOURCE_DINGTALK -> multiConfig.appendDingTalkRemoteLog("回执[$status] -> ${pending.target}$receiptSimSuffix")
+            SOURCE_FEISHU -> multiConfig.appendFeishuRemoteLog("回执[$status] -> ${pending.target}$receiptSimSuffix")
+            SOURCE_WECOM -> multiConfig.appendWeComRemoteLog("回执[$status] -> ${pending.target}$receiptSimSuffix")
+            SOURCE_EMAIL -> multiConfig.appendEmailRemoteLog("回执[$status] -> ${pending.target}$receiptSimSuffix")
+            SOURCE_TELEGRAM -> multiConfig.appendTelegramRemoteLog("回执[$status] -> ${pending.target}$receiptSimSuffix")
+            SOURCE_WEBSOCKET -> multiConfig.appendWebSocketRemoteLog("回执[$status] -> ${pending.target}$receiptSimSuffix")
+            SOURCE_QQ -> multiConfig.appendQqRemoteLog("回执[$status] -> ${pending.target}$receiptSimSuffix")
         }
 
         if (ForwardingChannels.PUSHPLUS in channels && PushPlusConfig(context).enabled) {
@@ -204,6 +214,13 @@ object RemoteControlReceiptForwarder {
                 uniqueId = uniqueId,
                 allowedChannels = multiChannels,
             )
+        }
+
+        // 远程渠道原路直连回执
+        when (pending.source) {
+            SOURCE_TELEGRAM -> TelegramRemotePoller.sendReply(context, pending.requester, "【短信远程指令回执】\n$body")
+            SOURCE_WEBSOCKET -> WebSocketRemoteClient.sendReceiptOverSocket(pending.commandId, status, body)
+            SOURCE_QQ -> QqRemoteClient.sendReply(pending.requester, "【短信远程指令回执】\n$body")
         }
     }
 }

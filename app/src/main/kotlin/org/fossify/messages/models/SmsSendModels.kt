@@ -16,6 +16,12 @@ enum class SmsSendTriggerType {
     FORWARDING_SMS_DIRECT,
     REMOTE_SMS_COMMAND,
     REMOTE_DINGTALK_COMMAND,
+    REMOTE_FEISHU_COMMAND,
+    REMOTE_WECOM_COMMAND,
+    REMOTE_EMAIL_COMMAND,
+    REMOTE_TELEGRAM_COMMAND,
+    REMOTE_WEBSOCKET_COMMAND,
+    REMOTE_QQ_COMMAND,
     UI,
     RECOVERY,
     /** Used when the send chain is instrumented but the caller's trigger is unknown (legacy code paths). */

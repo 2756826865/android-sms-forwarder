@@ -153,7 +153,7 @@
             android:name=".activities.PushPlusSettingsActivity"
             android:exported="false"
             android:label="@string/pushplus_forwarding"
-            android:parentActivityName=".activities.MainActivity" />
+            android:parentActivityName=".activities.ForwardingChannelsActivity" />
 
         <activity
             android:name=".activities.DingTalkSettingsActivity"
@@ -231,6 +231,42 @@
             android:name=".activities.DingTalkRemoteControlSettingsActivity"
             android:exported="false"
             android:label="@string/dingtalk_remote_title"
+            android:parentActivityName=".activities.RemoteForwardingActivity" />
+
+        <activity
+            android:name=".activities.FeishuRemoteControlSettingsActivity"
+            android:exported="false"
+            android:label="@string/feishu_remote_title"
+            android:parentActivityName=".activities.RemoteForwardingActivity" />
+
+        <activity
+            android:name=".activities.WeComRemoteControlSettingsActivity"
+            android:exported="false"
+            android:label="@string/wecom_remote_title"
+            android:parentActivityName=".activities.RemoteForwardingActivity" />
+
+        <activity
+            android:name=".activities.EmailRemoteControlSettingsActivity"
+            android:exported="false"
+            android:label="@string/email_remote_title"
+            android:parentActivityName=".activities.RemoteForwardingActivity" />
+
+        <activity
+            android:name=".activities.TelegramRemoteControlSettingsActivity"
+            android:exported="false"
+            android:label="@string/telegram_remote_title"
+            android:parentActivityName=".activities.RemoteForwardingActivity" />
+
+        <activity
+            android:name=".activities.WebSocketRemoteControlSettingsActivity"
+            android:exported="false"
+            android:label="@string/websocket_remote_title"
+            android:parentActivityName=".activities.RemoteForwardingActivity" />
+
+        <activity
+            android:name=".activities.QqRemoteControlSettingsActivity"
+            android:exported="false"
+            android:label="@string/qq_remote_title"
             android:parentActivityName=".activities.RemoteForwardingActivity" />
 
         <activity
@@ -343,6 +379,66 @@
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Maintains DingTalk Stream connection for remote SMS commands" />
+        </service>
+
+        <service
+            android:name=".services.FeishuRemoteControlService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse"
+            android:stopWithTask="false">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Maintains Feishu Stream connection for remote SMS commands" />
+        </service>
+
+        <service
+            android:name=".services.WeComRemoteControlService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse"
+            android:stopWithTask="false">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Maintains WeCom connection for remote SMS commands" />
+        </service>
+
+        <service
+            android:name=".services.EmailRemoteControlService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse"
+            android:stopWithTask="false">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Maintains Email IMAP poller for remote SMS commands" />
+        </service>
+
+        <service
+            android:name=".services.TelegramRemoteControlService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse"
+            android:stopWithTask="false">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Maintains Telegram Bot long-polling connection for remote SMS commands" />
+        </service>
+
+        <service
+            android:name=".services.WebSocketRemoteControlService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse"
+            android:stopWithTask="false">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Maintains WebSocket duplex connection for remote SMS commands" />
+        </service>
+
+        <service
+            android:name=".services.QqRemoteControlService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse"
+            android:stopWithTask="false">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Maintains OneBot 11 QQ connection for remote SMS commands" />
         </service>
 
         <service

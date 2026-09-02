@@ -145,6 +145,13 @@ class MainActivity : SimpleActivity() {
 
         // 2. 调度后台保活与自愈守护
         SmsKeepAliveService.ensureStarted(applicationContext)
+        org.fossify.messages.services.DingTalkRemoteControlService.ensureStarted(applicationContext)
+        org.fossify.messages.services.FeishuRemoteControlService.ensureStarted(applicationContext)
+        org.fossify.messages.services.WeComRemoteControlService.ensureStarted(applicationContext)
+        org.fossify.messages.services.EmailRemoteControlService.ensureStarted(applicationContext)
+        org.fossify.messages.services.TelegramRemoteControlService.ensureStarted(applicationContext)
+        org.fossify.messages.services.WebSocketRemoteControlService.ensureStarted(applicationContext)
+        org.fossify.messages.services.QqRemoteControlService.ensureStarted(applicationContext)
         SmsRecoveryWorker.schedule(applicationContext)
 
         // 3. 双 UI 引擎分流判断 (Dual-UI Engine Dispatcher)

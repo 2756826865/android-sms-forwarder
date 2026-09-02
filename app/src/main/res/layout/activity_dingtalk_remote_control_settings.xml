@@ -73,6 +73,23 @@
                     android:maxLines="1" />
             </com.google.android.material.textfield.TextInputLayout>
 
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:hint="自定义指令前缀 (选填，留空默认 /发信)"
+                app:helperText="如自定义为 /发短信 或 #发信"
+                app:helperTextTextColor="@color/miui_secondary_text">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/dingtalk_remote_custom_prefix"
+                    style="@style/SmsChannelInputText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="text"
+                    android:maxLines="1" />
+            </com.google.android.material.textfield.TextInputLayout>
+
             <TextView
                 style="@style/SmsChannelFieldLabel"
                 android:text="@string/dingtalk_remote_send_sim" />

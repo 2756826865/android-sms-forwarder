@@ -74,6 +74,206 @@ class MultiForwardConfig(private val context: Context) {
 
     fun dingTalkRemoteLogs(): String = prefs.getString(KEY_DINGTALK_REMOTE_LOGS, "").orEmpty()
 
+    // 飞书远程控制
+    var feishuRemoteControlEnabled by booleanPreference(KEY_FEISHU_REMOTE_CONTROL_ENABLED)
+    var feishuRemoteSendSimMode: Int
+        get() = prefs.getInt(KEY_FEISHU_REMOTE_SEND_SIM, SimSendMode.DEFAULT).let { mode ->
+            when (mode) {
+                SimSendMode.SIM1, SimSendMode.SIM2, SimSendMode.DEFAULT -> mode
+                else -> SimSendMode.DEFAULT
+            }
+        }
+        set(value) = prefs.edit().putInt(
+            KEY_FEISHU_REMOTE_SEND_SIM,
+            when (value) {
+                SimSendMode.SIM1, SimSendMode.SIM2, SimSendMode.DEFAULT -> value
+                else -> SimSendMode.DEFAULT
+            },
+        ).apply()
+
+    var feishuRemoteConnectionStatus: String
+        get() = prefs.getString(KEY_FEISHU_REMOTE_STATUS, "").orEmpty()
+        set(value) = prefs.edit().putString(KEY_FEISHU_REMOTE_STATUS, value).apply()
+
+    fun appendFeishuRemoteLog(message: String) {
+        val now = java.text.SimpleDateFormat("MM-dd HH:mm:ss", java.util.Locale.getDefault())
+            .format(java.util.Date())
+        val line = "$now $message"
+        val current = prefs.getString(KEY_FEISHU_REMOTE_LOGS, "").orEmpty().lines().filter(String::isNotBlank)
+        val logs = (listOf(line) + current).take(30).joinToString("\n")
+        prefs.edit().putString(KEY_FEISHU_REMOTE_LOGS, logs).putString(KEY_FEISHU_REMOTE_STATUS, line).apply()
+    }
+
+    fun feishuRemoteLogs(): String = prefs.getString(KEY_FEISHU_REMOTE_LOGS, "").orEmpty()
+
+    // 企业微信应用远程控制
+    var weComRemoteControlEnabled by booleanPreference(KEY_WECOM_REMOTE_CONTROL_ENABLED)
+    var weComRemoteSendSimMode: Int
+        get() = prefs.getInt(KEY_WECOM_REMOTE_SEND_SIM, SimSendMode.DEFAULT).let { mode ->
+            when (mode) {
+                SimSendMode.SIM1, SimSendMode.SIM2, SimSendMode.DEFAULT -> mode
+                else -> SimSendMode.DEFAULT
+            }
+        }
+        set(value) = prefs.edit().putInt(
+            KEY_WECOM_REMOTE_SEND_SIM,
+            when (value) {
+                SimSendMode.SIM1, SimSendMode.SIM2, SimSendMode.DEFAULT -> value
+                else -> SimSendMode.DEFAULT
+            },
+        ).apply()
+
+    var weComRemoteConnectionStatus: String
+        get() = prefs.getString(KEY_WECOM_REMOTE_STATUS, "").orEmpty()
+        set(value) = prefs.edit().putString(KEY_WECOM_REMOTE_STATUS, value).apply()
+
+    fun appendWeComRemoteLog(message: String) {
+        val now = java.text.SimpleDateFormat("MM-dd HH:mm:ss", java.util.Locale.getDefault())
+            .format(java.util.Date())
+        val line = "$now $message"
+        val current = prefs.getString(KEY_WECOM_REMOTE_LOGS, "").orEmpty().lines().filter(String::isNotBlank)
+        val logs = (listOf(line) + current).take(30).joinToString("\n")
+        prefs.edit().putString(KEY_WECOM_REMOTE_LOGS, logs).putString(KEY_WECOM_REMOTE_STATUS, line).apply()
+    }
+
+    fun weComRemoteLogs(): String = prefs.getString(KEY_WECOM_REMOTE_LOGS, "").orEmpty()
+
+    // 邮箱远程控制
+    var emailRemoteControlEnabled by booleanPreference(KEY_EMAIL_REMOTE_CONTROL_ENABLED)
+    var emailRemoteSendSimMode: Int
+        get() = prefs.getInt(KEY_EMAIL_REMOTE_SEND_SIM, SimSendMode.DEFAULT).let { mode ->
+            when (mode) {
+                SimSendMode.SIM1, SimSendMode.SIM2, SimSendMode.DEFAULT -> mode
+                else -> SimSendMode.DEFAULT
+            }
+        }
+        set(value) = prefs.edit().putInt(
+            KEY_EMAIL_REMOTE_SEND_SIM,
+            when (value) {
+                SimSendMode.SIM1, SimSendMode.SIM2, SimSendMode.DEFAULT -> value
+                else -> SimSendMode.DEFAULT
+            },
+        ).apply()
+
+    var emailRemoteConnectionStatus: String
+        get() = prefs.getString(KEY_EMAIL_REMOTE_STATUS, "").orEmpty()
+        set(value) = prefs.edit().putString(KEY_EMAIL_REMOTE_STATUS, value).apply()
+
+    var emailRemoteSecurity: Int
+        get() = prefs.getInt(KEY_EMAIL_REMOTE_SECURITY, EMAIL_SECURITY_SSL)
+        set(value) = prefs.edit().putInt(KEY_EMAIL_REMOTE_SECURITY, value).apply()
+
+    fun appendEmailRemoteLog(message: String) {
+        val now = java.text.SimpleDateFormat("MM-dd HH:mm:ss", java.util.Locale.getDefault())
+            .format(java.util.Date())
+        val line = "$now $message"
+        val current = prefs.getString(KEY_EMAIL_REMOTE_LOGS, "").orEmpty().lines().filter(String::isNotBlank)
+        val logs = (listOf(line) + current).take(30).joinToString("\n")
+        prefs.edit().putString(KEY_EMAIL_REMOTE_LOGS, logs).putString(KEY_EMAIL_REMOTE_STATUS, line).apply()
+    }
+
+    fun emailRemoteLogs(): String = prefs.getString(KEY_EMAIL_REMOTE_LOGS, "").orEmpty()
+
+    // Telegram 远程控制
+    var telegramRemoteControlEnabled by booleanPreference(KEY_TELEGRAM_REMOTE_CONTROL_ENABLED)
+    var telegramRemoteSendSimMode: Int
+        get() = prefs.getInt(KEY_TELEGRAM_REMOTE_SEND_SIM, SimSendMode.DEFAULT).let { mode ->
+            when (mode) {
+                SimSendMode.SIM1, SimSendMode.SIM2, SimSendMode.DEFAULT -> mode
+                else -> SimSendMode.DEFAULT
+            }
+        }
+        set(value) = prefs.edit().putInt(
+            KEY_TELEGRAM_REMOTE_SEND_SIM,
+            when (value) {
+                SimSendMode.SIM1, SimSendMode.SIM2, SimSendMode.DEFAULT -> value
+                else -> SimSendMode.DEFAULT
+            },
+        ).apply()
+
+    var telegramRemoteConnectionStatus: String
+        get() = prefs.getString(KEY_TELEGRAM_REMOTE_STATUS, "").orEmpty()
+        set(value) = prefs.edit().putString(KEY_TELEGRAM_REMOTE_STATUS, value).apply()
+
+    fun appendTelegramRemoteLog(message: String) {
+        val now = java.text.SimpleDateFormat("MM-dd HH:mm:ss", java.util.Locale.getDefault())
+            .format(java.util.Date())
+        val line = "$now $message"
+        val current = prefs.getString(KEY_TELEGRAM_REMOTE_LOGS, "").orEmpty().lines().filter(String::isNotBlank)
+        val logs = (listOf(line) + current).take(30).joinToString("\n")
+        prefs.edit().putString(KEY_TELEGRAM_REMOTE_LOGS, logs).putString(KEY_TELEGRAM_REMOTE_STATUS, line).apply()
+    }
+
+    fun telegramRemoteLogs(): String = prefs.getString(KEY_TELEGRAM_REMOTE_LOGS, "").orEmpty()
+
+    // WebSocket 远程控制
+    var websocketRemoteControlEnabled by booleanPreference(KEY_WEBSOCKET_REMOTE_CONTROL_ENABLED)
+    var websocketRemoteSendSimMode: Int
+        get() = prefs.getInt(KEY_WEBSOCKET_REMOTE_SEND_SIM, SimSendMode.DEFAULT).let { mode ->
+            when (mode) {
+                SimSendMode.SIM1, SimSendMode.SIM2, SimSendMode.DEFAULT -> mode
+                else -> SimSendMode.DEFAULT
+            }
+        }
+        set(value) = prefs.edit().putInt(
+            KEY_WEBSOCKET_REMOTE_SEND_SIM,
+            when (value) {
+                SimSendMode.SIM1, SimSendMode.SIM2, SimSendMode.DEFAULT -> value
+                else -> SimSendMode.DEFAULT
+            },
+        ).apply()
+
+    var websocketRemoteConnectionStatus: String
+        get() = prefs.getString(KEY_WEBSOCKET_REMOTE_STATUS, "").orEmpty()
+        set(value) = prefs.edit().putString(KEY_WEBSOCKET_REMOTE_STATUS, value).apply()
+
+    fun appendWebSocketRemoteLog(message: String) {
+        val now = java.text.SimpleDateFormat("MM-dd HH:mm:ss", java.util.Locale.getDefault())
+            .format(java.util.Date())
+        val line = "$now $message"
+        val current = prefs.getString(KEY_WEBSOCKET_REMOTE_LOGS, "").orEmpty().lines().filter(String::isNotBlank)
+        val logs = (listOf(line) + current).take(30).joinToString("\n")
+        prefs.edit().putString(KEY_WEBSOCKET_REMOTE_LOGS, logs).putString(KEY_WEBSOCKET_REMOTE_STATUS, line).apply()
+    }
+
+    fun websocketRemoteLogs(): String = prefs.getString(KEY_WEBSOCKET_REMOTE_LOGS, "").orEmpty()
+
+    // QQ (OneBot 11) 远程控制
+    var qqRemoteControlEnabled by booleanPreference(KEY_QQ_REMOTE_CONTROL_ENABLED)
+    var qqRemoteSendSimMode: Int
+        get() = prefs.getInt(KEY_QQ_REMOTE_SEND_SIM, SimSendMode.DEFAULT).let { mode ->
+            when (mode) {
+                SimSendMode.SIM1, SimSendMode.SIM2, SimSendMode.DEFAULT -> mode
+                else -> SimSendMode.DEFAULT
+            }
+        }
+        set(value) = prefs.edit().putInt(
+            KEY_QQ_REMOTE_SEND_SIM,
+            when (value) {
+                SimSendMode.SIM1, SimSendMode.SIM2, SimSendMode.DEFAULT -> value
+                else -> SimSendMode.DEFAULT
+            },
+        ).apply()
+
+    var qqRemoteConnectionStatus: String
+        get() = prefs.getString(KEY_QQ_REMOTE_STATUS, "").orEmpty()
+        set(value) = prefs.edit().putString(KEY_QQ_REMOTE_STATUS, value).apply()
+
+    var qqRemoteRequireAt: Boolean
+        get() = prefs.getBoolean(KEY_QQ_REMOTE_REQUIRE_AT, true)
+        set(value) = prefs.edit().putBoolean(KEY_QQ_REMOTE_REQUIRE_AT, value).apply()
+
+    fun appendQqRemoteLog(message: String) {
+        val now = java.text.SimpleDateFormat("MM-dd HH:mm:ss", java.util.Locale.getDefault())
+            .format(java.util.Date())
+        val line = "$now $message"
+        val current = prefs.getString(KEY_QQ_REMOTE_LOGS, "").orEmpty().lines().filter(String::isNotBlank)
+        val logs = (listOf(line) + current).take(30).joinToString("\n")
+        prefs.edit().putString(KEY_QQ_REMOTE_LOGS, logs).putString(KEY_QQ_REMOTE_STATUS, line).apply()
+    }
+
+    fun qqRemoteLogs(): String = prefs.getString(KEY_QQ_REMOTE_LOGS, "").orEmpty()
+
     var simOneLabel: String
         get() = prefs.getString(KEY_SIM_ONE_LABEL, "").orEmpty()
         set(value) = prefs.edit().putString(KEY_SIM_ONE_LABEL, value.trim()).apply()
@@ -217,12 +417,123 @@ class MultiForwardConfig(private val context: Context) {
     fun dingTalkWebhook() = getSecret(KEY_DINGTALK_WEBHOOK)
     fun dingTalkSecret() = getSecret(KEY_DINGTALK_SECRET)
 
-    fun saveDingTalkRemoteControl(clientId: String, clientSecret: String) {
+    fun saveDingTalkRemoteControl(clientId: String, clientSecret: String, customPrefix: String = "") {
         saveSecret(KEY_DINGTALK_REMOTE_CLIENT_ID, clientId)
         saveSecret(KEY_DINGTALK_REMOTE_CLIENT_SECRET, clientSecret)
+        prefs.edit().putString(KEY_DINGTALK_REMOTE_CUSTOM_PREFIX, customPrefix.trim()).apply()
     }
     fun dingTalkRemoteClientId() = getSecret(KEY_DINGTALK_REMOTE_CLIENT_ID)
     fun dingTalkRemoteClientSecret() = getSecret(KEY_DINGTALK_REMOTE_CLIENT_SECRET)
+    fun dingTalkRemoteCustomPrefix() = prefs.getString(KEY_DINGTALK_REMOTE_CUSTOM_PREFIX, "").orEmpty()
+
+    fun saveFeishuRemoteControl(appId: String, appSecret: String, customPrefix: String = "") {
+        saveSecret(KEY_FEISHU_REMOTE_APP_ID, appId)
+        saveSecret(KEY_FEISHU_REMOTE_APP_SECRET, appSecret)
+        prefs.edit().putString(KEY_FEISHU_REMOTE_CUSTOM_PREFIX, customPrefix.trim()).apply()
+    }
+    fun feishuRemoteAppId() = getSecret(KEY_FEISHU_REMOTE_APP_ID)
+    fun feishuRemoteAppSecret() = getSecret(KEY_FEISHU_REMOTE_APP_SECRET)
+    fun feishuRemoteCustomPrefix() = prefs.getString(KEY_FEISHU_REMOTE_CUSTOM_PREFIX, "").orEmpty()
+
+    fun saveWeComRemoteControl(
+        corpId: String,
+        agentId: String,
+        secret: String,
+        authorizedUsers: String = "",
+        customPrefix: String = "",
+    ) {
+        saveSecret(KEY_WECOM_REMOTE_CORP_ID, corpId)
+        saveSecret(KEY_WECOM_REMOTE_AGENT_ID, agentId)
+        saveSecret(KEY_WECOM_REMOTE_SECRET, secret)
+        prefs.edit()
+            .putString(KEY_WECOM_REMOTE_AUTH_USERS, authorizedUsers.trim())
+            .putString(KEY_WECOM_REMOTE_CUSTOM_PREFIX, customPrefix.trim())
+            .apply()
+    }
+    fun weComRemoteCorpId() = getSecret(KEY_WECOM_REMOTE_CORP_ID)
+    fun weComRemoteAgentId() = getSecret(KEY_WECOM_REMOTE_AGENT_ID)
+    fun weComRemoteSecret() = getSecret(KEY_WECOM_REMOTE_SECRET)
+    fun weComRemoteAuthorizedUsers() = prefs.getString(KEY_WECOM_REMOTE_AUTH_USERS, "").orEmpty()
+    fun weComRemoteCustomPrefix() = prefs.getString(KEY_WECOM_REMOTE_CUSTOM_PREFIX, "").orEmpty()
+
+    fun saveEmailRemoteControl(
+        host: String,
+        port: Int,
+        user: String,
+        pass: String,
+        authorizedSenders: String = "",
+        security: Int = EMAIL_SECURITY_SSL,
+        customPrefix: String = "",
+    ) {
+        prefs.edit()
+            .putString(KEY_EMAIL_REMOTE_HOST, host.trim())
+            .putInt(KEY_EMAIL_REMOTE_PORT, port)
+            .putString(KEY_EMAIL_REMOTE_AUTH_SENDERS, authorizedSenders.trim())
+            .putInt(KEY_EMAIL_REMOTE_SECURITY, security)
+            .putString(KEY_EMAIL_REMOTE_CUSTOM_PREFIX, customPrefix.trim())
+            .apply()
+        saveSecret(KEY_EMAIL_REMOTE_USER, user)
+        saveSecret(KEY_EMAIL_REMOTE_PASSWORD, pass)
+    }
+    fun emailRemoteHost() = prefs.getString(KEY_EMAIL_REMOTE_HOST, "").orEmpty()
+    fun emailRemotePort() = prefs.getInt(KEY_EMAIL_REMOTE_PORT, 993)
+    fun emailRemoteUser() = getSecret(KEY_EMAIL_REMOTE_USER)
+    fun emailRemotePassword() = getSecret(KEY_EMAIL_REMOTE_PASSWORD)
+    fun emailRemoteAuthorizedSenders() = prefs.getString(KEY_EMAIL_REMOTE_AUTH_SENDERS, "").orEmpty()
+    fun emailRemoteCustomPrefix() = prefs.getString(KEY_EMAIL_REMOTE_CUSTOM_PREFIX, "").orEmpty()
+
+    fun saveTelegramRemoteControl(
+        botToken: String,
+        chatId: String,
+        customHost: String = "",
+        authorizedUsers: String = "",
+        customPrefix: String = "",
+    ) {
+        saveSecret(KEY_TELEGRAM_REMOTE_BOT_TOKEN, botToken)
+        saveSecret(KEY_TELEGRAM_REMOTE_CHAT_ID, chatId)
+        prefs.edit()
+            .putString(KEY_TELEGRAM_REMOTE_CUSTOM_HOST, customHost.trim())
+            .putString(KEY_TELEGRAM_REMOTE_AUTH_USERS, authorizedUsers.trim())
+            .putString(KEY_TELEGRAM_REMOTE_CUSTOM_PREFIX, customPrefix.trim())
+            .apply()
+    }
+    fun telegramRemoteBotToken() = getSecret(KEY_TELEGRAM_REMOTE_BOT_TOKEN)
+    fun telegramRemoteChatId() = getSecret(KEY_TELEGRAM_REMOTE_CHAT_ID)
+    fun telegramRemoteCustomHost() = prefs.getString(KEY_TELEGRAM_REMOTE_CUSTOM_HOST, "").orEmpty()
+    fun telegramRemoteAuthorizedUsers() = prefs.getString(KEY_TELEGRAM_REMOTE_AUTH_USERS, "").orEmpty()
+    fun telegramRemoteCustomPrefix() = prefs.getString(KEY_TELEGRAM_REMOTE_CUSTOM_PREFIX, "").orEmpty()
+
+    fun saveWebSocketRemoteControl(serverUrl: String, token: String = "", customPrefix: String = "") {
+        saveSecret(KEY_WEBSOCKET_REMOTE_URL, serverUrl)
+        saveSecret(KEY_WEBSOCKET_REMOTE_TOKEN, token)
+        prefs.edit().putString(KEY_WEBSOCKET_REMOTE_CUSTOM_PREFIX, customPrefix.trim()).apply()
+    }
+    fun websocketRemoteUrl() = getSecret(KEY_WEBSOCKET_REMOTE_URL).ifBlank { websocketUrl() }
+    fun websocketRemoteToken() = getSecret(KEY_WEBSOCKET_REMOTE_TOKEN).ifBlank { websocketToken() }
+    fun websocketRemoteCustomPrefix() = prefs.getString(KEY_WEBSOCKET_REMOTE_CUSTOM_PREFIX, "").orEmpty()
+
+    fun saveQqRemoteControl(
+        wsUrl: String,
+        token: String = "",
+        authUsers: String = "",
+        authGroups: String = "",
+        requireAt: Boolean = true,
+        customPrefix: String = "",
+    ) {
+        saveSecret(KEY_QQ_REMOTE_WS_URL, wsUrl)
+        saveSecret(KEY_QQ_REMOTE_TOKEN, token)
+        prefs.edit()
+            .putString(KEY_QQ_REMOTE_AUTH_USERS, authUsers.trim())
+            .putString(KEY_QQ_REMOTE_AUTH_GROUPS, authGroups.trim())
+            .putBoolean(KEY_QQ_REMOTE_REQUIRE_AT, requireAt)
+            .putString(KEY_QQ_REMOTE_CUSTOM_PREFIX, customPrefix.trim())
+            .apply()
+    }
+    fun qqRemoteWsUrl() = getSecret(KEY_QQ_REMOTE_WS_URL)
+    fun qqRemoteToken() = getSecret(KEY_QQ_REMOTE_TOKEN)
+    fun qqRemoteAuthorizedUsers() = prefs.getString(KEY_QQ_REMOTE_AUTH_USERS, "").orEmpty()
+    fun qqRemoteAuthorizedGroups() = prefs.getString(KEY_QQ_REMOTE_AUTH_GROUPS, "").orEmpty()
+    fun qqRemoteCustomPrefix() = prefs.getString(KEY_QQ_REMOTE_CUSTOM_PREFIX, "").orEmpty()
 
     // 9. Bark
     fun saveBark(serverUrl: String, deviceKey: String) {
@@ -475,9 +786,69 @@ class MultiForwardConfig(private val context: Context) {
         private const val KEY_DINGTALK_REMOTE_CONTROL_ENABLED = "dingtalk_remote_control_enabled"
         private const val KEY_DINGTALK_REMOTE_CLIENT_ID = "dingtalk_remote_client_id"
         private const val KEY_DINGTALK_REMOTE_CLIENT_SECRET = "dingtalk_remote_client_secret"
+        private const val KEY_DINGTALK_REMOTE_CUSTOM_PREFIX = "dingtalk_remote_custom_prefix"
         private const val KEY_DINGTALK_REMOTE_SEND_SIM = "dingtalk_remote_send_sim"
         private const val KEY_DINGTALK_REMOTE_STATUS = "dingtalk_remote_status"
         private const val KEY_DINGTALK_REMOTE_LOGS = "dingtalk_remote_logs"
+
+        private const val KEY_FEISHU_REMOTE_CONTROL_ENABLED = "feishu_remote_control_enabled"
+        private const val KEY_FEISHU_REMOTE_APP_ID = "feishu_remote_app_id"
+        private const val KEY_FEISHU_REMOTE_APP_SECRET = "feishu_remote_app_secret"
+        private const val KEY_FEISHU_REMOTE_CUSTOM_PREFIX = "feishu_remote_custom_prefix"
+        private const val KEY_FEISHU_REMOTE_SEND_SIM = "feishu_remote_send_sim"
+        private const val KEY_FEISHU_REMOTE_STATUS = "feishu_remote_status"
+        private const val KEY_FEISHU_REMOTE_LOGS = "feishu_remote_logs"
+
+        private const val KEY_WECOM_REMOTE_CONTROL_ENABLED = "wecom_remote_control_enabled"
+        private const val KEY_WECOM_REMOTE_CORP_ID = "wecom_remote_corp_id"
+        private const val KEY_WECOM_REMOTE_AGENT_ID = "wecom_remote_agent_id"
+        private const val KEY_WECOM_REMOTE_SECRET = "wecom_remote_secret"
+        private const val KEY_WECOM_REMOTE_AUTH_USERS = "wecom_remote_auth_users"
+        private const val KEY_WECOM_REMOTE_CUSTOM_PREFIX = "wecom_remote_custom_prefix"
+        private const val KEY_WECOM_REMOTE_SEND_SIM = "wecom_remote_send_sim"
+        private const val KEY_WECOM_REMOTE_STATUS = "wecom_remote_status"
+        private const val KEY_WECOM_REMOTE_LOGS = "wecom_remote_logs"
+
+        private const val KEY_EMAIL_REMOTE_CONTROL_ENABLED = "email_remote_control_enabled"
+        private const val KEY_EMAIL_REMOTE_HOST = "email_remote_host"
+        private const val KEY_EMAIL_REMOTE_PORT = "email_remote_port"
+        private const val KEY_EMAIL_REMOTE_USER = "email_remote_user"
+        private const val KEY_EMAIL_REMOTE_PASSWORD = "email_remote_password"
+        private const val KEY_EMAIL_REMOTE_AUTH_SENDERS = "email_remote_auth_senders"
+        private const val KEY_EMAIL_REMOTE_SECURITY = "email_remote_security"
+        private const val KEY_EMAIL_REMOTE_CUSTOM_PREFIX = "email_remote_custom_prefix"
+        private const val KEY_EMAIL_REMOTE_SEND_SIM = "email_remote_send_sim"
+        private const val KEY_EMAIL_REMOTE_STATUS = "email_remote_status"
+        private const val KEY_EMAIL_REMOTE_LOGS = "email_remote_logs"
+
+        private const val KEY_TELEGRAM_REMOTE_CONTROL_ENABLED = "telegram_remote_control_enabled"
+        private const val KEY_TELEGRAM_REMOTE_BOT_TOKEN = "telegram_remote_bot_token"
+        private const val KEY_TELEGRAM_REMOTE_CHAT_ID = "telegram_remote_chat_id"
+        private const val KEY_TELEGRAM_REMOTE_CUSTOM_HOST = "telegram_remote_custom_host"
+        private const val KEY_TELEGRAM_REMOTE_AUTH_USERS = "telegram_remote_auth_users"
+        private const val KEY_TELEGRAM_REMOTE_CUSTOM_PREFIX = "telegram_remote_custom_prefix"
+        private const val KEY_TELEGRAM_REMOTE_SEND_SIM = "telegram_remote_send_sim"
+        private const val KEY_TELEGRAM_REMOTE_STATUS = "telegram_remote_status"
+        private const val KEY_TELEGRAM_REMOTE_LOGS = "telegram_remote_logs"
+
+        private const val KEY_WEBSOCKET_REMOTE_CONTROL_ENABLED = "websocket_remote_control_enabled"
+        private const val KEY_WEBSOCKET_REMOTE_URL = "websocket_remote_url"
+        private const val KEY_WEBSOCKET_REMOTE_TOKEN = "websocket_remote_token"
+        private const val KEY_WEBSOCKET_REMOTE_CUSTOM_PREFIX = "websocket_remote_custom_prefix"
+        private const val KEY_WEBSOCKET_REMOTE_SEND_SIM = "websocket_remote_send_sim"
+        private const val KEY_WEBSOCKET_REMOTE_STATUS = "websocket_remote_status"
+        private const val KEY_WEBSOCKET_REMOTE_LOGS = "websocket_remote_logs"
+
+        private const val KEY_QQ_REMOTE_CONTROL_ENABLED = "qq_remote_control_enabled"
+        private const val KEY_QQ_REMOTE_WS_URL = "qq_remote_ws_url"
+        private const val KEY_QQ_REMOTE_TOKEN = "qq_remote_token"
+        private const val KEY_QQ_REMOTE_AUTH_USERS = "qq_remote_auth_users"
+        private const val KEY_QQ_REMOTE_AUTH_GROUPS = "qq_remote_auth_groups"
+        private const val KEY_QQ_REMOTE_REQUIRE_AT = "qq_remote_require_at"
+        private const val KEY_QQ_REMOTE_CUSTOM_PREFIX = "qq_remote_custom_prefix"
+        private const val KEY_QQ_REMOTE_SEND_SIM = "qq_remote_send_sim"
+        private const val KEY_QQ_REMOTE_STATUS = "qq_remote_status"
+        private const val KEY_QQ_REMOTE_LOGS = "qq_remote_logs"
         private const val KEY_LAST_STATUS = "last_status"
         private const val KEY_SIM_ONE_LABEL = "sim_one_label"
         private const val KEY_SIM_TWO_LABEL = "sim_two_label"
@@ -500,11 +871,11 @@ class MultiForwardConfig(private val context: Context) {
     }
 }
 
-/** Alias for [SimSendResolver] modes used in DingTalk remote settings UI. */
+/** SIM send modes used in Remote Settings UI and command dispatch. */
 object SimSendMode {
-    const val DEFAULT = SimSendResolver.MODE_DEFAULT
-    const val SIM1 = SimSendResolver.MODE_SIM1
-    const val SIM2 = SimSendResolver.MODE_SIM2
+    const val DEFAULT = 0
+    const val SIM1 = 1
+    const val SIM2 = 2
 }
 
 private object ForwardingCipher {

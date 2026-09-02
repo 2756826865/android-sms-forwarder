@@ -187,6 +187,47 @@
     <string name="dingtalk_remote_save">保存并连接</string>
     <string name="dingtalk_remote_section_credentials">应用凭证</string>
     <string name="dingtalk_remote_section_status">连接状态</string>
+
+    <string name="feishu_remote_title">飞书远程指令</string>
+    <string name="feishu_remote_enable">启用飞书远程指令</string>
+    <string name="feishu_remote_app_id">App ID</string>
+    <string name="feishu_remote_app_secret">App Secret</string>
+
+    <string name="wecom_remote_title">企业微信远程指令</string>
+    <string name="wecom_remote_enable">启用企业微信远程指令</string>
+    <string name="wecom_remote_corp_id">Corp ID</string>
+    <string name="wecom_remote_agent_id">Agent ID</string>
+    <string name="wecom_remote_secret">Secret</string>
+    <string name="wecom_remote_auth_users">授权成员 UserID</string>
+
+    <string name="email_remote_title">邮箱远程指令</string>
+    <string name="email_remote_enable">启用邮箱远程指令</string>
+    <string name="email_remote_host">IMAP 服务器</string>
+    <string name="email_remote_port">端口 (默认993)</string>
+    <string name="email_remote_user">邮箱账号</string>
+    <string name="email_remote_password">密码 / 授权码</string>
+    <string name="email_remote_auth_senders">授权发件人邮箱</string>
+    <string name="email_remote_security">加密方式</string>
+
+    <string name="telegram_remote_title">Telegram 远程指令</string>
+    <string name="telegram_remote_enable">启用 Telegram 远程指令</string>
+    <string name="telegram_remote_bot_token">Bot Token</string>
+    <string name="telegram_remote_chat_id">默认 Chat ID</string>
+    <string name="telegram_remote_custom_host">自定义 API 反代地址 (选填)</string>
+    <string name="telegram_remote_auth_users">授权 ChatID / UserID</string>
+
+    <string name="websocket_remote_title">WebSocket 远程指令</string>
+    <string name="websocket_remote_enable">启用 WebSocket 远程指令</string>
+    <string name="websocket_remote_url">WebSocket URL (ws:// 或 wss://)</string>
+    <string name="websocket_remote_token">认证 Token (选填)</string>
+
+    <string name="qq_remote_title">QQ (OneBot 11) 远程指令</string>
+    <string name="qq_remote_enable">启用 QQ 远程指令</string>
+    <string name="qq_remote_ws_url">OneBot 11 WebSocket URL</string>
+    <string name="qq_remote_token">Access Token (选填)</string>
+    <string name="qq_remote_auth_users">授权 QQ 号</string>
+    <string name="qq_remote_auth_groups">授权 QQ 群号</string>
+    <string name="qq_remote_require_at">群聊中必须 @机器人 才执行</string>
     <string name="remote_sms_section_command">指令与安全</string>
     <string name="remote_sms_section_receipt">发送回执转发</string>
     <string name="remote_sms_section_log">执行日志</string>

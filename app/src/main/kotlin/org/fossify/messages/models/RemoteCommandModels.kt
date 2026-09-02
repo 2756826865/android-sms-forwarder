@@ -26,6 +26,12 @@ enum class RemoteCommandState {
 object RemoteCommandSourceType {
     const val SMS = "SMS"
     const val DINGTALK = "DINGTALK"
+    const val FEISHU = "FEISHU"
+    const val WECOM = "WECOM"
+    const val EMAIL = "EMAIL"
+    const val TELEGRAM = "TELEGRAM"
+    const val WEBSOCKET = "WEBSOCKET"
+    const val QQ = "QQ"
     const val HTTP_API = "HTTP_API"
 }
 

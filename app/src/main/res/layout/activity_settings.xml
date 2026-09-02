@@ -285,6 +285,13 @@
                 android:orientation="vertical">
 
                 <TextView
+                    android:id="@+id/settings_backup_holder"
+                    style="@style/SmsSettingsRow"
+                    android:text="配置备份与恢复" />
+
+                <View style="@style/SmsSettingsDivider" />
+
+                <TextView
                     android:id="@+id/settings_about_holder"
                     style="@style/SmsSettingsRow"
                     android:text="@string/about" />

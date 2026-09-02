@@ -16,6 +16,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 class DingTalkStreamClient(
     private val clientId: String,
     private val clientSecret: String,
+    private val customPrefix: String = "",
     private val onCommand: (DingTalkRemoteCommand) -> Unit,
     private val onStatus: (String) -> Unit,
 ) {
@@ -144,7 +145,7 @@ class DingTalkStreamClient(
                 val commandMessageId = messageId
                     .ifBlank { data.optString("msgId") }
                     .ifBlank { data.optString("messageId") }
-                RemoteSmsCommand.parse(content)?.let { command ->
+                RemoteSmsCommand.parse(content, customPrefix)?.let { command ->
                     if (commandMessageId.isBlank()) {
                         onStatus("忽略缺少 messageId 的钉钉远程指令")
                     } else {

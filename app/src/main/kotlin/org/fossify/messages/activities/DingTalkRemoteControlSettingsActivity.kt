@@ -61,6 +61,7 @@ class DingTalkRemoteControlSettingsActivity : SimpleActivity() {
         dingtalkRemoteEnabled.isChecked = config.dingTalkRemoteControlEnabled
         dingtalkRemoteClientId.setText(config.dingTalkRemoteClientId())
         dingtalkRemoteClientSecret.setText(config.dingTalkRemoteClientSecret())
+        dingtalkRemoteCustomPrefix.setText(config.dingTalkRemoteCustomPrefix())
         dingtalkRemoteSendSim.setSelection(
             when (config.dingTalkRemoteSendSimMode) {
                 SimSendMode.SIM1 -> 1
@@ -75,13 +76,14 @@ class DingTalkRemoteControlSettingsActivity : SimpleActivity() {
     private fun saveConfig(): Boolean {
         val clientId = binding.dingtalkRemoteClientId.value.trim()
         val clientSecret = binding.dingtalkRemoteClientSecret.value.trim()
+        val customPrefix = binding.dingtalkRemoteCustomPrefix.value.trim()
         val enabled = binding.dingtalkRemoteEnabled.isChecked
         if (enabled && (clientId.isBlank() || clientSecret.isBlank())) {
             toast("请填写 Client ID 和 Client Secret")
             return false
         }
         config.dingTalkRemoteControlEnabled = enabled
-        config.saveDingTalkRemoteControl(clientId, clientSecret)
+        config.saveDingTalkRemoteControl(clientId, clientSecret, customPrefix)
         config.dingTalkRemoteSendSimMode = when (binding.dingtalkRemoteSendSim.selectedItemPosition) {
             1 -> SimSendMode.SIM1
             2 -> SimSendMode.SIM2
