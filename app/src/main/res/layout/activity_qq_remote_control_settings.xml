@@ -1,0 +1,195 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/miui_page_background">
+
+    <org.fossify.commons.views.MyAppBarLayout
+        android:id="@+id/qq_remote_appbar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/miui_page_background">
+
+        <com.google.android.material.appbar.MaterialToolbar
+            android:id="@+id/qq_remote_toolbar"
+            android:layout_width="match_parent"
+            android:layout_height="?attr/actionBarSize"
+            android:background="@color/miui_page_background"
+            app:navigationIconTint="@color/miui_primary_text"
+            app:title="@string/qq_remote_title"
+            app:titleTextColor="@color/miui_primary_text" />
+    </org.fossify.commons.views.MyAppBarLayout>
+
+    <androidx.core.widget.NestedScrollView
+        android:id="@+id/qq_remote_scrollview"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <com.google.android.material.switchmaterial.SwitchMaterial
+                android:id="@+id/qq_remote_enabled"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/qq_remote_enable"
+                android:textColor="@color/miui_primary_text" />
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:hint="@string/qq_remote_ws_url"
+                app:helperText="如 ws://192.168.1.100:3001 (OneBot 11 正向/反向 WebSocket)"
+                app:helperTextTextColor="@color/miui_secondary_text">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/qq_remote_ws_url"
+                    style="@style/SmsChannelInputText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="textUri"
+                    android:maxLines="1" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:hint="@string/qq_remote_token"
+                app:endIconMode="password_toggle"
+                app:helperText="@string/dingtalk_remote_secret_hint"
+                app:helperTextTextColor="@color/miui_secondary_text">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/qq_remote_token"
+                    style="@style/SmsChannelInputText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="textPassword"
+                    android:maxLines="1" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:hint="@string/qq_remote_auth_users"
+                app:helperText="授权的 QQ 号，换行或逗号分隔，留空不限制"
+                app:helperTextTextColor="@color/miui_secondary_text">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/qq_remote_auth_users"
+                    style="@style/SmsChannelInputText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="text"
+                    android:maxLines="2" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:hint="@string/qq_remote_auth_groups"
+                app:helperText="授权的 QQ 群号，换行或逗号分隔，留空不限制"
+                app:helperTextTextColor="@color/miui_secondary_text">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/qq_remote_auth_groups"
+                    style="@style/SmsChannelInputText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="text"
+                    android:maxLines="2" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:hint="自定义指令前缀 (选填，留空默认 /发信)"
+                app:helperText="如自定义为 /发短信 或 #发信"
+                app:helperTextTextColor="@color/miui_secondary_text">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/qq_remote_custom_prefix"
+                    style="@style/SmsChannelInputText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="text"
+                    android:maxLines="1" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.switchmaterial.SwitchMaterial
+                android:id="@+id/qq_remote_require_at"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/qq_remote_require_at"
+                android:textColor="@color/miui_primary_text" />
+
+            <TextView
+                style="@style/SmsChannelFieldLabel"
+                android:text="@string/dingtalk_remote_send_sim" />
+
+            <Spinner
+                android:id="@+id/qq_remote_send_sim"
+                android:layout_width="match_parent"
+                android:layout_height="52dp"
+                android:layout_marginTop="4dp"
+                android:background="@drawable/email_security_spinner_background"
+                android:popupBackground="@color/miui_card_background"
+                android:paddingHorizontal="12dp" />
+
+            <TextView
+                style="@style/SmsChannelHelperText"
+                android:layout_marginTop="8dp"
+                android:text="@string/dingtalk_remote_format_hint" />
+
+            <TextView
+                style="@style/SmsChannelFieldLabel"
+                android:text="@string/dingtalk_remote_examples_title" />
+
+            <TextView
+                style="@style/SmsSettingsLogBox"
+                android:layout_marginTop="6dp"
+                android:text="@string/dingtalk_remote_examples_body" />
+
+            <TextView
+                style="@style/SmsChannelFieldLabel"
+                android:text="@string/dingtalk_remote_section_status" />
+
+            <TextView
+                android:id="@+id/qq_remote_status"
+                style="@style/SmsSettingsLogBox"
+                android:layout_marginTop="6dp" />
+
+            <TextView
+                style="@style/SmsChannelFieldLabel"
+                android:text="@string/remote_sms_section_log" />
+
+            <TextView
+                android:id="@+id/qq_remote_logs"
+                style="@style/SmsSettingsLogBox"
+                android:layout_marginTop="6dp" />
+
+            <Button
+                android:id="@+id/qq_remote_test"
+                style="@style/SmsChannelSecondaryButton"
+                android:layout_marginTop="16dp"
+                android:text="@string/dingtalk_remote_test" />
+
+            <Button
+                android:id="@+id/qq_remote_save"
+                style="@style/SmsChannelPrimaryButton"
+                android:layout_marginTop="8dp"
+                android:text="@string/dingtalk_remote_save" />
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

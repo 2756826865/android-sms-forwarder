@@ -12,3 +12,6 @@ sms-forwarder-release.jks
 fastlane/fastlane.json
 fastlane/report.xml
 .kotlin/
+*.bak
+logcat*.txt
+*.log

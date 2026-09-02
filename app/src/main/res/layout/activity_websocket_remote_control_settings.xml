@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/miui_page_background">
+
+    <org.fossify.commons.views.MyAppBarLayout
+        android:id="@+id/ws_remote_appbar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/miui_page_background">
+
+        <com.google.android.material.appbar.MaterialToolbar
+            android:id="@+id/ws_remote_toolbar"
+            android:layout_width="match_parent"
+            android:layout_height="?attr/actionBarSize"
+            android:background="@color/miui_page_background"
+            app:navigationIconTint="@color/miui_primary_text"
+            app:title="@string/websocket_remote_title"
+            app:titleTextColor="@color/miui_primary_text" />
+    </org.fossify.commons.views.MyAppBarLayout>
+
+    <androidx.core.widget.NestedScrollView
+        android:id="@+id/ws_remote_scrollview"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <com.google.android.material.switchmaterial.SwitchMaterial
+                android:id="@+id/ws_remote_enabled"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/websocket_remote_enable"
+                android:textColor="@color/miui_primary_text" />
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:hint="@string/websocket_remote_url">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/ws_remote_url"
+                    style="@style/SmsChannelInputText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="textUri"
+                    android:maxLines="1" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:hint="@string/websocket_remote_token"
+                app:endIconMode="password_toggle"
+                app:helperText="@string/dingtalk_remote_secret_hint"
+                app:helperTextTextColor="@color/miui_secondary_text">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/ws_remote_token"
+                    style="@style/SmsChannelInputText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="textPassword"
+                    android:maxLines="1" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:hint="自定义指令前缀 (选填，留空默认 /发信)"
+                app:helperText="如自定义为 /send 或 #发信"
+                app:helperTextTextColor="@color/miui_secondary_text">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/ws_remote_custom_prefix"
+                    style="@style/SmsChannelInputText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="text"
+                    android:maxLines="1" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <TextView
+                style="@style/SmsChannelFieldLabel"
+                android:text="@string/dingtalk_remote_send_sim" />
+
+            <Spinner
+                android:id="@+id/ws_remote_send_sim"
+                android:layout_width="match_parent"
+                android:layout_height="52dp"
+                android:layout_marginTop="4dp"
+                android:background="@drawable/email_security_spinner_background"
+                android:popupBackground="@color/miui_card_background"
+                android:paddingHorizontal="12dp" />
+
+            <TextView
+                style="@style/SmsChannelHelperText"
+                android:layout_marginTop="8dp"
+                android:text="服务器下发 JSON 载荷：{&quot;action&quot;:&quot;send_sms&quot;,&quot;commandId&quot;:&quot;101&quot;,&quot;target&quot;:&quot;13800138000&quot;,&quot;content&quot;:&quot;短信内容&quot;,&quot;simSlot&quot;:&quot;SIM1&quot;}，发信结果及送达回执通过同一连接主动回传。" />
+
+            <TextView
+                style="@style/SmsChannelFieldLabel"
+                android:text="@string/dingtalk_remote_section_status" />
+
+            <TextView
+                android:id="@+id/ws_remote_status"
+                style="@style/SmsSettingsLogBox"
+                android:layout_marginTop="6dp" />
+
+            <TextView
+                style="@style/SmsChannelFieldLabel"
+                android:text="@string/remote_sms_section_log" />
+
+            <TextView
+                android:id="@+id/ws_remote_logs"
+                style="@style/SmsSettingsLogBox"
+                android:layout_marginTop="6dp" />
+
+            <Button
+                android:id="@+id/ws_remote_test"
+                style="@style/SmsChannelSecondaryButton"
+                android:layout_marginTop="16dp"
+                android:text="@string/dingtalk_remote_test" />
+
+            <Button
+                android:id="@+id/ws_remote_save"
+                style="@style/SmsChannelPrimaryButton"
+                android:layout_marginTop="8dp"
+                android:text="@string/dingtalk_remote_save" />
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+</androidx.coordinatorlayout.widget.CoordinatorLayout>
