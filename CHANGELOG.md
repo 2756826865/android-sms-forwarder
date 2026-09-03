@@ -4,15 +4,91 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.1.5] - 2026-09-02
+## [1.1.5] - 2026-09-03
 
 ### 🌟 核心新特性与重大升级 (Major Features)
-- **📡 远程控制渠道矩阵重磅扩展至 8 大渠道 (Telegram / WebSocket / QQ OneBot 11)**：
-  - **✈️ Telegram Bot 远程控制**：基于官方 Bot API 的 `getUpdates` 长轮询架构，支持国内自定义 API 反代 Host（如 Cloudflare Workers），支持 ChatID / UserID 白名单与 `message_id` 去重，发信结果及运营商送达回执（DELIVERED）原路直接回复到 Telegram 原对话中。
+
+- **🔀 多渠道多实例池与靶向规则分流体系 (Multi-Instance Channel Hub & Targeted Routing)**：
+  - 彻底打破单渠道仅能配置单个 Webhook/Bot 的限制，支持用户创建任意数量的独立渠道实例（如：研发企微群、运维钉钉群、告警飞书群等）；
+  - **靶向规则定向分流**：转发规则升级支持 `targetInstanceIds` 属性，支持根据发信人、关键词将不同业务短信精准分流推送到指定群组/机器人，实现企业级多群多租户分流。
+
+- **⚡ 免 Root 验证码自动填充引擎 (Accessibility Autofill Engine)**：
+  - 基于 Android 官方无障碍辅助服务（AccessibilityService）架构，无需 Root / Xposed 即可实现前台登录或验证界面的全自动验证码模拟输入；
+  - **智能特征引擎**：集成 `VerificationCodeExtractor`，精准匹配银行、运营商（包括特殊表达如 `(验证密码)951332`、`【123456】` 等）的 4~8 位数字/字母验证码；
+  - **自动提交与剪贴板兜底**：支持配置 500ms 延时自动点击「登录/提交/确定」按钮；对金融加密软键盘等特殊场景自动复制到剪贴板。
+
+- **📋 任务栏通知一键快捷「复制」验证码 (Notification Quick Action)**：
+  - 收到验证码类短信时，系统通知栏卡片最左侧首选位置智能渲染 **`[ 复制 ]`** 快捷按钮；
+  - 点击后秒级将验证码写入系统剪贴板、弹出 Toast 确认并优雅消除通知。
+
+- **🏝️ 屏幕顶部 5 秒悬浮验证码胶囊 (Floating OTP Pill Overlay)**：
+  - 基于 Android 原生 `WindowManager` 动态绘制深色毛玻璃轻量小胶囊（`[ 验证码 951332 · 点击复制 ]`）；
+  - 收到短信后屏幕顶部即时弹出，支持单点一键秒级复制，无操作 5 秒后自动缩放淡出消失；
+  - 在「验证码自动填充」设置中提供独立控制开关及悬浮窗权限一键引导。
+
+- **💓 定时心跳与系统状态保活上报 (Scheduled Device Health Heartbeat)**：
+  - 新增 `HeartbeatConfig` 与 `HeartbeatWorker`（支持 1~24 小时自定义周期）；
+  - 定期自动抓取备用机电池电量/充电状态、Wi-Fi/移动数据网络连接、双卡卡槽状态及系统开机时长，秒级推送到所有启用的转发渠道，让用户随时掌握无人值守备用机存活状态。
+
+- **📞 未接来电与通话状态实时转发 (Missed Call & Call State Forwarding)**：
+  - 新增 `CallStateReceiver` 纯本地电话状态广播监听器与 `CallForwardingSettingsActivity` 设置界面；
+  - 备用机产生未接来电（或通话结束）时，自动抓取来电人、通讯录姓名、卡槽（SIM1/SIM2）、响铃时长，秒级推送至已配好的全部转发渠道。
+
+- **🎭 转发内容「隐私数据正则脱敏/掩码」 (Privacy Data Masking)**：
+  - 新增 `PrivacyDataMasker` 纯本地脱敏引擎与全局/规则独立控制开关；
+  - 自动对转发消息中的手机号 (`138****1234`)、身份证号 (`110101********1234`)、银行卡号 (`6222 **** **** 1234`) 进行精准正则掩码，杜绝群聊推送信安泄露。
+
+- **⏰ 转发规则生效时段与时间窗口控制 (Time-Window & Active Days Rule Control)**：
+  - `ForwardingRule` 实体升级支持 `timeStart`、`timeEnd` 与 `activeDays`（工作日/周末/自定义）；
+  - 规则匹配引擎自动校验系统时间与星期，支持“工作日 09:00~18:00 转发至企业微信，其余时段静默或转推 Bark”等精细化分流控制。
+
+- **📱 双卡（SIM 1 / SIM 2）自定义别名全链路覆盖 (Custom SIM Labels Full-Coverage)**：
+  - 支持用户为卡 1 / 卡 2 配置个性化别名（如：`卡1-工作主卡`、`卡2-副卡流量`）；
+  - 全链路覆盖：短信多渠道转发、消息模板变量 `{{SIM_SLOT}}`、未接来电推送均自动展示自定义卡槽名称。
+
+- **📡 远程控制渠道矩阵重磅扩展至 8 大全渠道 (Remote Command Hub)**：
+  - **✈️ Telegram Bot 远程控制**：基于官方 Bot API 的 `getUpdates` 长轮询架构，支持国内自定义 API 反代 Host，支持 ChatID / UserID 白名单与 `message_id` 去重，发信结果原路直接回复。
   - **🔌 WebSocket 全双工远程控制**：建立与用户自建服务端/网关的长连接，支持 Auth Token 鉴权，支持服务器主动下发 `send_sms` 指令载荷（指定卡槽、目标号码、内容），发信结果与回执通过同一连接实时主动上推。
-  - **🐧 QQ 远程控制 (OneBot 11)**：支持对接 OneBot 11 / NapCat / LLOneBot 标准 WebSocket 协议，监听 QQ 私聊与群聊消息；支持 QQ 号白名单、群号白名单与「群聊必须 @机器人」触发开关，发信结果原路回复至对应私聊或群聊。
-- **🔄 全渠道闭环回执直连上报**：
-  - 远程指令下发发信完成后，除推送至全局已启用的转发渠道外，特设**原路直接回执响应**（Telegram / WebSocket / QQ），实现指令发起方秒级接收发送状态与送达结果。
+  - **🐧 QQ 远程控制 (OneBot 11)**：支持对接 OneBot 11 / NapCat / LLOneBot 标准 WebSocket 协议，监听 QQ 私聊与群聊消息；支持 QQ 号/群号白名单与「群聊必须 @机器人」触发开关，发信结果原路回复。
+  - **🔄 全渠道闭环回执直连上报**：远程指令下发发信完成后，除推送至全局已启用的转发渠道外，特设**原路直接回执响应**（Telegram / WebSocket / QQ），实现指令发起方秒级接收发送状态与送达结果。
+
+---
+
+### 🛡️ 底层架构与稳定性深度加固 (Deep Architectural Hardening)
+
+- **⚡ 内存环形日志 O(N) 遍历降维至 O(1) (`RingBufferLogManager.kt`)**：
+  - 原 `ConcurrentLinkedQueue.size` 每次打日志全量遍历 1000 个节点，产生不可忽视的 CPU/电池损耗；升级为 `AtomicInteger` 无锁原子计数器，将容量淘汰开销彻底降为 **$O(1)$**，大幅提升后台常驻省电性能。
+- **🛡️ AndroidKeyStore 硬件加密密钥自动故障自愈 (`MultiForwardConfig.kt`)**：
+  - 针对 Android 系统升级或修改锁屏密码可能导致 KeyStore 密钥永久失效的隐患，增加异常捕获与 `deleteEntry` 自动清理重建机制，杜绝凭据加解密模块陷入永久瘫痪。
+- **📱 未接来电广播 `goAsync` 与进程被杀状态持久化 (`CallStateReceiver.kt`)**：
+  - 采用 `goAsync()` 将多渠道入队从广播主线程剥离至 IO 协程并发执行；状态机改用 SharedPreferences 暂态持久化，彻底解决响铃期间备用机进程被杀导致状态丢失的漏洞。
+- **🚀 转发历史存储全面异步化 (`ForwardingHistoryStore.kt`)**：
+  - 将所有的同步阻塞式 `.commit()` 全量升级为异步 `.apply()`，彻底杜绝多通道并发转发时触发 BroadcastReceiver / UI 主线程 ANR 卡死的风险。
+- **📦 WorkManager 10KB 载荷预算安全截断 (`MultiChannelForwardWorker.kt`)**：
+  - 针对极端超长短信/彩信，在序列化入队前设置 4000 字符安全防御截断，彻底消除超过 Android WorkManager 10KB Data 限制引发崩溃的风险。
+- **🔋 低电量阈值下调漏提醒修复 (`LowBatterySettingsActivity.kt`)**：
+  - 用户滑动条调低阈值时自动重置 `lowBatteryLastNotifiedLevel = -1`，修复由此导致的低阈值不触发提醒 Bug。
+- **🔍 异常与越界防御全面固化**：
+  - 修复 `Context.kt` 会话索引 `.firstOrNull()` 安全防线，避免并发删除时的潜在越界；
+  - 修复 `NumberFormatException` 解析风险，全量使用 `toLongOrNull() ?: 0L` 与 `toIntOrNull() ?: 0`；
+  - 修复 `FloatingCodePillManager` 误调 `removeCallbacksAndMessages(null)` 隐患，改为只移除自身 Runnable。
+- **📱 Android 12~15+ 系统合规加固**：
+  - 为 `TransactionService` 显式标明 `android:exported="false"`，规范前台服务与广播权限声明。
+
+---
+
+### 🐛 社区真实反馈与特定机型专项排查修复 (Community Feedback Fixes)
+
+- **📧 邮箱远程指令：RFC 2047 MIME 解码与 `<...>` 纯净邮箱正则提取 (`EmailRemoteCommandPoller.kt`)**：
+  - 彻底解决 QQ 邮箱等邮件服务器返回带 MIME 编码的 `From` 头（形如 `["=?utf-8?B?...?=" <user@qq.com>]`）时被系统误判为“未授权发件人”的问题；
+  - 增加主题与正文的 Base64 / Quoted-Printable 自动解码，让邮件发送的远程指令 100% 准确被识别。
+- **🔌 钉钉 Stream 远程控制：增加 TCP/WebSocket Ping-Pong 心跳保活与智能退避重连 (`DingTalkStreamClient.kt`)**：
+  - 注入 `20s` 原生心跳保活帧，防止被基站与路由器 NAT 超时掐断；
+  - 针对 `Software caused connection abort` 增加智能排障指引日志，引导用户在钉钉开发者后台勾选 **【Stream 模式】** 并排查多端重复登录。
+- **💬 企业微信远程控制：去重降噪与提示完善 (`WeComRemoteControlService.kt`)**：
+  - 消除每分钟重复打印守护日志刷屏现象，明确提示企业微信接收指令需配置回调服务器，推荐免公网全双工场景优先使用钉钉/飞书 Stream 或 Telegram。
+- **🚨 ColorOS / HyperOS / OriginOS 后台发信 5 秒倒计时弹窗拦截排查指引 (`DeviceCompatHelper.kt`)**：
+  - 补充针对 OPPO / 小米 / vivo 系统自带「恶意扣费保护 / 后台发送短信拦截」的自检方案（建议设为默认短信应用，或在系统权限中将「发送短信」设为「始终允许」）。
 
 ---
 
@@ -427,3 +503,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [1.1.0]: https://github.com/FossifyOrg/Messages/compare/1.0.1...1.1.0
 [1.0.1]: https://github.com/FossifyOrg/Messages/compare/1.0.0...1.0.1
 [1.0.0]: https://github.com/FossifyOrg/Messages/releases/tag/1.0.0
+

@@ -1229,7 +1229,7 @@ fun Context.updateLastConversationMessage(threadIds: Iterable<Long>) {
     try {
         contentResolver.delete(uri, selection, null)
         for (threadId in threadIds) {
-            val newConversation = getConversations(threadId)[0]
+            val newConversation = getConversations(threadId).firstOrNull() ?: continue
             insertOrUpdateConversation(newConversation)
         }
     } catch (_: Exception) {

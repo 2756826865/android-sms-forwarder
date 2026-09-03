@@ -25,9 +25,10 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 class WebSocketRemoteClient(
-    private val context: Context,
+    context: Context,
     private val onStatus: (String) -> Unit,
 ) {
+    private val context: Context = context.applicationContext
     private val http = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(0, TimeUnit.MILLISECONDS)
@@ -40,6 +41,7 @@ class WebSocketRemoteClient(
         if (!running.compareAndSet(false, true)) return
         activeInstance = this
         Thread {
+            var retryDelayMs = 5_000L
             while (running.get()) {
                 try {
                     val config = MultiForwardConfig(context)
@@ -50,13 +52,19 @@ class WebSocketRemoteClient(
                         continue
                     }
                     onStatus("正在连接 WebSocket…")
+                    retryDelayMs = 5_000L
                     connectAndListen(url, config.websocketRemoteToken())
                 } catch (e: Throwable) {
                     Log.e(TAG, "WS connect error", e)
                     onStatus("连接断开：${e.message ?: e.javaClass.simpleName}")
+                    retryDelayMs = (retryDelayMs * 2).coerceAtMost(30_000L)
                 }
                 if (running.get()) {
-                    Thread.sleep(5_000)
+                    try {
+                        Thread.sleep(retryDelayMs)
+                    } catch (_: InterruptedException) {
+                        break
+                    }
                 }
             }
         }.apply {
@@ -68,9 +76,11 @@ class WebSocketRemoteClient(
 
     fun stop() {
         running.set(false)
-        if (activeInstance === this) activeInstance = null
-        webSocket?.close(1000, "client stop")
+        webSocket?.close(1000, "Client stopped")
         webSocket = null
+        if (activeInstance === this) {
+            activeInstance = null
+        }
     }
 
     private fun connectAndListen(url: String, token: String) {

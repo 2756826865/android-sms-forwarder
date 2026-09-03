@@ -122,10 +122,9 @@ object DeviceCompatHelper {
                 ComponentName("com.oppo.safe", "com.oppo.safe.permission.startup.StartupAppManagerActivity")
             ),
             tips = listOf(
-                "允许「短信转发」权限",
+                "重要：设为默认短信应用，或在权限管理中将「发送短信」改为「始终允许」，避免 ColorOS 5秒弹窗拦截",
                 "设置 → 应用管理 → 启动管理 → 短信转发 → 允许自启动",
-                "允许后台运行",
-                "关闭省电限制",
+                "允许后台运行与关闭省电限制",
                 "允许锁屏通知"
             )
         ),

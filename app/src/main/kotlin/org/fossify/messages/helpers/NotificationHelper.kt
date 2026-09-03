@@ -153,6 +153,26 @@ class NotificationHelper(private val context: Context) {
             setSound(soundUri, AudioManager.STREAM_NOTIFICATION)
         }
 
+        val verificationCode = org.fossify.messages.autofill.VerificationCodeExtractor.extractCode(body)
+        if (!verificationCode.isNullOrBlank()) {
+            val copyIntent = Intent(context, org.fossify.messages.receivers.CopyVerificationCodeReceiver::class.java).apply {
+                action = org.fossify.messages.receivers.CopyVerificationCodeReceiver.ACTION_COPY_CODE
+                putExtra(org.fossify.messages.receivers.CopyVerificationCodeReceiver.EXTRA_CODE, verificationCode)
+                putExtra(org.fossify.messages.receivers.CopyVerificationCodeReceiver.EXTRA_NOTIFICATION_ID, notificationId)
+            }
+            val copyPendingIntent = PendingIntent.getBroadcast(
+                context,
+                notificationId + 20000,
+                copyIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            builder.addAction(
+                org.fossify.commons.R.drawable.ic_copy_vector,
+                "复制",
+                copyPendingIntent
+            )
+        }
+
         if (replyAction != null && context.config.lockScreenVisibilitySetting == LOCK_SCREEN_SENDER_MESSAGE) {
             builder.addAction(replyAction)
         }

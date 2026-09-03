@@ -43,6 +43,8 @@ class MultiForwardConfig(private val context: Context) {
     var gotifyEnabled by booleanPreference(KEY_GOTIFY_ENABLED)
     var gotifyAllowHttp by booleanPreference(KEY_GOTIFY_ALLOW_HTTP)
     var dingTalkRemoteControlEnabled by booleanPreference(KEY_DINGTALK_REMOTE_CONTROL_ENABLED)
+    var enablePrivacyMask by booleanPreference(KEY_ENABLE_PRIVACY_MASK)
+    var maskVerificationCode by booleanPreference(KEY_MASK_VERIFICATION_CODE)
 
     var dingTalkRemoteSendSimMode: Int
         get() = prefs.getInt(KEY_DINGTALK_REMOTE_SEND_SIM, SimSendMode.DEFAULT).let { mode ->
@@ -649,6 +651,44 @@ class MultiForwardConfig(private val context: Context) {
         else -> false
     }
 
+    // 多实例渠道池 (Multi-Instance Channel Hub)
+    fun channelInstances(): List<ForwardingChannelInstance> = runCatching {
+        val raw = prefs.getString(KEY_CHANNEL_INSTANCES, null)
+        if (raw.isNullOrBlank()) return@runCatching emptyList<ForwardingChannelInstance>()
+        val array = org.json.JSONArray(raw)
+        buildList {
+            for (i in 0 until array.length()) {
+                add(ForwardingChannelInstance.fromJson(array.getJSONObject(i)))
+            }
+        }
+    }.getOrDefault(emptyList())
+
+    fun saveChannelInstances(instances: List<ForwardingChannelInstance>) {
+        val array = org.json.JSONArray()
+        instances.forEach { array.put(it.toJson()) }
+        prefs.edit().putString(KEY_CHANNEL_INSTANCES, array.toString()).apply()
+    }
+
+    fun addChannelInstance(instance: ForwardingChannelInstance) {
+        val current = channelInstances().toMutableList()
+        val existingIndex = current.indexOfFirst { it.id == instance.id }
+        if (existingIndex >= 0) {
+            current[existingIndex] = instance
+        } else {
+            current.add(instance)
+        }
+        saveChannelInstances(current)
+    }
+
+    fun removeChannelInstance(instanceId: String) {
+        val current = channelInstances().filterNot { it.id == instanceId }
+        saveChannelInstances(current)
+    }
+
+    fun getChannelInstanceById(instanceId: String): ForwardingChannelInstance? {
+        return channelInstances().firstOrNull { it.id == instanceId }
+    }
+
     fun setChannelEnabled(channel: String, enabled: Boolean) {
         when (channel) {
             ForwardingChannels.PUSHPLUS -> pushPlusEnabled = enabled
@@ -857,6 +897,9 @@ class MultiForwardConfig(private val context: Context) {
         private const val KEY_TEMPLATE_MODE = "template_mode"
         private const val KEY_CUSTOM_TEMPLATE = "custom_template"
         private const val KEY_ACCEPTED_DISCLAIMER_VERSION = "accepted_disclaimer_version"
+        private const val KEY_CHANNEL_INSTANCES = "channel_instances"
+        private const val KEY_ENABLE_PRIVACY_MASK = "enable_privacy_mask"
+        private const val KEY_MASK_VERIFICATION_CODE = "mask_verification_code"
 
         const val CURRENT_DISCLAIMER_VERSION = 1
 
@@ -901,7 +944,11 @@ private object ForwardingCipher {
 
     private fun getOrCreateKey(): SecretKey {
         val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
-        (keyStore.getKey(KEY_ALIAS, null) as? SecretKey)?.let { return it }
+        try {
+            (keyStore.getKey(KEY_ALIAS, null) as? SecretKey)?.let { return it }
+        } catch (e: Throwable) {
+            runCatching { keyStore.deleteEntry(KEY_ALIAS) }
+        }
         return KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore").run {
             init(
                 KeyGenParameterSpec.Builder(

@@ -23,6 +23,7 @@ class DingTalkStreamClient(
     private val http = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(0, TimeUnit.MILLISECONDS)
+        .pingInterval(20, TimeUnit.SECONDS)
         .build()
     private var webSocket: WebSocket? = null
     private val running = AtomicBoolean(false)
@@ -40,16 +41,29 @@ class DingTalkStreamClient(
 
     private fun connectLoop() {
         Thread {
+            var retryDelayMs = 5_000L
             while (running.get()) {
                 try {
                     onStatus("正在连接 DingTalk Stream…")
                     openAndListen()
+                    retryDelayMs = 5_000L
                 } catch (error: Throwable) {
                     Log.e(TAG, "DingTalk stream connection failed", error)
-                    onStatus("连接失败：${error.message ?: error.javaClass.simpleName}")
+                    val errorMsg = error.message ?: error.javaClass.simpleName
+                    val tip = if (errorMsg.contains("connection abort", ignoreCase = true)) {
+                        "连接被终止 · 建议排查：①钉钉机器人是否开启【Stream模式】；②是否有其他设备登录同个 Client ID"
+                    } else {
+                        "连接失败：$errorMsg"
+                    }
+                    onStatus(tip)
+                    retryDelayMs = (retryDelayMs * 2).coerceAtMost(30_000L)
                 }
                 if (running.get()) {
-                    Thread.sleep(RECONNECT_DELAY_MS)
+                    try {
+                        Thread.sleep(retryDelayMs)
+                    } catch (_: InterruptedException) {
+                        break
+                    }
                 }
             }
         }.apply {
@@ -60,6 +74,8 @@ class DingTalkStreamClient(
     }
 
     private fun openAndListen() {
+        webSocket?.close(1000, "reconnecting")
+        webSocket = null
         val openResult = openConnection()
         val endpoint = openResult.getString("endpoint")
         val ticket = openResult.getString("ticket")
@@ -85,7 +101,13 @@ class DingTalkStreamClient(
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                onStatus("连接异常：${t.message ?: t.javaClass.simpleName}")
+                val msg = t.message ?: t.javaClass.simpleName
+                val tip = if (msg.contains("connection abort", ignoreCase = true)) {
+                    "连接被服务端终止 · 请检查钉钉开放平台后台【消息接收模式】是否已选为【Stream模式】"
+                } else {
+                    "连接异常：$msg"
+                }
+                onStatus(tip)
                 latch.countDown()
             }
         })

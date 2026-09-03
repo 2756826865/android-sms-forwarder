@@ -222,6 +222,61 @@ class MultiChannelForwardWorker(
             sendGotify(config.gotifyServerUrl(), config.gotifyToken(), title, content, config.gotifyAllowHttp)
         }
 
+        // 多实例渠道池定向调度 (Multi-Instance Channel Hub Dispatch)
+        val instances = config.channelInstances().filter { it.enabled }
+        for (instance in instances) {
+            val isInstanceTargeted = ruleAllowedChannels == null || ruleAllowedChannels.contains(instance.id) || ruleAllowedChannels.contains(instance.channelType)
+            if (!isInstanceTargeted) continue
+
+            runChannel(instance.name, "instance_${instance.id}") {
+                when (instance.channelType) {
+                    ForwardingChannels.WECOM_BOT -> {
+                        val webhook = instance.optString("webhook")
+                        if (webhook.isNotBlank()) sendWeComBot(webhook, content)
+                    }
+                    ForwardingChannels.DINGTALK -> {
+                        val webhook = instance.optString("webhook")
+                        val secret = instance.optString("secret")
+                        if (webhook.isNotBlank()) sendDingTalk(webhook, secret, content)
+                    }
+                    ForwardingChannels.FEISHU_BOT -> {
+                        val webhook = instance.optString("webhook")
+                        val secret = instance.optString("secret")
+                        if (webhook.isNotBlank()) sendFeishu(webhook, secret, content)
+                    }
+                    ForwardingChannels.TELEGRAM -> {
+                        val token = instance.optString("botToken")
+                        val chatId = instance.optString("chatId")
+                        if (token.isNotBlank() && chatId.isNotBlank()) sendTelegram(token, chatId, title, content)
+                    }
+                    ForwardingChannels.BARK -> {
+                        val url = instance.optString("serverUrl")
+                        val key = instance.optString("deviceKey")
+                        if (url.isNotBlank() && key.isNotBlank()) sendBark(url, key, title, content, true)
+                    }
+                    ForwardingChannels.CUSTOM_WEBHOOK -> {
+                        val url = instance.optString("url")
+                        val headers = instance.optString("headers")
+                        if (url.isNotBlank()) sendCustomWebhook(url, headers, content)
+                    }
+                    ForwardingChannels.DISCORD -> {
+                        val webhook = instance.optString("webhook")
+                        if (webhook.isNotBlank()) sendDiscord(webhook, title, content)
+                    }
+                    ForwardingChannels.PUSHPLUS -> {
+                        val token = instance.optString("token")
+                        val topic = instance.optString("topic")
+                        if (token.isNotBlank()) sendPushPlus(token, topic, title, content)
+                    }
+                    ForwardingChannels.GOTIFY -> {
+                        val url = instance.optString("serverUrl")
+                        val token = instance.optString("token")
+                        if (url.isNotBlank() && token.isNotBlank()) sendGotify(url, token, title, content, true)
+                    }
+                }
+            }
+        }
+
         val now = SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
         config.lastStatus = buildString {
             append(now)
@@ -780,7 +835,7 @@ class MultiChannelForwardWorker(
             )
         }
 
-        private fun enqueueSingle(
+        fun enqueueSingle(
             context: Context,
             sender: String,
             body: String,
@@ -803,11 +858,12 @@ class MultiChannelForwardWorker(
                 isTest = isTest,
             )
             Log.d(TAG, "enqueueSingle: channel=$targetChannel, historyId=$historyRecordId, workId=$uniqueId")
+            val safeBody = if (body.length > 4000) body.take(4000) + "…(内容过长已截断)" else body
             val request = OneTimeWorkRequestBuilder<MultiChannelForwardWorker>()
                 .setInputData(
                     workDataOf(
                         KEY_SENDER to sender,
-                        KEY_BODY to body,
+                        KEY_BODY to safeBody,
                         KEY_RECEIVED_AT to receivedAt,
                         KEY_SUBSCRIPTION_ID to subscriptionId,
                         KEY_TARGET_CHANNEL to targetChannel,

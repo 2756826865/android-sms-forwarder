@@ -230,6 +230,7 @@ open class IncomingSmsService : Service() {
         }
 
         val uniqueId = "sms-$insertedMessageId"
+        org.fossify.messages.autofill.SmsAutofillAccessibilityService.onNewVerificationSms(applicationContext, body)
 
         val rulesConfig = ForwardingRulesConfig(applicationContext)
         val simSlotIndex = runCatching {

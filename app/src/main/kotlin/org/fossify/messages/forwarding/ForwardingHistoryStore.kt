@@ -109,7 +109,7 @@ class ForwardingHistoryStore(context: Context) {
     }
 
     fun clear() = synchronized(lock) {
-        prefs.edit().remove(KEY_RECORDS).commit()
+        prefs.edit().remove(KEY_RECORDS).apply()
     }
 
     private fun update(recordId: String, transform: (ForwardingHistoryRecord) -> ForwardingHistoryRecord) =
@@ -124,7 +124,7 @@ class ForwardingHistoryStore(context: Context) {
     private fun persist(records: List<ForwardingHistoryRecord>) {
         val kept = records.sortedByDescending { it.updatedAt }.take(MAX_RECORDS)
         val encoded = JSONArray().apply { kept.forEach { put(encode(it)) } }.toString()
-        prefs.edit().putString(KEY_RECORDS, encoded).commit()
+        prefs.edit().putString(KEY_RECORDS, encoded).apply()
     }
 
     private fun encode(record: ForwardingHistoryRecord) = JSONObject()

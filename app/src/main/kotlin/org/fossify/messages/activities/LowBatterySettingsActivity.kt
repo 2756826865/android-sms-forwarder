@@ -56,6 +56,7 @@ class LowBatterySettingsActivity : SimpleActivity() {
         binding.lowBatteryThresholdSlider.addOnChangeListener { _, value, _ ->
             val threshold = value.toInt()
             config.lowBatteryThreshold = threshold
+            config.lowBatteryLastNotifiedLevel = -1
             updateThresholdSummary(threshold)
         }
 

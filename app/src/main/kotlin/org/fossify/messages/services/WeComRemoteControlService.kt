@@ -81,18 +81,25 @@ class WeComRemoteControlService : Service() {
     private fun startLoop(corpId: String, secret: String) {
         if (!running.compareAndSet(false, true)) return
         Thread {
+            var lastLoggedStatus = ""
             while (running.get()) {
                 try {
                     val token = fetchAccessToken(corpId, secret)
                     if (token.isNotBlank()) {
                         val status = "已授权企业微信 · 守护运行中"
-                        MultiForwardConfig(applicationContext).appendWeComRemoteLog(status)
+                        if (lastLoggedStatus != status) {
+                            lastLoggedStatus = status
+                            MultiForwardConfig(applicationContext).appendWeComRemoteLog(status)
+                        }
                         mainHandler.post { updateNotification(status) }
                     }
                 } catch (e: Throwable) {
                     Log.e(TAG, "WeCom polling error", e)
                     val err = "连接状态：${e.message ?: e.javaClass.simpleName}"
-                    MultiForwardConfig(applicationContext).appendWeComRemoteLog(err)
+                    if (lastLoggedStatus != err) {
+                        lastLoggedStatus = err
+                        MultiForwardConfig(applicationContext).appendWeComRemoteLog(err)
+                    }
                     mainHandler.post { updateNotification(err) }
                 }
                 try {

@@ -163,7 +163,18 @@ object ForwardingMessageFormatter {
             }
         }.joinToString("\n")
         
-        return ForwardingPayload(title, content)
+        val finalContent = if (config.enablePrivacyMask) {
+            val code = org.fossify.messages.rule.template.TemplateRenderer.extractVerificationCode(body)
+            PrivacyDataMasker.mask(
+                content = content,
+                maskVerificationCode = config.maskVerificationCode,
+                verificationCode = code
+            )
+        } else {
+            content
+        }
+        
+        return ForwardingPayload(title, finalContent)
     }
 
     @SuppressLint("MissingPermission")

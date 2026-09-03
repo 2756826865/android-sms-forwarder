@@ -654,9 +654,13 @@
     <string name="faq_3_title">Does the app support scheduled messages?</string>
     <string name="faq_3_text">Yes, you can schedule messages to be sent in the future by long pressing the Send button and picking the desired date and time.</string>
     <string name="faq_4_title">Why do my group message replies appear as individual texts to recipients?</string>
-    <string name="faq_4_text">You need to enable \"Send group messages as MMS\" in the app settings. This will ensure that group messages are sent as proper MMS, allowing all participants to see each other\'s replies.</string>
-    <!--
-        Haven't found some strings? There's more at
-        https://github.com/FossifyOrg/Commons/tree/master/commons/src/main/res
-    -->
+    <!-- Autofill Verification Code -->
+    <string name="autofill_settings_title">验证码自动填充</string>
+    <string name="autofill_service_name">短信转发器验证码自动填充服务</string>
+    <string name="autofill_accessibility_description">用于检测当前前台登录/验证界面，收到验证码短信时自动填充并可选自动提交，免去手动输入的繁琐。</string>
+    <string name="message_templates">消息模板</string>
+    <string name="call_forwarding_settings_title">未接来电转发</string>
+    <string name="enable_call_forwarding">启用未接来电转发</string>
+    <string name="privacy_mask_settings_title">隐私数据脱敏</string>
+    <string name="enable_privacy_mask">启用手机号/身份证/卡号自动掩码</string>
 </resources>

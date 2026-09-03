@@ -102,6 +102,9 @@ class SettingsActivity : SimpleActivity() {
         settingsTemplateHolder.setOnClickListener {
             startActivity(Intent(this@SettingsActivity, MessageTemplateActivity::class.java))
         }
+        settingsAutofillHolder.setOnClickListener {
+            startActivity(Intent(this@SettingsActivity, AutofillSettingsActivity::class.java))
+        }
         settingsRemoteForwardingHolder.setOnClickListener {
             startActivity(Intent(this@SettingsActivity, RemoteForwardingActivity::class.java))
         }
@@ -116,6 +119,12 @@ class SettingsActivity : SimpleActivity() {
         }
         settingsLowBatteryHolder.setOnClickListener {
             startActivity(Intent(this@SettingsActivity, LowBatterySettingsActivity::class.java))
+        }
+        settingsCallForwardingHolder.setOnClickListener {
+            startActivity(Intent(this@SettingsActivity, CallForwardingSettingsActivity::class.java))
+        }
+        settingsHeartbeatHolder.setOnClickListener {
+            startActivity(Intent(this@SettingsActivity, HeartbeatSettingsActivity::class.java))
         }
         settingsSyncHolder.setOnClickListener {
             AlertDialog.Builder(this@SettingsActivity)

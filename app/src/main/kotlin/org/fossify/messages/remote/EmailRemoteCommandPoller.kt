@@ -79,19 +79,30 @@ class EmailRemoteCommandPoller(private val context: Context) {
                     val fetchLines = send("FETCH $seq (BODY[HEADER.FIELDS (FROM SUBJECT MESSAGE-ID)] BODY[TEXT])")
                     val headerText = fetchLines.joinToString("\n")
 
-                    val from = extractHeader(headerText, "From")
-                    val subject = extractHeader(headerText, "Subject")
+                    val rawFrom = extractHeader(headerText, "From")
+                    val decodedFrom = decodeMimeHeader(rawFrom)
+                    val senderEmail = extractEmailAddress(decodedFrom)
+                    
+                    val rawSubject = extractHeader(headerText, "Subject")
+                    val decodedSubject = decodeMimeHeader(rawSubject)
                     val messageId = extractHeader(headerText, "Message-ID").ifBlank { "email-$seq-${System.currentTimeMillis()}" }
 
-                    if (authorizedSenders.isNotEmpty() && !authorizedSenders.any { from.contains(it, ignoreCase = true) }) {
-                        config.appendEmailRemoteLog("忽略未授权发件人 [$from]")
-                        continue
+                    if (authorizedSenders.isNotEmpty()) {
+                        val isAuthorized = authorizedSenders.any { auth ->
+                            val cleanAuth = auth.trim().lowercase()
+                            senderEmail == cleanAuth || cleanAuth.contains(senderEmail) || senderEmail.contains(cleanAuth)
+                        }
+                        if (!isAuthorized) {
+                            config.appendEmailRemoteLog("忽略未授权发件人 [$senderEmail] (完整: $decodedFrom)")
+                            continue
+                        }
                     }
 
                     val customPrefix = config.emailRemoteCustomPrefix()
-                    val command = RemoteSmsCommand.parse(subject, customPrefix) ?: RemoteSmsCommand.parse(headerText, customPrefix)
+                    val command = RemoteSmsCommand.parse(decodedSubject, customPrefix)
+                        ?: RemoteSmsCommand.parse(headerText, customPrefix)
                     if (command != null) {
-                        handleEmailCommand(command, from, messageId)
+                        handleEmailCommand(command, senderEmail, messageId)
                         send("STORE $seq +FLAGS (\\Seen)")
                         processedCount++
                     }
@@ -175,6 +186,39 @@ class EmailRemoteCommandPoller(private val context: Context) {
         val pattern = "(?i)^$name:\\s*(.+)$".toRegex(RegexOption.MULTILINE)
         return pattern.find(text)?.groupValues?.getOrNull(1)?.trim().orEmpty()
     }
+
+    private fun extractEmailAddress(raw: String): String {
+        val bracketMatch = "<([^>]+)>".toRegex().find(raw)
+        if (bracketMatch != null) {
+            return bracketMatch.groupValues[1].trim().lowercase()
+        }
+        val directMatch = "([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,})".toRegex().find(raw)
+        if (directMatch != null) {
+            return directMatch.groupValues[1].trim().lowercase()
+        }
+        return raw.trim().lowercase()
+    }
+
+    private fun decodeMimeHeader(raw: String): String = runCatching {
+        val pattern = """=\?([a-zA-Z0-9_-]+)\?([bBqQ])\?([^?]+)\?=""".toRegex()
+        pattern.replace(raw) { match ->
+            val charsetName = match.groupValues[1]
+            val encoding = match.groupValues[2].uppercase()
+            val encodedText = match.groupValues[3]
+            val charset = runCatching { java.nio.charset.Charset.forName(charsetName) }.getOrDefault(Charsets.UTF_8)
+            if (encoding == "B") {
+                val bytes = android.util.Base64.decode(encodedText, android.util.Base64.DEFAULT)
+                String(bytes, charset)
+            } else if (encoding == "Q") {
+                val bytes = encodedText.replace('_', ' ').replace("=([0-9A-Fa-f]{2})".toRegex()) { hexMatch ->
+                    hexMatch.groupValues[1].toInt(16).toChar().toString()
+                }.toByteArray(Charsets.ISO_8859_1)
+                String(bytes, charset)
+            } else {
+                match.value
+            }
+        }
+    }.getOrDefault(raw)
 
     private fun createSocket(host: String, port: Int, useSsl: Boolean): Socket {
         return if (useSsl) {

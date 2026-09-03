@@ -480,7 +480,7 @@ fun DashboardContent(
 
                         StatusChipItem(
                             icon = "🔋",
-                            text = if (isBatteryOk) "已加入电池白名单" else "未忽略电池优化",
+                            text = if (isBatteryOk) "已加白名单" else "未设白名单",
                             isOk = isBatteryOk,
                             modifier = Modifier.weight(1f),
                             onClick = {
@@ -504,7 +504,7 @@ fun DashboardContent(
                         )
                         StatusChipItem(
                             icon = "💬",
-                            text = if (isSmsOk) "默认短信就绪" else "未设为默认短信",
+                            text = if (isSmsOk) "默认短信" else "未设默认",
                             isOk = isSmsOk,
                             modifier = Modifier.weight(1f),
                             onClick = {
@@ -513,7 +513,7 @@ fun DashboardContent(
                         )
                         StatusChipItem(
                             icon = "🔔",
-                            text = if (isNotifOk) "通知权限正常" else "通知未开启",
+                            text = if (isNotifOk) "通知正常" else "通知未开",
                             isOk = isNotifOk,
                             modifier = Modifier.weight(1f),
                             onClick = {

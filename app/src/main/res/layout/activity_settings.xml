@@ -70,7 +70,14 @@
                 <TextView
                     android:id="@+id/settings_template_holder"
                     style="@style/SmsSettingsRow"
-                    android:text="消息模板" />
+                    android:text="@string/message_templates" />
+
+                <View style="@style/SmsSettingsDivider" />
+
+                <TextView
+                    android:id="@+id/settings_autofill_holder"
+                    style="@style/SmsSettingsRow"
+                    android:text="@string/autofill_settings_title" />
 
                 <View style="@style/SmsSettingsDivider" />
 
@@ -106,6 +113,20 @@
                     android:id="@+id/settings_low_battery_holder"
                     style="@style/SmsSettingsRow"
                     android:text="@string/low_battery_reminder" />
+
+                <View style="@style/SmsSettingsDivider" />
+
+                <TextView
+                    android:id="@+id/settings_call_forwarding_holder"
+                    style="@style/SmsSettingsRow"
+                    android:text="@string/call_forwarding_settings_title" />
+
+                <View style="@style/SmsSettingsDivider" />
+
+                <TextView
+                    android:id="@+id/settings_heartbeat_holder"
+                    style="@style/SmsSettingsRow"
+                    android:text="定时心跳与状态保活" />
             </LinearLayout>
 
             <!-- 2. 系统分组 -->

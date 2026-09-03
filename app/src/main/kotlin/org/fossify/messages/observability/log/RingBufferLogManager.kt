@@ -33,6 +33,7 @@ object RingBufferLogManager {
 
     private const val MAX_ENTRIES = 1000
     private val buffer = ConcurrentLinkedQueue<LogEntry>()
+    private val count = java.util.concurrent.atomic.AtomicInteger(0)
 
     fun d(tag: String, message: String) = log(LogLevel.DEBUG, tag, message)
     fun i(tag: String, message: String) = log(LogLevel.INFO, tag, message)
@@ -52,8 +53,10 @@ object RingBufferLogManager {
         )
 
         buffer.add(entry)
-        while (buffer.size > MAX_ENTRIES) {
-            buffer.poll()
+        if (count.incrementAndGet() > MAX_ENTRIES) {
+            if (buffer.poll() != null) {
+                count.decrementAndGet()
+            }
         }
     }
 

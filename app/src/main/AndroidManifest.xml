@@ -23,6 +23,8 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.READ_SYNC_SETTINGS" />
     <uses-permission android:name="android.permission.CALL_PHONE" />
+    <uses-permission android:name="android.permission.READ_CALL_LOG" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
     <uses-permission android:name="android.permission.READ_CONTACTS" />
     <uses-permission
@@ -210,6 +212,18 @@
             android:parentActivityName=".activities.ForwardingChannelsActivity" />
 
         <activity
+            android:name=".activities.CallForwardingSettingsActivity"
+            android:exported="false"
+            android:label="@string/call_forwarding_settings_title"
+            android:parentActivityName=".activities.SettingsActivity" />
+
+        <activity
+            android:name=".activities.HeartbeatSettingsActivity"
+            android:exported="false"
+            android:label="定时心跳与状态保活"
+            android:parentActivityName=".activities.SettingsActivity" />
+
+        <activity
             android:name=".activities.ForwardingHistoryActivity"
             android:exported="false"
             android:label="@string/forwarding_history_title"
@@ -274,6 +288,25 @@
             android:exported="false"
             android:label="短信自动回复"
             android:parentActivityName=".activities.SettingsActivity" />
+
+        <activity
+            android:name=".activities.AutofillSettingsActivity"
+            android:exported="false"
+            android:label="@string/autofill_settings_title"
+            android:parentActivityName=".activities.SettingsActivity" />
+
+        <service
+            android:name=".autofill.SmsAutofillAccessibilityService"
+            android:exported="false"
+            android:label="@string/autofill_service_name"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
+        </service>
 
         <activity
             android:name=".activities.ForwardingChannelsActivity"
@@ -451,7 +484,9 @@
                 android:value="Processes SMS_DELIVER serially before notification and forwarding" />
         </service>
 
-        <service android:name="com.android.mms.transaction.TransactionService" />
+        <service
+            android:name="com.android.mms.transaction.TransactionService"
+            android:exported="false" />
 
         <receiver
             android:name=".receivers.SmsStatusSentReceiver"
@@ -508,6 +543,24 @@
             android:name=".receivers.MmsReceiver"
             android:exported="false"
             android:taskAffinity="com.klinker.android.messaging.MMS_RECEIVED" />
+
+        <receiver
+            android:name=".receivers.CopyVerificationCodeReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="org.fossify.messages.action.copy_code" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
+            android:name=".receivers.CallStateReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.PHONE_STATE" />
+            </intent-filter>
+        </receiver>
 
         <receiver
             android:name=".receivers.MarkAsReadReceiver"
