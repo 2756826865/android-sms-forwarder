@@ -175,13 +175,13 @@ class MessagesImporter(private val activity: SimpleActivity) {
             subscriptionId = 0,
             address = getAttributeValue(null, "address"),
             body = getAttributeValue(null, "body"),
-            date = getAttributeValue(null, "date").toLong(),
-            dateSent = getAttributeValue(null, "date").toLong(),
-            locked = getAttributeValue(null, "locked").toInt(),
+            date = getAttributeValue(null, "date")?.toLongOrNull() ?: System.currentTimeMillis(),
+            dateSent = getAttributeValue(null, "date")?.toLongOrNull() ?: System.currentTimeMillis(),
+            locked = getAttributeValue(null, "locked")?.toIntOrNull() ?: 0,
             protocol = getAttributeValue(null, "protocol"),
-            read = getAttributeValue(null, "read").toInt(),
-            status = getAttributeValue(null, "status").toInt(),
-            type = getAttributeValue(null, "type").toInt(),
+            read = getAttributeValue(null, "read")?.toIntOrNull() ?: 0,
+            status = getAttributeValue(null, "status")?.toIntOrNull() ?: 0,
+            type = getAttributeValue(null, "type")?.toIntOrNull() ?: 0,
             serviceCenter = getAttributeValue(null, "service_center")
         )
     }

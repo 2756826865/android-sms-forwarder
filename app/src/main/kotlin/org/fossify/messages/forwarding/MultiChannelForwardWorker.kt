@@ -334,7 +334,7 @@ class MultiChannelForwardWorker(
             JSONObject()
                 .put("touser", toUser)
                 .put("msgtype", "text")
-                .put("agentid", agentId.toLong())
+                .put("agentid", agentId.trim().toLongOrNull() ?: 0L)
                 .put("text", JSONObject().put("content", content))
                 .put("safe", 0)
         )

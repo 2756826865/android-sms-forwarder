@@ -70,7 +70,7 @@ class SmsStatusSentReceiver : SendStatusReceiver() {
 
         Log.i(TAG, "updateAppDatabase: uri=$messageUri, resultCode=$receiverResultCode, opId=$sendOperationId, part=$partIndex")
         if (messageUri != null) {
-            val messageId = messageUri.lastPathSegment?.toLong() ?: 0L
+            val messageId = messageUri.lastPathSegment?.toLongOrNull() ?: 0L
             val intentThreadId = intent.getLongExtra(SendStatusReceiver.EXTRA_THREAD_ID, 0L)
             val intentAddress = intent.getStringExtra(SendStatusReceiver.EXTRA_ADDRESS) ?: ""
 

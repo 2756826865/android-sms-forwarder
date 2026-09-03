@@ -103,7 +103,7 @@ object ChannelTestSender {
                     val sendPayload = JSONObject()
                         .put("touser", toUser)
                         .put("msgtype", "text")
-                        .put("agentid", agentId.toLong())
+                        .put("agentid", agentId.trim().toLongOrNull() ?: 0L)
                         .put("text", JSONObject().put("content", "$title\n$content"))
                         .put("safe", 0)
                     val sendRes = postJson("https://qyapi.weixin.qq.com/cgi-bin/message/send?access_token=$token", sendPayload)

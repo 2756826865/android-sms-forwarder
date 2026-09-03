@@ -133,7 +133,8 @@ class ShortcutHelper(private val context: Context) {
     }
 
     private fun createOrUpdateShortcut(shortcut: ShortcutInfoCompat) {
-        if (getShortcut(shortcut.id.toLong()) != null) {
+        val sid = shortcut.id.toLongOrNull()
+        if (sid != null && getShortcut(sid) != null) {
             ShortcutManagerCompat.updateShortcuts(context, listOf(shortcut))
             return
         }

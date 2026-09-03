@@ -101,7 +101,7 @@ class SmsStatusDeliveredReceiver : SendStatusReceiver() {
         Log.i(TAG, "updateAppDatabase: uri=$messageUri, status=$status, opId=$sendOperationId, part=$partIndex")
 
         if (messageUri != null) {
-            val messageId = messageUri.lastPathSegment?.toLong() ?: 0L
+            val messageId = messageUri.lastPathSegment?.toLongOrNull() ?: 0L
             ensureBackgroundThread {
                 if (status != Sms.Sent.STATUS_NONE) {
                     context.messagesDB.updateStatus(messageId, status)
