@@ -213,7 +213,7 @@ fun OperationsContent(
             ) {
                 Column(modifier = Modifier.padding(14.dp)) {
                     Text(
-                        text = "🛡️ 厂商后台保活与白名单直达",
+                        text = "🛡️ 后台运行",
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
                         color = if (isDark) Color.White else TextPrimary
@@ -269,7 +269,7 @@ fun OperationsContent(
                         ) {
                             Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
                                 Text(
-                                    text = "🔋 电池优化白名单 (忽略省电限制)",
+                                    text = "🔋 电池优化",
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 12.sp,
                                     color = primaryTextColor,
@@ -332,7 +332,7 @@ fun OperationsContent(
                         ) {
                             Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
                                 Text(
-                                    text = "🚀 应用自启动 / 允许后台活动",
+                                    text = "🚀 自启动设置",
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 12.sp,
                                     color = primaryTextColor,
@@ -385,7 +385,7 @@ fun OperationsContent(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "📦 硬件加密排障诊断包",
+                            text = "📦 诊断报告",
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (isDark) Color.White else TextPrimary
@@ -554,7 +554,7 @@ fun OperationsContent(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "RingBuffer 实时日志瀑布流",
+                            text = "运行日志",
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (isDark) Color.White else TextPrimary
@@ -643,7 +643,7 @@ fun OperationsContent(
         AlertDialog(
             onDismissRequest = { showReportDialog = false },
             title = {
-                Text("🔍 节点全量明文体检报告", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Text("🔍 完整报告", fontWeight = FontWeight.Bold, fontSize = 16.sp)
             },
             text = {
                 Column(modifier = Modifier.height(380.dp).verticalScroll(rememberScrollState())) {

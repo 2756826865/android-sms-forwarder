@@ -39,7 +39,6 @@ import org.fossify.messages.ui.compose.conversations.ConversationsViewModel
 import org.fossify.messages.ui.compose.dashboard.DashboardScreen
 import org.fossify.messages.ui.compose.diagnostics.OperationsScreen
 import org.fossify.messages.ui.compose.forwarding.ChannelHubScreen
-import org.fossify.messages.ui.compose.rules.RuleStudioScreen
 import org.fossify.messages.ui.dashboard.DashboardViewModel
 import org.fossify.messages.ui.diagnostics.DiagnosticsViewModel
 import org.fossify.messages.ui.messages.MessageCenterViewModel
@@ -47,8 +46,8 @@ import org.fossify.messages.ui.messages.MessageCenterViewModel
 enum class GatewayTab(val title: String, val emoji: String) {
     MESSAGES("信息", "💬"),
     DASHBOARD("大盘", "📊"),
-    RULES("规则", "⚡"),
     CHANNELS("通道", "🔌"),
+    RULES("规则", "⚡"),
     OPERATIONS("运维", "🛠️")
 }
 
@@ -62,6 +61,8 @@ fun GatewayApp(
     onSwitchToClassic: () -> Unit = {}
 ) {
     var selectedTab by remember { mutableStateOf(GatewayTab.MESSAGES) }
+    var editingRuleId by remember { mutableStateOf<String?>(null) }
+    var isEditingRule by remember { mutableStateOf(false) }
 
     Box(
         modifier = Modifier
@@ -82,17 +83,34 @@ fun GatewayApp(
                     onNavigateToOperations = { selectedTab = GatewayTab.OPERATIONS },
                     onSwitchToClassic = onSwitchToClassic
                 )
-                GatewayTab.RULES -> RuleStudioScreen()
                 GatewayTab.CHANNELS -> ChannelHubScreen()
+                GatewayTab.RULES -> {
+                    if (isEditingRule) {
+                        org.fossify.messages.ui.compose.rules.RuleEditorScreen(
+                            ruleId = editingRuleId,
+                            onNavigateBack = { isEditingRule = false }
+                        )
+                    } else {
+                        org.fossify.messages.ui.compose.rules.RuleManagementScreen(
+                            // 规则已经是独立底部标签，不再显示容易挤压标题的“返回通道”。
+                            onNavigateBack = null,
+                            onNavigateToEditor = { id ->
+                                editingRuleId = id
+                                isEditingRule = true
+                            }
+                        )
+                    }
+                }
                 GatewayTab.OPERATIONS -> OperationsScreen(viewModel = diagnosticsViewModel)
             }
         }
 
         // 悬浮白色大圆角底部导航栏 (Modern Floating Capsule Dock)
         val isDark = androidx.compose.foundation.isSystemInDarkTheme()
-        Surface(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
+        if (!isEditingRule) {
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
                 .fillMaxWidth()
                 .padding(horizontal = 18.dp, vertical = 12.dp)
                 .navigationBarsPadding(),
@@ -126,7 +144,12 @@ fun GatewayApp(
                     )
 
                     Surface(
-                        onClick = { selectedTab = tab },
+                        onClick = {
+                            if (tab == GatewayTab.RULES && selectedTab == GatewayTab.RULES) {
+                                isEditingRule = false
+                            }
+                            selectedTab = tab
+                        },
                         shape = RoundedCornerShape(20.dp),
                         color = itemBgColor,
                         modifier = Modifier
@@ -155,6 +178,7 @@ fun GatewayApp(
                     }
                 }
             }
+        }
         }
     }
 }

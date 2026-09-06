@@ -5,6 +5,9 @@ import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
 import android.os.Bundle
+import androidx.activity.compose.setContent
+import org.fossify.messages.ui.compose.forwarding.ChannelHubScreen
+import org.fossify.messages.ui.compose.theme.GatewayTheme
 import android.text.InputType
 import android.util.TypedValue
 import android.view.Menu
@@ -44,24 +47,15 @@ class ForwardingChannelsActivity : SimpleActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(binding.root)
-        setupEdgeToEdge(
-            padTopSystem = listOf(binding.forwardingAppbar),
-            padBottomImeAndSystem = listOf(binding.forwardingScrollview),
-        )
-        setupMaterialScrollListener(binding.forwardingScrollview, binding.forwardingAppbar)
-        setupTopAppBar(binding.forwardingAppbar, NavigationIcon.Arrow)
-        binding.forwardingToolbar.title = getString(R.string.forwarding_title)
-        applyMiuiTopAppBarChrome(binding.forwardingAppbar, binding.forwardingToolbar)
-        setupToolbarMenu()
-        bindActions()
-        enforceForwardingDisclaimer()
+        setContent {
+            GatewayTheme {
+                ChannelHubScreen(onBack = { finish() })
+            }
+        }
     }
 
     override fun onResume() {
         super.onResume()
-        applyMiuiTopAppBarChrome(binding.forwardingAppbar, binding.forwardingToolbar)
-        updateSummaries()
     }
 
     private fun setupToolbarMenu() {

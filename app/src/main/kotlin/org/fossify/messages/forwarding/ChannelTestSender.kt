@@ -4,17 +4,30 @@ import android.content.Context
 import android.util.Base64
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.Response
+import okhttp3.WebSocket
+import okhttp3.WebSocketListener
 import org.fossify.messages.messaging.sendMessageCompat
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
+import java.io.BufferedReader
+import java.io.BufferedWriter
 import java.nio.charset.StandardCharsets
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
+import javax.net.ssl.SSLSocket
+import javax.net.ssl.SSLSocketFactory
 
 object ChannelTestSender {
     suspend fun sendTest(context: Context, channelId: String): Result<String> = withContext(Dispatchers.IO) {
@@ -138,7 +151,9 @@ object ChannelTestSender {
                         .put("msg_type", "text")
                         .put("content", JSONObject().put("text", "$title\n$content").toString())
                     val res = postJson(msgUrl, sendPayload, mapOf("Authorization" to "Bearer $token"))
-                    check(res.optInt("code", -1) == 0 || res.has("data")) { res.optString("msg", "飞书发送失败") }
+                    check(res.optInt("code", -1) == 0) {
+                        res.optString("msg", "飞书发送失败")
+                    }
                     "飞书自建应用消息推送成功！"
                 }
                 ForwardingChannels.FEISHU, ForwardingChannels.FEISHU_BOT -> {
@@ -216,7 +231,11 @@ object ChannelTestSender {
                 ForwardingChannels.CUSTOM_WEBHOOK -> {
                     val url = config.customWebhookUrl()
                     require(url.isNotBlank()) { "自定义 Webhook URL 不能为空，请先配置" }
-                    postJson(url, JSONObject().put("title", title).put("content", content))
+                    postJson(
+                        url,
+                        JSONObject().put("title", title).put("content", content),
+                        parseCustomHeaders(config.customWebhookHeaders())
+                    )
                     "自定义 Webhook 请求成功送达！"
                 }
                 ForwardingChannels.SMS_DIRECT -> {
@@ -246,7 +265,287 @@ object ChannelTestSender {
                     }
                     "群组分发完成:\n" + results.joinToString("\n")
                 }
-                else -> "通道测试已完成"
+                else -> error("该通道暂不支持测试：$channelId")
+            }
+        }
+        if (res.isSuccess) {
+            history.markSuccess(historyId, res.getOrNull().orEmpty())
+        } else {
+            history.markFailed(historyId, res.exceptionOrNull()?.message ?: "测试发送失败")
+        }
+        res
+    }
+
+    suspend fun sendTestInstance(context: Context, instance: ForwardingChannelInstance): Result<String> = withContext(Dispatchers.IO) {
+        val history = ForwardingHistoryStore(context)
+        val now = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
+        val title = "【SMS Forwarder 测试通知】"
+        val content = "这是一条来自 SMS Forwarder 的测试消息\n通道名称: ${instance.name}\n发送时间: $now\n如果您收到此消息，说明该通道实例已成功打通！"
+
+        val historyId = history.registerQueued(
+            workId = "test-${System.currentTimeMillis()}::${instance.id}",
+            channel = instance.channelType,
+            sender = "10086",
+            body = "【通道实例测试】$content",
+            receivedAt = System.currentTimeMillis(),
+            subscriptionId = 1,
+            isTest = true
+        )
+
+        val res = runCatching {
+            when (instance.channelType) {
+                ForwardingChannels.PUSHPLUS -> {
+                    val token = instance.optString("token")
+                    require(token.isNotBlank()) { "PushPlus Token 不能为空，请先配置" }
+                    val payload = JSONObject()
+                        .put("token", token)
+                        .put("title", title)
+                        .put("content", content.replace("\n", "<br/>"))
+                        .put("template", "html")
+                    val topic = instance.optString("topic")
+                    if (topic.isNotBlank()) payload.put("topic", topic)
+                    val res = postJson("https://www.pushplus.plus/send", payload)
+                    check(res.optInt("code", -1) == 200) { res.optString("msg", "PushPlus 响应错误") }
+                    "PushPlus 微信推送成功！"
+                }
+                ForwardingChannels.WECHAT_TEST -> {
+                    val appId = instance.optString("appId")
+                    val appSecret = instance.optString("appSecret")
+                    val templateId = instance.optString("templateId")
+                    val openId = instance.optString("openId")
+                    require(appId.isNotBlank() && appSecret.isNotBlank() && templateId.isNotBlank() && openId.isNotBlank()) {
+                        "微信测试号配置不完整，请先配置"
+                    }
+                    val tokenUrl = "https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=${URLEncoder.encode(appId, "UTF-8")}&secret=${URLEncoder.encode(appSecret, "UTF-8")}"
+                    val tokenRes = getJson(tokenUrl)
+                    val token = tokenRes.optString("access_token")
+                    check(token.isNotBlank()) { tokenRes.optString("errmsg", "获取微信 Token 失败") }
+
+                    val dataObj = JSONObject()
+                        .put("title", JSONObject().put("value", title))
+                        .put("content", JSONObject().put("value", content))
+                        .put("time", JSONObject().put("value", now))
+                    val sendPayload = JSONObject()
+                        .put("touser", openId)
+                        .put("template_id", templateId)
+                        .put("data", dataObj)
+                    val sendRes = postJson("https://api.weixin.qq.com/cgi-bin/message/template/send?access_token=$token", sendPayload)
+                    check(sendRes.optInt("errcode", -1) == 0) { sendRes.optString("errmsg", "微信测试号模板发送失败") }
+                    "微信测试号模板消息推送成功！"
+                }
+                ForwardingChannels.QQ -> {
+                    val qmsgKey = instance.optString("qmsgKey")
+                    val onebotUrl = instance.optString("onebotUrl")
+                    val target = if (qmsgKey.isNotBlank()) qmsgKey else if (onebotUrl.isNotBlank()) onebotUrl else instance.optString("webhook")
+                    val type = if (qmsgKey.isNotBlank() || instance.optString("type") == "qmsg") "qmsg" else "onebot"
+                    require(target.isNotBlank()) { "QQ 消息配置不能为空，请先配置" }
+                    val text = "$title\n$content"
+                    if (type == "qmsg" || !target.startsWith("http")) {
+                        postJson("https://qmsg.zendee.cn/send/$target", JSONObject().put("msg", text))
+                    } else {
+                        postJson(target, JSONObject().put("message", text))
+                    }
+                    "QQ 消息已成功推送！"
+                }
+                ForwardingChannels.WECOM, ForwardingChannels.WECOM_APP -> {
+                    val corpId = instance.optString("corpId")
+                    val agentId = instance.optString("agentId")
+                    val secret = instance.optString("secret")
+                    val toUser = instance.optString("toUser")
+                    require(corpId.isNotBlank() && agentId.isNotBlank() && secret.isNotBlank() && toUser.isNotBlank()) {
+                        "企业微信应用号配置不完整，请先配置"
+                    }
+                    val tokenUrl = "https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid=${URLEncoder.encode(corpId, "UTF-8")}&corpsecret=${URLEncoder.encode(secret, "UTF-8")}"
+                    val tokenRes = getJson(tokenUrl)
+                    val token = tokenRes.optString("access_token")
+                    check(token.isNotBlank()) { tokenRes.optString("errmsg", "获取企微 Token 失败") }
+
+                    val sendPayload = JSONObject()
+                        .put("touser", toUser)
+                        .put("msgtype", "text")
+                        .put("agentid", agentId.trim().toLongOrNull() ?: 0L)
+                        .put("text", JSONObject().put("content", "$title\n$content"))
+                        .put("safe", 0)
+                    val sendRes = postJson("https://qyapi.weixin.qq.com/cgi-bin/message/send?access_token=$token", sendPayload)
+                    check(sendRes.optInt("errcode", -1) == 0) { sendRes.optString("errmsg", "企业微信发送失败") }
+                    "企业微信应用号消息推送成功！"
+                }
+                ForwardingChannels.WECOM_BOT -> {
+                    val webhook = instance.optString("webhook")
+                    require(webhook.isNotBlank()) { "企业微信群机器人 Webhook 不能为空，请先配置" }
+                    val payload = JSONObject()
+                        .put("msgtype", "text")
+                        .put("text", JSONObject().put("content", "$title\n$content"))
+                    val res = postJson(webhook, payload)
+                    check(res.optInt("errcode", -1) == 0) { res.optString("errmsg", "企微群机器人响应失败") }
+                    "企业微信群机器人推送成功！"
+                }
+                ForwardingChannels.FEISHU_APP -> {
+                    val appId = instance.optString("appId")
+                    val appSecret = instance.optString("appSecret")
+                    val receiveId = instance.optString("receiveId")
+                    require(appId.isNotBlank() && appSecret.isNotBlank() && receiveId.isNotBlank()) {
+                        "飞书自建应用配置不完整，请先配置"
+                    }
+                    val authUrl = "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal"
+                    val authRes = postJson(authUrl, JSONObject().put("app_id", appId).put("app_secret", appSecret))
+                    val token = authRes.optString("tenant_access_token")
+                    check(token.isNotBlank()) { authRes.optString("msg", "获取飞书 Token 失败") }
+
+                    val msgUrl = "https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=open_id"
+                    val sendPayload = JSONObject()
+                        .put("receive_id", receiveId)
+                        .put("msg_type", "text")
+                        .put("content", JSONObject().put("text", "$title\n$content").toString())
+                    val res = postJson(msgUrl, sendPayload, mapOf("Authorization" to "Bearer $token"))
+                    check(res.optInt("code", -1) == 0 || res.has("data")) { res.optString("msg", "飞书发送失败") }
+                    "飞书自建应用消息推送成功！"
+                }
+                ForwardingChannels.FEISHU, ForwardingChannels.FEISHU_BOT -> {
+                    val webhook = instance.optString("webhook")
+                    val secret = instance.optString("secret")
+                    require(webhook.isNotBlank()) { "飞书群机器人 Webhook 不能为空，请先配置" }
+                    val payload = JSONObject()
+                        .put("msg_type", "text")
+                        .put("content", JSONObject().put("text", "$title\n$content"))
+                    if (secret.isNotBlank()) {
+                        val timestamp = System.currentTimeMillis() / 1000
+                        val stringToSign = "$timestamp\n$secret"
+                        val mac = Mac.getInstance("HmacSHA256")
+                        mac.init(SecretKeySpec(stringToSign.toByteArray(StandardCharsets.UTF_8), "HmacSHA256"))
+                        val sign = Base64.encodeToString(mac.doFinal(ByteArray(0)), Base64.NO_WRAP)
+                        payload.put("timestamp", timestamp.toString()).put("sign", sign)
+                    }
+                    val res = postJson(webhook, payload)
+                    val code = if (res.has("StatusCode")) res.optInt("StatusCode", -1) else res.optInt("code", -1)
+                    check(code == 0) { res.optString("msg", res.optString("StatusMessage", "飞书群机器人拒绝请求")) }
+                    "飞书群机器人推送成功！"
+                }
+                ForwardingChannels.DINGTALK -> {
+                    val webhook = instance.optString("webhook")
+                    val secret = instance.optString("secret")
+                    require(webhook.isNotBlank()) { "钉钉群机器人 Webhook 不能为空，请先配置" }
+                    val timestamp = System.currentTimeMillis()
+                    val signedUrl = if (secret.isBlank()) webhook else {
+                        val mac = Mac.getInstance("HmacSHA256")
+                        mac.init(SecretKeySpec(secret.toByteArray(StandardCharsets.UTF_8), "HmacSHA256"))
+                        val signData = "$timestamp\n$secret".toByteArray(StandardCharsets.UTF_8)
+                        val sign = Base64.encodeToString(mac.doFinal(signData), Base64.NO_WRAP)
+                        val sep = if (webhook.contains('?')) '&' else '?'
+                        "$webhook${sep}timestamp=$timestamp&sign=${URLEncoder.encode(sign, "UTF-8")}"
+                    }
+                    val payload = JSONObject()
+                        .put("msgtype", "text")
+                        .put("text", JSONObject().put("content", "$title\n$content"))
+                    val res = postJson(signedUrl, payload)
+                    check(res.optInt("errcode", -1) == 0) { res.optString("errmsg", "钉钉群机器人拒绝请求") }
+                    "钉钉群机器人推送成功！"
+                }
+                ForwardingChannels.BARK -> {
+                    val server = instance.optString("serverUrl").ifBlank { "https://api.day.app" }
+                    val key = instance.optString("deviceKey")
+                    require(key.isNotBlank()) { "Bark DeviceKey 不能为空，请先配置" }
+                    val url = "${server.trimEnd('/')}/$key/${URLEncoder.encode(title, "UTF-8")}/${URLEncoder.encode(content, "UTF-8")}"
+                    getJson(url)
+                    "Bark 消息已推送至苹果 APNs！"
+                }
+                ForwardingChannels.TELEGRAM -> {
+                    val token = instance.optString("botToken")
+                    val chatId = instance.optString("chatId")
+                    require(token.isNotBlank() && chatId.isNotBlank()) { "Telegram 配置不完整，请先配置" }
+                    val url = "https://api.telegram.org/bot$token/sendMessage"
+                    val payload = JSONObject().put("chat_id", chatId).put("text", "$title\n\n$content")
+                    val res = postJson(url, payload)
+                    check(res.optBoolean("ok", false)) { res.optString("description", "Telegram 发送失败") }
+                    "Telegram 机器人消息推送成功！"
+                }
+                ForwardingChannels.DISCORD -> {
+                    val webhook = instance.optString("webhook")
+                    require(webhook.isNotBlank()) { "Discord Webhook 不能为空，请先配置" }
+                    val embed = JSONObject().put("title", title).put("description", content).put("color", 5814783)
+                    val payload = JSONObject().put("embeds", org.json.JSONArray().put(embed))
+                    postJson(webhook, payload)
+                    "Discord 频道消息推送成功！"
+                }
+                ForwardingChannels.TENCENT_CLOUD -> {
+                    val webhook = instance.optString("webhook")
+                    require(webhook.isNotBlank()) { "腾讯云告警 Webhook 不能为空，请先配置" }
+                    postJson(webhook, JSONObject().put("text", "$title\n$content"))
+                    "腾讯云自定义告警触发成功！"
+                }
+                ForwardingChannels.CUSTOM_WEBHOOK -> {
+                    val url = instance.optString("url")
+                    require(url.isNotBlank()) { "自定义 Webhook URL 不能为空，请先配置" }
+                    postJson(
+                        url,
+                        JSONObject().put("title", title).put("content", content),
+                        parseCustomHeaders(instance.optString("headers"))
+                    )
+                    "自定义 Webhook 请求成功送达！"
+                }
+                ForwardingChannels.GOTIFY -> {
+                    val serverUrl = instance.optString("serverUrl").trim().trimEnd('/')
+                    val token = instance.optString("token")
+                    require(serverUrl.isNotBlank() && token.isNotBlank()) { "Gotify URL 或 Token 不能为空" }
+                    val res = postJson(
+                        "$serverUrl/message?token=${URLEncoder.encode(token, "UTF-8")}",
+                        JSONObject().put("title", title).put("message", content).put("priority", 5)
+                    )
+                    check(res.has("id")) { "Gotify 推送失败" }
+                    "Gotify 消息推送成功！"
+                }
+                ForwardingChannels.NTFY -> {
+                    val serverUrl = instance.optString("serverUrl").ifBlank { "https://ntfy.sh" }.trimEnd('/')
+                    val topic = instance.optString("topic")
+                    val token = instance.optString("token")
+                    val priority = instance.optString("priority").ifBlank { "default" }
+                    require(topic.isNotBlank()) { "ntfy Topic 不能为空，请先配置" }
+                    val headers = mutableMapOf("Title" to title, "Priority" to priority)
+                    if (token.isNotBlank()) headers["Authorization"] = "Bearer ${token.trim()}"
+                    instance.optString("tags").takeIf { it.isNotBlank() }?.let { headers["Tags"] = it.trim() }
+                    instance.optString("clickUrl").takeIf { it.isNotBlank() }?.let { headers["Click"] = it.trim() }
+                    postText(
+                        "$serverUrl/${URLEncoder.encode(topic.trim(), "UTF-8")}",
+                        content,
+                        headers
+                    )
+                    "ntfy 消息推送成功！"
+                }
+                ForwardingChannels.WEBSOCKET -> {
+                    sendWebSocketTest(
+                        instance.optString("serverUrl"),
+                        instance.optString("token"),
+                        title,
+                        content
+                    )
+                    "WebSocket 测试消息已发送！"
+                }
+                ForwardingChannels.EMAIL -> {
+                    sendEmailTest(
+                        host = instance.optString("host"),
+                        port = instance.optInt("port", 465),
+                        user = instance.optString("user"),
+                        password = instance.optString("password"),
+                        recipientsText = instance.optString("recipients"),
+                        subject = title,
+                        content = content
+                    )
+                    "邮件测试消息已发送！"
+                }
+                ForwardingChannels.SMS_DIRECT -> {
+                    val phone = instance.optString("phone")
+                    require(phone.isNotBlank()) { "短信直发目标号码不能为空，请先配置" }
+                    context.sendMessageCompat(
+                        text = "$title $content",
+                        addresses = listOf(phone),
+                        subId = null,
+                        attachments = emptyList(),
+                        propagateErrors = true,
+                        triggerType = org.fossify.messages.models.SmsSendTriggerType.SMS_DIRECT_TEST
+                    )
+                    "测试短信已通过本机 SIM 卡发送！"
+                }
+                else -> error("该通道暂不支持实例测试：${instance.channelType}")
             }
         }
         if (res.isSuccess) {
@@ -273,7 +572,146 @@ object ChannelTestSender {
         val stream = if (code in 200..299) conn.inputStream else (conn.errorStream ?: conn.inputStream)
         val response = stream?.bufferedReader(StandardCharsets.UTF_8)?.use { it.readText() }.orEmpty()
         conn.disconnect()
+        check(code in 200..299) { "HTTP $code: ${response.take(200)}" }
         return runCatching { JSONObject(response) }.getOrDefault(JSONObject().put("code", code).put("raw", response))
+    }
+
+    private fun parseCustomHeaders(raw: String): Map<String, String> {
+        if (raw.isBlank()) return emptyMap()
+        val jsonHeaders = runCatching {
+            val json = JSONObject(raw)
+            buildMap {
+                json.keys().forEach { key ->
+                    val name = key.trim()
+                    val value = json.optString(key).trim()
+                    if (name.isNotBlank() && value.isNotBlank()) put(name, value)
+                }
+            }
+        }.getOrNull()
+        if (!jsonHeaders.isNullOrEmpty()) return jsonHeaders
+
+        return buildMap {
+            raw.lineSequence().forEach { line ->
+                val separator = line.indexOf(':')
+                if (separator > 0) {
+                    val name = line.substring(0, separator).trim()
+                    val value = line.substring(separator + 1).trim()
+                    if (name.isNotBlank() && value.isNotBlank()) put(name, value)
+                }
+            }
+        }
+    }
+
+    private fun sendWebSocketTest(serverUrl: String, token: String, title: String, content: String) {
+        require(serverUrl.isNotBlank()) { "WebSocket 地址不能为空" }
+        val payload = JSONObject()
+            .put("title", title)
+            .put("content", content)
+            .put("token", token)
+            .put("time", System.currentTimeMillis())
+        if (serverUrl.startsWith("http://") || serverUrl.startsWith("https://")) {
+            postJson(serverUrl, payload)
+            return
+        }
+        require(serverUrl.startsWith("ws://") || serverUrl.startsWith("wss://")) { "WebSocket 地址格式错误" }
+        val latch = CountDownLatch(1)
+        val sent = AtomicBoolean(false)
+        val failure = AtomicReference<Throwable?>(null)
+        val client = OkHttpClient.Builder().connectTimeout(8, TimeUnit.SECONDS).build()
+        val request = Request.Builder().url(serverUrl).apply {
+            if (token.isNotBlank()) header("Authorization", "Bearer ${token.trim()}")
+        }.build()
+        client.newWebSocket(request, object : WebSocketListener() {
+            override fun onOpen(webSocket: WebSocket, response: Response) {
+                sent.set(webSocket.send(payload.toString()))
+                webSocket.close(1000, "test sent")
+                latch.countDown()
+            }
+
+            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                failure.set(t)
+                latch.countDown()
+            }
+        })
+        val completed = latch.await(10, TimeUnit.SECONDS)
+        client.dispatcher.executorService.shutdown()
+        client.connectionPool.evictAll()
+        check(completed) { "WebSocket 连接超时" }
+        failure.get()?.let { throw it }
+        check(sent.get()) { "WebSocket 测试消息发送失败" }
+    }
+
+    private fun sendEmailTest(
+        host: String,
+        port: Int,
+        user: String,
+        password: String,
+        recipientsText: String,
+        subject: String,
+        content: String
+    ) {
+        val recipients = recipientsText.split(',', ';').map(String::trim).filter(String::isNotBlank)
+        require(host.isNotBlank() && user.isNotBlank() && password.isNotBlank() && recipients.isNotEmpty()) {
+            "邮件配置不完整"
+        }
+        val socket = SSLSocketFactory.getDefault().createSocket(host, port) as SSLSocket
+        socket.soTimeout = 10_000
+        socket.sslParameters = socket.sslParameters.apply { endpointIdentificationAlgorithm = "HTTPS" }
+        socket.startHandshake()
+        socket.use {
+            val reader = it.inputStream.bufferedReader(StandardCharsets.UTF_8)
+            val writer = it.outputStream.bufferedWriter(StandardCharsets.UTF_8)
+            expectSmtp(reader, 220)
+            smtpCommand(writer, reader, "EHLO android-sms-forwarder", 250)
+            smtpCommand(writer, reader, "AUTH LOGIN", 334)
+            smtpCommand(writer, reader, Base64.encodeToString(user.toByteArray(), Base64.NO_WRAP), 334)
+            smtpCommand(writer, reader, Base64.encodeToString(password.toByteArray(), Base64.NO_WRAP), 235)
+            smtpCommand(writer, reader, "MAIL FROM:<$user>", 250)
+            recipients.forEach { recipient -> smtpCommand(writer, reader, "RCPT TO:<$recipient>", 250) }
+            smtpCommand(writer, reader, "DATA", 354)
+            val encodedSubject = Base64.encodeToString(subject.toByteArray(StandardCharsets.UTF_8), Base64.NO_WRAP)
+            val encodedBody = java.util.Base64.getMimeEncoder(76, "\r\n".toByteArray())
+                .encodeToString(content.toByteArray(StandardCharsets.UTF_8))
+            writer.write("From: <$user>\r\n")
+            writer.write("To: ${recipients.joinToString(", ")}\r\n")
+            writer.write("Subject: =?UTF-8?B?$encodedSubject?=\r\n")
+            writer.write("MIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\n")
+            writer.write("Content-Transfer-Encoding: base64\r\n\r\n$encodedBody\r\n.\r\n")
+            writer.flush()
+            expectSmtp(reader, 250)
+            smtpCommand(writer, reader, "QUIT", 221)
+        }
+    }
+
+    private fun smtpCommand(writer: BufferedWriter, reader: BufferedReader, command: String, expected: Int) {
+        writer.write("$command\r\n")
+        writer.flush()
+        expectSmtp(reader, expected)
+    }
+
+    private fun expectSmtp(reader: BufferedReader, expected: Int) {
+        var line = reader.readLine() ?: error("SMTP 服务器无响应")
+        val code = line.take(3).toIntOrNull() ?: error("SMTP 响应无效")
+        while (line.length > 3 && line[3] == '-') line = reader.readLine() ?: break
+        check(code == expected) { "SMTP $code ${line.drop(4)}" }
+    }
+
+    private fun postText(urlString: String, body: String, headers: Map<String, String> = emptyMap()) {
+        val conn = (URL(urlString).openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = 8000
+            readTimeout = 8000
+            doOutput = true
+            setRequestProperty("Content-Type", "text/plain; charset=utf-8")
+            setRequestProperty("Accept", "application/json")
+            headers.forEach { (key, value) -> setRequestProperty(key, value) }
+        }
+        conn.outputStream.bufferedWriter(StandardCharsets.UTF_8).use { it.write(body) }
+        val code = conn.responseCode
+        val response = (if (code in 200..299) conn.inputStream else conn.errorStream)
+            ?.bufferedReader(StandardCharsets.UTF_8)?.use { it.readText() }.orEmpty()
+        conn.disconnect()
+        check(code in 200..299) { "ntfy HTTP $code: ${response.take(200)}" }
     }
 
     private fun getJson(urlString: String): JSONObject {
@@ -288,6 +726,7 @@ object ChannelTestSender {
         val stream = if (code in 200..299) conn.inputStream else (conn.errorStream ?: conn.inputStream)
         val response = stream?.bufferedReader(StandardCharsets.UTF_8)?.use { it.readText() }.orEmpty()
         conn.disconnect()
+        check(code in 200..299) { "HTTP $code: ${response.take(200)}" }
         return runCatching { JSONObject(response) }.getOrDefault(JSONObject().put("code", code).put("raw", response))
     }
 }

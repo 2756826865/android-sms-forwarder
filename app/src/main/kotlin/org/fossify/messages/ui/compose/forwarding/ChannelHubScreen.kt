@@ -1,8 +1,6 @@
 package org.fossify.messages.ui.compose.forwarding
 
-import android.annotation.SuppressLint
 import android.content.Context
-import android.telephony.SubscriptionManager
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
@@ -26,26 +24,30 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.res.painterResource
+import org.fossify.messages.R
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
-import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -59,13 +61,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import org.fossify.messages.forwarding.ChannelTestSender
+import org.fossify.messages.forwarding.ForwardingChannelInstance
 import org.fossify.messages.forwarding.ForwardingChannels
-import org.fossify.messages.forwarding.MultiForwardConfig
-import org.fossify.messages.ui.compose.components.GatewayCard
+import org.fossify.messages.forwarding.repository.ChannelRepository
+import org.fossify.messages.remote.repository.RemoteSourceConnectionState
+import org.fossify.messages.remote.repository.RemoteSourceInstance
+import org.fossify.messages.remote.repository.RemoteSourceRepository
+import org.fossify.messages.remote.repository.RemoteSourceType
+import org.fossify.messages.ui.compose.rules.RuleStudioScreen
 import org.fossify.messages.ui.compose.components.StatusBadge
 import org.fossify.messages.ui.compose.theme.AppBackground
 import org.fossify.messages.ui.compose.theme.BrandGreen
@@ -82,8 +87,8 @@ import org.fossify.messages.ui.compose.theme.OutlineSoft
 import org.fossify.messages.ui.compose.theme.SurfaceCard
 import org.fossify.messages.ui.compose.theme.TextPrimary
 import org.fossify.messages.ui.compose.theme.TextSecondary
-import java.net.HttpURLConnection
-import java.net.URL
+import org.json.JSONObject
+import java.util.UUID
 
 enum class ChannelCategory(val title: String, val emoji: String) {
     ALL("全部", "🌐"),
@@ -93,15 +98,89 @@ enum class ChannelCategory(val title: String, val emoji: String) {
     CLOUD("云与自定义", "☁️")
 }
 
-data class ChannelDefinition(
-    val id: String,
+data class ChannelTypeDefinition(
+    val type: String,
     val name: String,
     val description: String,
     val iconEmoji: String,
-    val category: ChannelCategory,
-    val isSmsChannel: Boolean = false,
-    val isGroupChannel: Boolean = false
+    val category: ChannelCategory
 )
+
+val ALL_CHANNEL_TYPE_DEFINITIONS = listOf(
+    ChannelTypeDefinition(ForwardingChannels.PUSHPLUS, "PushPlus 微信推送", "微信服务号一对一或群组推送", "💬", ChannelCategory.WECHAT),
+    ChannelTypeDefinition(ForwardingChannels.WECHAT_TEST, "微信测试号", "微信公众平台测试号模板消息直推", "🟢", ChannelCategory.WECHAT),
+    ChannelTypeDefinition(ForwardingChannels.WECOM_BOT, "企业微信群机器人", "企业微信内部群 Webhook 机器人", "🤖", ChannelCategory.WECHAT),
+    ChannelTypeDefinition(ForwardingChannels.WECOM_APP, "企业微信应用号", "企业微信自建应用 Agent 卡片消息", "💼", ChannelCategory.WECHAT),
+    ChannelTypeDefinition(ForwardingChannels.DINGTALK, "钉钉群机器人", "钉钉群自定义机器人 Webhook + 加签", "🤖", ChannelCategory.WORK),
+    ChannelTypeDefinition(ForwardingChannels.FEISHU_BOT, "飞书群机器人", "飞书群自定义机器人 Webhook + 加签", "🕊️", ChannelCategory.WORK),
+    ChannelTypeDefinition(ForwardingChannels.FEISHU_APP, "飞书自建应用", "飞书开放平台企业自建应用", "🏢", ChannelCategory.WORK),
+    ChannelTypeDefinition(ForwardingChannels.QQ, "QQ 消息 (Qmsg/OneBot)", "支持 Qmsg 酱或 OneBot 协议推送", "🐧", ChannelCategory.INSTANT),
+    ChannelTypeDefinition(ForwardingChannels.BARK, "Bark (iOS)", "苹果设备专属 APNs 极速低功耗推送", "🔔", ChannelCategory.INSTANT),
+    ChannelTypeDefinition(ForwardingChannels.TELEGRAM, "Telegram 机器人", "Telegram Bot API 异步消息推送", "✈️", ChannelCategory.INSTANT),
+    ChannelTypeDefinition(ForwardingChannels.DISCORD, "Discord 群机器人", "Discord Webhook 频道卡片推送", "🎮", ChannelCategory.INSTANT),
+    ChannelTypeDefinition(ForwardingChannels.GOTIFY, "Gotify 消息推送", "自建 Gotify 服务即时推送", "🚀", ChannelCategory.INSTANT),
+    ChannelTypeDefinition(ForwardingChannels.NTFY, "ntfy 推送", "支持官方或自建 ntfy 服务与独立 Topic", "📣", ChannelCategory.INSTANT),
+    ChannelTypeDefinition(ForwardingChannels.WEBSOCKET, "WebSocket 客户端", "长连接实时推流，毫秒级响应", "🔌", ChannelCategory.INSTANT),
+    ChannelTypeDefinition(ForwardingChannels.EMAIL, "邮件消息 (SMTP)", "标准 SMTP 协议发信 (SSL/STARTTLS)", "📧", ChannelCategory.CLOUD),
+    ChannelTypeDefinition(ForwardingChannels.TENCENT_CLOUD, "腾讯云自定义告警", "腾讯云监控告警回调，触发短信与通知", "☁️", ChannelCategory.CLOUD),
+    ChannelTypeDefinition(ForwardingChannels.SMS_DIRECT, "短信直发 (SIM 转发)", "通过本机备用 SIM 卡向指定手机转发", "📱", ChannelCategory.CLOUD),
+    ChannelTypeDefinition(ForwardingChannels.CUSTOM_WEBHOOK, "自定义 Webhook", "适配任意第三方 HTTP POST/GET 接口", "🌐", ChannelCategory.CLOUD)
+)
+
+fun getChannelTypeDefinition(type: String): ChannelTypeDefinition? =
+    ALL_CHANNEL_TYPE_DEFINITIONS.firstOrNull { it.type == type }
+
+private fun linkedDingTalkSourceId(channelInstanceId: String) = "linked-dingtalk-$channelInstanceId"
+
+private fun splitAccessList(value: String): Set<String> = value
+    .split(',', '\n', ';', '；', '，')
+    .map(String::trim)
+    .filter(String::isNotBlank)
+    .toSet()
+
+private fun syncLinkedDingTalkSource(context: Context, channel: ForwardingChannelInstance) {
+    if (channel.channelType != ForwardingChannels.DINGTALK) return
+    val clientId = channel.optString("clientId")
+    val clientSecret = channel.optString("clientSecret")
+    val repository = RemoteSourceRepository.getInstance(context)
+    val sourceId = linkedDingTalkSourceId(channel.id)
+    val existing = repository.getSourceById(sourceId)
+    if (clientId.isBlank() || clientSecret.isBlank()) {
+        if (existing != null) repository.deleteSource(sourceId)
+        return
+    }
+    repository.saveSource(
+        (existing ?: RemoteSourceInstance(
+            id = sourceId,
+            name = channel.name,
+            type = RemoteSourceType.DINGTALK
+        )).copy(
+            name = channel.name,
+            enabled = channel.enabled,
+            connectionState = when {
+                !channel.enabled -> RemoteSourceConnectionState.DISABLED
+                existing == null || !existing.enabled -> RemoteSourceConnectionState.CONNECTING
+                else -> existing.connectionState
+            },
+            customCommandPrefix = channel.optString("customCommandPrefix"),
+            whitelistEnabled = channel.optBoolean("whitelistEnabled", false),
+            authorizedUsers = splitAccessList(channel.optString("authorizedUsers")),
+            authorizedGroups = splitAccessList(channel.optString("authorizedGroups")),
+            requireMention = true,
+            configJson = JSONObject()
+                .put("clientId", clientId)
+                .put("clientSecret", clientSecret)
+                .put("linkedChannelInstanceId", channel.id)
+                .toString()
+        )
+    )
+}
+
+private fun deleteLinkedDingTalkSource(context: Context, channel: ForwardingChannelInstance) {
+    if (channel.channelType == ForwardingChannels.DINGTALK) {
+        RemoteSourceRepository.getInstance(context).deleteSource(linkedDingTalkSourceId(channel.id))
+    }
+}
 
 fun getChannelTutorial(channelId: String): String = when (channelId) {
     ForwardingChannels.PUSHPLUS -> """
@@ -143,16 +222,31 @@ fun getChannelTutorial(channelId: String): String = when (channelId) {
     ForwardingChannels.DINGTALK -> """
         1. 电脑端钉钉群 -> 右上角群设置 ->【智能群助手】->【添加机器人】->【自定义】
         2. 安全设置勾选【加签】
-        3. 复制生成的 Webhook URL 与加签 Secret 填入即可
+        3. 填写 Webhook 与加签 Secret，可把手机短信推送到群
+        4. 如需在群内远程发送短信，再填写企业内部应用的 Client ID 与 Client Secret
+        5. 双向模式通过官方 Stream 长连接接收指令，无需公网回调地址
     """.trimIndent()
     ForwardingChannels.BARK -> """
         1. iPhone 在 App Store 搜索下载 Bark App
         2. 打开 Bark 首页复制您的专属 Device Key
         3. 填入 App 保存，苹果设备即可通过 APNs 极速低功耗弹窗
     """.trimIndent()
+    ForwardingChannels.NTFY -> """
+        1. 使用 ntfy.sh 或部署自己的 ntfy 服务
+        2. 创建一个不易猜测的 Topic，并在接收设备订阅该 Topic
+        3. 填写服务地址和 Topic；私有主题可填写访问 Token
+        4. 不建议使用简单公开 Topic 传输短信或验证码
+    """.trimIndent()
+    ForwardingChannels.GOTIFY -> """
+        1. 使用已有的 Gotify 服务，或在自己的服务器部署 Gotify
+        2. 在 Gotify 后台创建 Application，并复制生成的 App Token
+        3. 填写服务地址和 App Token 后保存并测试
+        4. 公网服务应使用 HTTPS；HTTP 仅用于可信局域网服务
+    """.trimIndent()
     ForwardingChannels.WEBSOCKET -> """
-        1. 部署运行 personal-assistant 或标准 WebSocket 服务
-        2. 填入 ws://IP:端口 或 HTTP 推送网关地址，实现毫秒级桌面端推流
+        1. 准备能够接收 JSON 消息的 WebSocket 服务或 HTTP POST 接口
+        2. 填写 wss://、ws://、https:// 或 http:// 服务地址
+        3. 服务需要鉴权时填写 Token，并先使用测试按钮验证连接
     """.trimIndent()
     ForwardingChannels.TELEGRAM -> """
         1. Telegram 搜索 @BotFather 发送 /newbot 创建机器人获取 Bot Token
@@ -179,7 +273,10 @@ fun getChannelTutorial(channelId: String): String = when (channelId) {
         填入目标手机号码即可。
     """.trimIndent()
     ForwardingChannels.CUSTOM_WEBHOOK -> """
-        填入任意已有系统或第三方平台的 HTTP POST 接收接口 URL，系统将自动将短信转换为 JSON 发送，无需修改原有平台代码。
+        1. 填写接收 JSON 的 HTTP POST 接口地址
+        2. 需要鉴权时填写自定义 Headers，支持 JSON 或每行“名称: 值”格式
+        3. 公网地址使用 HTTPS；HTTP 仅适合可信局域网服务
+        4. 保存后先点击测试，确认接收端返回 HTTP 2xx
     """.trimIndent()
     ForwardingChannels.CHANNEL_GROUP -> """
         自由勾选多个已配置的通道组合为一个群组。
@@ -188,175 +285,195 @@ fun getChannelTutorial(channelId: String): String = when (channelId) {
     else -> "配置该通道所需的凭证参数即可。"
 }
 
+fun getInstanceSummary(instance: ForwardingChannelInstance): String {
+    val type = instance.channelType
+    return when (type) {
+        ForwardingChannels.PUSHPLUS -> {
+            val token = instance.optString("token")
+            if (token.isNotBlank()) "Token: ${token.take(6)}***" else "未配置 Token"
+        }
+        ForwardingChannels.WECHAT_TEST -> {
+            val appId = instance.optString("appId")
+            if (appId.isNotBlank()) "AppID: $appId" else "未配置凭据"
+        }
+        ForwardingChannels.QQ -> {
+            val key = instance.optString("qmsgKey").ifBlank { instance.optString("onebotUrl") }
+            if (key.isNotBlank()) "目标: ${key.take(16)}..." else "未配置目标"
+        }
+        ForwardingChannels.WECOM, ForwardingChannels.WECOM_APP -> {
+            val corpId = instance.optString("corpId")
+            if (corpId.isNotBlank()) "企业ID: $corpId" else "未配置应用"
+        }
+        ForwardingChannels.WECOM_BOT, ForwardingChannels.FEISHU_BOT, ForwardingChannels.FEISHU,
+        ForwardingChannels.DISCORD, ForwardingChannels.TENCENT_CLOUD -> {
+            val webhook = instance.optString("webhook")
+            if (webhook.isNotBlank()) "Webhook: ${webhook.take(28)}..." else "未配置 Webhook"
+        }
+        ForwardingChannels.DINGTALK -> {
+            val hasWebhook = instance.optString("webhook").isNotBlank()
+            val hasStream = instance.optString("clientId").isNotBlank() &&
+                instance.optString("clientSecret").isNotBlank() &&
+                (!instance.optBoolean("whitelistEnabled", false) ||
+                    instance.optString("authorizedUsers").isNotBlank())
+            when {
+                hasWebhook && hasStream -> "双向已配置 · 推送 + Stream"
+                hasWebhook -> "仅短信推送"
+                hasStream -> "仅远程发送"
+                else -> "未配置"
+            }
+        }
+        ForwardingChannels.FEISHU_APP -> {
+            val appId = instance.optString("appId")
+            if (appId.isNotBlank()) "AppID: $appId" else "未配置应用"
+        }
+        ForwardingChannels.BARK -> {
+            val key = instance.optString("deviceKey")
+            if (key.isNotBlank()) "Key: ${key.take(8)}***" else "未配置 DeviceKey"
+        }
+        ForwardingChannels.WEBSOCKET -> {
+            val url = instance.optString("serverUrl")
+            if (url.isNotBlank()) "URL: ${url.take(24)}..." else "未配置 URL"
+        }
+        ForwardingChannels.TELEGRAM -> {
+            val chat = instance.optString("chatId")
+            if (chat.isNotBlank()) "ChatID: $chat" else "未配置凭据"
+        }
+        ForwardingChannels.EMAIL -> {
+            val host = instance.optString("host")
+            val user = instance.optString("user")
+            if (host.isNotBlank()) "$user @ $host" else "未配置 SMTP"
+        }
+        ForwardingChannels.SMS_DIRECT -> {
+            val phone = instance.optString("phone")
+            if (phone.isNotBlank()) "目标号: $phone" else "未配置目标号"
+        }
+        ForwardingChannels.CUSTOM_WEBHOOK -> {
+            val url = instance.optString("url")
+            if (url.isNotBlank()) "URL: ${url.take(28)}..." else "未配置 URL"
+        }
+        ForwardingChannels.GOTIFY -> {
+            val serverUrl = instance.optString("serverUrl")
+            if (serverUrl.isNotBlank()) "Server: ${serverUrl.take(20)}..." else "未配置服务"
+        }
+        ForwardingChannels.NTFY -> {
+            val serverUrl = instance.optString("serverUrl")
+            val topic = instance.optString("topic")
+            if (topic.isNotBlank()) "${serverUrl.ifBlank { "https://ntfy.sh" }.take(20)} / $topic" else "未配置 Topic"
+        }
+        else -> "已配置"
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChannelHubScreen() {
+private fun HeaderPill(
+    label: String,
+    contentColor: Color,
+    containerColor: Color,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(18.dp),
+        color = containerColor,
+        modifier = Modifier.height(34.dp)
+    ) {
+        Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 10.dp)) {
+            Text(label, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = contentColor, maxLines = 1, softWrap = false)
+        }
+    }
+}
+
+@Composable
+private fun ChannelNavChip(
+    label: String,
+    selected: Boolean,
+    isDark: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(18.dp),
+        color = if (selected) {
+            if (isDark) Color(0xFF1B3322) else BrandGreenSoft
+        } else {
+            if (isDark) DarkSurface else Color.White
+        },
+        border = BorderStroke(1.dp, if (selected) BrandGreen else if (isDark) DarkOutline else OutlineSoft),
+        modifier = Modifier.height(36.dp)
+    ) {
+        Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 13.dp)) {
+            Text(
+                label,
+                fontSize = 12.sp,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                color = if (selected) BrandGreen else TextSecondary,
+                maxLines = 1,
+                softWrap = false
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ChannelHubScreen(
+    onBack: (() -> Unit)? = null,
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val config = remember { MultiForwardConfig(context) }
+    val channelRepo = remember { ChannelRepository.getInstance(context) }
+    val instances by channelRepo.instancesFlow.collectAsState()
 
-    var selectedCategory by remember { mutableStateOf(ChannelCategory.ALL) }
-
-    // 15 大全生态通道定义
-    val channelDefs = remember {
-        listOf(
-            // 微信生态
-            ChannelDefinition(ForwardingChannels.PUSHPLUS, "PushPlus 微信推送", "通过 PushPlus 机器人推送到个人/群微信", "💬", ChannelCategory.WECHAT),
-            ChannelDefinition(ForwardingChannels.WECHAT_TEST, "微信测试号", "微信公众平台测试号模板消息直推", "🟢", ChannelCategory.WECHAT),
-            ChannelDefinition(ForwardingChannels.WECOM_APP, "企业微信应用号", "官方企业微信 Agent 应用自建卡片消息", "💼", ChannelCategory.WECHAT),
-            ChannelDefinition(ForwardingChannels.WECOM_BOT, "企业微信群机器人", "企业微信内部群 Webhook 机器人", "🤖", ChannelCategory.WECHAT),
-
-            // 办公协同
-            ChannelDefinition(ForwardingChannels.FEISHU_APP, "飞书自建应用", "飞书开放平台自建应用直推，支持富文本", "🏢", ChannelCategory.WORK),
-            ChannelDefinition(ForwardingChannels.FEISHU_BOT, "飞书群机器人", "飞书自定义群机器人签名消息", "🕊️", ChannelCategory.WORK),
-            ChannelDefinition(ForwardingChannels.DINGTALK, "钉钉群机器人", "钉钉自定义群机器人加签推送", "🤖", ChannelCategory.WORK),
-
-            // 极客通讯
-            ChannelDefinition(ForwardingChannels.QQ, "QQ 消息 (Qmsg/OneBot)", "支持 Qmsg 酱或 OneBot(go-cqhttp) 协议", "🐧", ChannelCategory.INSTANT),
-            ChannelDefinition(ForwardingChannels.BARK, "Bark (iOS)", "苹果设备专属 APNs 极速低功耗推送", "🔔", ChannelCategory.INSTANT),
-            ChannelDefinition(ForwardingChannels.WEBSOCKET, "WebSocket 客户端", "长连接实时推送，支持 [personal-assistant]", "🔌", ChannelCategory.INSTANT),
-            ChannelDefinition(ForwardingChannels.TELEGRAM, "Telegram 机器人", "Telegram Bot API 异步消息推送", "✈️", ChannelCategory.INSTANT),
-            ChannelDefinition(ForwardingChannels.DISCORD, "Discord 群机器人", "Discord Webhook 频道卡片推送", "🎮", ChannelCategory.INSTANT),
-
-            // 云与自定义
-            ChannelDefinition(ForwardingChannels.EMAIL, "邮件消息 (SMTP)", "标准 SMTP 协议直连发信 (SSL/STARTTLS)", "📧", ChannelCategory.CLOUD),
-            ChannelDefinition(ForwardingChannels.TENCENT_CLOUD, "腾讯云自定义告警", "腾讯云监控告警回调，触发免费短信与通知", "☁️", ChannelCategory.CLOUD),
-            ChannelDefinition(ForwardingChannels.SMS_DIRECT, "短信直发 (SIM 转发)", "通过本机备用 SIM 卡向指定手机号转发短信", "📱", ChannelCategory.CLOUD, isSmsChannel = true),
-            ChannelDefinition(ForwardingChannels.CUSTOM_WEBHOOK, "自定义 Webhook", "反向适配任意第三方系统 HTTP POST/GET", "🌐", ChannelCategory.CLOUD),
-            ChannelDefinition(ForwardingChannels.CHANNEL_GROUP, "群组聚合消息", "组合多个通道为一个群组，一次性并发推送", "👥", ChannelCategory.CLOUD, isGroupChannel = true)
-        )
-    }
-
-    val filteredChannels = remember(selectedCategory) {
-        if (selectedCategory == ChannelCategory.ALL) channelDefs
-        else channelDefs.filter { it.category == selectedCategory }
-    }
-
-    // 响应式开关状态映射
-    var channelStates by remember {
-        mutableStateOf(
-            mapOf(
-                ForwardingChannels.PUSHPLUS to config.pushPlusEnabled,
-                ForwardingChannels.WECHAT_TEST to config.wechatTestEnabled,
-                ForwardingChannels.QQ to config.qqEnabled,
-                ForwardingChannels.WECOM_APP to config.weComEnabled,
-                ForwardingChannels.WECOM_BOT to config.weComBotEnabled,
-                ForwardingChannels.FEISHU_APP to config.feishuAppEnabled,
-                ForwardingChannels.FEISHU_BOT to config.feishuEnabled,
-                ForwardingChannels.DINGTALK to config.dingTalkEnabled,
-                ForwardingChannels.BARK to config.barkEnabled,
-                ForwardingChannels.WEBSOCKET to config.websocketEnabled,
-                ForwardingChannels.TELEGRAM to config.telegramEnabled,
-                ForwardingChannels.DISCORD to config.discordEnabled,
-                ForwardingChannels.TENCENT_CLOUD to config.tencentCloudEnabled,
-                ForwardingChannels.EMAIL to config.emailEnabled,
-                ForwardingChannels.SMS_DIRECT to config.smsDirectEnabled,
-                ForwardingChannels.CUSTOM_WEBHOOK to config.customWebhookEnabled,
-                ForwardingChannels.CHANNEL_GROUP to config.channelGroupEnabled
+    // 兼容此前错误落库的 catalog: 占位 ID：进入页面即转换为可启停、可测试的真实实例。
+    LaunchedEffect(instances) {
+        instances.filter { it.id.startsWith("catalog:") }.forEach { staleInstance ->
+            channelRepo.saveInstance(
+                staleInstance.copy(
+                    id = UUID.randomUUID().toString(),
+                    enabled = true
+                )
             )
-        )
+            channelRepo.deleteInstance(staleInstance.id)
+        }
     }
+    var selectedSection by remember { mutableStateOf("all") }
+    var inlineRuleId by remember { mutableStateOf<String?>(null) }
+    var isEditingInlineRule by remember { mutableStateOf(false) }
 
-    var pingResults by remember { mutableStateOf(mapOf<String, String>()) }
     var testingStates by remember { mutableStateOf(mapOf<String, Boolean>()) }
-    var editingChannel by remember { mutableStateOf<ChannelDefinition?>(null) }
-    var showGroupDialog by remember { mutableStateOf(false) }
+    var testResults by remember { mutableStateOf(mapOf<String, String>()) }
+
+    var editingInstance by remember { mutableStateOf<ForwardingChannelInstance?>(null) }
+    var isAddingNew by remember { mutableStateOf(false) }
+    var instanceToDelete by remember { mutableStateOf<ForwardingChannelInstance?>(null) }
     var showFullTutorialDialog by remember { mutableStateOf(false) }
 
-    fun isChannelConfigured(id: String): Boolean = when (id) {
-        ForwardingChannels.PUSHPLUS -> config.pushPlusToken().isNotBlank()
-        ForwardingChannels.WECHAT_TEST -> config.wechatTestAppId().isNotBlank() && config.wechatTestAppSecret().isNotBlank()
-        ForwardingChannels.QQ -> config.qqWebhook().isNotBlank()
-        ForwardingChannels.WECOM, ForwardingChannels.WECOM_APP -> config.weComCorpId().isNotBlank() && config.weComAgentId().isNotBlank()
-        ForwardingChannels.WECOM_BOT -> config.weComBotWebhook().isNotBlank()
-        ForwardingChannels.FEISHU_APP -> config.feishuAppId().isNotBlank() && config.feishuAppSecret().isNotBlank()
-        ForwardingChannels.FEISHU, ForwardingChannels.FEISHU_BOT -> config.feishuWebhook().isNotBlank()
-        ForwardingChannels.DINGTALK -> config.dingTalkWebhook().isNotBlank()
-        ForwardingChannels.BARK -> config.barkDeviceKey().isNotBlank()
-        ForwardingChannels.WEBSOCKET -> config.websocketUrl().isNotBlank()
-        ForwardingChannels.TELEGRAM -> config.telegramBotToken().isNotBlank() && config.telegramChatId().isNotBlank()
-        ForwardingChannels.DISCORD -> config.discordWebhook().isNotBlank()
-        ForwardingChannels.TENCENT_CLOUD -> config.tencentCloudWebhook().isNotBlank()
-        ForwardingChannels.EMAIL -> config.emailHost().isNotBlank() && config.emailUser().isNotBlank()
-        ForwardingChannels.SMS_DIRECT -> config.smsDirectPhone().isNotBlank()
-        ForwardingChannels.CUSTOM_WEBHOOK -> config.customWebhookUrl().isNotBlank()
-        ForwardingChannels.CHANNEL_GROUP -> config.channelGroupMembers().isNotEmpty()
-        else -> false
-    }
-
-    fun setChannelEnabled(id: String, enabled: Boolean) {
-        when (id) {
-            ForwardingChannels.PUSHPLUS -> config.pushPlusEnabled = enabled
-            ForwardingChannels.WECHAT_TEST -> config.wechatTestEnabled = enabled
-            ForwardingChannels.QQ -> config.qqEnabled = enabled
-            ForwardingChannels.WECOM, ForwardingChannels.WECOM_APP -> config.weComEnabled = enabled
-            ForwardingChannels.WECOM_BOT -> config.weComBotEnabled = enabled
-            ForwardingChannels.FEISHU_APP -> config.feishuAppEnabled = enabled
-            ForwardingChannels.FEISHU, ForwardingChannels.FEISHU_BOT -> config.feishuEnabled = enabled
-            ForwardingChannels.DINGTALK -> config.dingTalkEnabled = enabled
-            ForwardingChannels.BARK -> config.barkEnabled = enabled
-            ForwardingChannels.WEBSOCKET -> config.websocketEnabled = enabled
-            ForwardingChannels.TELEGRAM -> config.telegramEnabled = enabled
-            ForwardingChannels.DISCORD -> config.discordEnabled = enabled
-            ForwardingChannels.TENCENT_CLOUD -> config.tencentCloudEnabled = enabled
-            ForwardingChannels.EMAIL -> config.emailEnabled = enabled
-            ForwardingChannels.SMS_DIRECT -> config.smsDirectEnabled = enabled
-            ForwardingChannels.CUSTOM_WEBHOOK -> config.customWebhookEnabled = enabled
-            ForwardingChannels.CHANNEL_GROUP -> config.channelGroupEnabled = enabled
-        }
-        channelStates = channelStates + (id to enabled)
-    }
-
-    fun getChannelConfigSummary(id: String): String = when (id) {
-        ForwardingChannels.PUSHPLUS -> if (config.pushPlusToken().isNotBlank()) "Token: 已配置" else "未配置 Token"
-        ForwardingChannels.WECHAT_TEST -> if (config.wechatTestAppId().isNotBlank()) "AppID: 已配置" else "未配置 AppID/Secret"
-        ForwardingChannels.QQ -> if (config.qqWebhook().isNotBlank()) "QQ: 已配置" else "未配置 Token/Webhook"
-        ForwardingChannels.WECOM, ForwardingChannels.WECOM_APP -> if (config.weComCorpId().isNotBlank()) "企业ID: 已配置" else "未配置 CorpID/Secret"
-        ForwardingChannels.WECOM_BOT -> if (config.weComBotWebhook().isNotBlank()) "Webhook: 已配置" else "未配置 Webhook"
-        ForwardingChannels.FEISHU_APP -> if (config.feishuAppId().isNotBlank()) "AppID: 已配置" else "未配置 AppID/Secret"
-        ForwardingChannels.FEISHU, ForwardingChannels.FEISHU_BOT -> if (config.feishuWebhook().isNotBlank()) "Webhook: 已配置" else "未配置 Webhook"
-        ForwardingChannels.DINGTALK -> if (config.dingTalkWebhook().isNotBlank()) "Webhook: 已配置" else "未配置 Webhook"
-        ForwardingChannels.BARK -> if (config.barkDeviceKey().isNotBlank()) "Key: 已配置" else "未配置 DeviceKey"
-        ForwardingChannels.WEBSOCKET -> if (config.websocketUrl().isNotBlank()) "URL: 已配置" else "未配置 WebSocket URL"
-        ForwardingChannels.TELEGRAM -> if (config.telegramBotToken().isNotBlank()) "Token: 已配置" else "未配置 BotToken"
-        ForwardingChannels.DISCORD -> if (config.discordWebhook().isNotBlank()) "Webhook: 已配置" else "未配置 Webhook"
-        ForwardingChannels.TENCENT_CLOUD -> if (config.tencentCloudWebhook().isNotBlank()) "URL: 已配置" else "未配置 Webhook"
-        ForwardingChannels.EMAIL -> if (config.emailHost().isNotBlank()) "SMTP: ${config.emailHost()}" else "未配置 SMTP"
-        ForwardingChannels.SMS_DIRECT -> if (config.smsDirectPhone().isNotBlank()) "目标号: ${config.smsDirectPhone()}" else "未配置目标号"
-        ForwardingChannels.CUSTOM_WEBHOOK -> if (config.customWebhookUrl().isNotBlank()) "URL: 已配置" else "未配置 URL"
-        ForwardingChannels.CHANNEL_GROUP -> "已包含 ${config.channelGroupMembers().size} 个聚合通道"
-        else -> "就绪"
-    }
-
-    fun performSendTestMessage(channel: ChannelDefinition) {
-        if (channel.isGroupChannel) {
-            val members = config.channelGroupMembers()
-            if (members.isEmpty()) {
-                Toast.makeText(context, "请先点击「⚙️ 配置」为群组选择至少一个通道成员", Toast.LENGTH_SHORT).show()
-                showGroupDialog = true
-                return
-            }
-        } else if (!isChannelConfigured(channel.id)) {
-            Toast.makeText(context, "请先完成【${channel.name}】的参数配置", Toast.LENGTH_SHORT).show()
-            editingChannel = channel
-            return
-        }
-
-        testingStates = testingStates + (channel.id to true)
-        scope.launch {
-            val result = ChannelTestSender.sendTest(context, channel.id)
-            testingStates = testingStates + (channel.id to false)
-            if (result.isSuccess) {
-                val msg = result.getOrNull() ?: "测试消息发送成功！"
-                pingResults = pingResults + (channel.id to "测试送达成功")
-                Toast.makeText(context, "✅ [${channel.name}] $msg", Toast.LENGTH_LONG).show()
-            } else {
-                val err = result.exceptionOrNull()?.message ?: "未知错误"
-                pingResults = pingResults + (channel.id to "发送失败: ${err.take(15)}")
-                Toast.makeText(context, "❌ [${channel.name}] 推送失败: $err", Toast.LENGTH_LONG).show()
+    val allChannelItems = remember(instances) {
+        val removedTypes = setOf(
+            ForwardingChannels.WECHAT_TEST,
+            ForwardingChannels.WECOM_BOT,
+            ForwardingChannels.WECOM_APP
+        )
+        val supportedDefinitions = ALL_CHANNEL_TYPE_DEFINITIONS.filterNot { it.type in removedTypes }
+        val catalogItems = supportedDefinitions.flatMap { definition ->
+            instances.filter { it.channelType == definition.type }.ifEmpty {
+                listOf(
+                    ForwardingChannelInstance(
+                        id = "catalog:${definition.type}",
+                        channelType = definition.type,
+                        name = definition.name,
+                        enabled = false,
+                        configJson = "{}"
+                    )
+                )
             }
         }
+        catalogItems + instances.filter { instance ->
+            supportedDefinitions.none { it.type == instance.channelType } && instance.channelType !in removedTypes
+        }
     }
+    val visibleInstances = if (selectedSection == "custom") instances else allChannelItems
 
     val isDark = isSystemInDarkTheme()
     val pageBgColor = if (isDark) DarkBackground else AppBackground
@@ -372,319 +489,509 @@ fun ChannelHubScreen() {
                 .padding(innerPadding)
                 .statusBarsPadding()
         ) {
-            // 顶部 Header
-            Row(
+            // 恢复经典标题区结构，列表仍只展示用户真实创建的实例。
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(horizontal = 16.dp, vertical = 10.dp)
             ) {
-                Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
-                    Text(
-                        text = "推送中心",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = primaryTextColor,
-                        maxLines = 1,
-                        softWrap = false
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (onBack != null) {
+                            IconButton(onClick = onBack) {
+                                Icon(painterResource(R.drawable.ic_chevron_left), "返回", tint = primaryTextColor)
+                            }
+                        }
+                        Text("通道管理", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = primaryTextColor)
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        HeaderPill("📖 教程", BrandGreen, if (isDark) Color(0xFF1B3322) else BrandGreenSoft) {
+                            showFullTutorialDialog = true
+                        }
+                        Button(
+                            onClick = { isAddingNew = true },
+                            shape = RoundedCornerShape(18.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = BrandGreen),
+                            modifier = Modifier.height(34.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
+                        ) {
+                            Text("+ 自定义通道", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(3.dp))
+                Text(
+                    "${instances.size} 个通道实例 · ${instances.count { it.enabled }} 个已启用",
+                    fontSize = 12.sp,
+                    color = secondaryTextColor
+                )
+            }
+
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                item {
+                    ChannelNavChip("🌐 全部", selectedSection == "all", isDark) { selectedSection = "all" }
+                }
+                item {
+                    ChannelNavChip("🔧 自定义", selectedSection == "custom", isDark) { selectedSection = "custom" }
+                }
+                item {
+                    ChannelNavChip("🎮 远程发送", selectedSection == "remote", isDark) { selectedSection = "remote" }
+                }
+                item {
+                    ChannelNavChip("⚡ 规则", selectedSection == "rules", isDark) { selectedSection = "rules" }
+                }
+                item {
+                    ChannelNavChip("📝 消息模板", selectedSection == "templates", isDark) { selectedSection = "templates" }
+                }
+                item {
+                    ChannelNavChip("💬 自动回复", selectedSection == "auto_reply", isDark) { selectedSection = "auto_reply" }
+                }
+                item {
+                    ChannelNavChip("📞 未接提醒", selectedSection == "missed_call", isDark) { selectedSection = "missed_call" }
+                }
+                item {
+                    ChannelNavChip("🔋 电量提醒", selectedSection == "low_battery", isDark) { selectedSection = "low_battery" }
+                }
+                item {
+                    ChannelNavChip("📋 验证码写入", selectedSection == "autofill", isDark) { selectedSection = "autofill" }
+                }
+                item {
+                    ChannelNavChip("💚 定时心跳", selectedSection == "heartbeat", isDark) { selectedSection = "heartbeat" }
+                }
+                item {
+                    ChannelNavChip("⏰ 定时短信", selectedSection == "scheduled", isDark) { selectedSection = "scheduled" }
+                }
+                item {
+                    ChannelNavChip("📨 批量发送", selectedSection == "bulk_send", isDark) { selectedSection = "bulk_send" }
+                }
+            }
+
+            // 通道实例列表
+            if (selectedSection == "remote") {
+                org.fossify.messages.ui.compose.remote.RemoteControlScreen(onBack = null)
+            } else if (selectedSection == "rules") {
+                if (isEditingInlineRule) {
+                    org.fossify.messages.ui.compose.rules.RuleEditorScreen(
+                        ruleId = inlineRuleId,
+                        onNavigateBack = { isEditingInlineRule = false }
                     )
-                    Spacer(modifier = Modifier.height(3.dp))
-                    Text(
-                        text = "15 种全生态通道 · 真实测试发信",
-                        fontSize = 12.sp,
-                        color = secondaryTextColor,
-                        maxLines = 2,
-                        softWrap = true
+                } else {
+                    org.fossify.messages.ui.compose.rules.RuleManagementScreen(
+                        onNavigateBack = null,
+                        onNavigateToEditor = { id ->
+                            inlineRuleId = id
+                            isEditingInlineRule = true
+                        }
                     )
                 }
-
+            } else if (selectedSection == "templates") {
+                RuleStudioScreen(embeddedTemplateOnly = true)
+            } else if (selectedSection == "auto_reply") {
+                AutoReplyEmbeddedScreen()
+            } else if (selectedSection == "missed_call") {
+                MissedCallEmbeddedScreen()
+            } else if (selectedSection == "low_battery") {
+                LowBatteryEmbeddedScreen()
+            } else if (selectedSection == "autofill") {
+                AutofillEmbeddedScreen()
+            } else if (selectedSection == "heartbeat") {
+                HeartbeatEmbeddedScreen()
+            } else if (selectedSection == "scheduled") {
+                ClassicFeatureEntryScreen(
+                    title = "定时短信",
+                    description = "创建、查看和管理计划发送的短信。",
+                    buttonText = "管理定时短信",
+                    activityClass = org.fossify.messages.activities.ScheduledMessagesActivity::class.java
+                )
+            } else if (selectedSection == "bulk_send") {
+                ClassicFeatureEntryScreen(
+                    title = "批量发送",
+                    description = "向多个号码批量发送短信，会产生运营商通信费用。",
+                    buttonText = "打开批量发送",
+                    activityClass = org.fossify.messages.activities.BulkSendActivity::class.java
+                )
+            } else if (visibleInstances.isEmpty()) {
                 Surface(
-                    onClick = { showFullTutorialDialog = true },
-                    shape = RoundedCornerShape(22.dp),
-                    color = if (isDark) Color(0xFF1B3322) else BrandGreenSoft,
-                    modifier = Modifier.height(34.dp)
+                    shape = RoundedCornerShape(20.dp),
+                    color = if (isDark) DarkSurface else SurfaceCard,
+                    border = BorderStroke(1.dp, if (isDark) DarkOutline else OutlineSoft),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 20.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                    Column(
+                        modifier = Modifier.padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
+                        Text("📭", fontSize = 40.sp)
+                        Spacer(modifier = Modifier.height(12.dp))
                         Text(
-                            text = "📖 教程指南",
-                            fontSize = 12.sp,
+                            text = if (selectedSection == "custom") "暂无自定义通道" else "暂无可用通道",
+                            fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
-                            color = BrandGreen,
-                            maxLines = 1,
-                            softWrap = false
+                            color = primaryTextColor
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "点击右上角「+ 添加自定义通道」创建通道实例；旧版已配置通道会在升级后自动导入。",
+                            fontSize = 12.sp,
+                            color = secondaryTextColor,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
                         )
                     }
                 }
-            }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    items(visibleInstances, key = { it.id }) { instance ->
+                        val def = getChannelTypeDefinition(instance.channelType)
+                        val isCatalogPlaceholder = instance.id.startsWith("catalog:")
+                        val isTesting = testingStates[instance.id] == true
+                        val testMsg = testResults[instance.id]
 
-            // 分类选择横向 Chips
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                items(ChannelCategory.values().toList()) { cat ->
-                    val isSelected = selectedCategory == cat
-                    Surface(
-                        onClick = { selectedCategory = cat },
-                        shape = RoundedCornerShape(16.dp),
-                        color = if (isSelected) {
-                            if (isDark) Color(0xFF1B3322) else BrandGreenSoft
-                        } else {
-                            if (isDark) DarkSurface else Color.White
-                        },
-                        border = BorderStroke(
-                            1.dp,
-                            if (isSelected) BrandGreen else (if (isDark) DarkOutline else OutlineSoft)
-                        ),
-                        modifier = Modifier.height(36.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                        Surface(
+                            shape = RoundedCornerShape(20.dp),
+                            color = if (isDark) DarkSurface else SurfaceCard,
+                            shadowElevation = 2.dp,
+                            border = BorderStroke(1.dp, if (isDark) DarkOutline else Color(0xFFF0F3F7)),
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text(
-                                text = "${cat.emoji} ${cat.title}",
-                                fontSize = 12.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                color = if (isSelected) BrandGreen else secondaryTextColor,
-                                maxLines = 1,
-                                softWrap = false
-                            )
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                items(filteredChannels, key = { it.id }) { channel ->
-                    val isChecked = channelStates[channel.id] == true
-                    val isTesting = testingStates[channel.id] == true
-                    val pingText = pingResults[channel.id]
-
-                    Surface(
-                        shape = RoundedCornerShape(22.dp),
-                        color = if (isDark) DarkSurface else SurfaceCard,
-                        shadowElevation = 2.dp,
-                        border = BorderStroke(1.dp, if (isDark) DarkOutline else Color(0xFFF0F3F7)),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(modifier = Modifier.padding(14.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Surface(
-                                    shape = RoundedCornerShape(16.dp),
-                                    color = if (isDark) Color(0xFF1B3322) else BrandGreenSoft,
-                                    modifier = Modifier.size(42.dp)
+                            Column(modifier = Modifier.padding(14.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                                        Text(text = channel.iconEmoji, fontSize = 18.sp)
-                                    }
-                                }
-
-                                Spacer(modifier = Modifier.width(14.dp))
-
-                                Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
-                                    Text(
-                                        text = channel.name,
-                                        fontSize = 15.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (isDark) Color.White else primaryTextColor,
-                                        maxLines = 1,
-                                        softWrap = false,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    Spacer(modifier = Modifier.height(3.dp))
-                                    Text(
-                                        text = getChannelConfigSummary(channel.id),
-                                        fontSize = 12.sp,
-                                        color = if (getChannelConfigSummary(channel.id).contains("未配置")) GatewayOrange else secondaryTextColor,
-                                        maxLines = 1,
-                                        softWrap = false,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-
-                                Switch(
-                                    checked = isChecked,
-                                    onCheckedChange = { targetState ->
-                                        if (targetState && !isChannelConfigured(channel.id)) {
-                                            Toast.makeText(context, "请先完成【${channel.name}】的参数配置后再开启", Toast.LENGTH_SHORT).show()
-                                            if (channel.isGroupChannel) showGroupDialog = true
-                                            else editingChannel = channel
-                                        } else {
-                                            setChannelEnabled(channel.id, targetState)
-                                            Toast.makeText(context, "${channel.name} 已${if (targetState) "启用" else "禁用"}", Toast.LENGTH_SHORT).show()
-                                        }
-                                    },
-                                    colors = SwitchDefaults.colors(
-                                        checkedThumbColor = Color.White,
-                                        checkedTrackColor = BrandGreen
-                                    )
-                                )
-                            }
-
-                            if (pingText != null) {
-                                Spacer(modifier = Modifier.height(8.dp))
-                                StatusBadge(
-                                    text = pingText,
-                                    color = if (pingText.contains("失败")) GatewayRed else GatewayGreen
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.height(14.dp))
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Surface(
-                                    shape = RoundedCornerShape(10.dp),
-                                    color = if (isDark) Color(0xFF2C1E3A) else Color(0xFFF3E8FF)
-                                ) {
-                                    Text(
-                                        text = if (channel.isSmsChannel) "SIM直发" else if (channel.isGroupChannel) "群组聚合" else "KEYSTORE加密",
-                                        fontSize = 10.5.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = GatewayPurple,
-                                        maxLines = 1,
-                                        softWrap = false,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                    )
-                                }
-
-                                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                    OutlinedButton(
-                                        onClick = {
-                                            if (channel.isGroupChannel) showGroupDialog = true
-                                            else editingChannel = channel
-                                        },
+                                    Surface(
                                         shape = RoundedCornerShape(14.dp),
-                                        border = BorderStroke(1.dp, if (isDark) DarkOutline else OutlineSoft),
-                                        modifier = Modifier.height(34.dp),
-                                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp)
+                                        color = if (isDark) Color(0xFF1B3322) else BrandGreenSoft,
+                                        modifier = Modifier.size(42.dp)
                                     ) {
+                                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                            Text(text = def?.iconEmoji ?: "📡", fontSize = 20.sp)
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.width(12.dp))
+
+                                    Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                text = instance.name,
+                                                fontSize = 15.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = primaryTextColor,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.height(2.dp))
                                         Text(
-                                            text = "⚙️ 配置",
+                                            text = "${def?.name ?: instance.channelType} · ${getInstanceSummary(instance)}",
                                             fontSize = 12.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = if (isDark) Color.White else primaryTextColor,
+                                            color = secondaryTextColor,
                                             maxLines = 1,
-                                            softWrap = false
+                                            overflow = TextOverflow.Ellipsis
                                         )
                                     }
 
-                                    Button(
-                                        onClick = { performSendTestMessage(channel) },
-                                        shape = RoundedCornerShape(14.dp),
-                                        colors = ButtonDefaults.buttonColors(containerColor = BrandGreen),
-                                        modifier = Modifier.height(34.dp),
-                                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp),
-                                        enabled = !isTesting
+                                    Switch(
+                                        checked = instance.enabled,
+                                        onCheckedChange = { targetState ->
+                                            if (isCatalogPlaceholder) {
+                                                editingInstance = instance
+                                            } else {
+                                                channelRepo.toggleInstanceEnabled(instance.id, targetState)
+                                                syncLinkedDingTalkSource(context, instance.copy(enabled = targetState))
+                                                Toast.makeText(context, "【${instance.name}】已${if (targetState) "启用" else "停用"}", Toast.LENGTH_SHORT).show()
+                                            }
+                                        },
+                                        colors = SwitchDefaults.colors(
+                                            checkedThumbColor = Color.White,
+                                            checkedTrackColor = BrandGreen
+                                        )
+                                    )
+                                }
+
+                                if (testMsg != null) {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    StatusBadge(
+                                        text = testMsg,
+                                        color = if (testMsg.contains("失败")) GatewayRed else GatewayGreen
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = if (isDark) Color(0xFF2C1E3A) else Color(0xFFF3E8FF)
                                     ) {
-                                        if (isTesting) {
-                                            CircularProgressIndicator(
-                                                modifier = Modifier.size(14.dp),
-                                                strokeWidth = 2.dp,
-                                                color = Color.White
-                                            )
-                                        } else {
-                                            Text(
-                                                text = "测试",
-                                                fontSize = 12.sp,
-                                                color = Color.White,
-                                                fontWeight = FontWeight.Bold,
-                                                maxLines = 1,
-                                                softWrap = false
-                                            )
+                                        Text(
+                                            text = def?.category?.title ?: "通道",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = GatewayPurple,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                        )
+                                    }
+
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        if (!isCatalogPlaceholder) {
+                                            OutlinedButton(
+                                                onClick = { instanceToDelete = instance },
+                                                shape = RoundedCornerShape(12.dp),
+                                                border = BorderStroke(1.dp, GatewayRed.copy(alpha = 0.4f)),
+                                                modifier = Modifier.height(32.dp),
+                                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
+                                            ) {
+                                                Text("删除", fontSize = 11.5.sp, color = GatewayRed)
+                                            }
+                                        }
+
+                                        OutlinedButton(
+                                            onClick = { editingInstance = instance },
+                                            shape = RoundedCornerShape(12.dp),
+                                            border = BorderStroke(1.dp, if (isDark) DarkOutline else OutlineSoft),
+                                            modifier = Modifier.height(32.dp),
+                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
+                                        ) {
+                                            Text(if (isCatalogPlaceholder) "⚙️ 配置" else "⚙️ 编辑", fontSize = 11.5.sp, color = primaryTextColor)
+                                        }
+
+                                        if (!isCatalogPlaceholder) Button(
+                                            onClick = {
+                                                testingStates = testingStates + (instance.id to true)
+                                                scope.launch {
+                                                    val res = ChannelTestSender.sendTestInstance(context, instance)
+                                                    testingStates = testingStates + (instance.id to false)
+                                                    if (res.isSuccess) {
+                                                        testResults = testResults + (instance.id to "✅ 测试成功")
+                                                        Toast.makeText(context, "✅ [${instance.name}] 测试发送成功！", Toast.LENGTH_SHORT).show()
+                                                    } else {
+                                                        val err = res.exceptionOrNull()?.message ?: "未知错误"
+                                                        testResults = testResults + (instance.id to "❌ 失败: ${err.take(12)}")
+                                                        Toast.makeText(context, "❌ [${instance.name}] 失败: $err", Toast.LENGTH_LONG).show()
+                                                    }
+                                                }
+                                            },
+                                            shape = RoundedCornerShape(12.dp),
+                                            colors = ButtonDefaults.buttonColors(containerColor = BrandGreen),
+                                            modifier = Modifier.height(32.dp),
+                                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                                            enabled = !isTesting
+                                        ) {
+                                            if (isTesting) {
+                                                CircularProgressIndicator(modifier = Modifier.size(12.dp), strokeWidth = 2.dp, color = Color.White)
+                                            } else {
+                                                Text("测试", fontSize = 11.5.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                                            }
                                         }
                                     }
                                 }
                             }
                         }
                     }
-                }
 
-                item { Spacer(modifier = Modifier.height(120.dp)) }
+                    item { Spacer(modifier = Modifier.height(100.dp)) }
+                }
             }
         }
     }
 
-    // 通道专属配置弹窗 (内置极速指引)
-    editingChannel?.let { channel ->
-        ChannelDedicatedConfigDialog(
-            channel = channel,
-            config = config,
-            onDismiss = { editingChannel = null },
-            onSaved = {
-                setChannelEnabled(channel.id, true)
-                Toast.makeText(context, "${channel.name} 配置已安全加密保存并立即启用！", Toast.LENGTH_SHORT).show()
-                editingChannel = null
+    // 新增通道实例弹窗
+    if (isAddingNew) {
+        InstanceEditorDialog(
+            existingInstance = null,
+            onDismiss = { isAddingNew = false },
+            onSaved = { newInst ->
+                channelRepo.saveInstance(newInst)
+                syncLinkedDingTalkSource(context, newInst)
+                Toast.makeText(context, "通道实例【${newInst.name}】已成功添加！", Toast.LENGTH_SHORT).show()
+                isAddingNew = false
             }
         )
     }
 
-    // 群组聚合分发弹窗
-    if (showGroupDialog) {
-        ChannelGroupMembersDialog(
-            allChannels = channelDefs.filter { !it.isGroupChannel },
-            config = config,
-            onDismiss = { showGroupDialog = false },
-            onSaved = {
-                setChannelEnabled(ForwardingChannels.CHANNEL_GROUP, true)
-                Toast.makeText(context, "群组聚合通道配置已更新并启用！", Toast.LENGTH_SHORT).show()
-                showGroupDialog = false
+    // 编辑通道实例弹窗
+    editingInstance?.let { target ->
+        InstanceEditorDialog(
+            existingInstance = target,
+            onDismiss = { editingInstance = null },
+            onSaved = { updatedInst ->
+                // “全部通道”中的 catalog: 项只是未配置目录卡。首次保存时必须
+                // 转换为真实实例，否则页面会继续把它当作占位项，隐藏开关和测试按钮。
+                val savedInstance = if (target.id.startsWith("catalog:")) {
+                    updatedInst.copy(
+                        id = UUID.randomUUID().toString(),
+                        enabled = true
+                    )
+                } else {
+                    updatedInst
+                }
+                channelRepo.saveInstance(savedInstance)
+                syncLinkedDingTalkSource(context, savedInstance)
+                if (target.id.startsWith("catalog:")) {
+                    channelRepo.deleteInstance(target.id)
+                }
+                Toast.makeText(context, "通道实例【${savedInstance.name}】配置已更新！", Toast.LENGTH_SHORT).show()
+                editingInstance = null
+            }
+        )
+    }
+
+    // 删除确认弹窗 (检查规则引用)
+    instanceToDelete?.let { inst ->
+        val referencingRules = remember(inst.id) { channelRepo.getReferencingRules(inst.id) }
+        AlertDialog(
+            onDismissRequest = { instanceToDelete = null },
+            title = { Text("删除通道？") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("确定要删除通道实例【${inst.name}】吗？删除后不可恢复。")
+                    if (referencingRules.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "⚠️ 警告：该实例当前已被以下 ${referencingRules.size} 条转发规则引用：\n" +
+                                referencingRules.joinToString("、") { it.name } +
+                                "\n删除后这些规则将无法再向该通道分发！",
+                            color = GatewayRed,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        channelRepo.deleteInstance(inst.id)
+                        deleteLinkedDingTalkSource(context, inst)
+                        Toast.makeText(context, "已删除通道实例【${inst.name}】", Toast.LENGTH_SHORT).show()
+                        instanceToDelete = null
+                    },
+                    enabled = referencingRules.isEmpty(),
+                    colors = ButtonDefaults.buttonColors(containerColor = GatewayRed)
+                ) {
+                    Text(
+                        text = if (referencingRules.isEmpty()) "确认删除" else "请先解除规则引用",
+                        color = Color.White
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { instanceToDelete = null }) { Text("取消") }
             }
         )
     }
 
     // 全量教程指南弹窗
     if (showFullTutorialDialog) {
-        ChannelFullTutorialDialog(
-            onDismiss = { showFullTutorialDialog = false }
-        )
+        ChannelFullTutorialDialog(onDismiss = { showFullTutorialDialog = false })
     }
 }
 
 @Composable
-fun ChannelDedicatedConfigDialog(
-    channel: ChannelDefinition,
-    config: MultiForwardConfig,
-    onDismiss: () -> Unit,
-    onSaved: () -> Unit
+private fun LegacyFeatureEntry(
+    title: String,
+    description: String,
+    actionText: String,
+    onClick: () -> Unit
 ) {
+    val isDark = isSystemInDarkTheme()
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp, vertical = 10.dp)
+            .padding(bottom = 92.dp)
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            color = if (isDark) DarkSurface else SurfaceCard,
+            border = BorderStroke(1.dp, if (isDark) DarkOutline else OutlineSoft),
+            shadowElevation = 2.dp
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = title,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isDark) Color.White else TextPrimary
+                )
+                Text(
+                    text = description,
+                    fontSize = 12.sp,
+                    lineHeight = 18.sp,
+                    color = if (isDark) Color(0xFFB8C0CC) else TextSecondary
+                )
+                Button(
+                    onClick = onClick,
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = BrandGreen),
+                    modifier = Modifier.height(40.dp)
+                ) {
+                    Text(actionText, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun InstanceEditorDialog(
+    existingInstance: ForwardingChannelInstance?,
+    onDismiss: () -> Unit,
+    onSaved: (ForwardingChannelInstance) -> Unit
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val isEditing = existingInstance != null
+    var selectedType by remember {
+        mutableStateOf(existingInstance?.channelType ?: ForwardingChannels.WECOM_BOT)
+    }
+    var instanceName by remember {
+        mutableStateOf(
+            existingInstance?.name
+                ?: "${getChannelTypeDefinition(selectedType)?.name ?: "通道"} 1"
+        )
+    }
+
     var f1 by remember {
         mutableStateOf(
-            when (channel.id) {
-                ForwardingChannels.PUSHPLUS -> config.pushPlusToken()
-                ForwardingChannels.WECHAT_TEST -> config.wechatTestAppId()
-                ForwardingChannels.QQ -> config.qqWebhook()
-                ForwardingChannels.WECOM, ForwardingChannels.WECOM_APP -> config.weComCorpId()
-                ForwardingChannels.WECOM_BOT -> config.weComBotWebhook()
-                ForwardingChannels.FEISHU_APP -> config.feishuAppId()
-                ForwardingChannels.FEISHU, ForwardingChannels.FEISHU_BOT -> config.feishuWebhook()
-                ForwardingChannels.DINGTALK -> config.dingTalkWebhook()
-                ForwardingChannels.BARK -> config.barkServerUrl()
-                ForwardingChannels.WEBSOCKET -> config.websocketUrl()
-                ForwardingChannels.TELEGRAM -> config.telegramBotToken()
-                ForwardingChannels.DISCORD -> config.discordWebhook()
-                ForwardingChannels.TENCENT_CLOUD -> config.tencentCloudWebhook()
-                ForwardingChannels.EMAIL -> config.emailHost()
-                ForwardingChannels.SMS_DIRECT -> config.smsDirectPhone()
-                ForwardingChannels.CUSTOM_WEBHOOK -> config.customWebhookUrl()
+            when (selectedType) {
+                ForwardingChannels.PUSHPLUS -> existingInstance?.optString("token") ?: ""
+                ForwardingChannels.WECHAT_TEST -> existingInstance?.optString("appId") ?: ""
+                ForwardingChannels.QQ -> existingInstance?.optString("qmsgKey")?.ifBlank { existingInstance.optString("onebotUrl") } ?: ""
+                ForwardingChannels.WECOM, ForwardingChannels.WECOM_APP -> existingInstance?.optString("corpId") ?: ""
+                ForwardingChannels.WECOM_BOT, ForwardingChannels.FEISHU_BOT, ForwardingChannels.FEISHU,
+                ForwardingChannels.DINGTALK, ForwardingChannels.DISCORD, ForwardingChannels.TENCENT_CLOUD -> existingInstance?.optString("webhook") ?: ""
+                ForwardingChannels.FEISHU_APP -> existingInstance?.optString("appId") ?: ""
+                ForwardingChannels.BARK -> existingInstance?.optString("serverUrl") ?: "https://api.day.app"
+                ForwardingChannels.WEBSOCKET -> existingInstance?.optString("serverUrl") ?: ""
+                ForwardingChannels.TELEGRAM -> existingInstance?.optString("botToken") ?: ""
+                ForwardingChannels.EMAIL -> existingInstance?.optString("host") ?: "smtp.qq.com"
+                ForwardingChannels.SMS_DIRECT -> existingInstance?.optString("phone") ?: ""
+                ForwardingChannels.CUSTOM_WEBHOOK -> existingInstance?.optString("url") ?: ""
+                ForwardingChannels.GOTIFY -> existingInstance?.optString("serverUrl") ?: ""
+                ForwardingChannels.NTFY -> existingInstance?.optString("serverUrl") ?: "https://ntfy.sh"
                 else -> ""
             }
         )
@@ -692,20 +999,21 @@ fun ChannelDedicatedConfigDialog(
 
     var f2 by remember {
         mutableStateOf(
-            when (channel.id) {
-                ForwardingChannels.PUSHPLUS -> config.pushPlusTopic()
-                ForwardingChannels.WECHAT_TEST -> config.wechatTestAppSecret()
-                ForwardingChannels.QQ -> config.qqType()
-                ForwardingChannels.WECOM, ForwardingChannels.WECOM_APP -> config.weComAgentId()
-                ForwardingChannels.FEISHU_APP -> config.feishuAppSecret()
-                ForwardingChannels.FEISHU, ForwardingChannels.FEISHU_BOT -> config.feishuSecret()
-                ForwardingChannels.DINGTALK -> config.dingTalkSecret()
-                ForwardingChannels.BARK -> config.barkDeviceKey()
-                ForwardingChannels.WEBSOCKET -> config.websocketToken()
-                ForwardingChannels.TELEGRAM -> config.telegramChatId()
-                ForwardingChannels.TENCENT_CLOUD -> config.tencentCloudSecret()
-                ForwardingChannels.EMAIL -> config.emailUser()
-                ForwardingChannels.CUSTOM_WEBHOOK -> config.customWebhookHeaders()
+            when (selectedType) {
+                ForwardingChannels.PUSHPLUS -> existingInstance?.optString("topic") ?: ""
+                ForwardingChannels.WECHAT_TEST -> existingInstance?.optString("appSecret") ?: ""
+                ForwardingChannels.QQ -> existingInstance?.optString("type") ?: "qmsg"
+                ForwardingChannels.WECOM, ForwardingChannels.WECOM_APP -> existingInstance?.optString("agentId") ?: ""
+                ForwardingChannels.DINGTALK, ForwardingChannels.FEISHU, ForwardingChannels.FEISHU_BOT,
+                ForwardingChannels.TENCENT_CLOUD -> existingInstance?.optString("secret") ?: ""
+                ForwardingChannels.FEISHU_APP -> existingInstance?.optString("appSecret") ?: ""
+                ForwardingChannels.BARK -> existingInstance?.optString("deviceKey") ?: ""
+                ForwardingChannels.WEBSOCKET -> existingInstance?.optString("token") ?: ""
+                ForwardingChannels.TELEGRAM -> existingInstance?.optString("chatId") ?: ""
+                ForwardingChannels.EMAIL -> existingInstance?.optString("user") ?: ""
+                ForwardingChannels.CUSTOM_WEBHOOK -> existingInstance?.optString("headers") ?: ""
+                ForwardingChannels.GOTIFY -> existingInstance?.optString("token") ?: ""
+                ForwardingChannels.NTFY -> existingInstance?.optString("topic") ?: ""
                 else -> ""
             }
         )
@@ -713,11 +1021,13 @@ fun ChannelDedicatedConfigDialog(
 
     var f3 by remember {
         mutableStateOf(
-            when (channel.id) {
-                ForwardingChannels.WECHAT_TEST -> config.wechatTestTemplateId()
-                ForwardingChannels.WECOM, ForwardingChannels.WECOM_APP -> config.weComSecret()
-                ForwardingChannels.FEISHU_APP -> config.feishuReceiveId()
-                ForwardingChannels.EMAIL -> config.emailPassword()
+            when (selectedType) {
+                ForwardingChannels.WECHAT_TEST -> existingInstance?.optString("templateId") ?: ""
+                ForwardingChannels.WECOM, ForwardingChannels.WECOM_APP -> existingInstance?.optString("secret") ?: ""
+                ForwardingChannels.FEISHU_APP -> existingInstance?.optString("receiveId") ?: ""
+                ForwardingChannels.EMAIL -> existingInstance?.optString("password") ?: ""
+                ForwardingChannels.NTFY -> existingInstance?.optString("token") ?: ""
+                ForwardingChannels.DINGTALK -> existingInstance?.optString("clientId") ?: ""
                 else -> ""
             }
         )
@@ -725,36 +1035,155 @@ fun ChannelDedicatedConfigDialog(
 
     var f4 by remember {
         mutableStateOf(
-            when (channel.id) {
-                ForwardingChannels.WECHAT_TEST -> config.wechatTestOpenId()
-                ForwardingChannels.WECOM, ForwardingChannels.WECOM_APP -> config.weComToUser()
-                ForwardingChannels.EMAIL -> config.emailRecipients()
+            when (selectedType) {
+                ForwardingChannels.WECHAT_TEST -> existingInstance?.optString("openId") ?: ""
+                ForwardingChannels.WECOM, ForwardingChannels.WECOM_APP -> existingInstance?.optString("toUser") ?: "@all"
+                ForwardingChannels.EMAIL -> existingInstance?.optString("recipients") ?: ""
+                ForwardingChannels.NTFY -> existingInstance?.optString("priority") ?: "default"
+                ForwardingChannels.DINGTALK -> existingInstance?.optString("clientSecret") ?: ""
                 else -> ""
             }
+        )
+    }
+
+    var f5 by remember {
+        mutableStateOf(
+            if (selectedType == ForwardingChannels.DINGTALK) existingInstance?.optString("customCommandPrefix") ?: ""
+            else existingInstance?.optString("tags") ?: ""
+        )
+    }
+    var f6 by remember {
+        mutableStateOf(
+            if (selectedType == ForwardingChannels.DINGTALK) existingInstance?.optString("authorizedUsers") ?: ""
+            else existingInstance?.optString("clickUrl") ?: ""
+        )
+    }
+    var f7 by remember { mutableStateOf(existingInstance?.optString("authorizedGroups") ?: "") }
+    var dingTalkWhitelistEnabled by remember {
+        mutableStateOf(existingInstance?.optBoolean("whitelistEnabled", false) ?: false)
+    }
+
+    var typeMenuExpanded by remember { mutableStateOf(false) }
+    var isTesting by remember { mutableStateOf(false) }
+    var testFeedback by remember { mutableStateOf<String?>(null) }
+
+    fun currentInstance(): ForwardingChannelInstance {
+        val configJson = JSONObject()
+        when (selectedType) {
+            ForwardingChannels.PUSHPLUS -> configJson.put("token", f1).put("topic", f2)
+            ForwardingChannels.WECHAT_TEST -> configJson.put("appId", f1).put("appSecret", f2).put("templateId", f3).put("openId", f4)
+            ForwardingChannels.QQ -> {
+                if (f2 == "qmsg" || !f1.startsWith("http")) configJson.put("qmsgKey", f1).put("type", "qmsg")
+                else configJson.put("onebotUrl", f1).put("type", "onebot")
+            }
+            ForwardingChannels.WECOM, ForwardingChannels.WECOM_APP -> configJson.put("corpId", f1).put("agentId", f2).put("secret", f3).put("toUser", f4)
+            ForwardingChannels.WECOM_BOT -> configJson.put("webhook", f1)
+            ForwardingChannels.FEISHU_APP -> configJson.put("appId", f1).put("appSecret", f2).put("receiveId", f3)
+            ForwardingChannels.FEISHU, ForwardingChannels.FEISHU_BOT -> configJson.put("webhook", f1).put("secret", f2)
+            ForwardingChannels.DINGTALK -> configJson.put("webhook", f1).put("secret", f2)
+                .put("clientId", f3).put("clientSecret", f4).put("customCommandPrefix", f5)
+                .put("whitelistEnabled", dingTalkWhitelistEnabled)
+                .put("authorizedUsers", f6).put("authorizedGroups", f7)
+            ForwardingChannels.BARK -> configJson.put("serverUrl", f1).put("deviceKey", f2)
+            ForwardingChannels.WEBSOCKET -> configJson.put("serverUrl", f1).put("token", f2)
+            ForwardingChannels.TELEGRAM -> configJson.put("botToken", f1).put("chatId", f2)
+            ForwardingChannels.DISCORD -> configJson.put("webhook", f1)
+            ForwardingChannels.TENCENT_CLOUD -> configJson.put("webhook", f1).put("secret", f2)
+            ForwardingChannels.EMAIL -> configJson.put("host", f1).put("port", 465).put("user", f2).put("password", f3).put("recipients", f4)
+            ForwardingChannels.SMS_DIRECT -> configJson.put("phone", f1)
+            ForwardingChannels.CUSTOM_WEBHOOK -> configJson.put("url", f1).put("headers", f2)
+            ForwardingChannels.GOTIFY -> configJson.put("serverUrl", f1).put("token", f2)
+            ForwardingChannels.NTFY -> configJson.put("serverUrl", f1).put("topic", f2).put("token", f3)
+                .put("priority", f4).put("tags", f5).put("clickUrl", f6)
+            else -> configJson.put("webhook", f1)
+        }
+        return ForwardingChannelInstance(
+            id = existingInstance?.id ?: UUID.randomUUID().toString(),
+            channelType = selectedType,
+            name = instanceName.ifBlank { getChannelTypeDefinition(selectedType)?.name ?: "通道" },
+            enabled = existingInstance?.enabled ?: true,
+            configJson = configJson.toString()
         )
     }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text("${channel.iconEmoji} 配置 ${channel.name}")
+            Text(if (isEditing) "⚙️ 编辑通道实例" else "✨ 添加新通道实例")
         },
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // 内置极速配置指引卡片
+                // 通道类型选择器 (仅新增时可选)
+                if (!isEditing) {
+                    Text("选择通道类型：", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    ExposedDropdownMenuBox(
+                        expanded = typeMenuExpanded,
+                        onExpandedChange = { typeMenuExpanded = !typeMenuExpanded }
+                    ) {
+                        val currentDef = getChannelTypeDefinition(selectedType)
+                        OutlinedTextField(
+                            value = "${currentDef?.iconEmoji} ${currentDef?.name}",
+                            onValueChange = {},
+                            readOnly = true,
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = typeMenuExpanded) },
+                            modifier = Modifier.menuAnchor().fillMaxWidth()
+                        )
+                        ExposedDropdownMenu(
+                            expanded = typeMenuExpanded,
+                            onDismissRequest = { typeMenuExpanded = false }
+                        ) {
+                            ALL_CHANNEL_TYPE_DEFINITIONS.forEach { def ->
+                                DropdownMenuItem(
+                                    text = { Text("${def.iconEmoji} ${def.name} (${def.category.title})") },
+                                    onClick = {
+                                        selectedType = def.type
+                                        instanceName = "${def.name} 1"
+                                        if (def.type == ForwardingChannels.NTFY) {
+                                            f1 = "https://ntfy.sh"
+                                            f2 = ""
+                                            f3 = ""
+                                            f4 = "default"
+                                            f5 = ""
+                                            f6 = ""
+                                            f7 = ""
+                                        } else if (def.type == ForwardingChannels.DINGTALK) {
+                                            f1 = ""
+                                            f2 = ""
+                                            f3 = ""
+                                            f4 = ""
+                                            f5 = ""
+                                            f6 = ""
+                                            f7 = ""
+                                        }
+                                        typeMenuExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                OutlinedTextField(
+                    value = instanceName,
+                    onValueChange = { instanceName = it },
+                    label = { Text("实例名称 (自定义备注)") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                // 极速指引小卡片
                 Surface(
                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
                     shape = RoundedCornerShape(8.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(10.dp)) {
-                        Text("💡 极速配置指引：", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+                        Text("💡 快速配置指引：", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = getChannelTutorial(channel.id),
+                            text = getChannelTutorial(selectedType),
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             lineHeight = 16.sp
@@ -762,7 +1191,8 @@ fun ChannelDedicatedConfigDialog(
                     }
                 }
 
-                when (channel.id) {
+                // 根据类型显示对应输入字段
+                when (selectedType) {
                     ForwardingChannels.PUSHPLUS -> {
                         OutlinedTextField(value = f1, onValueChange = { f1 = it }, label = { Text("Token (一对一密钥)") }, modifier = Modifier.fillMaxWidth())
                         OutlinedTextField(value = f2, onValueChange = { f2 = it }, label = { Text("Topic (群组编码 选填)") }, modifier = Modifier.fillMaxWidth())
@@ -791,6 +1221,43 @@ fun ChannelDedicatedConfigDialog(
                     ForwardingChannels.DINGTALK -> {
                         OutlinedTextField(value = f1, onValueChange = { f1 = it }, label = { Text("Webhook URL") }, modifier = Modifier.fillMaxWidth())
                         OutlinedTextField(value = f2, onValueChange = { f2 = it }, label = { Text("加签密钥 Secret (SEC...)") }, modifier = Modifier.fillMaxWidth())
+                        Text("远程发送（选填）", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                        OutlinedTextField(value = f3, onValueChange = { f3 = it }, label = { Text("Stream Client ID") }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(value = f4, onValueChange = { f4 = it }, label = { Text("Stream Client Secret") }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(value = f5, onValueChange = { f5 = it }, label = { Text("指令前缀（选填，默认 /发信）") }, modifier = Modifier.fillMaxWidth())
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("启用用户白名单", fontSize = 13.sp)
+                                Text(
+                                    if (dingTalkWhitelistEnabled) "仅接受名单内用户" else "已关闭：接受所有用户的有效指令",
+                                    fontSize = 11.sp,
+                                    color = if (dingTalkWhitelistEnabled) MaterialTheme.colorScheme.onSurfaceVariant else GatewayOrange
+                                )
+                            }
+                            Switch(
+                                checked = dingTalkWhitelistEnabled,
+                                onCheckedChange = { dingTalkWhitelistEnabled = it }
+                            )
+                        }
+                        if (dingTalkWhitelistEnabled) {
+                            OutlinedTextField(
+                                value = f6,
+                                onValueChange = { f6 = it },
+                                label = { Text("授权用户 ID（必填）") },
+                                isError = f3.isNotBlank() && f4.isNotBlank() && f6.isBlank(),
+                                supportingText = {
+                                    if (f3.isNotBlank() && f4.isNotBlank() && f6.isBlank()) Text("开启白名单后至少填写一个用户 ID")
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                        if (dingTalkWhitelistEnabled) {
+                            OutlinedTextField(value = f7, onValueChange = { f7 = it }, label = { Text("授权群 ID（群内使用必填）") }, modifier = Modifier.fillMaxWidth())
+                        }
                     }
                     ForwardingChannels.FEISHU, ForwardingChannels.FEISHU_BOT -> {
                         OutlinedTextField(value = f1, onValueChange = { f1 = it }, label = { Text("Webhook URL") }, modifier = Modifier.fillMaxWidth())
@@ -828,110 +1295,167 @@ fun ChannelDedicatedConfigDialog(
                         OutlinedTextField(value = f1, onValueChange = { f1 = it }, label = { Text("接收端 HTTP URL (POST)") }, modifier = Modifier.fillMaxWidth())
                         OutlinedTextField(value = f2, onValueChange = { f2 = it }, label = { Text("自定义 Headers (可选)") }, modifier = Modifier.fillMaxWidth())
                     }
+                    ForwardingChannels.GOTIFY -> {
+                        OutlinedTextField(value = f1, onValueChange = { f1 = it }, label = { Text("Gotify 服务地址 (http://... 或 https://...)") }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(value = f2, onValueChange = { f2 = it }, label = { Text("App Token") }, modifier = Modifier.fillMaxWidth())
+                    }
+                    ForwardingChannels.NTFY -> {
+                        OutlinedTextField(value = f1, onValueChange = { f1 = it }, label = { Text("ntfy 服务地址") }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(value = f2, onValueChange = { f2 = it }, label = { Text("Topic") }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(value = f3, onValueChange = { f3 = it }, label = { Text("访问 Token（选填）") }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(value = f4, onValueChange = { f4 = it }, label = { Text("优先级（min/low/default/high/max）") }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(value = f5, onValueChange = { f5 = it }, label = { Text("标签 Tags（选填，逗号分隔）") }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(value = f6, onValueChange = { f6 = it }, label = { Text("点击打开链接（选填）") }, modifier = Modifier.fillMaxWidth())
+                    }
                     else -> {
                         OutlinedTextField(value = f1, onValueChange = { f1 = it }, label = { Text("Webhook 地址") }, modifier = Modifier.fillMaxWidth())
                     }
                 }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    when (channel.id) {
-                        ForwardingChannels.PUSHPLUS -> config.savePushPlus(f1, f2)
-                        ForwardingChannels.WECHAT_TEST -> config.saveWechatTest(f1, f2, f3, f4)
-                        ForwardingChannels.QQ -> config.saveQq(f1, f2)
-                        ForwardingChannels.WECOM, ForwardingChannels.WECOM_APP -> config.saveWeCom(f1, f2, f3, f4)
-                        ForwardingChannels.WECOM_BOT -> config.saveWeComBot(f1)
-                        ForwardingChannels.FEISHU_APP -> config.saveFeishuApp(f1, f2, f3)
-                        ForwardingChannels.FEISHU, ForwardingChannels.FEISHU_BOT -> config.saveFeishu(f1, f2)
-                        ForwardingChannels.DINGTALK -> config.saveDingTalk(f1, f2)
-                        ForwardingChannels.BARK -> config.saveBark(f1, f2)
-                        ForwardingChannels.WEBSOCKET -> config.saveWebsocket(f1, f2)
-                        ForwardingChannels.TELEGRAM -> config.saveTelegram(f1, f2)
-                        ForwardingChannels.DISCORD -> config.saveDiscord(f1)
-                        ForwardingChannels.TENCENT_CLOUD -> config.saveTencentCloud(f1, f2)
-                        ForwardingChannels.EMAIL -> config.saveEmail(f1, 465, f2, f3, f4)
-                        ForwardingChannels.SMS_DIRECT -> config.saveSmsDirect(f1)
-                        ForwardingChannels.CUSTOM_WEBHOOK -> config.saveCustomWebhook(f1, f2)
-                    }
-                    onSaved()
-                }
-            ) {
-                Text("保存配置")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("取消") }
-        }
-    )
-}
 
-@Composable
-fun ChannelGroupMembersDialog(
-    allChannels: List<ChannelDefinition>,
-    config: MultiForwardConfig,
-    onDismiss: () -> Unit,
-    onSaved: () -> Unit
-) {
-    var selectedMembers by remember { mutableStateOf(config.channelGroupMembers().toSet()) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("👥 聚合群组通道配置") },
-        text = {
-            Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Text("请勾选需要归纳到群组的通道。收到短信后将一键并发推送到所选的所有渠道：", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-
-                allChannels.forEach { channel ->
-                    val isChecked = selectedMembers.contains(channel.id)
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                selectedMembers = if (isChecked) selectedMembers - channel.id else selectedMembers + channel.id
-                            }
-                            .padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Checkbox(
-                            checked = isChecked,
-                            onCheckedChange = { checked ->
-                                selectedMembers = if (checked) selectedMembers + channel.id else selectedMembers - channel.id
-                            }
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("${channel.iconEmoji} ${channel.name}", fontSize = 13.sp)
-                    }
+                testFeedback?.let { feedback ->
+                    Text(
+                        text = feedback,
+                        fontSize = 11.sp,
+                        color = if (feedback.startsWith("测试成功")) BrandGreen else MaterialTheme.colorScheme.error
+                    )
                 }
             }
         },
         confirmButton = {
             Button(
-                onClick = {
-                    config.saveChannelGroupMembers(selectedMembers)
-                    onSaved()
-                }
+                onClick = { onSaved(currentInstance()) },
+                enabled = !isTesting && !(
+                    selectedType == ForwardingChannels.DINGTALK &&
+                        f3.isNotBlank() && f4.isNotBlank() &&
+                        dingTalkWhitelistEnabled && f6.isBlank()
+                    )
             ) {
-                Text("保存群组成员 (${selectedMembers.size})")
+                Text("保存实例")
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("取消") }
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                TextButton(onClick = onDismiss, enabled = !isTesting) { Text("取消") }
+                OutlinedButton(
+                    onClick = {
+                        isTesting = true
+                        testFeedback = null
+                        scope.launch {
+                            val result = ChannelTestSender.sendTestInstance(context, currentInstance())
+                            testFeedback = result.fold(
+                                onSuccess = { "测试成功：$it" },
+                                onFailure = { "测试失败：${it.message ?: "未知错误"}" }
+                            )
+                            isTesting = false
+                        }
+                    },
+                    enabled = !isTesting
+                ) {
+                    if (isTesting) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                    } else {
+                        Text("测试")
+                    }
+                }
+            }
         }
     )
 }
 
 @Composable
 fun ChannelFullTutorialDialog(onDismiss: () -> Unit) {
+    val tutorialPages = linkedMapOf(
+        "快速开始" to listOf(
+            "推荐流程" to "添加并保存通道 → 点击测试 → 新建规则 → 选择具体通道实例 → 开启规则。",
+            "多实例" to "同一种通道可以创建多份配置，例如 Bark A、Bark B。规则可以只发给其中一个，也可以同时选择多个实例。",
+            "先测试再启用" to "测试成功只代表凭据和网络可用；还需要开启通道实例，并在规则中选中它。"
+        ),
+        "转发通道" to listOf(
+            "PushPlus" to "登录 pushplus.plus，在一对一推送中复制 Token；群组推送可再填写 Topic。",
+            "钉钉 / 飞书机器人" to "在群聊中添加自定义机器人，复制 Webhook；开启加签时还要填写对应 Secret。",
+            "飞书自建应用" to "在飞书开放平台创建企业自建应用，填写 App ID、App Secret 和接收人的 open_id。",
+            "Bark" to "在 iPhone 的 Bark App 中复制 Device Key；自建服务可填写自己的 HTTPS 或局域网 HTTP 地址。",
+            "Telegram / Discord" to "Telegram 通过 BotFather 获取 Token 和 Chat ID；Discord 从频道 Webhooks 中复制地址。",
+            "Gotify" to "填写 Gotify 服务地址和应用 Token。公网服务使用 HTTPS，局域网可使用 HTTP。",
+            "ntfy" to "填写 ntfy 服务地址与 Topic，私有主题再填写访问 Token。不要使用容易猜到的公开 Topic 传输验证码。",
+            "QQ / OneBot" to "Qmsg 模式填写 Key；OneBot 模式填写自建 HTTP 接口地址。",
+            "邮件 / WebSocket" to "邮件填写 SMTP 服务器、账号、授权码和收件人；WebSocket 填写服务地址及可选 Token。",
+            "短信直发 / 自定义 Webhook" to "短信直发会产生运营商费用；Webhook 接收 JSON POST，可按需填写自定义 Headers。",
+            "通道组" to "把多个已配置实例组合后并发发送。不要把通道组互相循环引用。"
+        ),
+        "远程发送" to listOf(
+            "支持来源" to "短信指令、钉钉 Stream、飞书长连接、Telegram Bot、WebSocket 和邮箱 IMAP。",
+            "指令格式" to "默认格式：/发信 [SIM1或SIM2] 目标号码 短信内容。自定义前缀后，请使用该实例自己的前缀。",
+            "白名单" to "关闭时接受所有符合格式的用户；开启后必须填写授权用户，群聊还应填写授权群组。",
+            "卡槽与限制" to "每个来源可设置默认卡槽、免打扰时段、每小时限额和每日限额。",
+            "回执" to "钉钉、飞书、Telegram、WebSocket 支持原路回执；短信和邮箱来源需选择普通转发通道接收回执。",
+            "安全提示" to "远程发送会真实调用本机 SIM 卡。请启用白名单、设置限额，并只在本人或明确授权的设备上使用。"
+        ),
+        "规则" to listOf(
+            "匹配内容" to "可以按发件人、正文关键词、正则表达式、接收卡槽等条件筛选短信。",
+            "选择实例" to "规则关联的是具体通道实例，不只是通道类型。同一渠道的多个用户可以分别选择。",
+            "多个目标" to "一条规则可同时选择多个实例，例如验证码发给 Bark A，账单同时发给 Bark A 和 Bark B。",
+            "优先级" to "优先级高的规则先匹配；相同优先级按规则列表顺序执行。是否继续匹配决定后续规则还会不会执行。",
+            "测试建议" to "先用精确关键词测试，再逐步增加正则条件，避免规则过宽导致无关短信外发。"
+        ),
+        "消息模板" to listOf(
+            "模板作用" to "控制转发消息的标题和正文格式，不改变原短信内容。",
+            "常用变量" to "可插入发件人、短信正文、接收时间、卡槽等变量；保存前可使用预览确认结果。",
+            "正则替换" to "用于隐藏号码、验证码或替换固定文本。替换规则按列表顺序执行。"
+        ),
+        "自动回复" to listOf(
+            "使用方式" to "收到符合条件的短信后，由本机 SIM 卡自动回复预设内容。",
+            "注意事项" to "自动回复会产生运营商短信费用，应限制联系人或关键词，并避免与其他自动化形成循环。"
+        ),
+        "来电提醒" to listOf(
+            "提醒范围" to "可发送未接来电提醒，也可按设置发送已接来电记录。",
+            "选择通道" to "提醒可以选择一个或多个已配置的通道实例，不会自动发送到全部渠道。",
+            "模板" to "自定义模板可使用来电类型、号码、联系人、时长、时间和卡槽变量。"
+        ),
+        "电量提醒" to listOf(
+            "触发条件" to "电量低于设定值时发送提醒，恢复充电或电量恢复时可按设置再次通知。",
+            "选择通道" to "请明确选择接收提醒的通道实例，并先完成通道测试。"
+        ),
+        "验证码写入" to listOf(
+            "剪贴板" to "识别短信验证码后自动写入系统剪贴板，方便在其他应用粘贴。",
+            "悬浮胶囊" to "需要显示悬浮提示时，请按系统要求授予显示在其他应用上层权限。"
+        ),
+        "定时心跳" to listOf(
+            "用途" to "按设定周期发送设备、电量和 SIM 卡状态，用于确认手机仍在正常运行。",
+            "测试" to "启用前先测试发送，并确保至少有一个可用的转发通道。"
+        ),
+        "定时短信" to listOf(
+            "计划发送" to "设置目标号码、内容和发送时间后，系统将在计划时间调用本机 SIM 卡发送。",
+            "注意" to "请允许应用后台运行，并确认发送短信权限和卡槽状态正常。"
+        ),
+        "批量发送" to listOf(
+            "使用方式" to "填写多个目标号码和短信内容，由本机 SIM 卡依次提交发送。",
+            "费用与合规" to "批量短信可能产生较多运营商费用，只能向已授权的接收人发送。"
+        ),
+        "常见问题" to listOf(
+            "测试成功但没有转发" to "检查实例开关、规则开关、规则所选实例和系统后台运行权限。",
+            "升级后找不到旧通道" to "应用启动时会自动迁移真实已配置的旧凭据，不需要手动点击导入。",
+            "远程来源无法连接" to "检查凭据、网络、白名单和平台后台设置；Telegram Webhook 与长轮询不能同时使用。",
+            "收不到送达回执" to "运营商和设备必须支持送达报告，并在设置中开启送达回执。"
+        )
+    )
+    var selectedPage by remember { mutableStateOf<String?>(null) }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("📖 15 大全生态推送通道配置指南", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (selectedPage != null) {
+                    TextButton(onClick = { selectedPage = null }) { Text("返回") }
+                }
+                Text(
+                    text = selectedPage ?: "使用教程",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp
+                )
             }
         },
         text = {
@@ -939,48 +1463,35 @@ fun ChannelFullTutorialDialog(onDismiss: () -> Unit) {
                 modifier = Modifier
                     .height(420.dp)
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                TutorialSection(
-                    title = "🟢 微信生态",
-                    items = listOf(
-                        "1. PushPlus 微信推送" to "微信小程序或网站 (pushplus.plus) 扫码登录，在「一对一推送」复制 Token 填入即可。",
-                        "2. 微信公众平台测试号" to "访问 mp.weixin.qq.com 申请测试号，获取 appID、appsecret，关注后获取 openID，新增模板获取 template_id 即可直推微信模板消息。",
-                        "3. 企业微信应用号" to "企业微信后台创建自建应用，获取企业ID (corpid)、AgentId 与 Secret，接收人填 @all 或具体账号。",
-                        "4. 企业微信群机器人" to "企业微信群聊设置 -> 添加群机器人，复制生成的 Webhook URL 填入即可。"
+                val page = selectedPage
+                if (page == null) {
+                    Text(
+                        "选择需要了解的功能，教程会留在当前页面内显示。",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                )
-
-                TutorialSection(
-                    title = "🏢 办公协同",
-                    items = listOf(
-                        "5. 钉钉群机器人" to "钉钉群设置 -> 智能群助手 -> 添加自定义机器人 -> 勾选【加签】，复制 Webhook 与加签 Secret。",
-                        "6. 飞书群机器人" to "飞书群设置 -> 群机器人 -> 自定义机器人，复制 Webhook 地址与签名 Secret。",
-                        "7. 飞书自建应用" to "飞书开放平台 (open.feishu.cn) 创建自建应用，获取 App ID 与 App Secret，开启消息权限并填入 open_id。"
-                    )
-                )
-
-                TutorialSection(
-                    title = "⚡ 极客通讯",
-                    items = listOf(
-                        "8. QQ 消息 (Qmsg/OneBot)" to "Qmsg 酱模式：访问 qmsg.zendee.cn 登录并添加 QQ 机器人好友，复制 Key；OneBot 模式直接填入 HTTP Webhook。",
-                        "9. Bark (iOS 苹果设备)" to "iPhone 下载 Bark App，打开后复制提供的专属 Device Key 填入即可实现 APNs 极速低功耗弹窗。",
-                        "10. WebSocket 客户端" to "运行 personal-assistant 或标准 WebSocket 服务，填入 ws:// 或 http:// 地址实现毫秒级桌面推流。",
-                        "11. Telegram 机器人" to "Telegram @BotFather 创建机器人获取 Bot Token，@userinfobot 获取 Chat ID 填入。",
-                        "12. Discord 群机器人" to "Discord 频道设置 -> 整合 -> Webhooks -> 复制 Webhook URL 填入即可。"
-                    )
-                )
-
-                TutorialSection(
-                    title = "☁️ 云服务与自定义",
-                    items = listOf(
-                        "13. 邮件消息 (SMTP 邮箱直发)" to "以 QQ 邮箱为例：SMTP 服务器填 smtp.qq.com (端口 465 SSL)，在 QQ 邮箱网页版设置账户中生成 16 位 POP3/SMTP 授权码填入密码栏。",
-                        "14. 腾讯云自定义告警" to "腾讯云控制台云监控告警回调设置中获取 Webhook，可触发免费短信提醒。",
-                        "15. 短信直发 (SIM 转发)" to "通过本机备用 SIM 卡直接将收到的短信转发到指定的目标手机号码。",
-                        "16. 自定义 Webhook" to "支持自定义 HTTP POST 目标地址，反向适配任意已有业务平台。",
-                        "👥 群组聚合消息" to "自由勾选多个已配置好的通道，收到短信后一键并发扇出到选中的所有渠道！"
-                    )
-                )
+                    tutorialPages.keys.forEach { name ->
+                        Surface(
+                            onClick = { selectedPage = name },
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 11.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(name, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                                Text("查看", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
+                            }
+                        }
+                    }
+                } else {
+                    TutorialSection(title = page, items = tutorialPages[page].orEmpty())
+                }
             }
         },
         confirmButton = {

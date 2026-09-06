@@ -62,7 +62,10 @@ class App : FossifyApp() {
         LowBatteryCheckWorker.sync(this)
         org.fossify.messages.helpers.ShadowCleanupWorker.schedule(this)
         SmsKeepAliveService.ensureStarted(this)
-        DingTalkRemoteControlService.ensureStarted(this)
+        // 应用启动即触发旧版通道的幂等自动迁移，无需用户进入页面手动同步。
+        org.fossify.messages.forwarding.repository.ChannelRepository.getInstance(this)
+        org.fossify.messages.remote.repository.RemoteSourceRepository.getInstance(this).importLegacySources()
+        org.fossify.messages.remote.runtime.RemoteSourceRuntimeManager.getInstance(this).sync()
     }
 
     private val contactsObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {

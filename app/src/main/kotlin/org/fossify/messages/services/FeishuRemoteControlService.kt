@@ -8,31 +8,19 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
-import android.os.Handler
 import android.os.IBinder
-import android.os.Looper
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import org.fossify.messages.R
 import org.fossify.messages.activities.FeishuRemoteControlSettingsActivity
-import org.fossify.messages.forwarding.ForwardingRuleEngine
-import org.fossify.messages.forwarding.ForwardingRulesConfig
-import org.fossify.messages.forwarding.MultiForwardConfig
-import org.fossify.messages.helpers.RemoteCommandRepository
-import org.fossify.messages.messaging.SimSendResolver
-import org.fossify.messages.models.RemoteCommandContext
-import org.fossify.messages.models.RemoteCommandSourceType
-import org.fossify.messages.models.RemoteCommandType
-import org.fossify.messages.remote.FeishuRemoteCommand
-import org.fossify.messages.remote.FeishuStreamClient
-import org.fossify.messages.remote.RemoteSmsCommandWorker
-import org.fossify.messages.remote.SOURCE_FEISHU
-import kotlinx.coroutines.runBlocking
-import java.security.MessageDigest
+import org.fossify.messages.remote.repository.RemoteSourceRepository
+import org.fossify.messages.remote.repository.RemoteSourceType
 
+/**
+ * 飞书远程控制前台保活服务
+ * 职责：仅负责前台通知与进程优先级守护，实际多实例网络连接由 RemoteSourceRuntimeManager 统一管理。
+ */
 class FeishuRemoteControlService : Service() {
-    private var streamClient: FeishuStreamClient? = null
-    private val mainHandler = Handler(Looper.getMainLooper())
 
     override fun onCreate() {
         super.onCreate()
@@ -40,117 +28,21 @@ class FeishuRemoteControlService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val config = MultiForwardConfig(applicationContext)
-        if (!config.feishuRemoteControlEnabled) {
-            stopStream()
+        val repo = RemoteSourceRepository.getInstance(applicationContext)
+        val hasEnabled = repo.getSourcesByType(RemoteSourceType.FEISHU).any { it.enabled }
+        if (!hasEnabled) {
             stopSelf()
             return START_NOT_STICKY
         }
-        val appId = config.feishuRemoteAppId()
-        val appSecret = config.feishuRemoteAppSecret()
-        if (appId.isBlank() || appSecret.isBlank()) {
-            config.appendFeishuRemoteLog("缺少 App ID 或 App Secret")
-            stopStream()
-            stopSelf()
-            return START_NOT_STICKY
-        }
-        stopStream()
-        streamClient = FeishuStreamClient(
-            appId = appId,
-            appSecret = appSecret,
-            customPrefix = config.feishuRemoteCustomPrefix(),
-            onCommand = ::handleCommand,
-            onStatus = { status ->
-                MultiForwardConfig(applicationContext).appendFeishuRemoteLog(status)
-                mainHandler.post { updateNotification(status) }
-            },
-        ).also { it.start() }
+        updateNotification("飞书 Stream 远程指令服务运行中")
         return START_STICKY
     }
 
     override fun onDestroy() {
-        stopStream()
         super.onDestroy()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
-
-    private fun handleCommand(event: FeishuRemoteCommand) {
-        val command = event.command
-        val config = MultiForwardConfig(applicationContext)
-        val messageKey = event.messageId.takeIf(String::isNotBlank)
-            ?: "feishu-${command.targetNumber}-${command.content.hashCode()}"
-        val sendMode = command.effectiveSendMode(config.feishuRemoteSendSimMode)
-
-        val cmdContext = RemoteCommandContext(
-            sourceType = RemoteCommandSourceType.FEISHU,
-            sourceMessageKey = messageKey,
-            commandType = RemoteCommandType.SEND_SMS,
-            rawTarget = command.targetNumber,
-            rawPayload = command.content,
-            requestedSimMode = sendMode,
-            rawRequester = "feishu-stream",
-            receivedAt = System.currentTimeMillis(),
-        )
-
-        val claimResult = runBlocking {
-            RemoteCommandRepository.claimOrGetDuplicate(applicationContext, cmdContext)
-        }
-
-        if (claimResult is RemoteCommandRepository.ClaimResult.Duplicate) {
-            config.appendFeishuRemoteLog("抑制重复指令 -> ${command.targetNumber}")
-            return
-        }
-
-        val commandId = (claimResult as? RemoteCommandRepository.ClaimResult.NewCommand)?.commandId.orEmpty()
-        val fingerprint = event.messageId.takeIf(String::isNotBlank)
-            ?.let { "feishu-${sha256(it)}" }
-            ?: "feishu-${command.targetNumber}-${command.content.hashCode()}"
-        val simSuffix = " · ${SimSendResolver.describeForLog(applicationContext, null, sendMode)}"
-        config.appendFeishuRemoteLog("收到指令 -> ${command.targetNumber}$simSuffix")
-
-        val rulesConfig = ForwardingRulesConfig(applicationContext)
-        if (rulesConfig.affectsRemoteCommands() && rulesConfig.rules.any { it.enabled }) {
-            val decision = ForwardingRuleEngine(rulesConfig.rules).evaluate(
-                sender = SOURCE_FEISHU,
-                body = "${command.targetNumber} ${command.content}",
-                subscriptionId = -1,
-                channelCandidates = emptySet(),
-                simSlotIndex = null,
-            )
-            if (decision.matchedRules.isEmpty()) {
-                if (commandId.isNotBlank()) {
-                    RemoteCommandRepository.recordAuthorization(applicationContext, commandId, authorized = false, reason = "RULE_BLOCKED")
-                }
-                config.appendFeishuRemoteLog("规则阻止执行 -> ${command.targetNumber}$simSuffix")
-                return
-            }
-        }
-
-        if (commandId.isNotBlank()) {
-            RemoteCommandRepository.recordAuthorization(applicationContext, commandId, authorized = true, reason = "FEISHU_AUTHORIZED")
-        }
-
-        RemoteSmsCommandWorker.enqueue(
-            context = applicationContext,
-            target = command.targetNumber,
-            content = command.content,
-            subId = -1,
-            uniqueId = fingerprint,
-            sendMode = sendMode,
-            source = SOURCE_FEISHU,
-            commandId = commandId,
-        )
-    }
-
-    private fun stopStream() {
-        streamClient?.stop()
-        streamClient = null
-    }
-
-    private fun sha256(value: String): String = MessageDigest.getInstance("SHA-256")
-        .digest(value.toByteArray())
-        .joinToString("") { "%02x".format(it) }
 
     private fun updateNotification(status: String) {
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
@@ -187,7 +79,7 @@ class FeishuRemoteControlService : Service() {
                 },
             )
         }
-        updateNotification("正在连接飞书…")
+        updateNotification("飞书 Stream 远程指令服务已就绪")
     }
 
     private fun startForegroundCompat(notification: android.app.Notification) {
@@ -207,8 +99,9 @@ class FeishuRemoteControlService : Service() {
         private const val NOTIFICATION_ID = 19084
 
         fun ensureStarted(context: Context) {
-            val config = MultiForwardConfig(context)
-            if (!config.feishuRemoteControlEnabled) {
+            val repo = RemoteSourceRepository.getInstance(context)
+            val isEnabled = repo.getSourcesByType(RemoteSourceType.FEISHU).any { it.enabled }
+            if (!isEnabled) {
                 context.stopService(Intent(context, FeishuRemoteControlService::class.java))
                 return
             }
@@ -217,8 +110,6 @@ class FeishuRemoteControlService : Service() {
                     context,
                     Intent(context, FeishuRemoteControlService::class.java),
                 )
-            }.onFailure { error ->
-                config.appendFeishuRemoteLog("启动失败：${error.message ?: error.javaClass.simpleName}")
             }
         }
 

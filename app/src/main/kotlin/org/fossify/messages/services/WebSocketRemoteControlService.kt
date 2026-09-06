@@ -8,19 +8,19 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
-import android.os.Handler
 import android.os.IBinder
-import android.os.Looper
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import org.fossify.messages.R
 import org.fossify.messages.activities.WebSocketRemoteControlSettingsActivity
-import org.fossify.messages.forwarding.MultiForwardConfig
-import org.fossify.messages.remote.WebSocketRemoteClient
+import org.fossify.messages.remote.repository.RemoteSourceRepository
+import org.fossify.messages.remote.repository.RemoteSourceType
 
+/**
+ * WebSocket 远程控制前台保活服务
+ * 职责：仅负责前台通知与进程优先级守护，实际多实例网络连接由 RemoteSourceRuntimeManager 统一管理。
+ */
 class WebSocketRemoteControlService : Service() {
-    private val mainHandler = Handler(Looper.getMainLooper())
-    private var client: WebSocketRemoteClient? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -28,41 +28,21 @@ class WebSocketRemoteControlService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val config = MultiForwardConfig(applicationContext)
-        if (!config.websocketRemoteControlEnabled) {
-            stopClient()
+        val repo = RemoteSourceRepository.getInstance(applicationContext)
+        val hasEnabled = repo.getSourcesByType(RemoteSourceType.WEBSOCKET).any { it.enabled }
+        if (!hasEnabled) {
             stopSelf()
             return START_NOT_STICKY
         }
-        val url = config.websocketRemoteUrl()
-        if (url.isBlank()) {
-            config.appendWebSocketRemoteLog("缺少 WebSocket 服务器 URL")
-            stopClient()
-            stopSelf()
-            return START_NOT_STICKY
-        }
-        stopClient()
-        client = WebSocketRemoteClient(
-            context = applicationContext,
-            onStatus = { status ->
-                MultiForwardConfig(applicationContext).appendWebSocketRemoteLog(status)
-                mainHandler.post { updateNotification(status) }
-            },
-        ).also { it.start() }
+        updateNotification("WebSocket 远程指令服务运行中")
         return START_STICKY
     }
 
     override fun onDestroy() {
-        stopClient()
         super.onDestroy()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
-
-    private fun stopClient() {
-        client?.stop()
-        client = null
-    }
 
     private fun updateNotification(status: String) {
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
@@ -99,7 +79,7 @@ class WebSocketRemoteControlService : Service() {
                 },
             )
         }
-        updateNotification("正在连接 WebSocket…")
+        updateNotification("WebSocket 远程指令服务已就绪")
     }
 
     private fun startForegroundCompat(notification: android.app.Notification) {
@@ -119,8 +99,9 @@ class WebSocketRemoteControlService : Service() {
         private const val NOTIFICATION_ID = 19088
 
         fun ensureStarted(context: Context) {
-            val config = MultiForwardConfig(context)
-            if (!config.websocketRemoteControlEnabled) {
+            val repo = RemoteSourceRepository.getInstance(context)
+            val isEnabled = repo.getSourcesByType(RemoteSourceType.WEBSOCKET).any { it.enabled }
+            if (!isEnabled) {
                 context.stopService(Intent(context, WebSocketRemoteControlService::class.java))
                 return
             }
@@ -129,8 +110,6 @@ class WebSocketRemoteControlService : Service() {
                     context,
                     Intent(context, WebSocketRemoteControlService::class.java),
                 )
-            }.onFailure { error ->
-                config.appendWebSocketRemoteLog("启动失败：${error.message ?: error.javaClass.simpleName}")
             }
         }
 

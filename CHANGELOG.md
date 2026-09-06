@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 🚧 进行中的修改与新功能 (Work In Progress for v1.1.6)
+- 准备开始 1.1.6 迭代修改。
+
+## [1.1.5] - 2026-09-03
+
 ### 🌟 核心新特性与重大升级 (Major Features)
 
 - **🔀 多渠道多实例池与靶向规则分流体系 (Multi-Instance Channel Hub & Targeted Routing)**：

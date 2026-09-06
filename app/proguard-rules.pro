@@ -73,3 +73,8 @@
 -assumenosideeffects class org.fossify.commons.compose.extensions.ComposeActivityExtensionsKt {
     public static final void FakeVersionCheck(androidx.compose.runtime.Composer, int);
 }
+# 飞书官方长连接 SDK 使用 Gson 反射解析事件模型；保留注解与事件模型字段，
+# 避免 release 混淆后连接正常但消息体被解析为空。
+-keepattributes Signature,*Annotation*
+-keep class com.lark.oapi.event.model.** { *; }
+-keep class com.lark.oapi.service.im.v1.model.** { *; }

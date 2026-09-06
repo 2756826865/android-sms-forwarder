@@ -133,6 +133,9 @@ class TelegramRemoteControlSettingsActivity : SimpleActivity() {
             2 -> SimSendMode.SIM2
             else -> SimSendMode.DEFAULT
         }
+        org.fossify.messages.remote.repository.RemoteSourceRepository
+            .getInstance(applicationContext)
+            .syncLegacySourcesFromClassic()
         return true
     }
 }

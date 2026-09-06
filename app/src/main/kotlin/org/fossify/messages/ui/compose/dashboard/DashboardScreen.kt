@@ -117,7 +117,7 @@ fun DashboardScreen(
             ) {
                 Column(modifier = Modifier.weight(1f).padding(end = 6.dp)) {
                     Text(
-                        text = "节点大盘",
+                        text = "运行大盘",
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
                         color = primaryTextColor,
@@ -375,7 +375,7 @@ fun DashboardContent(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "网关运行节点态势",
+                            text = "运行状态",
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (isDark) Color.White else TextPrimary
@@ -752,7 +752,7 @@ fun DashboardContent(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "📜 最新发送与转发记录",
+                            text = "📜 最近记录",
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (isDark) Color.White else TextPrimary

@@ -80,7 +80,8 @@ enum class TemplatePreset(val mode: Int, val label: String, val emoji: String) {
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun RuleStudioScreen(
-    onBack: (() -> Unit)? = null
+    onBack: (() -> Unit)? = null,
+    embeddedTemplateOnly: Boolean = false
 ) {
     val context = LocalContext.current
     val config = remember { MultiForwardConfig(context) }
@@ -165,10 +166,10 @@ fun RuleStudioScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .statusBarsPadding()
+                .then(if (embeddedTemplateOnly) Modifier else Modifier.statusBarsPadding())
         ) {
             // 顶部 Header
-            Row(
+            if (!embeddedTemplateOnly) Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 10.dp),
@@ -243,7 +244,7 @@ fun RuleStudioScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "🎨 转发消息模板预设",
+                                    text = "🎨 模板预设",
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = if (isDark) Color.White else TextPrimary
@@ -395,7 +396,7 @@ fun RuleStudioScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "🧪 实时渲染预览沙箱",
+                                    text = "🧪 模板预览",
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = if (isDark) Color.White else TextPrimary
@@ -516,6 +517,7 @@ fun RuleStudioScreen(
                     }
                 }
 
+                if (!embeddedTemplateOnly) {
                 // 3. 智能规则列表与开关（与经典版实时双向同步）
                 item {
                     val rulesConfig = remember { org.fossify.messages.forwarding.ForwardingRulesConfig(context) }
@@ -537,7 +539,7 @@ fun RuleStudioScreen(
                             ) {
                                 Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
                                     Text(
-                                        text = "⚡ 智能过滤与分流规则",
+                                        text = "⚡ 分流规则",
                                         fontSize = 15.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = if (isDark) Color.White else TextPrimary
@@ -679,7 +681,7 @@ fun RuleStudioScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "📡 短信远程发信与指令控制",
+                                    text = "📡 远程发送",
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = if (isDark) Color.White else TextPrimary
@@ -751,7 +753,7 @@ fun RuleStudioScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "🤖 智能防对轰自动回复引擎",
+                                    text = "🤖 自动回复",
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = if (isDark) Color.White else TextPrimary
@@ -800,6 +802,8 @@ fun RuleStudioScreen(
                             }
                         }
                     }
+                }
+
                 }
 
                 item { Spacer(modifier = Modifier.height(120.dp)) }

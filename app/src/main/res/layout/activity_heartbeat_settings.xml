@@ -12,7 +12,7 @@
         android:layout_height="?attr/actionBarSize"
         android:background="@color/miui_page_background"
         app:navigationIconTint="@color/miui_primary_text"
-        app:title="定时心跳与状态保活"
+        app:title="定时心跳"
         app:titleTextColor="@color/miui_primary_text" />
 
     <androidx.core.widget.NestedScrollView

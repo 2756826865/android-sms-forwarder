@@ -36,8 +36,10 @@ class PrivacyAndRulesTest {
     fun testForwardingRuleTimeWindow() {
         val alwaysRule = ForwardingRule(
             name = "AllDayRule",
+            enabled = true,
             timeWindowEnabled = false,
-            includeKeywords = listOf("验证码")
+            includeKeywords = listOf("验证码"),
+            channels = listOf("telegram", "dingtalk")
         )
         val engine = ForwardingRuleEngine(listOf(alwaysRule))
         val decision = engine.evaluate(

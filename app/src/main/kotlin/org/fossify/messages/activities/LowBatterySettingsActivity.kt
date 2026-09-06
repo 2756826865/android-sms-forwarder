@@ -84,6 +84,8 @@ class LowBatterySettingsActivity : SimpleActivity() {
                     return@setPositiveButton
                 }
                 config.lowBatteryChannels = selected
+                // 经典版按通道类型选择时，明确切回兼容模式，避免与开发版实例选择互相覆盖。
+                config.clearLowBatteryInstanceSelection()
                 updateChannelSummary()
                 if (selected.isEmpty() && config.enableLowBatteryReminder) {
                     binding.lowBatteryEnableSwitch.isChecked = false

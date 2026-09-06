@@ -43,11 +43,11 @@
                 android:layout_height="wrap_content"
                 android:layout_marginStart="8dp"
                 android:layout_marginTop="18dp"
-                android:layout_marginBottom="30dp"
+                android:layout_marginBottom="18dp"
                 android:fontFamily="sans-serif"
                 android:text="@string/low_battery_reminder"
                 android:textColor="@color/miui_primary_text"
-                android:textSize="38sp" />
+                android:textSize="24sp" />
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -76,9 +76,9 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:fontFamily="sans-serif"
-                            android:text="@string/low_battery_reminder"
+                            android:text="@string/low_battery_enable_title"
                             android:textColor="@color/miui_primary_text"
-                            android:textSize="18sp" />
+                            android:textSize="16sp" />
 
                         <TextView
                             android:id="@+id/low_battery_enable_summary"
@@ -103,7 +103,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="8dp"
-                android:layout_marginTop="26dp"
+                android:layout_marginTop="18dp"
                 android:layout_marginBottom="8dp"
                 android:fontFamily="sans-serif"
                 android:text="@string/low_battery_channels_label"
@@ -136,7 +136,7 @@
                         android:fontFamily="sans-serif"
                         android:text="@string/low_battery_channels_label"
                         android:textColor="@color/miui_primary_text"
-                        android:textSize="18sp" />
+                        android:textSize="16sp" />
 
                     <TextView
                         android:id="@+id/low_battery_channels_summary"
@@ -160,7 +160,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="8dp"
-                android:layout_marginTop="26dp"
+                android:layout_marginTop="18dp"
                 android:layout_marginBottom="8dp"
                 android:fontFamily="sans-serif"
                 android:text="@string/low_battery_threshold_label"
@@ -190,7 +190,7 @@
                         android:fontFamily="sans-serif"
                         android:text="@string/low_battery_threshold_label"
                         android:textColor="@color/miui_primary_text"
-                        android:textSize="18sp" />
+                        android:textSize="16sp" />
 
                     <TextView
                         android:id="@+id/low_battery_threshold_summary"

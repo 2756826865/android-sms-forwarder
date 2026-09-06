@@ -138,20 +138,14 @@ class SmsAutofillAccessibilityService : AccessibilityService() {
         fun onNewVerificationSms(context: Context, body: String) {
             val code = VerificationCodeExtractor.extractCode(body) ?: return
             val config = AutofillConfig(context)
+            if (!config.enabled) return
 
-            if (config.copyToClipboard) {
-                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                clipboard?.setPrimaryClip(ClipData.newPlainText("VerificationCode", code))
-            }
+            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+            clipboard?.setPrimaryClip(ClipData.newPlainText("VerificationCode", code))
 
             // 弹出屏幕顶部 5 秒悬浮胶囊
-            org.fossify.messages.helpers.FloatingCodePillManager.showPill(context, code)
-
-            val service = instanceRef.get()
-            if (service != null && config.enabled) {
-                service.mainHandler.post {
-                    service.attemptAutofill(code)
-                }
+            if (config.enableFloatingPill) {
+                org.fossify.messages.helpers.FloatingCodePillManager.showPill(context, code)
             }
         }
     }

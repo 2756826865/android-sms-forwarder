@@ -22,21 +22,22 @@ object ForwardingChannels {
     const val CUSTOM_WEBHOOK = "custom_webhook"
     const val CHANNEL_GROUP = "channel_group"
     const val GOTIFY = "gotify"
+    const val NTFY = "ntfy"
 
     val networkChannels = setOf(
         PUSHPLUS, WECHAT_TEST, QQ, WECOM_APP, WECOM, WECOM_BOT,
         FEISHU_APP, FEISHU_BOT, FEISHU, DINGTALK, BARK, WEBSOCKET,
-        TELEGRAM, DISCORD, TENCENT_CLOUD, EMAIL, CUSTOM_WEBHOOK, GOTIFY
+        TELEGRAM, DISCORD, TENCENT_CLOUD, EMAIL, CUSTOM_WEBHOOK, GOTIFY, NTFY
     )
 
     val allRuleChannels = listOf(
         PUSHPLUS, WECHAT_TEST, QQ, WECOM_APP, WECOM_BOT,
         FEISHU_APP, FEISHU_BOT, DINGTALK, BARK, WEBSOCKET,
-        TELEGRAM, DISCORD, TENCENT_CLOUD, EMAIL, SMS_DIRECT, CUSTOM_WEBHOOK, CHANNEL_GROUP, GOTIFY
+        TELEGRAM, DISCORD, TENCENT_CLOUD, EMAIL, SMS_DIRECT, CUSTOM_WEBHOOK, CHANNEL_GROUP, GOTIFY, NTFY
     )
 
     val lowBatteryChannels = listOf(
-        PUSHPLUS, BARK, GOTIFY, DINGTALK, FEISHU, WECOM, WECOM_BOT, EMAIL, SMS_DIRECT
+        PUSHPLUS, BARK, GOTIFY, NTFY, DINGTALK, FEISHU, WECOM, WECOM_BOT, EMAIL, SMS_DIRECT
     )
 
     fun displayName(channel: String): String = when (channel) {
@@ -58,6 +59,7 @@ object ForwardingChannels {
         CUSTOM_WEBHOOK -> "自定义 Webhook"
         CHANNEL_GROUP -> "群组聚合消息"
         GOTIFY -> "Gotify"
+        NTFY -> "ntfy 推送"
         else -> channel
     }
 }

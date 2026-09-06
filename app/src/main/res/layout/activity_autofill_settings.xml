@@ -45,7 +45,7 @@
                         android:layout_height="wrap_content"
                         android:layout_alignParentStart="true"
                         android:layout_centerVertical="true"
-                        android:text="启用验证码自动填充"
+                        android:text="自动写入验证码到剪贴板"
                         android:textColor="@color/miui_primary_text"
                         android:textSize="16sp"
                         android:textStyle="bold" />
@@ -63,7 +63,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
-                    android:text="无障碍服务状态：未开启（点击开启）"
+                    android:text="收到验证码短信后自动提取并写入剪贴板"
                     android:textColor="@color/brand_green"
                     android:textSize="13sp" />
             </LinearLayout>
@@ -72,7 +72,7 @@
             <TextView
                 style="@style/SmsSettingsSectionTitle"
                 android:layout_marginTop="16dp"
-                android:text="填充选项" />
+                android:text="显示选项" />
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -80,48 +80,6 @@
                 android:background="@drawable/settings_card_background"
                 android:orientation="vertical"
                 android:padding="16dp">
-
-                <RelativeLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_alignParentStart="true"
-                        android:text="自动点击登录/提交按钮"
-                        android:textColor="@color/miui_primary_text"
-                        android:textSize="15sp" />
-
-                    <androidx.appcompat.widget.SwitchCompat
-                        android:id="@+id/autofill_switch_auto_submit"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_alignParentEnd="true" />
-                </RelativeLayout>
-
-                <View style="@style/SmsSettingsDivider" android:layout_marginVertical="12dp" />
-
-                <RelativeLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_alignParentStart="true"
-                        android:text="自动复制验证码到剪贴板"
-                        android:textColor="@color/miui_primary_text"
-                        android:textSize="15sp" />
-
-                    <androidx.appcompat.widget.SwitchCompat
-                        android:id="@+id/autofill_switch_copy_clipboard"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_alignParentEnd="true" />
-                </RelativeLayout>
-
-                <View style="@style/SmsSettingsDivider" android:layout_marginVertical="12dp" />
 
                 <RelativeLayout
                     android:layout_width="match_parent"
@@ -160,7 +118,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:lineSpacingExtra="4dp"
-                    android:text="1. 本功能基于 Android 官方无障碍辅助服务（AccessibilityService）实现，免 Root / 免 Xposed。\n2. 收到验证码时，若当前正处于前台登录或验证页面，系统会自动寻址输入框填入验证码。\n3. 部分银行或金融类 App 自带加密安全软键盘，无法模拟输入时会自动复制到剪贴板方便一键粘贴。"
+                    android:text="1. 收到包含验证码的短信后，系统会自动识别验证码并写入剪贴板。\n2. 需要使用时，在目标应用的验证码输入框中长按粘贴即可。\n3. 本功能不会自动操作其他应用的输入框，也不会自动点击登录或提交按钮。"
                     android:textColor="@color/miui_secondary_text"
                     android:textSize="13sp" />
             </LinearLayout>

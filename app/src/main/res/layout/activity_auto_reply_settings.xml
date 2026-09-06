@@ -18,8 +18,7 @@
             android:layout_height="?attr/actionBarSize"
             android:background="@color/miui_page_background"
             app:navigationIconTint="@color/miui_primary_text"
-            app:title="短信自动回复"
-            app:titleCentered="true"
+            app:title="自动回复"
             app:titleTextColor="@color/miui_primary_text" />
 
     </org.fossify.commons.views.MyAppBarLayout>
@@ -67,7 +66,7 @@
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="启用短信自动回复"
+                                android:text="开启回复"
                                 android:textColor="@color/miui_primary_text"
                                 android:textSize="17sp"
                                 android:textStyle="bold" />

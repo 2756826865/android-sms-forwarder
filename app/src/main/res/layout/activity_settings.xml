@@ -91,7 +91,7 @@
                 <TextView
                     android:id="@+id/settings_auto_reply_holder"
                     style="@style/SmsSettingsRow"
-                    android:text="短信自动回复" />
+                    android:text="自动回复" />
 
                 <View style="@style/SmsSettingsDivider" />
 
@@ -126,7 +126,7 @@
                 <TextView
                     android:id="@+id/settings_heartbeat_holder"
                     style="@style/SmsSettingsRow"
-                    android:text="定时心跳与状态保活" />
+                    android:text="定时心跳" />
             </LinearLayout>
 
             <!-- 2. 系统分组 -->
@@ -193,7 +193,7 @@
                             android:fontFamily="sans-serif"
                             android:text="@string/settings_home_bottom_nav"
                             android:textColor="@color/classic_text_primary"
-                            android:textSize="17sp" />
+                            android:textSize="16sp" />
 
                         <TextView
                             android:layout_width="wrap_content"
@@ -232,7 +232,7 @@
                         android:fontFamily="sans-serif"
                         android:text="@string/settings_home_list_density"
                         android:textColor="@color/classic_text_primary"
-                        android:textSize="17sp" />
+                        android:textSize="16sp" />
 
                     <TextView
                         android:id="@+id/settings_home_list_density_summary"
@@ -270,7 +270,7 @@
                             android:fontFamily="sans-serif"
                             android:text="@string/settings_live_island"
                             android:textColor="@color/classic_text_primary"
-                            android:textSize="17sp" />
+                            android:textSize="16sp" />
 
                         <TextView
                             android:id="@+id/settings_live_island_summary"
@@ -308,7 +308,7 @@
                 <TextView
                     android:id="@+id/settings_backup_holder"
                     style="@style/SmsSettingsRow"
-                    android:text="配置备份与恢复" />
+                    android:text="备份与恢复" />
 
                 <View style="@style/SmsSettingsDivider" />
 

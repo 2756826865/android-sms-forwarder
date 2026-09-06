@@ -37,6 +37,7 @@ import org.fossify.messages.extensions.syncThreadToLocal
 import org.fossify.messages.extensions.subscriptionManagerCompat
 import org.fossify.messages.forwarding.ForwardingChannels
 import org.fossify.messages.forwarding.ForwardingHistoryStore
+import org.fossify.messages.forwarding.ForwardingMessageFormatter
 import org.fossify.messages.forwarding.ForwardingRuleEngine
 import org.fossify.messages.forwarding.ForwardingRulesConfig
 import org.fossify.messages.forwarding.MultiChannelForwardWorker
@@ -241,9 +242,10 @@ open class IncomingSmsService : Service() {
             }
         }.getOrNull()
 
+        val multiConfig = MultiForwardConfig(applicationContext)
         val enabledForwardChannels = buildSet {
             if (receiverStatus.enabled) add(ForwardingChannels.PUSHPLUS)
-            addAll(MultiForwardConfig(applicationContext).enabledChannelIds())
+            addAll(multiConfig.enabledChannelIds())
         }
         val ruleDecision = if (rulesConfig.enabled) {
             ForwardingRuleEngine(rulesConfig.rules).evaluate(
@@ -252,6 +254,15 @@ open class IncomingSmsService : Service() {
                 subscriptionId = subscriptionId,
                 channelCandidates = rulesConfig.channelCandidatesForScope(enabledForwardChannels),
                 simSlotIndex = simSlotIndex,
+                resolveContent = { rule, action, text ->
+                    val template = action.customTemplate.takeIf { action.templateMode == org.fossify.messages.forwarding.RuleTemplateMode.CUSTOM }
+                        ?: rule.customTemplate.takeIf(String::isNotBlank)
+                    if (template != null) {
+                        ForwardingMessageFormatter.renderRuleTemplate(this, template, address, text, sentAt, subscriptionId)
+                    } else {
+                        ForwardingMessageFormatter.format(this, address, text, sentAt, subscriptionId).content
+                    }
+                }
             )
         } else {
             null
@@ -264,7 +275,6 @@ open class IncomingSmsService : Service() {
                 .joinToString("、")
             rulesConfig.lastDecision = "$decisionTime · $address · $blockedNames · ${ruleDecision.reason}"
         }
-        val allowedForwardChannels = ruleDecision?.allowedChannels
 
         val remoteCommandAllowed = !rulesConfig.affectsRemoteCommands() ||
             !rulesConfig.enabled ||
@@ -285,48 +295,92 @@ open class IncomingSmsService : Service() {
             ShadowRepository.recordStep(this, operationId, "REMOTE_COMMAND_OBSERVED", "SUCCESS", "Consumed")
         }
 
-        if (!remoteCommandConsumed && ruleDecision != null) {
+        ShadowRepository.recordStep(this, operationId, "FORWARDING_OBSERVED", "STARTED")
+        if (!remoteCommandConsumed) {
             val history = ForwardingHistoryStore(applicationContext)
-            ruleDecision.blockedChannels
-                .intersect(enabledForwardChannels)
-                .forEach { channel ->
-                    history.registerSkipped(
-                        workId = uniqueId,
-                        channel = channel,
+            if (ruleDecision != null) {
+                // 1. 记录规则跳过渠道
+                ruleDecision.blockedChannels
+                    .intersect(enabledForwardChannels)
+                    .forEach { channel ->
+                        history.registerSkipped(
+                            workId = uniqueId,
+                            channel = channel,
+                            sender = address,
+                            body = body,
+                            receivedAt = receivedAt,
+                            subscriptionId = subscriptionId,
+                            detail = "转发规则未允许：${ruleDecision.reason}",
+                        )
+                    }
+
+                // 2. 实例级靶向投递
+                if (ruleDecision.targets.isNotEmpty()) {
+                    ruleDecision.targets.forEach { target ->
+                        val targetKey = target.instanceId.ifBlank { target.channelType }
+                        ShadowRepository.recordDelivery(this, operationId, targetKey, "QUEUED")
+                        MultiChannelForwardWorker.enqueueSingle(
+                            context = this,
+                            sender = address,
+                            body = target.renderedContent,
+                            receivedAt = receivedAt,
+                            subscriptionId = subscriptionId,
+                            uniqueId = "$uniqueId-${target.ruleId.take(8)}-${target.actionId.take(8)}",
+                            targetChannel = target.channelType,
+                            allowedChannels = if (target.instanceId.isNotBlank()) setOf(target.instanceId) else setOf(target.channelType),
+                            isTest = false,
+                            operationId = operationId,
+                            targetInstanceId = target.instanceId,
+                            ruleId = target.ruleId,
+                            actionId = target.actionId,
+                            bodyAlreadyRendered = true
+                        )
+                    }
+                } else {
+                    Log.i(TAG, "rules enabled but matched 0 targets: ${ruleDecision.reason}")
+                }
+            } else if (multiConfig.anyEnabled() || receiverStatus.enabled) {
+                // 规则未启用时仍按实例逐一投递，不能把同类型多个实例压缩成一个类型。
+                val enabledInstances = org.fossify.messages.forwarding.repository.ChannelRepository
+                    .getInstance(this)
+                    .getEnabledInstances()
+                enabledInstances.forEach { instance ->
+                    ShadowRepository.recordDelivery(this, operationId, instance.id, "QUEUED")
+                    MultiChannelForwardWorker.enqueueSingle(
+                        context = this,
                         sender = address,
                         body = body,
                         receivedAt = receivedAt,
                         subscriptionId = subscriptionId,
-                        detail = "转发规则未允许：${ruleDecision.reason}",
+                        uniqueId = "$uniqueId-${instance.id}",
+                        targetChannel = instance.channelType,
+                        allowedChannels = setOf(instance.id),
+                        isTest = false,
+                        operationId = operationId,
+                        targetInstanceId = instance.id
                     )
                 }
-        }
 
-        ShadowRepository.recordStep(this, operationId, "FORWARDING_OBSERVED", "STARTED")
-        if (!remoteCommandConsumed && MultiForwardConfig(this).anyEnabled() || receiverStatus.enabled) {
-            val multiConfig = MultiForwardConfig(this)
-            val channels = buildMultiChannelAllowedChannels(
-                rulesConfig = rulesConfig,
-                allowedForwardChannels = allowedForwardChannels,
-                multiConfig = multiConfig,
-                pushPlusEnabled = receiverStatus.enabled
-            )
-            val activeChannels = channels ?: (multiConfig.enabledChannelIds() + if (receiverStatus.enabled) setOf(ForwardingChannels.PUSHPLUS) else emptySet())
-            activeChannels.forEach { channel ->
-                ShadowRepository.recordDelivery(this, operationId, channel, "QUEUED")
+                // 兼容尚未转换成实例的旧版配置；同类型已有实例时避免重复发送。
+                val instanceTypes = enabledInstances.map { it.channelType }.toSet()
+                val legacyChannels = (multiConfig.enabledChannelIds() +
+                    if (receiverStatus.enabled) setOf(ForwardingChannels.PUSHPLUS) else emptySet()) - instanceTypes
+                legacyChannels.forEach { channel ->
+                    ShadowRepository.recordDelivery(this, operationId, channel, "QUEUED")
+                    MultiChannelForwardWorker.enqueueSingle(
+                        context = this,
+                        sender = address,
+                        body = body,
+                        receivedAt = receivedAt,
+                        subscriptionId = subscriptionId,
+                        uniqueId = "$uniqueId-legacy-$channel",
+                        targetChannel = channel,
+                        allowedChannels = setOf(channel),
+                        isTest = false,
+                        operationId = operationId
+                    )
+                }
             }
-            
-            MultiChannelForwardWorker.enqueue(
-                context = this,
-                sender = address,
-                body = body,
-                receivedAt = receivedAt,
-                subscriptionId = subscriptionId,
-                uniqueId = uniqueId,
-                targetChannel = "",
-                allowedChannels = channels,
-                operationId = operationId
-            )
         }
 
         // Automatic SMS reply engine evaluation

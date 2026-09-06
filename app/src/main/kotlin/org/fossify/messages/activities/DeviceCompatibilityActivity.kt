@@ -37,6 +37,7 @@ import org.fossify.messages.databinding.ActivityDeviceCompatibilityBinding
 import org.fossify.messages.extensions.applyMiuiTopAppBarChrome
 import org.fossify.messages.extensions.config
 import org.fossify.messages.forwarding.ForwardingChannels
+import org.fossify.messages.forwarding.repository.ChannelRepository
 import org.fossify.messages.forwarding.ForwardingHistoryStore
 import org.fossify.messages.forwarding.ForwardingRulesConfig
 import org.fossify.messages.forwarding.MultiForwardConfig
@@ -424,14 +425,18 @@ class DeviceCompatibilityActivity : SimpleActivity() {
             configState("短信远程", remoteSms.enabled, remoteSms.authorizedList().isNotEmpty()),
             configState("钉钉Stream", multi.dingTalkRemoteControlEnabled, multi.dingTalkRemoteClientId().isNotBlank()),
             configState("飞书Stream", multi.feishuRemoteControlEnabled, multi.feishuRemoteAppId().isNotBlank()),
-            configState("企业微信应用", multi.weComRemoteControlEnabled, multi.weComRemoteCorpId().isNotBlank()),
             configState("邮箱IMAP", multi.emailRemoteControlEnabled, multi.emailRemoteHost().isNotBlank()),
             configState("TelegramBot", multi.telegramRemoteControlEnabled, multi.telegramRemoteBotToken().isNotBlank()),
             configState("WebSocket", multi.websocketRemoteControlEnabled, multi.websocketRemoteUrl().isNotBlank()),
-            configState("QQ OneBot11", multi.qqRemoteControlEnabled, multi.qqRemoteWsUrl().isNotBlank()),
         )
+        val lowBatteryInstanceNames = if (config.hasLowBatteryInstanceSelection) {
+            val ids = config.lowBatteryChannelInstanceIds
+            ChannelRepository.getInstance(applicationContext).getInstances().filter { it.id in ids }.map { it.name }
+        } else emptyList()
         val lowBattery = when {
             !config.enableLowBatteryReminder -> "关闭"
+            config.hasLowBatteryInstanceSelection && lowBatteryInstanceNames.isEmpty() -> "开启但未选择通道实例"
+            config.hasLowBatteryInstanceSelection -> "开启 · $lowBatteryWorkState · ${lowBatteryInstanceNames.joinToString("、")}"
             config.lowBatteryChannels.isEmpty() -> "开启但未选择渠道"
             else -> "开启 · $lowBatteryWorkState · ${config.lowBatteryChannels.map(ForwardingChannels::displayName).joinToString("、")}"
         }

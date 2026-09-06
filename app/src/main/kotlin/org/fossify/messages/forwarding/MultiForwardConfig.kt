@@ -1,6 +1,7 @@
 package org.fossify.messages.forwarding
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
@@ -12,15 +13,21 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 import org.fossify.messages.messaging.SimSendResolver
 
-class MultiForwardConfig(private val context: Context) {
-    private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+class MultiForwardConfig(
+    private val context: Context? = null,
+    customPrefs: SharedPreferences? = null
+) {
+    private val prefs: SharedPreferences = customPrefs
+        ?: context?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        ?: error("Either context or customPrefs must be provided")
 
     // 15 大通道开关
     var pushPlusEnabled: Boolean
-        get() = prefs.getBoolean(KEY_PUSHPLUS_ENABLED, false) || context.getSharedPreferences("pushplus_forwarding", Context.MODE_PRIVATE).getBoolean("enabled", false)
+        get() = prefs.getBoolean(KEY_PUSHPLUS_ENABLED, false) ||
+            (context?.getSharedPreferences("pushplus_forwarding", Context.MODE_PRIVATE)?.getBoolean("enabled", false) ?: false)
         set(value) {
             prefs.edit().putBoolean(KEY_PUSHPLUS_ENABLED, value).apply()
-            context.getSharedPreferences("pushplus_forwarding", Context.MODE_PRIVATE).edit().putBoolean("enabled", value).apply()
+            context?.getSharedPreferences("pushplus_forwarding", Context.MODE_PRIVATE)?.edit()?.putBoolean("enabled", value)?.apply()
         }
     var wechatTestEnabled by booleanPreference(KEY_WECHAT_TEST_ENABLED)
     var qqEnabled by booleanPreference(KEY_QQ_ENABLED)
@@ -107,38 +114,6 @@ class MultiForwardConfig(private val context: Context) {
     }
 
     fun feishuRemoteLogs(): String = prefs.getString(KEY_FEISHU_REMOTE_LOGS, "").orEmpty()
-
-    // 企业微信应用远程控制
-    var weComRemoteControlEnabled by booleanPreference(KEY_WECOM_REMOTE_CONTROL_ENABLED)
-    var weComRemoteSendSimMode: Int
-        get() = prefs.getInt(KEY_WECOM_REMOTE_SEND_SIM, SimSendMode.DEFAULT).let { mode ->
-            when (mode) {
-                SimSendMode.SIM1, SimSendMode.SIM2, SimSendMode.DEFAULT -> mode
-                else -> SimSendMode.DEFAULT
-            }
-        }
-        set(value) = prefs.edit().putInt(
-            KEY_WECOM_REMOTE_SEND_SIM,
-            when (value) {
-                SimSendMode.SIM1, SimSendMode.SIM2, SimSendMode.DEFAULT -> value
-                else -> SimSendMode.DEFAULT
-            },
-        ).apply()
-
-    var weComRemoteConnectionStatus: String
-        get() = prefs.getString(KEY_WECOM_REMOTE_STATUS, "").orEmpty()
-        set(value) = prefs.edit().putString(KEY_WECOM_REMOTE_STATUS, value).apply()
-
-    fun appendWeComRemoteLog(message: String) {
-        val now = java.text.SimpleDateFormat("MM-dd HH:mm:ss", java.util.Locale.getDefault())
-            .format(java.util.Date())
-        val line = "$now $message"
-        val current = prefs.getString(KEY_WECOM_REMOTE_LOGS, "").orEmpty().lines().filter(String::isNotBlank)
-        val logs = (listOf(line) + current).take(30).joinToString("\n")
-        prefs.edit().putString(KEY_WECOM_REMOTE_LOGS, logs).putString(KEY_WECOM_REMOTE_STATUS, line).apply()
-    }
-
-    fun weComRemoteLogs(): String = prefs.getString(KEY_WECOM_REMOTE_LOGS, "").orEmpty()
 
     // 邮箱远程控制
     var emailRemoteControlEnabled by booleanPreference(KEY_EMAIL_REMOTE_CONTROL_ENABLED)
@@ -239,42 +214,6 @@ class MultiForwardConfig(private val context: Context) {
     }
 
     fun websocketRemoteLogs(): String = prefs.getString(KEY_WEBSOCKET_REMOTE_LOGS, "").orEmpty()
-
-    // QQ (OneBot 11) 远程控制
-    var qqRemoteControlEnabled by booleanPreference(KEY_QQ_REMOTE_CONTROL_ENABLED)
-    var qqRemoteSendSimMode: Int
-        get() = prefs.getInt(KEY_QQ_REMOTE_SEND_SIM, SimSendMode.DEFAULT).let { mode ->
-            when (mode) {
-                SimSendMode.SIM1, SimSendMode.SIM2, SimSendMode.DEFAULT -> mode
-                else -> SimSendMode.DEFAULT
-            }
-        }
-        set(value) = prefs.edit().putInt(
-            KEY_QQ_REMOTE_SEND_SIM,
-            when (value) {
-                SimSendMode.SIM1, SimSendMode.SIM2, SimSendMode.DEFAULT -> value
-                else -> SimSendMode.DEFAULT
-            },
-        ).apply()
-
-    var qqRemoteConnectionStatus: String
-        get() = prefs.getString(KEY_QQ_REMOTE_STATUS, "").orEmpty()
-        set(value) = prefs.edit().putString(KEY_QQ_REMOTE_STATUS, value).apply()
-
-    var qqRemoteRequireAt: Boolean
-        get() = prefs.getBoolean(KEY_QQ_REMOTE_REQUIRE_AT, true)
-        set(value) = prefs.edit().putBoolean(KEY_QQ_REMOTE_REQUIRE_AT, value).apply()
-
-    fun appendQqRemoteLog(message: String) {
-        val now = java.text.SimpleDateFormat("MM-dd HH:mm:ss", java.util.Locale.getDefault())
-            .format(java.util.Date())
-        val line = "$now $message"
-        val current = prefs.getString(KEY_QQ_REMOTE_LOGS, "").orEmpty().lines().filter(String::isNotBlank)
-        val logs = (listOf(line) + current).take(30).joinToString("\n")
-        prefs.edit().putString(KEY_QQ_REMOTE_LOGS, logs).putString(KEY_QQ_REMOTE_STATUS, line).apply()
-    }
-
-    fun qqRemoteLogs(): String = prefs.getString(KEY_QQ_REMOTE_LOGS, "").orEmpty()
 
     var simOneLabel: String
         get() = prefs.getString(KEY_SIM_ONE_LABEL, "").orEmpty()
@@ -437,27 +376,6 @@ class MultiForwardConfig(private val context: Context) {
     fun feishuRemoteAppSecret() = getSecret(KEY_FEISHU_REMOTE_APP_SECRET)
     fun feishuRemoteCustomPrefix() = prefs.getString(KEY_FEISHU_REMOTE_CUSTOM_PREFIX, "").orEmpty()
 
-    fun saveWeComRemoteControl(
-        corpId: String,
-        agentId: String,
-        secret: String,
-        authorizedUsers: String = "",
-        customPrefix: String = "",
-    ) {
-        saveSecret(KEY_WECOM_REMOTE_CORP_ID, corpId)
-        saveSecret(KEY_WECOM_REMOTE_AGENT_ID, agentId)
-        saveSecret(KEY_WECOM_REMOTE_SECRET, secret)
-        prefs.edit()
-            .putString(KEY_WECOM_REMOTE_AUTH_USERS, authorizedUsers.trim())
-            .putString(KEY_WECOM_REMOTE_CUSTOM_PREFIX, customPrefix.trim())
-            .apply()
-    }
-    fun weComRemoteCorpId() = getSecret(KEY_WECOM_REMOTE_CORP_ID)
-    fun weComRemoteAgentId() = getSecret(KEY_WECOM_REMOTE_AGENT_ID)
-    fun weComRemoteSecret() = getSecret(KEY_WECOM_REMOTE_SECRET)
-    fun weComRemoteAuthorizedUsers() = prefs.getString(KEY_WECOM_REMOTE_AUTH_USERS, "").orEmpty()
-    fun weComRemoteCustomPrefix() = prefs.getString(KEY_WECOM_REMOTE_CUSTOM_PREFIX, "").orEmpty()
-
     fun saveEmailRemoteControl(
         host: String,
         port: Int,
@@ -513,29 +431,6 @@ class MultiForwardConfig(private val context: Context) {
     fun websocketRemoteUrl() = getSecret(KEY_WEBSOCKET_REMOTE_URL).ifBlank { websocketUrl() }
     fun websocketRemoteToken() = getSecret(KEY_WEBSOCKET_REMOTE_TOKEN).ifBlank { websocketToken() }
     fun websocketRemoteCustomPrefix() = prefs.getString(KEY_WEBSOCKET_REMOTE_CUSTOM_PREFIX, "").orEmpty()
-
-    fun saveQqRemoteControl(
-        wsUrl: String,
-        token: String = "",
-        authUsers: String = "",
-        authGroups: String = "",
-        requireAt: Boolean = true,
-        customPrefix: String = "",
-    ) {
-        saveSecret(KEY_QQ_REMOTE_WS_URL, wsUrl)
-        saveSecret(KEY_QQ_REMOTE_TOKEN, token)
-        prefs.edit()
-            .putString(KEY_QQ_REMOTE_AUTH_USERS, authUsers.trim())
-            .putString(KEY_QQ_REMOTE_AUTH_GROUPS, authGroups.trim())
-            .putBoolean(KEY_QQ_REMOTE_REQUIRE_AT, requireAt)
-            .putString(KEY_QQ_REMOTE_CUSTOM_PREFIX, customPrefix.trim())
-            .apply()
-    }
-    fun qqRemoteWsUrl() = getSecret(KEY_QQ_REMOTE_WS_URL)
-    fun qqRemoteToken() = getSecret(KEY_QQ_REMOTE_TOKEN)
-    fun qqRemoteAuthorizedUsers() = prefs.getString(KEY_QQ_REMOTE_AUTH_USERS, "").orEmpty()
-    fun qqRemoteAuthorizedGroups() = prefs.getString(KEY_QQ_REMOTE_AUTH_GROUPS, "").orEmpty()
-    fun qqRemoteCustomPrefix() = prefs.getString(KEY_QQ_REMOTE_CUSTOM_PREFIX, "").orEmpty()
 
     // 9. Bark
     fun saveBark(serverUrl: String, deviceKey: String) {
@@ -624,31 +519,35 @@ class MultiForwardConfig(private val context: Context) {
     fun gotifyServerUrl() = getSecret(KEY_GOTIFY_SERVER_URL)
     fun gotifyToken() = getSecret(KEY_GOTIFY_TOKEN)
 
-    fun anyEnabled() = pushPlusEnabled || wechatTestEnabled || qqEnabled || weComEnabled || weComBotEnabled ||
+    fun anyEnabled() = channelInstances().any { it.enabled } ||
+        pushPlusEnabled || wechatTestEnabled || qqEnabled || weComEnabled || weComBotEnabled ||
         feishuAppEnabled || feishuEnabled || dingTalkEnabled || barkEnabled || websocketEnabled ||
         telegramEnabled || discordEnabled || tencentCloudEnabled || emailEnabled || smsDirectEnabled ||
         customWebhookEnabled || channelGroupEnabled || gotifyEnabled
 
-    fun isChannelEnabled(channel: String): Boolean = when (channel) {
-        ForwardingChannels.PUSHPLUS -> pushPlusEnabled
-        ForwardingChannels.WECHAT_TEST -> wechatTestEnabled
-        ForwardingChannels.QQ -> qqEnabled
-        ForwardingChannels.WECOM, ForwardingChannels.WECOM_APP -> weComEnabled
-        ForwardingChannels.WECOM_BOT -> weComBotEnabled
-        ForwardingChannels.FEISHU_APP -> feishuAppEnabled
-        ForwardingChannels.FEISHU, ForwardingChannels.FEISHU_BOT -> feishuEnabled
-        ForwardingChannels.DINGTALK -> dingTalkEnabled
-        ForwardingChannels.BARK -> barkEnabled
-        ForwardingChannels.WEBSOCKET -> websocketEnabled
-        ForwardingChannels.TELEGRAM -> telegramEnabled
-        ForwardingChannels.DISCORD -> discordEnabled
-        ForwardingChannels.TENCENT_CLOUD -> tencentCloudEnabled
-        ForwardingChannels.EMAIL -> emailEnabled
-        ForwardingChannels.SMS_DIRECT -> smsDirectEnabled
-        ForwardingChannels.CUSTOM_WEBHOOK -> customWebhookEnabled
-        ForwardingChannels.CHANNEL_GROUP -> channelGroupEnabled
-        ForwardingChannels.GOTIFY -> gotifyEnabled
-        else -> false
+    fun isChannelEnabled(channel: String): Boolean {
+        if (channelInstances().any { it.channelType == channel && it.enabled }) return true
+        return when (channel) {
+            ForwardingChannels.PUSHPLUS -> pushPlusEnabled
+            ForwardingChannels.WECHAT_TEST -> wechatTestEnabled
+            ForwardingChannels.QQ -> qqEnabled
+            ForwardingChannels.WECOM, ForwardingChannels.WECOM_APP -> weComEnabled
+            ForwardingChannels.WECOM_BOT -> weComBotEnabled
+            ForwardingChannels.FEISHU_APP -> feishuAppEnabled
+            ForwardingChannels.FEISHU, ForwardingChannels.FEISHU_BOT -> feishuEnabled
+            ForwardingChannels.DINGTALK -> dingTalkEnabled
+            ForwardingChannels.BARK -> barkEnabled
+            ForwardingChannels.WEBSOCKET -> websocketEnabled
+            ForwardingChannels.TELEGRAM -> telegramEnabled
+            ForwardingChannels.DISCORD -> discordEnabled
+            ForwardingChannels.TENCENT_CLOUD -> tencentCloudEnabled
+            ForwardingChannels.EMAIL -> emailEnabled
+            ForwardingChannels.SMS_DIRECT -> smsDirectEnabled
+            ForwardingChannels.CUSTOM_WEBHOOK -> customWebhookEnabled
+            ForwardingChannels.CHANNEL_GROUP -> channelGroupEnabled
+            ForwardingChannels.GOTIFY -> gotifyEnabled
+            else -> false
+        }
     }
 
     // 多实例渠道池 (Multi-Instance Channel Hub)
@@ -658,14 +557,47 @@ class MultiForwardConfig(private val context: Context) {
         val array = org.json.JSONArray(raw)
         buildList {
             for (i in 0 until array.length()) {
-                add(ForwardingChannelInstance.fromJson(array.getJSONObject(i)))
+                val obj = array.getJSONObject(i)
+                val stored = ForwardingChannelInstance.fromJson(obj)
+                val encryptedConfig = obj.optString("configJsonEncrypted")
+                val decryptedConfig = encryptedConfig.takeIf(String::isNotBlank)
+                    ?.let(ForwardingCipher::decrypt)
+                    .orEmpty()
+                add(stored.copy(configJson = decryptedConfig.ifBlank { stored.configJson }))
             }
         }
     }.getOrDefault(emptyList())
 
     fun saveChannelInstances(instances: List<ForwardingChannelInstance>) {
+        val existingEncryptedById = runCatching {
+            val previousRaw = prefs.getString(KEY_CHANNEL_INSTANCES, "[]").orEmpty().ifBlank { "[]" }
+            val previous = org.json.JSONArray(previousRaw)
+            buildMap {
+                for (index in 0 until previous.length()) {
+                    val item = previous.optJSONObject(index) ?: continue
+                    val id = item.optString("id")
+                    val encrypted = item.optString("configJsonEncrypted")
+                    if (id.isNotBlank() && encrypted.isNotBlank()) put(id, encrypted)
+                }
+            }
+        }.getOrDefault(emptyMap())
         val array = org.json.JSONArray()
-        instances.forEach { array.put(it.toJson()) }
+        instances.forEach { instance ->
+            // 若旧密文因 Keystore 暂时不可用而未能解出，读取层会给出空对象。
+            // 此时保留原密文，避免用户仅切换开关就永久覆盖凭据。
+            val preservedEncrypted = existingEncryptedById[instance.id]
+                .takeIf { instance.configJson.isBlank() || instance.configJson == "{}" }
+            val encryptedConfig = preservedEncrypted
+                ?: instance.configJson.takeUnless { it.isBlank() || it == "{}" }
+                    ?.let(ForwardingCipher::encrypt)
+                    .orEmpty()
+            val obj = instance.toJson()
+            if (encryptedConfig.isNotBlank()) {
+                obj.put("configJson", "{}")
+                obj.put("configJsonEncrypted", encryptedConfig)
+            }
+            array.put(obj)
+        }
         prefs.edit().putString(KEY_CHANNEL_INSTANCES, array.toString()).apply()
     }
 
@@ -713,6 +645,7 @@ class MultiForwardConfig(private val context: Context) {
     }
 
     fun enabledChannelIds(includePushPlus: Boolean = false): Set<String> = buildSet {
+        channelInstances().filter { it.enabled }.forEach { add(it.channelType) }
         if (includePushPlus || pushPlusEnabled) add(ForwardingChannels.PUSHPLUS)
         if (wechatTestEnabled) add(ForwardingChannels.WECHAT_TEST)
         if (qqEnabled) add(ForwardingChannels.QQ)
@@ -750,14 +683,11 @@ class MultiForwardConfig(private val context: Context) {
         }
     }
 
-    private fun getSecret(key: String) = prefs.getString(key, null)
-        ?.let { encrypted ->
-            ForwardingCipher.decrypt(encrypted).ifEmpty {
-                prefs.edit().remove(key).apply()
-                ""
-            }
-        }
-        .orEmpty()
+    private fun getSecret(key: String): String {
+        val stored = prefs.getString(key, null) ?: return ""
+        val decrypted = ForwardingCipher.decrypt(stored)
+        return if (decrypted.isNotEmpty()) decrypted else stored
+    }
 
     companion object {
         private const val PREFS_NAME = "multi_channel_forwarding"
@@ -839,16 +769,6 @@ class MultiForwardConfig(private val context: Context) {
         private const val KEY_FEISHU_REMOTE_STATUS = "feishu_remote_status"
         private const val KEY_FEISHU_REMOTE_LOGS = "feishu_remote_logs"
 
-        private const val KEY_WECOM_REMOTE_CONTROL_ENABLED = "wecom_remote_control_enabled"
-        private const val KEY_WECOM_REMOTE_CORP_ID = "wecom_remote_corp_id"
-        private const val KEY_WECOM_REMOTE_AGENT_ID = "wecom_remote_agent_id"
-        private const val KEY_WECOM_REMOTE_SECRET = "wecom_remote_secret"
-        private const val KEY_WECOM_REMOTE_AUTH_USERS = "wecom_remote_auth_users"
-        private const val KEY_WECOM_REMOTE_CUSTOM_PREFIX = "wecom_remote_custom_prefix"
-        private const val KEY_WECOM_REMOTE_SEND_SIM = "wecom_remote_send_sim"
-        private const val KEY_WECOM_REMOTE_STATUS = "wecom_remote_status"
-        private const val KEY_WECOM_REMOTE_LOGS = "wecom_remote_logs"
-
         private const val KEY_EMAIL_REMOTE_CONTROL_ENABLED = "email_remote_control_enabled"
         private const val KEY_EMAIL_REMOTE_HOST = "email_remote_host"
         private const val KEY_EMAIL_REMOTE_PORT = "email_remote_port"
@@ -879,16 +799,6 @@ class MultiForwardConfig(private val context: Context) {
         private const val KEY_WEBSOCKET_REMOTE_STATUS = "websocket_remote_status"
         private const val KEY_WEBSOCKET_REMOTE_LOGS = "websocket_remote_logs"
 
-        private const val KEY_QQ_REMOTE_CONTROL_ENABLED = "qq_remote_control_enabled"
-        private const val KEY_QQ_REMOTE_WS_URL = "qq_remote_ws_url"
-        private const val KEY_QQ_REMOTE_TOKEN = "qq_remote_token"
-        private const val KEY_QQ_REMOTE_AUTH_USERS = "qq_remote_auth_users"
-        private const val KEY_QQ_REMOTE_AUTH_GROUPS = "qq_remote_auth_groups"
-        private const val KEY_QQ_REMOTE_REQUIRE_AT = "qq_remote_require_at"
-        private const val KEY_QQ_REMOTE_CUSTOM_PREFIX = "qq_remote_custom_prefix"
-        private const val KEY_QQ_REMOTE_SEND_SIM = "qq_remote_send_sim"
-        private const val KEY_QQ_REMOTE_STATUS = "qq_remote_status"
-        private const val KEY_QQ_REMOTE_LOGS = "qq_remote_logs"
         private const val KEY_LAST_STATUS = "last_status"
         private const val KEY_SIM_ONE_LABEL = "sim_one_label"
         private const val KEY_SIM_TWO_LABEL = "sim_two_label"
@@ -921,7 +831,10 @@ object SimSendMode {
     const val SIM2 = 2
 }
 
-private object ForwardingCipher {
+/**
+ * 基于 AndroidKeyStore AES-GCM 硬件加密的安全凭证加解密工具
+ */
+internal object ForwardingCipher {
     private const val KEY_ALIAS = "multi_forwarding_credentials_key"
     private const val TRANSFORMATION = "AES/GCM/NoPadding"
 
@@ -944,11 +857,8 @@ private object ForwardingCipher {
 
     private fun getOrCreateKey(): SecretKey {
         val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
-        try {
-            (keyStore.getKey(KEY_ALIAS, null) as? SecretKey)?.let { return it }
-        } catch (e: Throwable) {
-            runCatching { keyStore.deleteEntry(KEY_ALIAS) }
-        }
+        // 不在读取异常时删除旧密钥；删除会令所有既有密文永久不可恢复。
+        (keyStore.getKey(KEY_ALIAS, null) as? SecretKey)?.let { return it }
         return KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore").run {
             init(
                 KeyGenParameterSpec.Builder(

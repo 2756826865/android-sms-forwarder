@@ -151,10 +151,12 @@ class DingTalkStreamClient(
 
         when {
             type == "SYSTEM" && topic == "ping" -> {
-                val opaque = runCatching {
-                    JSONObject(envelope.optString("data")).optString("opaque")
-                }.getOrDefault("")
-                reply(webSocket, messageId, JSONObject().put("opaque", opaque))
+                // 官方 SDK 的行为是原样回放完整 ping data，不能只保留 opaque，
+                // 否则服务端新增心跳字段时会把兼容客户端判为失活。
+                val pingData = runCatching {
+                    JSONObject(envelope.optString("data"))
+                }.getOrDefault(JSONObject())
+                reply(webSocket, messageId, pingData)
             }
             type == "SYSTEM" && topic == "disconnect" -> {
                 onStatus("服务端请求重连")
@@ -167,11 +169,30 @@ class DingTalkStreamClient(
                 val commandMessageId = messageId
                     .ifBlank { data.optString("msgId") }
                     .ifBlank { data.optString("messageId") }
+                val senderId = data.optString("senderStaffId").ifBlank { data.optString("senderId") }
+                val senderNick = data.optString("senderNick")
+                val conversationId = data.optString("conversationId")
+                val conversationType = data.optString("conversationType")
+                val sessionWebhook = data.optString("sessionWebhook")
+                val isInAtList = data.optBoolean("isInAtList", false)
+
                 RemoteSmsCommand.parse(content, customPrefix)?.let { command ->
                     if (commandMessageId.isBlank()) {
                         onStatus("忽略缺少 messageId 的钉钉远程指令")
                     } else {
-                        onCommand(DingTalkRemoteCommand(commandMessageId, command))
+                        onCommand(
+                            DingTalkRemoteCommand(
+                                messageId = commandMessageId,
+                                command = command,
+                                rawContent = content,
+                                senderId = senderId,
+                                senderNick = senderNick,
+                                conversationId = conversationId,
+                                conversationType = conversationType,
+                                sessionWebhook = sessionWebhook,
+                                isMentioned = isInAtList,
+                            )
+                        )
                     }
                 }
                 reply(webSocket, messageId, JSONObject().put("response", JSONObject.NULL))
@@ -198,6 +219,28 @@ class DingTalkStreamClient(
         return "$endpoint${separator}ticket=${java.net.URLEncoder.encode(ticket, Charsets.UTF_8.name())}"
     }
 
+    fun sendReply(sessionWebhook: String, content: String): Boolean {
+        val uri = runCatching { java.net.URI(sessionWebhook) }.getOrNull() ?: return false
+        val host = uri.host.orEmpty().lowercase()
+        // sessionWebhook 来自远端事件载荷，仍需限制为钉钉官方 HTTPS 域名，避免被滥用为 SSRF。
+        if (uri.scheme != "https" || (host != "dingtalk.com" && !host.endsWith(".dingtalk.com"))) return false
+        val payload = JSONObject()
+            .put("msgtype", "text")
+            .put("text", JSONObject().put("content", content))
+        val request = Request.Builder()
+            .url(sessionWebhook)
+            .post(payload.toString().toRequestBody(JSON_MEDIA_TYPE))
+            .build()
+        return runCatching {
+            http.newCall(request).execute().use { response ->
+                val body = response.body?.string().orEmpty()
+                response.isSuccessful && runCatching {
+                    JSONObject(body).optInt("errcode", -1) == 0
+                }.getOrDefault(false)
+            }
+        }.onFailure { Log.e(TAG, "DingTalk reply failed", it) }.getOrDefault(false)
+    }
+
     companion object {
         private const val TAG = "DingTalkStreamClient"
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
@@ -210,4 +253,11 @@ class DingTalkStreamClient(
 data class DingTalkRemoteCommand(
     val messageId: String,
     val command: RemoteSmsCommand,
+    val rawContent: String = "",
+    val senderId: String = "",
+    val senderNick: String = "",
+    val conversationId: String = "",
+    val conversationType: String = "",
+    val sessionWebhook: String = "",
+    val isMentioned: Boolean = false,
 )

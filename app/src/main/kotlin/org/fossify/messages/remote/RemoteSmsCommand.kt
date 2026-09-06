@@ -1,6 +1,7 @@
 package org.fossify.messages.remote
 
 import android.content.Context
+import android.content.SharedPreferences
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
@@ -9,6 +10,7 @@ import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import android.telephony.SubscriptionManager
 import org.fossify.messages.extensions.config
+import org.fossify.messages.extensions.getMessagesDB
 import org.fossify.messages.extensions.messagingUtils
 import org.fossify.messages.remote.RemoteControlPendingReceipt
 import org.fossify.messages.remote.RemoteControlReceiptForwarder
@@ -27,8 +29,13 @@ import java.util.Date
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class RemoteSmsCommandConfig(context: Context) {
-    private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+class RemoteSmsCommandConfig(
+    context: Context? = null,
+    customPrefs: SharedPreferences? = null
+) {
+    private val prefs: SharedPreferences = customPrefs
+        ?: context?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        ?: error("Context or customPrefs required")
 
     var enabled: Boolean
         get() = prefs.getBoolean(KEY_ENABLED, false)
@@ -161,21 +168,42 @@ data class RemoteSmsCommand(
             var matchedPrefix: String? = null
             var commandText = trimmed
             for (p in prefixes) {
-                val idx = trimmed.indexOf(p)
-                if (idx >= 0) {
+                if (trimmed.startsWith(p)) {
                     matchedPrefix = p
-                    commandText = trimmed.substring(idx)
+                    commandText = trimmed
                     break
                 }
             }
             if (matchedPrefix == null) return null
+            val remainder = trimmed.substring(matchedPrefix.length).trim()
+            if (remainder.isBlank()) return null
 
-            val escaped = Regex.escape(matchedPrefix)
-            val regex = Regex("^$escaped\\s+(?:(SIM1|SIM2|默认|系统默认)\\s+)?(\\S+)\\s+([\\s\\S]+)$", RegexOption.IGNORE_CASE)
-            val match = regex.matchEntire(commandText.trim()) ?: return null
-            val simToken = match.groupValues[1].trim().takeIf(String::isNotBlank)
-            val target = match.groupValues[2].trim()
-            val content = match.groupValues[3].trim()
+            val firstSpace = remainder.indexOfFirst { it.isWhitespace() }
+            if (firstSpace < 0) return null // 仅有1个token（无论是SIM还是号码），缺少内容
+
+            val firstToken = remainder.substring(0, firstSpace).trim()
+            val afterFirst = remainder.substring(firstSpace).trim()
+
+            val isSimToken = firstToken.equals("SIM1", ignoreCase = true) ||
+                firstToken.equals("SIM2", ignoreCase = true) ||
+                firstToken == "默认" || firstToken == "系统默认"
+
+            val simToken: String?
+            val target: String
+            val content: String
+
+            if (isSimToken) {
+                val secondSpace = afterFirst.indexOfFirst { it.isWhitespace() }
+                if (secondSpace < 0) return null // 有SIM且有号码，但缺少内容
+                simToken = firstToken
+                target = afterFirst.substring(0, secondSpace).trim()
+                content = afterFirst.substring(secondSpace).trim()
+            } else {
+                simToken = null
+                target = firstToken
+                content = afterFirst
+            }
+
             if (target.isBlank() || content.isBlank()) return null
             return RemoteSmsCommand(target, content, parseSimMode(simToken))
         }
@@ -201,102 +229,66 @@ object RemoteSmsCommandProcessor {
         allowExecution: Boolean = true,
     ): Boolean {
         val config = RemoteSmsCommandConfig(context)
-        val command = RemoteSmsCommand.parse(body, config.customPrefix) ?: return false
+        val smsSources = org.fossify.messages.remote.repository.RemoteSourceRepository
+            .getInstance(context)
+            .getSourcesByType(org.fossify.messages.remote.repository.RemoteSourceType.SMS)
+            .filter { it.enabled }
 
-        // 1C-2: 优先持久化事实与永久幂等声明
-        val messageKey = if (messageId > 0L) "id:$messageId" else "time:$messageTimestamp"
-        val cmdContext = RemoteCommandContext(
-            sourceType = RemoteCommandSourceType.SMS,
-            sourceMessageKey = messageKey,
-            commandType = RemoteCommandType.SEND_SMS,
-            rawTarget = command.targetNumber,
-            rawPayload = command.content,
-            requestedSimMode = command.sendMode,
-            rawRequester = sender,
-            receivedAt = messageTimestamp
-        )
+        // 同类型多实例不能固定取 firstOrNull。优先选择白名单真正匹配发件人的实例，
+        // 其次选择关闭白名单的实例；相同条件下优先更长、更具体的自定义前缀。
+        val matchingSources = smsSources
+            .mapNotNull { source ->
+                val prefix = source.customCommandPrefix.ifBlank { config.customPrefix }
+                RemoteSmsCommand.parse(body, prefix)?.let { source to prefix }
+            }
+            .sortedByDescending { (_, prefix) -> prefix.length }
+        val selectedSource = matchingSources.firstOrNull { (source, _) ->
+            source.whitelistEnabled && source.authorizedUsers.any { numbersEquivalent(it, sender) }
+        }?.first ?: matchingSources.firstOrNull { (source, _) -> !source.whitelistEnabled }?.first
+            ?: matchingSources.firstOrNull()?.first
 
-        val claimResult = runBlocking {
-            RemoteCommandRepository.claimOrGetDuplicate(context, cmdContext)
-        }
-
-        if (claimResult is RemoteCommandRepository.ClaimResult.Duplicate) {
-            config.appendLog(
-                "抑制重复命令：$sender -> ${command.targetNumber}${simLogSuffix(context, subscriptionId, command.sendMode)}",
-            )
-            return true
-        }
-
-        val commandId = (claimResult as? RemoteCommandRepository.ClaimResult.NewCommand)?.commandId.orEmpty()
-
+        val legacyPrefix = config.customPrefix
+        val legacySyntaxMatched = RemoteSmsCommand.parse(body, legacyPrefix) != null
+        // 非指令内容立即放行走普通短信转发；存在实例时只采用实例自己的前缀。
+        if (selectedSource == null && (smsSources.isNotEmpty() || !legacySyntaxMatched)) return false
         if (!allowExecution) {
-            if (commandId.isNotBlank()) {
-                RemoteCommandRepository.recordAuthorization(context, commandId, authorized = false, reason = "RULE_BLOCKED")
-            }
-            config.appendLog("规则阻止执行：$sender")
+            config.appendLog("远程短信指令已被转发规则阻止：$sender")
             return true
         }
 
-        val fingerprint = fingerprint(sender, body, messageTimestamp, subscriptionId, messageId)
-        if (!config.enabled) {
-            if (commandId.isNotBlank()) {
-                RemoteCommandRepository.recordAuthorization(context, commandId, authorized = false, reason = "DISABLED")
-            }
-            config.appendLog("忽略未启用命令：$sender")
-            return true
-        }
-        if (!config.isAuthorized(sender)) {
-            if (commandId.isNotBlank()) {
-                RemoteCommandRepository.recordAuthorization(context, commandId, authorized = false, reason = "NOT_AUTHORIZED")
-            }
-            config.appendLog("拒绝未授权号码：$sender")
-            return true
-        }
-        if (config.isRateLimited(sender)) {
-            if (commandId.isNotBlank()) {
-                RemoteCommandRepository.recordAuthorization(context, commandId, authorized = false, reason = "RATE_LIMITED")
-            }
-            config.appendLog("触发频率限制：$sender")
-            return true
-        }
-        if (!config.claimFingerprint(fingerprint)) {
-            config.appendLog(
-                "抑制重复命令：$sender -> ${command.targetNumber}${simLogSuffix(context, subscriptionId, command.sendMode)}",
-            )
-            return true
-        }
-
-        if (commandId.isNotBlank()) {
-            RemoteCommandRepository.recordAuthorization(context, commandId, authorized = true, reason = "WHITELIST_MATCH")
-        }
-
-        config.markExecution(sender)
-        RemoteSmsCommandWorker.enqueue(
-            context = context,
-            target = command.targetNumber,
-            content = command.content,
-            subId = subscriptionId,
-            uniqueId = fingerprint,
-            sendMode = command.sendMode,
-            requester = sender,
-            source = SOURCE_SMS,
-            commandId = commandId,
+        val messageKey = if (messageId > 0L) "id:$messageId" else "time:$messageTimestamp"
+        val envelope = RemoteCommandEnvelope(
+            sourceType = org.fossify.messages.remote.repository.RemoteSourceType.SMS,
+            sourceInstanceId = selectedSource?.id.orEmpty(),
+            sourceMessageKey = messageKey,
+            senderId = sender,
+            rawContent = body,
+            receivedAt = messageTimestamp,
+            subscriptionId = subscriptionId,
+            messageId = messageId
         )
-        config.appendLog(
-            "已加入发送队列：$sender -> ${command.targetNumber}${simLogSuffix(context, subscriptionId, command.sendMode)}",
-        )
-        return true
+
+        return when (val result = RemoteCommandProcessor.process(context, envelope)) {
+            is RemoteProcessResult.Success -> {
+                config.appendLog("指令已加入发送队列：$sender -> ${result.target}")
+                true
+            }
+            is RemoteProcessResult.Duplicate -> {
+                config.appendLog("抑制重复指令：$sender")
+                true
+            }
+            is RemoteProcessResult.Rejected -> {
+                config.appendLog("指令已被拒绝：${result.detail.ifBlank { result.reason }}")
+                true
+            }
+            is RemoteProcessResult.Ignored -> false
+        }
     }
 
-    private fun simLogSuffix(context: Context, receiveSubId: Int, sendMode: Int): String =
-        " · ${SimSendResolver.describeForLog(context, receiveSubId.takeIf { it >= 0 }, sendMode)}"
-
-    private fun fingerprint(sender: String, body: String, messageTimestamp: Long, subscriptionId: Int, messageId: Long): String {
-        val identity = if (messageId > 0L) "id:$messageId" else "time:$messageTimestamp"
-        val raw = "$sender\u0000$body\u0000$identity\u0000$subscriptionId"
-        return MessageDigest.getInstance("SHA-256")
-            .digest(raw.toByteArray())
-            .joinToString("") { "%02x".format(it) }
+    private fun numbersEquivalent(a: String, b: String): Boolean {
+        val left = a.filter(Char::isDigit).takeLast(11)
+        val right = b.filter(Char::isDigit).takeLast(11)
+        return left.isNotEmpty() && (left == right || left.endsWith(right) || right.endsWith(left))
     }
 }
 
@@ -310,6 +302,7 @@ class RemoteSmsCommandWorker(appContext: Context, params: WorkerParameters) : Co
         val requester = inputData.getString(KEY_REQUESTER).orEmpty()
         val source = inputData.getString(KEY_SOURCE).orEmpty().ifBlank { SOURCE_SMS }
         val commandId = inputData.getString(KEY_COMMAND_ID).orEmpty()
+        val sourceInstanceId = inputData.getString(KEY_SOURCE_INSTANCE_ID).orEmpty()
 
         if (target.isBlank() || content.isBlank()) {
             if (commandId.isNotBlank()) {
@@ -347,6 +340,7 @@ class RemoteSmsCommandWorker(appContext: Context, params: WorkerParameters) : Co
             awaitDelivered = false,
             sendSimLabel = sendSimLabel,
             commandId = commandId,
+            sourceInstanceId = sourceInstanceId,
         )
         if (resolvedSubId == null && sendMode in setOf(SimSendResolver.MODE_SIM1, SimSendResolver.MODE_SIM2)) {
             val error = "未找到可用的${SimSendResolver.modeLabel(sendMode)}"
@@ -366,14 +360,15 @@ class RemoteSmsCommandWorker(appContext: Context, params: WorkerParameters) : Co
             appendRemoteLog(source, "抑制重复执行：$target$simLogSuffix")
             return Result.success()
         }
+        if (commandId.isNotBlank()) {
+            RemoteCommandRepository.recordSubmitting(applicationContext, commandId)
+        }
         val triggerType = when (source) {
             SOURCE_DINGTALK -> org.fossify.messages.models.SmsSendTriggerType.REMOTE_DINGTALK_COMMAND
             SOURCE_FEISHU -> org.fossify.messages.models.SmsSendTriggerType.REMOTE_FEISHU_COMMAND
-            SOURCE_WECOM -> org.fossify.messages.models.SmsSendTriggerType.REMOTE_WECOM_COMMAND
             SOURCE_EMAIL -> org.fossify.messages.models.SmsSendTriggerType.REMOTE_EMAIL_COMMAND
             SOURCE_TELEGRAM -> org.fossify.messages.models.SmsSendTriggerType.REMOTE_TELEGRAM_COMMAND
             SOURCE_WEBSOCKET -> org.fossify.messages.models.SmsSendTriggerType.REMOTE_WEBSOCKET_COMMAND
-            SOURCE_QQ -> org.fossify.messages.models.SmsSendTriggerType.REMOTE_QQ_COMMAND
             else -> org.fossify.messages.models.SmsSendTriggerType.REMOTE_SMS_COMMAND
         }
         return runCatching {
@@ -387,7 +382,11 @@ class RemoteSmsCommandWorker(appContext: Context, params: WorkerParameters) : Co
             RemoteControlReceiptForwarder.registerFromMessageUris(applicationContext, uris, pendingReceipt)
             appendRemoteLog(source, "已提交发送：$target$simLogSuffix")
             if (commandId.isNotBlank()) {
-                RemoteCommandRepository.recordExecutionSuccess(applicationContext, commandId)
+                val providerMsgId = uris.firstOrNull()?.lastPathSegment?.toLongOrNull()
+                val sendOpId = if (providerMsgId != null) {
+                    applicationContext.getMessagesDB().SmsSendDao().getOperationByProviderMessageId(providerMsgId)?.sendOperationId
+                } else null
+                RemoteCommandRepository.recordSubmitted(applicationContext, commandId, sendOpId)
             }
             Result.success()
         }.getOrElse { error ->
@@ -415,11 +414,9 @@ class RemoteSmsCommandWorker(appContext: Context, params: WorkerParameters) : Co
         when (source) {
             SOURCE_DINGTALK -> multiConfig.appendDingTalkRemoteLog(message)
             SOURCE_FEISHU -> multiConfig.appendFeishuRemoteLog(message)
-            SOURCE_WECOM -> multiConfig.appendWeComRemoteLog(message)
             SOURCE_EMAIL -> multiConfig.appendEmailRemoteLog(message)
             SOURCE_TELEGRAM -> multiConfig.appendTelegramRemoteLog(message)
             SOURCE_WEBSOCKET -> multiConfig.appendWebSocketRemoteLog(message)
-            SOURCE_QQ -> multiConfig.appendQqRemoteLog(message)
         }
     }
 
@@ -432,6 +429,7 @@ class RemoteSmsCommandWorker(appContext: Context, params: WorkerParameters) : Co
         private const val KEY_REQUESTER = "requester"
         private const val KEY_SOURCE = "source"
         private const val KEY_COMMAND_ID = "command_id"
+        private const val KEY_SOURCE_INSTANCE_ID = "source_instance_id"
 
         fun enqueue(
             context: Context,
@@ -443,6 +441,7 @@ class RemoteSmsCommandWorker(appContext: Context, params: WorkerParameters) : Co
             requester: String = "",
             source: String = SOURCE_SMS,
             commandId: String = "",
+            sourceInstanceId: String = "",
         ) {
             val request = OneTimeWorkRequestBuilder<RemoteSmsCommandWorker>()
                 .setInputData(
@@ -455,6 +454,7 @@ class RemoteSmsCommandWorker(appContext: Context, params: WorkerParameters) : Co
                         KEY_REQUESTER to requester,
                         KEY_SOURCE to source,
                         KEY_COMMAND_ID to commandId,
+                        KEY_SOURCE_INSTANCE_ID to sourceInstanceId,
                     ),
                 )
                 .setInitialDelay(0, TimeUnit.MILLISECONDS)
@@ -467,11 +467,9 @@ class RemoteSmsCommandWorker(appContext: Context, params: WorkerParameters) : Co
 const val SOURCE_SMS = "短信远程指令"
 const val SOURCE_DINGTALK = "钉钉远程指令"
 const val SOURCE_FEISHU = "飞书远程指令"
-const val SOURCE_WECOM = "企业微信远程指令"
 const val SOURCE_EMAIL = "邮箱远程指令"
 const val SOURCE_TELEGRAM = "Telegram远程指令"
 const val SOURCE_WEBSOCKET = "WebSocket远程指令"
-const val SOURCE_QQ = "QQ远程指令"
 
 private fun normalizeNumber(value: String): String = value.filter(Char::isDigit).takeLast(11)
 

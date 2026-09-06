@@ -10,6 +10,7 @@ import org.fossify.messages.extensions.applyMiuiTopAppBarChrome
 import org.fossify.messages.forwarding.CallForwardConfig
 import org.fossify.messages.forwarding.MultiChannelForwardWorker
 import org.fossify.messages.forwarding.MultiForwardConfig
+import org.fossify.messages.forwarding.repository.ChannelRepository
 
 class CallForwardingSettingsActivity : SimpleActivity() {
 
@@ -44,8 +45,11 @@ class CallForwardingSettingsActivity : SimpleActivity() {
 
         binding.callForwardBtnTest.setOnClickListener {
             val multiConfig = MultiForwardConfig(this)
-            val channels = multiConfig.enabledChannelIds()
-            if (channels.isEmpty()) {
+            val selectedInstances = if (callConfig.hasChannelSelection) {
+                ChannelRepository.getInstance(this).getEnabledInstances().filter { it.id in callConfig.channelInstanceIds }
+            } else emptyList()
+            val channels = if (callConfig.hasChannelSelection) emptySet() else multiConfig.enabledChannelIds()
+            if (channels.isEmpty() && selectedInstances.isEmpty()) {
                 toast("请先在「转发通道」中启用至少一个推送渠道")
                 return@setOnClickListener
             }
@@ -64,6 +68,20 @@ class CallForwardingSettingsActivity : SimpleActivity() {
                     targetChannel = target,
                     allowedChannels = setOf(target),
                     isTest = true
+                )
+            }
+            selectedInstances.forEach { instance ->
+                MultiChannelForwardWorker.enqueueSingle(
+                    context = this,
+                    sender = "10086",
+                    body = testBody,
+                    receivedAt = now,
+                    subscriptionId = -1,
+                    uniqueId = "test-call-$now",
+                    targetChannel = instance.channelType,
+                    allowedChannels = setOf(instance.id),
+                    isTest = true,
+                    targetInstanceId = instance.id
                 )
             }
             toast("未接来电模拟测试消息已发送")

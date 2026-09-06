@@ -51,10 +51,18 @@ class EmailRemoteControlSettingsActivity : SimpleActivity() {
             if (!saveConfig()) return@setOnClickListener
             toast("正在测试连接 IMAP 邮箱…")
             ensureBackgroundThread {
-                val count = EmailRemoteCommandPoller(applicationContext).pollOnce()
-                runOnUiThread {
-                    toast("连接测试完成，检测到 $count 条新指令")
-                    loadConfig()
+                runCatching {
+                    EmailRemoteCommandPoller(applicationContext, "legacy_remote_email").pollOnce()
+                }.onSuccess { count ->
+                    runOnUiThread {
+                        toast("连接测试成功，检测到 $count 条新指令")
+                        loadConfig()
+                    }
+                }.onFailure { error ->
+                    runOnUiThread {
+                        toast("连接测试失败：${error.message ?: error.javaClass.simpleName}")
+                        loadConfig()
+                    }
                 }
             }
         }
@@ -104,6 +112,9 @@ class EmailRemoteControlSettingsActivity : SimpleActivity() {
             2 -> SimSendMode.SIM2
             else -> SimSendMode.DEFAULT
         }
+        org.fossify.messages.remote.repository.RemoteSourceRepository
+            .getInstance(applicationContext)
+            .syncLegacySourcesFromClassic()
         return true
     }
 }

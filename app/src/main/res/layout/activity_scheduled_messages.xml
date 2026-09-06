@@ -42,7 +42,7 @@
                 android:layout_marginBottom="12dp"
                 android:text="@string/scheduled_management"
                 android:textColor="@color/miui_primary_text"
-                android:textSize="38sp" />
+                android:textSize="24sp" />
 
             <TextView
                 android:id="@+id/scheduled_alarm_status"

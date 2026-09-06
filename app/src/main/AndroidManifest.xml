@@ -9,7 +9,6 @@
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
     <uses-permission android:name="android.permission.RECEIVE_MMS" />
     <uses-permission android:name="android.permission.RECEIVE_WAP_PUSH" />
-    <uses-permission android:name="android.provider.Telephony.SMS_RECEIVED" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
@@ -254,12 +253,6 @@
             android:parentActivityName=".activities.RemoteForwardingActivity" />
 
         <activity
-            android:name=".activities.WeComRemoteControlSettingsActivity"
-            android:exported="false"
-            android:label="@string/wecom_remote_title"
-            android:parentActivityName=".activities.RemoteForwardingActivity" />
-
-        <activity
             android:name=".activities.EmailRemoteControlSettingsActivity"
             android:exported="false"
             android:label="@string/email_remote_title"
@@ -278,12 +271,6 @@
             android:parentActivityName=".activities.RemoteForwardingActivity" />
 
         <activity
-            android:name=".activities.QqRemoteControlSettingsActivity"
-            android:exported="false"
-            android:label="@string/qq_remote_title"
-            android:parentActivityName=".activities.RemoteForwardingActivity" />
-
-        <activity
             android:name=".activities.AutoReplySettingsActivity"
             android:exported="false"
             android:label="短信自动回复"
@@ -294,19 +281,6 @@
             android:exported="false"
             android:label="@string/autofill_settings_title"
             android:parentActivityName=".activities.SettingsActivity" />
-
-        <service
-            android:name=".autofill.SmsAutofillAccessibilityService"
-            android:exported="false"
-            android:label="@string/autofill_service_name"
-            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
-            <intent-filter>
-                <action android:name="android.accessibilityservice.AccessibilityService" />
-            </intent-filter>
-            <meta-data
-                android:name="android.accessibilityservice"
-                android:resource="@xml/accessibility_service_config" />
-        </service>
 
         <activity
             android:name=".activities.ForwardingChannelsActivity"
@@ -425,16 +399,6 @@
         </service>
 
         <service
-            android:name=".services.WeComRemoteControlService"
-            android:exported="false"
-            android:foregroundServiceType="specialUse"
-            android:stopWithTask="false">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Maintains WeCom connection for remote SMS commands" />
-        </service>
-
-        <service
             android:name=".services.EmailRemoteControlService"
             android:exported="false"
             android:foregroundServiceType="specialUse"
@@ -462,16 +426,6 @@
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Maintains WebSocket duplex connection for remote SMS commands" />
-        </service>
-
-        <service
-            android:name=".services.QqRemoteControlService"
-            android:exported="false"
-            android:foregroundServiceType="specialUse"
-            android:stopWithTask="false">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Maintains OneBot 11 QQ connection for remote SMS commands" />
         </service>
 
         <service

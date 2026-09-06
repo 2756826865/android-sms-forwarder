@@ -109,25 +109,86 @@ object RemoteCommandRepository {
         }
     }
 
-    fun recordExecutionSuccess(
-        context: Context,
-        commandId: String,
-        sendOperationId: String? = null
-    ) {
+    fun recordQueued(context: Context, commandId: String) {
+        if (commandId.isBlank()) return
+        commandScope.launch {
+            try {
+                context.getMessagesDB().RemoteCommandDao().updateState(commandId, RemoteCommandState.QUEUED.name)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to record queued for $commandId: ${e.message}")
+            }
+        }
+    }
+
+    fun recordSubmitting(context: Context, commandId: String) {
+        if (commandId.isBlank()) return
+        commandScope.launch {
+            try {
+                context.getMessagesDB().RemoteCommandDao().updateState(commandId, RemoteCommandState.SUBMITTING.name)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to record submitting for $commandId: ${e.message}")
+            }
+        }
+    }
+
+    fun recordSubmitted(context: Context, commandId: String, sendOperationId: String? = null) {
+        if (commandId.isBlank()) return
         commandScope.launch {
             try {
                 context.getMessagesDB().RemoteCommandDao().recordExecutionResult(
                     commandId = commandId,
-                    state = RemoteCommandState.SUCCESS.name,
+                    state = RemoteCommandState.SUBMITTED.name,
                     sendOperationId = sendOperationId,
+                    completedAt = null,
+                    errorClass = null,
+                    errorHmac = null
+                )
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to record submitted for $commandId: ${e.message}")
+            }
+        }
+    }
+
+    fun recordSent(context: Context, commandId: String) {
+        if (commandId.isBlank()) return
+        commandScope.launch {
+            try {
+                context.getMessagesDB().RemoteCommandDao().updateExecutionCompletion(
+                    commandId = commandId,
+                    state = RemoteCommandState.SENT.name,
                     completedAt = System.currentTimeMillis(),
                     errorClass = null,
                     errorHmac = null
                 )
             } catch (e: Exception) {
-                Log.w(TAG, "Failed to record success for $commandId: ${e.message}")
+                Log.w(TAG, "Failed to record sent for $commandId: ${e.message}")
             }
         }
+    }
+
+    fun recordDelivered(context: Context, commandId: String) {
+        if (commandId.isBlank()) return
+        commandScope.launch {
+            try {
+                context.getMessagesDB().RemoteCommandDao().updateExecutionCompletion(
+                    commandId = commandId,
+                    state = RemoteCommandState.DELIVERED.name,
+                    completedAt = System.currentTimeMillis(),
+                    errorClass = null,
+                    errorHmac = null
+                )
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to record delivered for $commandId: ${e.message}")
+            }
+        }
+    }
+
+    fun recordExecutionSuccess(
+        context: Context,
+        commandId: String,
+        sendOperationId: String? = null
+    ) {
+        recordSent(context, commandId)
     }
 
     fun recordExecutionFailure(
@@ -136,19 +197,19 @@ object RemoteCommandRepository {
         errorClass: String?,
         errorMessage: String? = null
     ) {
+        if (commandId.isBlank()) return
         commandScope.launch {
             try {
                 val errorHmac = ShadowHmacHelper.calculateHmac(errorMessage)
-                context.getMessagesDB().RemoteCommandDao().recordExecutionResult(
+                context.getMessagesDB().RemoteCommandDao().updateExecutionCompletion(
                     commandId = commandId,
                     state = RemoteCommandState.FAILED.name,
-                    sendOperationId = null,
                     completedAt = System.currentTimeMillis(),
                     errorClass = errorClass,
                     errorHmac = errorHmac
                 )
             } catch (e: Exception) {
-                Log.w(TAG, "Failed to record failure for $commandId: ${e.message}")
+                Log.w(TAG, "Failed to record execution failure for $commandId: ${e.message}")
             }
         }
     }

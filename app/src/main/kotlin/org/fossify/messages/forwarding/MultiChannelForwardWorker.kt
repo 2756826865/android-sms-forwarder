@@ -15,6 +15,11 @@ import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.Response
+import okhttp3.WebSocket
+import okhttp3.WebSocketListener
 import org.fossify.messages.messaging.sendMessageCompat
 import org.json.JSONObject
 import java.io.BufferedReader
@@ -28,6 +33,9 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 import javax.net.ssl.SSLSocket
@@ -79,8 +87,15 @@ class MultiChannelForwardWorker(
         val ruleAllowedChannels = decodeRuleAllowedChannels(
             inputData.getString(KEY_ALLOWED_CHANNELS).orEmpty(),
         )
+        val enabledInstanceTypes = config.channelInstances()
+            .asSequence()
+            .filter { it.enabled }
+            .map { it.channelType }
+            .toSet()
         fun shouldRun(channel: String, enabled: Boolean): Boolean {
             if (!enabled && !(isTest && targetChannel == channel)) return false
+            // 自动迁移后旧版扁平配置仍会保留；同类型已有启用实例时只发送实例，避免双发。
+            if (channel in enabledInstanceTypes) return false
             if (ruleAllowedChannels != null && channel !in ruleAllowedChannels) return false
             return when (targetChannel) {
                 "" -> true
@@ -89,15 +104,22 @@ class MultiChannelForwardWorker(
             }
         }
 
-        val payload = ForwardingMessageFormatter.format(
+        val formattedPayload = ForwardingMessageFormatter.format(
             context = applicationContext,
             sender = sender,
             body = body,
             receivedAt = receivedAt,
             subscriptionId = subscriptionId,
         )
+        val payload = if (inputData.getBoolean(KEY_BODY_ALREADY_RENDERED, false)) {
+            formattedPayload.copy(content = body)
+        } else formattedPayload
         val title = payload.title
         val content = payload.content
+
+        val targetInstanceId = inputData.getString(KEY_INSTANCE_ID).orEmpty()
+        val ruleId = inputData.getString(KEY_RULE_ID).orEmpty()
+        val actionId = inputData.getString(KEY_ACTION_ID).orEmpty()
 
         val successes = mutableListOf<String>()
         val failures = mutableListOf<String>()
@@ -136,9 +158,151 @@ class MultiChannelForwardWorker(
                 }
         }
 
-        val networkAvailable = isNetworkAvailable()
-        val onlyOnNoNetwork = config.smsDirectOnlyOnNoNetwork
-        Log.d(TAG, "networkAvailable=$networkAvailable, onlyOnNoNetwork=$onlyOnNoNetwork")
+        if (targetInstanceId.isNotBlank()) {
+            val instance = config.channelInstances().firstOrNull { it.id == targetInstanceId }
+            if (instance == null) {
+                history.markSkipped(historyRecordId, "目标实例不存在 (ID: $targetInstanceId)")
+                return@withContext Result.success()
+            }
+            if (!instance.enabled) {
+                history.markSkipped(historyRecordId, "目标通道实例已停用 (${instance.name})")
+                return@withContext Result.success()
+            }
+            runChannel(instance.name, "instance_${instance.id}") {
+                when (instance.channelType) {
+                    ForwardingChannels.WECHAT_TEST -> {
+                        val appId = instance.optString("appId")
+                        val appSecret = instance.optString("appSecret")
+                        val templateId = instance.optString("templateId")
+                        val openId = instance.optString("openId")
+                        check(appId.isNotBlank() && appSecret.isNotBlank() && templateId.isNotBlank() && openId.isNotBlank()) {
+                            "微信测试号配置不完整"
+                        }
+                        sendWechatTest(appId, appSecret, templateId, openId, title, content)
+                    }
+                    ForwardingChannels.WECOM, ForwardingChannels.WECOM_APP -> {
+                        val corpId = instance.optString("corpId")
+                        val agentId = instance.optString("agentId")
+                        val secret = instance.optString("secret")
+                        val toUser = instance.optString("toUser")
+                        check(corpId.isNotBlank() && agentId.isNotBlank() && secret.isNotBlank() && toUser.isNotBlank()) {
+                            "企业微信应用号配置不完整"
+                        }
+                        sendWeCom(corpId, agentId, secret, toUser, content)
+                    }
+                    ForwardingChannels.WECOM_BOT -> {
+                        val webhook = instance.optString("webhook")
+                        check(webhook.isNotBlank()) { "企微群机器人 Webhook 未配置" }
+                        sendWeComBot(webhook, content)
+                    }
+                    ForwardingChannels.DINGTALK -> {
+                        val webhook = instance.optString("webhook")
+                        val secret = instance.optString("secret")
+                        check(webhook.isNotBlank()) { "钉钉群机器人 Webhook 未配置" }
+                        sendDingTalk(webhook, secret, content)
+                    }
+                    ForwardingChannels.FEISHU, ForwardingChannels.FEISHU_BOT -> {
+                        val webhook = instance.optString("webhook")
+                        val secret = instance.optString("secret")
+                        check(webhook.isNotBlank()) { "飞书群机器人 Webhook 未配置" }
+                        sendFeishu(webhook, secret, content)
+                    }
+                    ForwardingChannels.FEISHU_APP -> {
+                        val appId = instance.optString("appId")
+                        val appSecret = instance.optString("appSecret")
+                        val receiveId = instance.optString("receiveId")
+                        check(appId.isNotBlank() && appSecret.isNotBlank() && receiveId.isNotBlank()) {
+                            "飞书自建应用配置不完整"
+                        }
+                        sendFeishuApp(appId, appSecret, receiveId, title, content)
+                    }
+                    ForwardingChannels.TELEGRAM -> {
+                        val token = instance.optString("botToken")
+                        val chatId = instance.optString("chatId")
+                        check(token.isNotBlank() && chatId.isNotBlank()) { "Telegram 凭据未配置" }
+                        sendTelegram(token, chatId, title, content)
+                    }
+                    ForwardingChannels.BARK -> {
+                        val url = instance.optString("serverUrl")
+                        val key = instance.optString("deviceKey")
+                        check(url.isNotBlank() && key.isNotBlank()) { "Bark URL 或 DeviceKey 未配置" }
+                        sendBark(url, key, title, content, true)
+                    }
+                    ForwardingChannels.CUSTOM_WEBHOOK -> {
+                        val url = instance.optString("url")
+                        val headers = instance.optString("headers")
+                        check(url.isNotBlank()) { "自定义 Webhook URL 未配置" }
+                        sendCustomWebhook(url, headers, content)
+                    }
+                    ForwardingChannels.DISCORD -> {
+                        val webhook = instance.optString("webhook")
+                        check(webhook.isNotBlank()) { "Discord Webhook 未配置" }
+                        sendDiscord(webhook, title, content)
+                    }
+                    ForwardingChannels.TENCENT_CLOUD -> {
+                        val webhook = instance.optString("webhook")
+                        check(webhook.isNotBlank()) { "腾讯云告警 Webhook 未配置" }
+                        sendTencentCloud(webhook, instance.optString("secret"), content)
+                    }
+                    ForwardingChannels.WEBSOCKET -> {
+                        val serverUrl = instance.optString("serverUrl")
+                        check(serverUrl.isNotBlank()) { "WebSocket 推送地址未配置" }
+                        sendWebsocket(serverUrl, instance.optString("token"), title, content)
+                    }
+                    ForwardingChannels.PUSHPLUS -> {
+                        val token = instance.optString("token")
+                        val topic = instance.optString("topic")
+                        check(token.isNotBlank()) { "PushPlus Token 未配置" }
+                        sendPushPlus(token, topic, title, content)
+                    }
+                    ForwardingChannels.GOTIFY -> {
+                        val url = instance.optString("serverUrl")
+                        val token = instance.optString("token")
+                        check(url.isNotBlank() && token.isNotBlank()) { "Gotify URL 或 Token 未配置" }
+                        sendGotify(url, token, title, content, true)
+                    }
+                    ForwardingChannels.NTFY -> {
+                        sendNtfy(
+                            instance.optString("serverUrl").ifBlank { "https://ntfy.sh" },
+                            instance.optString("topic"),
+                            instance.optString("token"),
+                            instance.optString("priority").ifBlank { "default" },
+                            instance.optString("tags"),
+                            instance.optString("clickUrl"),
+                            title,
+                            content
+                        )
+                    }
+                    ForwardingChannels.EMAIL -> {
+                        val host = instance.optString("host")
+                        val port = instance.optInt("port", 465)
+                        val user = instance.optString("user")
+                        val pass = instance.optString("password")
+                        val recipients = instance.optString("recipients")
+                        check(host.isNotBlank() && user.isNotBlank()) { "邮件配置不完整" }
+                        sendEmail(host, port, 0, user, pass, recipients, title, content)
+                    }
+                    ForwardingChannels.QQ -> {
+                        val qmsgKey = instance.optString("qmsgKey")
+                        val onebotUrl = instance.optString("onebotUrl")
+                        val target = if (qmsgKey.isNotBlank()) qmsgKey else onebotUrl
+                        val type = if (qmsgKey.isNotBlank()) "qmsg" else "onebot"
+                        check(target.isNotBlank()) { "QQ 机器人未配置 Key 或 Webhook" }
+                        sendQq(target, type, title, content)
+                    }
+                    ForwardingChannels.SMS_DIRECT -> {
+                        val phone = instance.optString("phone")
+                        check(phone.isNotBlank()) { "目标手机号未配置" }
+                        sendSmsDirect(phone, content, subscriptionId, isTest = isTest)
+                    }
+                    ForwardingChannels.CHANNEL_GROUP -> error("通道组必须展开为具体实例后发送")
+                    else -> error("暂不支持的通道类型：${instance.channelType}")
+                }
+            }
+        } else {
+            val networkAvailable = isNetworkAvailable()
+            val onlyOnNoNetwork = config.smsDirectOnlyOnNoNetwork
+            Log.d(TAG, "networkAvailable=$networkAvailable, onlyOnNoNetwork=$onlyOnNoNetwork")
 
         // 短信直发逻辑
         if (shouldRun(ForwardingChannels.SMS_DIRECT, config.smsDirectEnabled)) {
@@ -225,56 +389,147 @@ class MultiChannelForwardWorker(
         // 多实例渠道池定向调度 (Multi-Instance Channel Hub Dispatch)
         val instances = config.channelInstances().filter { it.enabled }
         for (instance in instances) {
-            val isInstanceTargeted = ruleAllowedChannels == null || ruleAllowedChannels.contains(instance.id) || ruleAllowedChannels.contains(instance.channelType)
+            val matchesTargetChannel = targetChannel.isBlank() ||
+                targetChannel == ForwardingChannels.ALL ||
+                targetChannel == instance.channelType
+            val isInstanceTargeted = matchesTargetChannel && (
+                ruleAllowedChannels == null ||
+                    ruleAllowedChannels.contains(instance.id) ||
+                    ruleAllowedChannels.contains(instance.channelType)
+                )
             if (!isInstanceTargeted) continue
 
             runChannel(instance.name, "instance_${instance.id}") {
                 when (instance.channelType) {
+                    ForwardingChannels.WECHAT_TEST -> sendWechatTest(
+                        instance.optString("appId"),
+                        instance.optString("appSecret"),
+                        instance.optString("templateId"),
+                        instance.optString("openId"),
+                        title,
+                        content
+                    )
+                    ForwardingChannels.WECOM, ForwardingChannels.WECOM_APP -> sendWeCom(
+                        instance.optString("corpId"),
+                        instance.optString("agentId"),
+                        instance.optString("secret"),
+                        instance.optString("toUser"),
+                        content
+                    )
                     ForwardingChannels.WECOM_BOT -> {
                         val webhook = instance.optString("webhook")
-                        if (webhook.isNotBlank()) sendWeComBot(webhook, content)
+                        check(webhook.isNotBlank()) { "企微群机器人 Webhook 未配置" }
+                        sendWeComBot(webhook, content)
                     }
                     ForwardingChannels.DINGTALK -> {
                         val webhook = instance.optString("webhook")
                         val secret = instance.optString("secret")
-                        if (webhook.isNotBlank()) sendDingTalk(webhook, secret, content)
+                        check(webhook.isNotBlank()) { "钉钉群机器人 Webhook 未配置" }
+                        sendDingTalk(webhook, secret, content)
                     }
                     ForwardingChannels.FEISHU_BOT -> {
                         val webhook = instance.optString("webhook")
                         val secret = instance.optString("secret")
-                        if (webhook.isNotBlank()) sendFeishu(webhook, secret, content)
+                        check(webhook.isNotBlank()) { "飞书群机器人 Webhook 未配置" }
+                        sendFeishu(webhook, secret, content)
                     }
+                    ForwardingChannels.FEISHU -> {
+                        val webhook = instance.optString("webhook")
+                        check(webhook.isNotBlank()) { "飞书群机器人 Webhook 未配置" }
+                        sendFeishu(webhook, instance.optString("secret"), content)
+                    }
+                    ForwardingChannels.FEISHU_APP -> sendFeishuApp(
+                        instance.optString("appId"),
+                        instance.optString("appSecret"),
+                        instance.optString("receiveId"),
+                        title,
+                        content
+                    )
                     ForwardingChannels.TELEGRAM -> {
                         val token = instance.optString("botToken")
                         val chatId = instance.optString("chatId")
-                        if (token.isNotBlank() && chatId.isNotBlank()) sendTelegram(token, chatId, title, content)
+                        check(token.isNotBlank() && chatId.isNotBlank()) { "Telegram 凭据未配置" }
+                        sendTelegram(token, chatId, title, content)
                     }
                     ForwardingChannels.BARK -> {
                         val url = instance.optString("serverUrl")
                         val key = instance.optString("deviceKey")
-                        if (url.isNotBlank() && key.isNotBlank()) sendBark(url, key, title, content, true)
+                        check(url.isNotBlank() && key.isNotBlank()) { "Bark URL 或 DeviceKey 未配置" }
+                        sendBark(url, key, title, content, true)
                     }
                     ForwardingChannels.CUSTOM_WEBHOOK -> {
                         val url = instance.optString("url")
                         val headers = instance.optString("headers")
-                        if (url.isNotBlank()) sendCustomWebhook(url, headers, content)
+                        check(url.isNotBlank()) { "自定义 Webhook URL 未配置" }
+                        sendCustomWebhook(url, headers, content)
                     }
                     ForwardingChannels.DISCORD -> {
                         val webhook = instance.optString("webhook")
-                        if (webhook.isNotBlank()) sendDiscord(webhook, title, content)
+                        check(webhook.isNotBlank()) { "Discord Webhook 未配置" }
+                        sendDiscord(webhook, title, content)
                     }
+                    ForwardingChannels.TENCENT_CLOUD -> sendTencentCloud(
+                        instance.optString("webhook"),
+                        instance.optString("secret"),
+                        content
+                    )
+                    ForwardingChannels.WEBSOCKET -> sendWebsocket(
+                        instance.optString("serverUrl"),
+                        instance.optString("token"),
+                        title,
+                        content
+                    )
                     ForwardingChannels.PUSHPLUS -> {
                         val token = instance.optString("token")
                         val topic = instance.optString("topic")
-                        if (token.isNotBlank()) sendPushPlus(token, topic, title, content)
+                        check(token.isNotBlank()) { "PushPlus Token 未配置" }
+                        sendPushPlus(token, topic, title, content)
                     }
                     ForwardingChannels.GOTIFY -> {
                         val url = instance.optString("serverUrl")
                         val token = instance.optString("token")
-                        if (url.isNotBlank() && token.isNotBlank()) sendGotify(url, token, title, content, true)
+                        check(url.isNotBlank() && token.isNotBlank()) { "Gotify URL 或 Token 未配置" }
+                        sendGotify(url, token, title, content, true)
                     }
+                    ForwardingChannels.NTFY -> {
+                        val topic = instance.optString("topic")
+                        check(topic.isNotBlank()) { "ntfy Topic 未配置" }
+                        sendNtfy(
+                            instance.optString("serverUrl").ifBlank { "https://ntfy.sh" },
+                            topic,
+                            instance.optString("token"),
+                            instance.optString("priority").ifBlank { "default" },
+                            instance.optString("tags"),
+                            instance.optString("clickUrl"),
+                            title,
+                            content
+                        )
+                    }
+                    ForwardingChannels.EMAIL -> sendEmail(
+                        instance.optString("host"),
+                        instance.optInt("port", 465),
+                        0,
+                        instance.optString("user"),
+                        instance.optString("password"),
+                        instance.optString("recipients"),
+                        title,
+                        content
+                    )
+                    ForwardingChannels.QQ -> {
+                        val qmsgKey = instance.optString("qmsgKey")
+                        val onebotUrl = instance.optString("onebotUrl")
+                        val target = qmsgKey.ifBlank { onebotUrl }
+                        check(target.isNotBlank()) { "QQ 机器人未配置 Key 或 Webhook" }
+                        sendQq(target, if (qmsgKey.isNotBlank()) "qmsg" else "onebot", title, content)
+                    }
+                    ForwardingChannels.SMS_DIRECT -> sendSmsDirect(
+                        instance.optString("phone"), content, subscriptionId, isTest
+                    )
+                    ForwardingChannels.CHANNEL_GROUP -> error("通道组必须展开为具体实例后发送")
+                    else -> error("暂不支持的通道类型：${instance.channelType}")
                 }
             }
+        }
         }
 
         val now = SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
@@ -577,17 +832,61 @@ class MultiChannelForwardWorker(
         check(result.optLong("id", -1L) > 0L) { "Gotify 请求失败" }
     }
 
+    private fun sendNtfy(
+        serverUrl: String,
+        topic: String,
+        token: String,
+        priority: String,
+        tags: String,
+        clickUrl: String,
+        title: String,
+        content: String
+    ) {
+        require(serverUrl.isNotBlank() && topic.isNotBlank()) { "ntfy 服务地址或 Topic 未配置" }
+        val base = serverUrl.trim().trimEnd('/')
+        requireHttpsOrAllowedHttp(base, base.startsWith("http://"))
+        val connection = URL("$base/${URLEncoder.encode(topic.trim(), "UTF-8")}").openConnection() as HttpURLConnection
+        connection.run {
+            requestMethod = "POST"
+            connectTimeout = 10_000
+            readTimeout = 12_000
+            doOutput = true
+            setRequestProperty("Content-Type", "text/plain; charset=utf-8")
+            setRequestProperty("Title", title)
+            setRequestProperty("Priority", priority.ifBlank { "default" })
+            if (token.isNotBlank()) setRequestProperty("Authorization", "Bearer ${token.trim()}")
+            if (tags.isNotBlank()) setRequestProperty("Tags", tags.trim())
+            if (clickUrl.isNotBlank()) setRequestProperty("Click", clickUrl.trim())
+            outputStream.bufferedWriter(StandardCharsets.UTF_8).use { it.write(content) }
+            val statusCode = responseCode
+            val response = (if (statusCode in 200..299) inputStream else errorStream)
+                ?.bufferedReader(StandardCharsets.UTF_8)?.use { it.readText() }.orEmpty()
+            disconnect()
+            check(statusCode in 200..299) { "ntfy HTTP $statusCode: ${response.take(200)}" }
+        }
+    }
+
     private fun getJson(url: String) = requestJson(url, "GET", null)
 
-    private fun postJson(url: String, payload: JSONObject) = requestJson(url, "POST", payload)
+    private fun postJson(
+        url: String,
+        payload: JSONObject,
+        headers: Map<String, String> = emptyMap()
+    ) = requestJson(url, "POST", payload, headers)
 
-    private fun requestJson(url: String, method: String, payload: JSONObject?): JSONObject {
+    private fun requestJson(
+        url: String,
+        method: String,
+        payload: JSONObject?,
+        headers: Map<String, String> = emptyMap()
+    ): JSONObject {
         val connection = URL(url).openConnection() as HttpURLConnection
         return connection.run {
             requestMethod = method
             connectTimeout = 10_000
             readTimeout = 12_000
             setRequestProperty("Accept", "application/json")
+            headers.forEach { (name, value) -> setRequestProperty(name, value) }
             if (payload != null) {
                 doOutput = true
                 setRequestProperty("Content-Type", "application/json; charset=utf-8")
@@ -605,8 +904,12 @@ class MultiChannelForwardWorker(
                 }.getOrDefault("").ifBlank { response.take(200) }
                 "HTTP $statusCode${detail.takeIf(String::isNotBlank)?.let { ": $it" }.orEmpty()}"
             }
-            check(response.isNotBlank()) { "接口返回空响应" }
-            JSONObject(response)
+            if (response.isBlank()) {
+                JSONObject().put("_httpStatus", statusCode)
+            } else {
+                runCatching { JSONObject(response) }
+                    .getOrElse { JSONObject().put("_httpStatus", statusCode).put("raw", response) }
+            }
         }
     }
 
@@ -689,8 +992,10 @@ class MultiChannelForwardWorker(
             .put("msg_type", "text")
             .put("content", contentObj.toString())
 
-        val result = postJson(msgUrl, sendPayload)
-        check(result.optInt("code", -1) == 0 || result.has("data")) { result.optString("msg", "飞书自建应用发送失败") }
+        val result = postJson(msgUrl, sendPayload, mapOf("Authorization" to "Bearer $token"))
+        check(result.optInt("code", -1) == 0) {
+            result.optString("msg", "飞书自建应用发送失败")
+        }
     }
 
     private fun sendTelegram(botToken: String, chatId: String, title: String, content: String) {
@@ -701,7 +1006,7 @@ class MultiChannelForwardWorker(
             .put("chat_id", chatId)
             .put("text", text)
         val result = postJson(url, payload)
-        check(result.optBoolean("ok", false) || result.optInt("error_code", 0) == 0) { result.optString("description", "Telegram 发送失败") }
+        check(result.optBoolean("ok", false)) { result.optString("description", "Telegram 发送失败") }
     }
 
     private fun sendDiscord(webhook: String, title: String, content: String) {
@@ -724,21 +1029,82 @@ class MultiChannelForwardWorker(
 
     private fun sendWebsocket(serverUrl: String, token: String, title: String, content: String) {
         require(serverUrl.isNotBlank()) { "WebSocket 客户端配置不能为空" }
-        val httpEndpoint = if (serverUrl.startsWith("ws://")) serverUrl.replace("ws://", "http://")
-            else if (serverUrl.startsWith("wss://")) serverUrl.replace("wss://", "https://")
-            else serverUrl
         val payload = JSONObject()
             .put("title", title)
             .put("content", content)
             .put("token", token)
             .put("time", System.currentTimeMillis())
-        postJson(httpEndpoint, payload)
+        if (serverUrl.startsWith("http://") || serverUrl.startsWith("https://")) {
+            postJson(serverUrl, payload)
+            return
+        }
+
+        require(serverUrl.startsWith("ws://") || serverUrl.startsWith("wss://")) {
+            "WebSocket 地址必须使用 ws://、wss://、http:// 或 https://"
+        }
+        val latch = CountDownLatch(1)
+        val sent = AtomicBoolean(false)
+        val failure = AtomicReference<Throwable?>(null)
+        val client = OkHttpClient.Builder()
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(12, TimeUnit.SECONDS)
+            .build()
+        val request = Request.Builder().url(serverUrl).apply {
+            if (token.isNotBlank()) {
+                header("Authorization", "Bearer ${token.trim()}")
+                header("X-Token", token.trim())
+            }
+        }.build()
+        client.newWebSocket(request, object : WebSocketListener() {
+            override fun onOpen(webSocket: WebSocket, response: Response) {
+                sent.set(webSocket.send(payload.toString()))
+                webSocket.close(1000, "sent")
+                latch.countDown()
+            }
+
+            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                failure.set(t)
+                latch.countDown()
+            }
+        })
+        val completed = latch.await(12, TimeUnit.SECONDS)
+        client.dispatcher.executorService.shutdown()
+        client.connectionPool.evictAll()
+        check(completed) { "WebSocket 连接超时" }
+        failure.get()?.let { throw it }
+        check(sent.get()) { "WebSocket 消息未能加入发送队列" }
     }
 
     private fun sendCustomWebhook(url: String, headersStr: String, content: String) {
         require(url.isNotBlank()) { "自定义 Webhook URL 不能为空" }
         val payload = JSONObject().put("content", content)
-        postJson(url, payload)
+        postJson(url, payload, parseCustomHeaders(headersStr))
+    }
+
+    private fun parseCustomHeaders(raw: String): Map<String, String> {
+        if (raw.isBlank()) return emptyMap()
+        val jsonHeaders = runCatching {
+            val json = JSONObject(raw)
+            buildMap {
+                json.keys().forEach { key ->
+                    val name = key.trim()
+                    val value = json.optString(key).trim()
+                    if (name.isNotBlank() && value.isNotBlank()) put(name, value)
+                }
+            }
+        }.getOrNull()
+        if (!jsonHeaders.isNullOrEmpty()) return jsonHeaders
+
+        return buildMap {
+            raw.lineSequence().forEach { line ->
+                val separator = line.indexOf(':')
+                if (separator > 0) {
+                    val name = line.substring(0, separator).trim()
+                    val value = line.substring(separator + 1).trim()
+                    if (name.isNotBlank() && value.isNotBlank()) put(name, value)
+                }
+            }
+        }
     }
 
     private fun sendSmsDirect(phone: String, content: String, receiveSubId: Int, isTest: Boolean = false) {
@@ -771,6 +1137,10 @@ class MultiChannelForwardWorker(
         private const val KEY_IS_TEST = "is_test"
         private const val KEY_HISTORY_RECORD_ID = "history_record_id"
         private const val KEY_OPERATION_ID = "operation_id"
+        const val KEY_INSTANCE_ID = "target_instance_id"
+        const val KEY_RULE_ID = "rule_id"
+        const val KEY_ACTION_ID = "action_id"
+        private const val KEY_BODY_ALREADY_RENDERED = "body_already_rendered"
         private const val SMTP_TIMEOUT_MS = 12_000
         /** 规则启用但无任何渠道命中时，与 null（未启用规则）区分 */
         const val RULE_BLOCK_ALL = "__BLOCK_ALL__"
@@ -845,19 +1215,96 @@ class MultiChannelForwardWorker(
             targetChannel: String,
             allowedChannels: Set<String>?,
             isTest: Boolean,
-            operationId: String? = null
+            operationId: String? = null,
+            targetInstanceId: String = "",
+            ruleId: String = "",
+            actionId: String = "",
+            bodyAlreadyRendered: Boolean = false,
+            visitedGroupIds: Set<String> = emptySet()
         ) {
+            val multiConfig = MultiForwardConfig(context)
+            val requestedInstance = targetInstanceId.takeIf(String::isNotBlank)
+                ?.let(multiConfig::getChannelInstanceById)
+            if (targetChannel == ForwardingChannels.CHANNEL_GROUP || requestedInstance?.channelType == ForwardingChannels.CHANNEL_GROUP) {
+                val groupIdentity = targetInstanceId.ifBlank { ForwardingChannels.CHANNEL_GROUP }
+                if (groupIdentity in visitedGroupIds) {
+                    val history = ForwardingHistoryStore(context)
+                    val historyId = history.registerQueued(
+                        workId = uniqueId,
+                        channel = ForwardingChannels.CHANNEL_GROUP,
+                        sender = sender,
+                        body = body,
+                        receivedAt = receivedAt,
+                        subscriptionId = subscriptionId,
+                        isTest = isTest
+                    )
+                    history.markSkipped(historyId, "检测到通道组循环引用，已停止展开")
+                    return
+                }
+                val instanceMembers = requestedInstance?.let { group ->
+                    runCatching {
+                        val array = JSONObject(group.configJson).optJSONArray("members") ?: return@runCatching emptySet<String>()
+                        buildSet {
+                            for (index in 0 until array.length()) {
+                                array.optString(index).trim().takeIf(String::isNotBlank)?.let(::add)
+                            }
+                        }
+                    }.getOrDefault(emptySet())
+                }.orEmpty()
+                val members = instanceMembers.ifEmpty { multiConfig.channelGroupMembers() }
+                    .filterNot { it == ForwardingChannels.CHANNEL_GROUP || it == targetInstanceId }
+                    .toSet()
+                if (members.isEmpty()) {
+                    val history = ForwardingHistoryStore(context)
+                    val historyId = history.registerQueued(
+                        workId = uniqueId,
+                        channel = ForwardingChannels.CHANNEL_GROUP,
+                        sender = sender,
+                        body = body,
+                        receivedAt = receivedAt,
+                        subscriptionId = subscriptionId,
+                        isTest = isTest
+                    )
+                    history.markSkipped(historyId, "通道组没有可发送的成员")
+                    return
+                }
+                members.forEach { member ->
+                    val memberInstance = multiConfig.getChannelInstanceById(member)
+                    enqueueSingle(
+                        context = context,
+                        sender = sender,
+                        body = body,
+                        receivedAt = receivedAt,
+                        subscriptionId = subscriptionId,
+                        uniqueId = "$uniqueId-group-$member",
+                        targetChannel = memberInstance?.channelType ?: member,
+                        allowedChannels = setOf(member),
+                        isTest = isTest,
+                        operationId = operationId,
+                        targetInstanceId = memberInstance?.id.orEmpty(),
+                        ruleId = ruleId,
+                        actionId = actionId,
+                        bodyAlreadyRendered = bodyAlreadyRendered,
+                        visitedGroupIds = visitedGroupIds + groupIdentity
+                    )
+                }
+                return
+            }
             val history = ForwardingHistoryStore(context)
+            val effectiveChannel = if (targetInstanceId.isNotBlank()) "instance_$targetInstanceId" else targetChannel
+            val constraintChannel = if (targetInstanceId.isNotBlank()) {
+                MultiForwardConfig(context).getChannelInstanceById(targetInstanceId)?.channelType ?: targetChannel
+            } else targetChannel
             val historyRecordId = history.registerQueued(
                 workId = uniqueId,
-                channel = targetChannel,
+                channel = effectiveChannel,
                 sender = sender,
                 body = body,
                 receivedAt = receivedAt,
                 subscriptionId = subscriptionId,
                 isTest = isTest,
             )
-            Log.d(TAG, "enqueueSingle: channel=$targetChannel, historyId=$historyRecordId, workId=$uniqueId")
+            Log.d(TAG, "enqueueSingle: channel=$targetChannel, instance=$targetInstanceId, historyId=$historyRecordId, workId=$uniqueId")
             val safeBody = if (body.length > 4000) body.take(4000) + "…(内容过长已截断)" else body
             val request = OneTimeWorkRequestBuilder<MultiChannelForwardWorker>()
                 .setInputData(
@@ -870,13 +1317,17 @@ class MultiChannelForwardWorker(
                         KEY_ALLOWED_CHANNELS to encodeRuleAllowedChannels(allowedChannels),
                         KEY_IS_TEST to isTest,
                         KEY_HISTORY_RECORD_ID to historyRecordId,
-                        KEY_OPERATION_ID to operationId
+                        KEY_OPERATION_ID to operationId,
+                        KEY_INSTANCE_ID to targetInstanceId,
+                        KEY_RULE_ID to ruleId,
+                        KEY_ACTION_ID to actionId,
+                        KEY_BODY_ALREADY_RENDERED to bodyAlreadyRendered
                     )
                 )
                 .setConstraints(
                     Constraints.Builder()
                         .setRequiredNetworkType(
-                            if (targetChannel in ForwardingChannels.networkChannels) {
+                            if (constraintChannel in ForwardingChannels.networkChannels) {
                                 NetworkType.CONNECTED
                             } else {
                                 NetworkType.NOT_REQUIRED
@@ -889,7 +1340,7 @@ class MultiChannelForwardWorker(
                 .build()
             runCatching {
                 WorkManager.getInstance(context)
-                    .enqueueUniqueWork("multi-forward-$uniqueId-$targetChannel", ExistingWorkPolicy.KEEP, request)
+                    .enqueueUniqueWork("multi-forward-$uniqueId-$effectiveChannel", ExistingWorkPolicy.KEEP, request)
             }.onFailure { error ->
                 history.markFailed(historyRecordId, "发送任务入队失败：${error.message ?: error.javaClass.simpleName}")
             }

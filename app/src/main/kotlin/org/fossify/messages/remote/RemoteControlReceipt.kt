@@ -3,11 +3,8 @@ package org.fossify.messages.remote
 import android.app.Activity
 import android.content.Context
 import android.net.Uri
-import org.fossify.messages.forwarding.ForwardingChannels
 import org.fossify.messages.forwarding.MultiChannelForwardWorker
 import org.fossify.messages.forwarding.MultiForwardConfig
-import org.fossify.messages.forwarding.PushPlusConfig
-import org.fossify.messages.forwarding.PushPlusWorker
 import org.fossify.messages.receivers.SendStatusReceiver
 import org.json.JSONArray
 import org.json.JSONObject
@@ -57,6 +54,7 @@ data class RemoteControlPendingReceipt(
     val awaitDelivered: Boolean,
     val sendSimLabel: String = "",
     val commandId: String = "",
+    val sourceInstanceId: String = "",
 )
 
 object RemoteSmsReceiptTracker {
@@ -88,9 +86,13 @@ object RemoteSmsReceiptTracker {
     private fun key(messageId: Long) = KEY_PREFIX + messageId
 
     private fun trimOldEntries(prefs: android.content.SharedPreferences) {
-        val keys = prefs.all.keys.filter { it.startsWith(KEY_PREFIX) }
+        val keys = prefs.all.keys
+            .filter { it.startsWith(KEY_PREFIX) }
+            .sortedByDescending { it.removePrefix(KEY_PREFIX).toLongOrNull() ?: Long.MIN_VALUE }
         if (keys.size <= MAX_PENDING) return
-        keys.drop(MAX_PENDING).forEach { prefs.edit().remove(it).apply() }
+        prefs.edit().apply {
+            keys.drop(MAX_PENDING).forEach(::remove)
+        }.apply()
     }
 
     private fun encodeReceipt(receipt: RemoteControlPendingReceipt): String = JSONObject()
@@ -101,6 +103,7 @@ object RemoteSmsReceiptTracker {
         .put("awaitDelivered", receipt.awaitDelivered)
         .put("sendSimLabel", receipt.sendSimLabel)
         .put("commandId", receipt.commandId)
+        .put("sourceInstanceId", receipt.sourceInstanceId)
         .toString()
 
     private fun decodeReceipt(raw: String): RemoteControlPendingReceipt? = runCatching {
@@ -113,6 +116,7 @@ object RemoteSmsReceiptTracker {
             awaitDelivered = json.optBoolean("awaitDelivered"),
             sendSimLabel = json.optString("sendSimLabel"),
             commandId = json.optString("commandId"),
+            sourceInstanceId = json.optString("sourceInstanceId")
         )
     }.getOrNull()
 }
@@ -124,13 +128,13 @@ object RemoteControlReceiptForwarder {
         receipt: RemoteControlPendingReceipt,
     ) {
         val config = RemoteControlReceiptConfig(context)
-        if (!config.enabled) return
+        // 内部状态跟踪永远必须注册，不依赖外部回执开关！
         uris.forEach { uri ->
             uri.lastPathSegment?.toLongOrNull()?.let { messageId ->
                 RemoteSmsReceiptTracker.register(
                     context,
                     messageId,
-                    receipt.copy(awaitDelivered = config.includeDelivered),
+                    receipt.copy(awaitDelivered = config.enabled && config.includeDelivered),
                 )
             }
         }
@@ -145,6 +149,21 @@ object RemoteControlReceiptForwarder {
             val detail = if (errorCode != SendStatusReceiver.NO_ERROR_CODE) "（错误码 $errorCode）" else ""
             "发送失败$detail"
         }
+
+        // 真实状态回写闭环：推进 RemoteCommandRepository
+        if (pending.commandId.isNotBlank()) {
+            if (success) {
+                org.fossify.messages.helpers.RemoteCommandRepository.recordSent(context, pending.commandId)
+            } else {
+                org.fossify.messages.helpers.RemoteCommandRepository.recordExecutionFailure(
+                    context = context,
+                    commandId = pending.commandId,
+                    errorClass = "SmsSendError",
+                    errorMessage = "Send failed with resultCode=$resultCode, errorCode=$errorCode"
+                )
+            }
+        }
+
         forward(context, status, pending)
         if (!success || !pending.awaitDelivered) {
             RemoteSmsReceiptTracker.remove(context, messageId)
@@ -153,6 +172,18 @@ object RemoteControlReceiptForwarder {
 
     fun onDelivered(context: Context, messageId: Long, delivered: Boolean) {
         val pending = RemoteSmsReceiptTracker.get(context, messageId) ?: return
+        if (pending.commandId.isNotBlank()) {
+            if (delivered) {
+                org.fossify.messages.helpers.RemoteCommandRepository.recordDelivered(context, pending.commandId)
+            } else {
+                org.fossify.messages.helpers.RemoteCommandRepository.recordExecutionFailure(
+                    context = context,
+                    commandId = pending.commandId,
+                    errorClass = "SmsDeliveryError",
+                    errorMessage = "Delivery unconfirmed or failed"
+                )
+            }
+        }
         forward(context, if (delivered) "已送达" else "送达失败或未确认", pending)
         RemoteSmsReceiptTracker.remove(context, messageId)
     }
@@ -164,8 +195,13 @@ object RemoteControlReceiptForwarder {
     private fun forward(context: Context, status: String, pending: RemoteControlPendingReceipt) {
         val config = RemoteControlReceiptConfig(context)
         if (!config.enabled) return
-        val channels = config.channels.intersect(ForwardingChannels.allRuleChannels.toSet())
-        if (channels.isEmpty()) return
+        val channelRepo = org.fossify.messages.forwarding.repository.ChannelRepository.getInstance(context)
+        val enabledInstances = channelRepo.getEnabledInstances()
+        val targetInstances = if (config.channels.isNotEmpty()) {
+            enabledInstances.filter { config.channels.contains(it.id) || config.channels.contains(it.channelType) }
+        } else {
+            emptyList()
+        }
 
         val now = SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
         val title = "远程指令回执 · $status"
@@ -186,41 +222,32 @@ object RemoteControlReceiptForwarder {
         when (pending.source) {
             SOURCE_DINGTALK -> multiConfig.appendDingTalkRemoteLog("回执[$status] -> ${pending.target}$receiptSimSuffix")
             SOURCE_FEISHU -> multiConfig.appendFeishuRemoteLog("回执[$status] -> ${pending.target}$receiptSimSuffix")
-            SOURCE_WECOM -> multiConfig.appendWeComRemoteLog("回执[$status] -> ${pending.target}$receiptSimSuffix")
             SOURCE_EMAIL -> multiConfig.appendEmailRemoteLog("回执[$status] -> ${pending.target}$receiptSimSuffix")
             SOURCE_TELEGRAM -> multiConfig.appendTelegramRemoteLog("回执[$status] -> ${pending.target}$receiptSimSuffix")
             SOURCE_WEBSOCKET -> multiConfig.appendWebSocketRemoteLog("回执[$status] -> ${pending.target}$receiptSimSuffix")
-            SOURCE_QQ -> multiConfig.appendQqRemoteLog("回执[$status] -> ${pending.target}$receiptSimSuffix")
         }
 
-        if (ForwardingChannels.PUSHPLUS in channels && PushPlusConfig(context).enabled) {
-            PushPlusWorker.enqueue(
-                context = context,
-                sender = title,
-                body = body,
-                receivedAt = System.currentTimeMillis(),
-                subscriptionId = -1,
-                uniqueId = uniqueId,
-            )
-        }
-        val multiChannels = channels - ForwardingChannels.PUSHPLUS
-        if (multiChannels.isNotEmpty()) {
-            MultiChannelForwardWorker.enqueue(
-                context = context,
-                sender = title,
-                body = body,
-                receivedAt = System.currentTimeMillis(),
-                subscriptionId = -1,
-                uniqueId = uniqueId,
-                allowedChannels = multiChannels,
-            )
+        // 普通转发通道精准派发（按用户选择的实例分别调用 enqueueSingle）
+        if (targetInstances.isNotEmpty()) {
+            targetInstances.forEach { inst ->
+                MultiChannelForwardWorker.enqueueSingle(
+                    context = context,
+                    sender = title,
+                    body = body,
+                    receivedAt = System.currentTimeMillis(),
+                    subscriptionId = -1,
+                    uniqueId = "$uniqueId-${inst.id}",
+                    targetChannel = inst.channelType,
+                    targetInstanceId = inst.id,
+                    allowedChannels = setOf(inst.id),
+                    isTest = false,
+                )
+            }
         }
 
-        // 远程渠道原路直连回执
-        when (pending.source) {
-            SOURCE_TELEGRAM -> TelegramRemotePoller.sendReply(context, pending.requester, "【短信远程指令回执】\n$body")
-            SOURCE_WEBSOCKET -> WebSocketRemoteClient.sendReceiptOverSocket(pending.commandId, status, body)
-            SOURCE_QQ -> QqRemoteClient.sendReply(pending.requester, "【短信远程指令回执】\n$body")
-        }
+        // 所有远程渠道统一按 sourceInstanceId 原路回执，禁止跨实例回退。
+        org.fossify.messages.remote.runtime.RemoteSourceRuntimeManager
+            .getInstance(context)
+            .sendDirectReceipt(pending, status, body)
     }
 }

@@ -147,11 +147,9 @@ class MainActivity : SimpleActivity() {
         SmsKeepAliveService.ensureStarted(applicationContext)
         org.fossify.messages.services.DingTalkRemoteControlService.ensureStarted(applicationContext)
         org.fossify.messages.services.FeishuRemoteControlService.ensureStarted(applicationContext)
-        org.fossify.messages.services.WeComRemoteControlService.ensureStarted(applicationContext)
         org.fossify.messages.services.EmailRemoteControlService.ensureStarted(applicationContext)
         org.fossify.messages.services.TelegramRemoteControlService.ensureStarted(applicationContext)
         org.fossify.messages.services.WebSocketRemoteControlService.ensureStarted(applicationContext)
-        org.fossify.messages.services.QqRemoteControlService.ensureStarted(applicationContext)
         SmsRecoveryWorker.schedule(applicationContext)
 
         // 3. 双 UI 引擎分流判断 (Dual-UI Engine Dispatcher)
@@ -547,36 +545,18 @@ class MainActivity : SimpleActivity() {
     }
 
     private fun askPermissions() {
-        handlePermission(PERMISSION_READ_SMS) {
-            if (it) {
-                handlePermission(PERMISSION_SEND_SMS) {
-                    if (it) {
-                        ensureReceiveSmsPermission()
-                        handlePermission(PERMISSION_READ_CONTACTS) {
-                            handleNotificationPermission { granted ->
-                                if (!granted) {
-                                    PermissionRequiredDialog(
-                                        activity = this,
-                                        textId = org.fossify.commons.R.string.allow_notifications_incoming_messages,
-                                        positiveActionCallback = { openNotificationSettings() })
-                                }
-                            }
-
-                            initMessenger()
-                            try {
-                                bus = EventBus.getDefault()
-                                if (bus?.isRegistered(eventSubscriber) == false) {
-                                    bus?.register(eventSubscriber)
-                                }
-                            } catch (_: Throwable) {
-                            }
-                        }
-                    } else {
-                        initMessenger()
-                    }
+        // 解耦按需申请：优先保证应用能正常打开与初始化，不进行无解释的5连弹窗轰炸
+        handlePermission(PERMISSION_READ_SMS) { hasReadSms ->
+            if (hasReadSms) {
+                ensureReceiveSmsPermission()
+            }
+            initMessenger()
+            try {
+                bus = EventBus.getDefault()
+                if (bus?.isRegistered(eventSubscriber) == false) {
+                    bus?.register(eventSubscriber)
                 }
-            } else {
-                initMessenger()
+            } catch (_: Throwable) {
             }
         }
     }

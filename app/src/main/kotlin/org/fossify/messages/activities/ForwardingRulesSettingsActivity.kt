@@ -21,11 +21,13 @@ import org.fossify.messages.forwarding.ForwardingChannels
 import org.fossify.messages.forwarding.ForwardingRule
 import org.fossify.messages.forwarding.ForwardingRuleEngine
 import org.fossify.messages.forwarding.ForwardingRulesConfig
+import org.fossify.messages.forwarding.repository.RuleRepository
 
 class ForwardingRulesSettingsActivity : SimpleActivity() {
     private val binding by viewBinding(ActivityForwardingRulesSettingsBinding::inflate)
+    private val ruleRepository by lazy { RuleRepository.getInstance(applicationContext) }
     private val config by lazy { ForwardingRulesConfig(applicationContext) }
-    private var workingRules = mutableListOf<ForwardingRule>()
+    private var workingRules: MutableList<ForwardingRule> = mutableListOf()
     private var selectedRuleIndex = 0
     private var selectedChannels = ForwardingChannels.allRuleChannels.toMutableSet()
     private var loadingEditor = false
@@ -43,7 +45,7 @@ class ForwardingRulesSettingsActivity : SimpleActivity() {
         binding.rulesScope.bindMiuiOptions(R.array.forwarding_rules_scope_options)
         binding.rulesSimScope.bindMiuiOptions(R.array.forwarding_rules_sim_options)
         binding.rulesMatchMode.bindMiuiOptions(R.array.forwarding_rules_match_options)
-        loadRules()
+        loadState()
 
         binding.rulesChannels.setOnClickListener { showChannelSelector() }
         binding.rulesTest.setOnClickListener { testRule() }
@@ -59,15 +61,16 @@ class ForwardingRulesSettingsActivity : SimpleActivity() {
         applyMiuiTopAppBarChrome(binding.rulesAppbar, binding.rulesToolbar)
     }
 
-    private fun loadRules() {
-        binding.rulesEnabled.isChecked = config.enabled
-        binding.rulesScope.setSelection(config.scope.coerceIn(0, 2))
+    private fun loadState() {
+        binding.rulesEnabled.isChecked = ruleRepository.isRulesEnabled()
+        binding.rulesScope.setSelection(ruleRepository.getScope().coerceIn(0, 2))
         binding.rulesTestBody.setText(getString(R.string.forwarding_rules_test_body_default))
-        binding.rulesLastDecision.text = config.lastDecision
+        binding.rulesLastDecision.text = ruleRepository.getLastDecision()
             .takeIf(String::isNotBlank)
             ?.let { getString(R.string.forwarding_rules_last_decision, it) }
             ?: getString(R.string.forwarding_rules_last_decision_empty)
-        workingRules = config.rules.toMutableList().ifEmpty { mutableListOf(newRule(1)) }
+        val loaded = ruleRepository.getRules().toMutableList()
+        workingRules = if (loaded.isEmpty()) mutableListOf(newRule(1)) else loaded
         selectedRuleIndex = 0
         loadEditor(workingRules.first())
         renderRuleList()
@@ -204,15 +207,15 @@ class ForwardingRulesSettingsActivity : SimpleActivity() {
         val current = readEditor(showError = binding.rulesEnabled.isChecked)
         if (current == null) {
             if (!binding.rulesEnabled.isChecked) {
-                config.enabled = false
+                ruleRepository.setRulesEnabled(false)
                 toast(R.string.forwarding_saved)
             }
             return
         }
         workingRules[selectedRuleIndex] = current
-        config.enabled = binding.rulesEnabled.isChecked
-        config.scope = binding.rulesScope.selectedItemPosition
-        config.rules = workingRules.toList()
+        ruleRepository.setRulesEnabled(binding.rulesEnabled.isChecked)
+        ruleRepository.setScope(binding.rulesScope.selectedItemPosition)
+        ruleRepository.saveRules(workingRules.toList())
         renderRuleList()
         toast(R.string.forwarding_saved)
     }

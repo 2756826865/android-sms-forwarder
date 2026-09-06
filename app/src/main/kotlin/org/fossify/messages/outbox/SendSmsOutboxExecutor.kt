@@ -88,11 +88,33 @@ class SendSmsOutboxExecutor : OutboxExecutor {
 
             // 3. 关联 RemoteCommandExecution (如果来源是远程指令)
             if (task.sourceType == OutboxSourceType.REMOTE_COMMAND && task.sourceId.isNotBlank()) {
-                RemoteCommandRepository.recordExecutionSuccess(
+                val providerMsgId = uris.firstOrNull()?.lastPathSegment?.toLongOrNull()
+                val sendOpId = if (providerMsgId != null) {
+                    context.getMessagesDB().SmsSendDao().getOperationByProviderMessageId(providerMsgId)?.sendOperationId
+                } else null
+
+                // 严禁在此处记 recordExecutionSuccess，统一记录为 SUBMITTED，由状态广播推进 SENT
+                RemoteCommandRepository.recordSubmitted(
                     context = context,
                     commandId = task.sourceId,
-                    sendOperationId = null
+                    sendOperationId = sendOpId
                 )
+
+                val requester = json.optString("requester", "")
+                val source = json.optString("source", "OUTBOX")
+                val sendSimLabel = json.optString("sendSimLabel", "")
+                val sourceInstanceId = json.optString("sourceInstanceId", "")
+                val receipt = org.fossify.messages.remote.RemoteControlPendingReceipt(
+                    target = target,
+                    content = body,
+                    source = source,
+                    requester = requester,
+                    awaitDelivered = false,
+                    sendSimLabel = sendSimLabel,
+                    commandId = task.sourceId,
+                    sourceInstanceId = sourceInstanceId
+                )
+                org.fossify.messages.remote.RemoteControlReceiptForwarder.registerFromMessageUris(context, uris, receipt)
             }
 
             OutboxExecutionResult.Success
@@ -106,7 +128,8 @@ class SendSmsOutboxExecutor : OutboxExecutor {
                     errorMessage = e.message
                 )
             }
-            OutboxExecutionResult.Retry(
+            // 短信属于不可逆运营商计费通道，失败返回 FatalFailure 避免重复扣费
+            OutboxExecutionResult.FatalFailure(
                 errorClass = e.javaClass.name,
                 errorMessage = e.message
             )

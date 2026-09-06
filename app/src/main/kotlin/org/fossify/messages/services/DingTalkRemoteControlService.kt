@@ -8,32 +8,19 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
-import android.os.Handler
 import android.os.IBinder
-import android.os.Looper
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import org.fossify.messages.R
 import org.fossify.messages.activities.DingTalkRemoteControlSettingsActivity
-import org.fossify.messages.forwarding.ForwardingRuleEngine
-import org.fossify.messages.forwarding.ForwardingRulesConfig
-import org.fossify.messages.forwarding.MultiForwardConfig
-import org.fossify.messages.messaging.SimSendResolver
-import org.fossify.messages.remote.DingTalkCommandDeduplicator
-import org.fossify.messages.remote.DingTalkRemoteCommand
-import org.fossify.messages.remote.DingTalkStreamClient
-import org.fossify.messages.remote.RemoteSmsCommandWorker
-import org.fossify.messages.remote.SOURCE_DINGTALK
-import org.fossify.messages.helpers.RemoteCommandRepository
-import org.fossify.messages.models.RemoteCommandContext
-import org.fossify.messages.models.RemoteCommandSourceType
-import org.fossify.messages.models.RemoteCommandType
-import kotlinx.coroutines.runBlocking
-import java.security.MessageDigest
+import org.fossify.messages.remote.repository.RemoteSourceRepository
+import org.fossify.messages.remote.repository.RemoteSourceType
 
+/**
+ * 钉钉远程控制前台保活服务
+ * 职责：仅负责前台通知与进程优先级守护，实际多实例网络连接由 RemoteSourceRuntimeManager 统一管理。
+ */
 class DingTalkRemoteControlService : Service() {
-    private var streamClient: DingTalkStreamClient? = null
-    private val mainHandler = Handler(Looper.getMainLooper())
 
     override fun onCreate() {
         super.onCreate()
@@ -41,122 +28,21 @@ class DingTalkRemoteControlService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val config = MultiForwardConfig(applicationContext)
-        if (!config.dingTalkRemoteControlEnabled) {
-            stopStream()
+        val repo = RemoteSourceRepository.getInstance(applicationContext)
+        val hasEnabled = repo.getSourcesByType(RemoteSourceType.DINGTALK).any { it.enabled }
+        if (!hasEnabled) {
             stopSelf()
             return START_NOT_STICKY
         }
-        val clientId = config.dingTalkRemoteClientId()
-        val clientSecret = config.dingTalkRemoteClientSecret()
-        if (clientId.isBlank() || clientSecret.isBlank()) {
-            config.appendDingTalkRemoteLog("缺少 Client ID 或 Client Secret")
-            stopStream()
-            stopSelf()
-            return START_NOT_STICKY
-        }
-        stopStream()
-        streamClient = DingTalkStreamClient(
-            clientId = clientId,
-            clientSecret = clientSecret,
-            customPrefix = config.dingTalkRemoteCustomPrefix(),
-            onCommand = ::handleCommand,
-            onStatus = { status ->
-                MultiForwardConfig(applicationContext).appendDingTalkRemoteLog(status)
-                mainHandler.post { updateNotification(status) }
-            },
-        ).also { it.start() }
+        updateNotification("钉钉 Stream 远程指令服务运行中")
         return START_STICKY
     }
 
     override fun onDestroy() {
-        stopStream()
         super.onDestroy()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
-
-    private fun handleCommand(event: DingTalkRemoteCommand) {
-        val command = event.command
-        val config = MultiForwardConfig(applicationContext)
-        val messageKey = event.messageId.takeIf(String::isNotBlank)
-            ?: "dingtalk-${command.targetNumber}-${command.content.hashCode()}"
-        val sendMode = command.effectiveSendMode(config.dingTalkRemoteSendSimMode)
-
-        // 1C-2: 优先持久化事实与永久幂等声明
-        val cmdContext = RemoteCommandContext(
-            sourceType = RemoteCommandSourceType.DINGTALK,
-            sourceMessageKey = messageKey,
-            commandType = RemoteCommandType.SEND_SMS,
-            rawTarget = command.targetNumber,
-            rawPayload = command.content,
-            requestedSimMode = sendMode,
-            rawRequester = "dingtalk-stream",
-            receivedAt = System.currentTimeMillis()
-        )
-
-        val claimResult = runBlocking {
-            RemoteCommandRepository.claimOrGetDuplicate(applicationContext, cmdContext)
-        }
-
-        if (claimResult is RemoteCommandRepository.ClaimResult.Duplicate) {
-            config.appendDingTalkRemoteLog("抑制重复指令 -> ${command.targetNumber}")
-            return
-        }
-
-        val commandId = (claimResult as? RemoteCommandRepository.ClaimResult.NewCommand)?.commandId.orEmpty()
-
-        if (event.messageId.isNotBlank() && !DingTalkCommandDeduplicator(applicationContext).claim(event.messageId)) {
-            config.appendDingTalkRemoteLog("抑制重复指令 -> ${command.targetNumber}")
-            return
-        }
-        val fingerprint = event.messageId.takeIf(String::isNotBlank)
-            ?.let { "dingtalk-${sha256(it)}" }
-            ?: "dingtalk-${command.targetNumber}-${command.content.hashCode()}"
-        val simSuffix = " · ${SimSendResolver.describeForLog(applicationContext, null, sendMode)}"
-        config.appendDingTalkRemoteLog("收到指令 -> ${command.targetNumber}$simSuffix")
-        val rulesConfig = ForwardingRulesConfig(applicationContext)
-        if (rulesConfig.affectsRemoteCommands() && rulesConfig.rules.any { it.enabled }) {
-            val decision = ForwardingRuleEngine(rulesConfig.rules).evaluate(
-                sender = SOURCE_DINGTALK,
-                body = "${command.targetNumber} ${command.content}",
-                subscriptionId = -1,
-                channelCandidates = emptySet(),
-                simSlotIndex = null,
-            )
-            if (decision.matchedRules.isEmpty()) {
-                if (commandId.isNotBlank()) {
-                    RemoteCommandRepository.recordAuthorization(applicationContext, commandId, authorized = false, reason = "RULE_BLOCKED")
-                }
-                config.appendDingTalkRemoteLog("规则阻止执行 -> ${command.targetNumber}$simSuffix")
-                return
-            }
-        }
-
-        if (commandId.isNotBlank()) {
-            RemoteCommandRepository.recordAuthorization(applicationContext, commandId, authorized = true, reason = "DINGTALK_AUTHORIZED")
-        }
-
-        RemoteSmsCommandWorker.enqueue(
-            context = applicationContext,
-            target = command.targetNumber,
-            content = command.content,
-            subId = -1,
-            uniqueId = fingerprint,
-            sendMode = sendMode,
-            source = SOURCE_DINGTALK,
-            commandId = commandId,
-        )
-    }
-
-    private fun stopStream() {
-        streamClient?.stop()
-        streamClient = null
-    }
-
-    private fun sha256(value: String): String = MessageDigest.getInstance("SHA-256")
-        .digest(value.toByteArray())
-        .joinToString("") { "%02x".format(it) }
 
     private fun updateNotification(status: String) {
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
@@ -193,7 +79,7 @@ class DingTalkRemoteControlService : Service() {
                 },
             )
         }
-        updateNotification(getString(R.string.dingtalk_remote_connecting))
+        updateNotification("钉钉 Stream 远程指令服务已就绪")
     }
 
     private fun startForegroundCompat(notification: android.app.Notification) {
@@ -213,8 +99,9 @@ class DingTalkRemoteControlService : Service() {
         private const val NOTIFICATION_ID = 19083
 
         fun ensureStarted(context: Context) {
-            val config = MultiForwardConfig(context)
-            if (!config.dingTalkRemoteControlEnabled) {
+            val repo = RemoteSourceRepository.getInstance(context)
+            val isEnabled = repo.getSourcesByType(RemoteSourceType.DINGTALK).any { it.enabled }
+            if (!isEnabled) {
                 context.stopService(Intent(context, DingTalkRemoteControlService::class.java))
                 return
             }
@@ -223,8 +110,6 @@ class DingTalkRemoteControlService : Service() {
                     context,
                     Intent(context, DingTalkRemoteControlService::class.java),
                 )
-            }.onFailure { error ->
-                config.appendDingTalkRemoteLog("启动失败：${error.message ?: error.javaClass.simpleName}")
             }
         }
 

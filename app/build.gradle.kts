@@ -119,6 +119,14 @@ android {
         generateLocaleConfig = true
     }
 
+    packaging {
+        resources {
+            // lark-oapi transitively includes Apache HttpClient artifacts that each
+            // carry this identical informational metadata file.
+            excludes += "/META-INF/DEPENDENCIES"
+        }
+    }
+
     tasks.withType<KotlinCompile> {
         compilerOptions.jvmTarget.set(
             JvmTarget.fromTarget(project.libs.versions.app.build.kotlinJVMTarget.get())
@@ -151,6 +159,7 @@ detekt {
 
 dependencies {
     implementation(libs.fossify.commons)
+    implementation(libs.xx.permissions)
     implementation(libs.eventbus)
     implementation(libs.indicator.fast.scroll)
     implementation(libs.mmslib)
@@ -163,12 +172,14 @@ dependencies {
     implementation(libs.androidx.compose.activity)
     implementation(libs.androidx.work.runtime)
     implementation(libs.okhttp)
+    implementation(libs.lark.oapi)
     implementation(libs.androidx.lifecycle.process)
     implementation(libs.ez.vcard)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.bundles.room)
     ksp(libs.androidx.room.compiler)
     testImplementation(libs.androidx.room.testing)
+    testImplementation("org.json:json:20240303")
     androidTestImplementation(libs.androidx.room.testing)
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.androidx.test.ext.junit)

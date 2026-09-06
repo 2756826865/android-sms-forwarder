@@ -11,6 +11,49 @@ import java.util.Locale
 data class ForwardingPayload(val title: String, val content: String)
 
 object ForwardingMessageFormatter {
+    fun renderRuleTemplate(
+        context: Context,
+        template: String,
+        sender: String,
+        body: String,
+        receivedAt: Long,
+        subscriptionId: Int
+    ): String {
+        if (template.isBlank()) return body
+        val config = MultiForwardConfig(context)
+        val contactName = runCatching { context.getNameAndPhotoFromPhoneNumber(sender).name }
+            .getOrNull()?.takeIf { it.isNotBlank() && it != sender } ?: sender
+        val formattedTime = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date(receivedAt))
+        val dateOnly = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(receivedAt))
+        val timeOnly = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(receivedAt))
+        val sim = if (subscriptionId >= 0) getSimDescription(context, config, subscriptionId) else ""
+        val receiverNumber = if (subscriptionId >= 0) getReceiverNumber(context, config, subscriptionId) else ""
+        val simIndex = runCatching {
+            val manager = context.getSystemService(SubscriptionManager::class.java)
+            val info = if (subscriptionId >= 0 && manager != null) manager.getActiveSubscriptionInfo(subscriptionId) else null
+            ((info?.simSlotIndex ?: if (subscriptionId > 0) subscriptionId - 1 else 0) + 1).toString()
+        }.getOrDefault("1")
+        val code = org.fossify.messages.rule.template.TemplateRenderer.extractVerificationCode(body)
+        return template
+            .replace("{{CODE}}", code).replace("{{VERIFICATION_CODE}}", code)
+            .replace("{{FROM}}", sender).replace("{{SENDER}}", sender)
+            .replace("{{CONTACT_NAME}}", contactName)
+            .replace("{{SMS}}", body).replace("{{BODY}}", body).replace("{{CONTENT}}", body)
+            .replace("{{RECEIVE_TIME}}", formattedTime).replace("{{DATE_YMD}}", dateOnly)
+            .replace("{{DATE_HMS}}", timeOnly).replace("{{TIMESTAMP}}", receivedAt.toString())
+            .replace("{{SIM_SLOT}}", sim).replace("{{SIM_INDEX}}", simIndex)
+            .replace("{{RECEIVER_NUMBER}}", receiverNumber)
+            .replace("{{DEVICE_NAME}}", TemplateDataRetriever.getDeviceName())
+            .replace("{{DEVICE_BRAND}}", TemplateDataRetriever.getDeviceBrand())
+            .replace("{{DEVICE_MODEL}}", TemplateDataRetriever.getDeviceModel())
+            .replace("{{BATTERY_INFO}}", TemplateDataRetriever.getBatteryInfo(context))
+            .replace("{{BATTERY_PCT}}", TemplateDataRetriever.getBatteryPct(context))
+            .replace("{{NET_TYPE}}", TemplateDataRetriever.getNetworkType(context))
+            .replace("{{IP_LIST}}", TemplateDataRetriever.getIpAddress())
+            .replace("{{APP_VERSION}}", TemplateDataRetriever.getAppVersion())
+            .replace("{{CURRENT_TIME}}", TemplateDataRetriever.getCurrentTime())
+    }
+
     fun format(
         context: Context,
         sender: String,

@@ -18,7 +18,7 @@ class Config(context: Context) : BaseConfig(context) {
     fun getUseSIMIdAtNumber(number: String) = prefs.getInt(USE_SIM_ID_PREFIX + number, 0)
 
     var showHomeBottomNavigation: Boolean
-        get() = prefs.getBoolean(SHOW_HOME_BOTTOM_NAVIGATION, true)
+        get() = prefs.getBoolean(SHOW_HOME_BOTTOM_NAVIGATION, false)
         set(value) = prefs.edit().putBoolean(SHOW_HOME_BOTTOM_NAVIGATION, value).apply()
 
     /** Approximate visible conversation rows on the home list: 4 / 6 / 8 / 10. Default 6. */
@@ -59,7 +59,7 @@ class Config(context: Context) : BaseConfig(context) {
             .putBoolean(SHOW_CHARACTER_COUNTER, showCharacterCounter).apply()
 
     var useGatewayDeveloperUi: Boolean
-        get() = prefs.getBoolean(USE_GATEWAY_DEVELOPER_UI, false)
+        get() = prefs.getBoolean(USE_GATEWAY_DEVELOPER_UI, true)
         set(value) = prefs.edit().putBoolean(USE_GATEWAY_DEVELOPER_UI, value).apply()
 
     var useSimpleCharacters: Boolean
@@ -263,6 +263,18 @@ class Config(context: Context) : BaseConfig(context) {
             LOW_BATTERY_CHANNELS,
             value.intersect(ForwardingChannels.lowBatteryChannels.toSet()),
         ).apply()
+
+    /** 未设置时继续使用旧版 lowBatteryChannels，设置后按真实通道实例精准分发。 */
+    val hasLowBatteryInstanceSelection: Boolean
+        get() = prefs.contains("low_battery_channel_instance_ids")
+
+    var lowBatteryChannelInstanceIds: Set<String>
+        get() = prefs.getStringSet("low_battery_channel_instance_ids", emptySet())?.toSet().orEmpty()
+        set(value) = prefs.edit().putStringSet("low_battery_channel_instance_ids", value.toSet()).apply()
+
+    fun clearLowBatteryInstanceSelection() {
+        prefs.edit().remove("low_battery_channel_instance_ids").apply()
+    }
 
     var shadowOperationTrackingEnabled: Boolean
         get() = prefs.getBoolean("shadow_operation_tracking_enabled", true)

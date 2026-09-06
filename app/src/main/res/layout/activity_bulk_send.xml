@@ -16,7 +16,6 @@
             android:background="@color/miui_page_background"
             app:navigationIconTint="@color/miui_primary_text"
             app:title="@string/bulk_send"
-            app:titleCentered="true"
             app:titleTextColor="@color/miui_primary_text" />
     </org.fossify.commons.views.MyAppBarLayout>
 

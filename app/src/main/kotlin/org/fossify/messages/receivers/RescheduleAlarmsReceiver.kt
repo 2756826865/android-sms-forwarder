@@ -20,13 +20,7 @@ class RescheduleAlarmsReceiver : BroadcastReceiver() {
                 SmsRecoveryWorker.schedule(context)
                 SmsRecoveryWorker.enqueueFullResync(context)
                 SmsKeepAliveService.ensureStarted(context)
-                org.fossify.messages.services.DingTalkRemoteControlService.ensureStarted(context)
-                org.fossify.messages.services.FeishuRemoteControlService.ensureStarted(context)
-                org.fossify.messages.services.WeComRemoteControlService.ensureStarted(context)
-                org.fossify.messages.services.EmailRemoteControlService.ensureStarted(context)
-                org.fossify.messages.services.TelegramRemoteControlService.ensureStarted(context)
-                org.fossify.messages.services.WebSocketRemoteControlService.ensureStarted(context)
-                org.fossify.messages.services.QqRemoteControlService.ensureStarted(context)
+                org.fossify.messages.remote.runtime.RemoteSourceRuntimeManager.getInstance(context).sync()
             } finally {
                 pendingResult.finish()
             }

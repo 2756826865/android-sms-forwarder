@@ -45,6 +45,16 @@ interface RemoteCommandDao {
         now: Long = System.currentTimeMillis()
     )
 
+    @Query("UPDATE remote_command_executions SET execution_state = :state, completed_at = :completedAt, error_class = :errorClass, error_hmac = :errorHmac, updated_at = :now WHERE command_id = :commandId")
+    suspend fun updateExecutionCompletion(
+        commandId: String,
+        state: String,
+        completedAt: Long?,
+        errorClass: String?,
+        errorHmac: String?,
+        now: Long = System.currentTimeMillis()
+    )
+
     @Query("UPDATE remote_command_executions SET execution_state = 'DUPLICATE', updated_at = :now WHERE command_id = :commandId")
     suspend fun markDuplicate(commandId: String, now: Long = System.currentTimeMillis())
 

@@ -8,16 +8,28 @@ enum class RemoteCommandState {
     RECEIVED,
     /** 授权/白名单/规则校验通过，允许执行 */
     AUTHORIZED,
-    /** 执行链路正在运行中 */
-    RUNNING,
-    /** 执行完成并确认成功 */
-    SUCCESS,
-    /** 执行过程中发生不可恢复错误 */
-    FAILED,
     /** 授权失败、未在白名单或被规则阻止 */
     REJECTED,
     /** 命中永久幂等键，拒绝重复执行 */
-    DUPLICATE
+    DUPLICATE,
+    /** 已排入执行队列 (WorkManager) */
+    QUEUED,
+    /** 执行链路开始准备提交发信 */
+    SUBMITTING,
+    /** 短信已写入系统 Outbox/Sent 并通过 SmsManager.sendMultipartTextMessage 提交 */
+    SUBMITTED,
+    /** 系统广播 SMS_SENT_ACTION 确认底层无线电网络已成功送出 */
+    SENT,
+    /** 系统广播 SMS_DELIVERED_ACTION 确认目标终端已成功接收送达 */
+    DELIVERED,
+    /** 执行过程中发生不可恢复错误或底层发信失败 */
+    FAILED,
+    /** 状态未知 */
+    UNKNOWN,
+    /** 历史兼容成功状态 (等同于 SENT) */
+    SUCCESS,
+    /** 执行链路正在运行中 */
+    RUNNING
 }
 
 /**

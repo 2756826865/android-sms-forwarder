@@ -14,6 +14,7 @@ import org.fossify.messages.forwarding.ForwardingChannels
 import org.fossify.messages.forwarding.MultiChannelForwardWorker
 import org.fossify.messages.forwarding.MultiForwardConfig
 import org.fossify.messages.forwarding.PushPlusConfig
+import org.fossify.messages.forwarding.repository.ChannelRepository
 import java.util.concurrent.TimeUnit
 
 class LowBatteryCheckWorker(
@@ -28,13 +29,20 @@ class LowBatteryCheckWorker(
             return Result.success()
         }
 
+        val selectedInstanceIds = config.lowBatteryChannelInstanceIds
+        val selectedInstances = if (config.hasLowBatteryInstanceSelection) {
+            ChannelRepository.getInstance(appContext).getEnabledInstances().filter { it.id in selectedInstanceIds }
+        } else emptyList()
         val selectedChannels = config.lowBatteryChannels
         val multiConfig = MultiForwardConfig(appContext)
         val enabledMultiChannels = multiConfig.enabledChannelIds().intersect(selectedChannels)
         val pushPlusEnabled = ForwardingChannels.PUSHPLUS in selectedChannels &&
             PushPlusConfig(appContext).enabled
 
-        if (enabledMultiChannels.isEmpty() && !pushPlusEnabled) {
+        if (config.hasLowBatteryInstanceSelection && selectedInstances.isEmpty()) {
+            return Result.success()
+        }
+        if (!config.hasLowBatteryInstanceSelection && enabledMultiChannels.isEmpty() && !pushPlusEnabled) {
             return Result.success()
         }
 
@@ -56,11 +64,26 @@ class LowBatteryCheckWorker(
                 config.lowBatteryLastNotifiedLevel = batteryLevel
                 val uniqueId = "low-battery-$threshold"
                 val now = System.currentTimeMillis()
-                val allSelectedEnabled = buildSet {
-                    addAll(enabledMultiChannels)
-                    if (pushPlusEnabled) add(ForwardingChannels.PUSHPLUS)
-                }
-                if (allSelectedEnabled.isNotEmpty()) {
+                if (config.hasLowBatteryInstanceSelection) {
+                    selectedInstances.forEach { instance ->
+                        MultiChannelForwardWorker.enqueueSingle(
+                            context = appContext,
+                            sender = appContext.getString(R.string.low_battery_system_sender),
+                            body = content,
+                            receivedAt = now,
+                            subscriptionId = -1,
+                            uniqueId = uniqueId,
+                            targetChannel = instance.channelType,
+                            allowedChannels = setOf(instance.id),
+                            isTest = false,
+                            targetInstanceId = instance.id
+                        )
+                    }
+                } else {
+                    val allSelectedEnabled = buildSet {
+                        addAll(enabledMultiChannels)
+                        if (pushPlusEnabled) add(ForwardingChannels.PUSHPLUS)
+                    }
                     MultiChannelForwardWorker.enqueue(
                         context = appContext,
                         sender = appContext.getString(R.string.low_battery_system_sender),
@@ -103,7 +126,10 @@ class LowBatteryCheckWorker(
 
         fun sync(context: Context) {
             val config = Config(context)
-            if (config.enableLowBatteryReminder && config.lowBatteryChannels.isNotEmpty()) {
+            val hasTarget = if (config.hasLowBatteryInstanceSelection) {
+                config.lowBatteryChannelInstanceIds.isNotEmpty()
+            } else config.lowBatteryChannels.isNotEmpty()
+            if (config.enableLowBatteryReminder && hasTarget) {
                 schedule(context)
             } else {
                 WorkManager.getInstance(context).cancelUniqueWork(UNIQUE_PERIODIC)

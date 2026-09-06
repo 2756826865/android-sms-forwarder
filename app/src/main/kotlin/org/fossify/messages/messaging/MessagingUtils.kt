@@ -147,7 +147,7 @@ class MessagingUtils(val context: Context) {
                 
                 if (!isVerified) {
                     android.util.Log.e("MessagingDebug", "LocalDB preinsert VERIFY FAILED! msgId=$insertedId, targetThreadId=$threadId")
-                    return emptyList()
+                    throw SmsException(ERROR_PERSISTING_MESSAGE)
                 }
             }
 

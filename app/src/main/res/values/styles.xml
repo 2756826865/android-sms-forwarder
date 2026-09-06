@@ -54,7 +54,7 @@
         <item name="android:paddingHorizontal">20dp</item>
         <item name="android:paddingVertical">14dp</item>
         <item name="android:textColor">@color/classic_text_primary</item>
-        <item name="android:textSize">17sp</item>
+        <item name="android:textSize">16sp</item>
         <item name="android:maxLines">1</item>
         <item name="android:ellipsize">end</item>
     </style>
@@ -68,7 +68,7 @@
 
     <style name="SmsForwardingRow">
         <item name="android:layout_width">match_parent</item>
-        <item name="android:layout_height">78dp</item>
+        <item name="android:layout_height">68dp</item>
         <item name="android:foreground">?attr/selectableItemBackground</item>
         <item name="android:gravity">center_vertical</item>
         <item name="android:orientation">horizontal</item>
@@ -87,7 +87,7 @@
         <item name="android:layout_height">wrap_content</item>
         <item name="android:fontFamily">sans-serif</item>
         <item name="android:textColor">@color/miui_primary_text</item>
-        <item name="android:textSize">18sp</item>
+        <item name="android:textSize">16sp</item>
     </style>
 
     <style name="SmsForwardingSummary">
@@ -109,10 +109,10 @@
         <item name="android:layout_width">match_parent</item>
         <item name="android:layout_height">wrap_content</item>
         <item name="android:layout_marginStart">20dp</item>
-        <item name="android:layout_marginTop">24dp</item>
-        <item name="android:layout_marginBottom">10dp</item>
+        <item name="android:layout_marginTop">18dp</item>
+        <item name="android:layout_marginBottom">8dp</item>
         <item name="android:textColor">@color/classic_text_secondary</item>
-        <item name="android:textSize">15sp</item>
+        <item name="android:textSize">14sp</item>
         <item name="android:fontFamily">sans-serif-medium</item>
         <item name="android:textStyle">bold</item>
     </style>

@@ -8,21 +8,19 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
-import android.os.Handler
 import android.os.IBinder
-import android.os.Looper
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import org.fossify.messages.R
 import org.fossify.messages.activities.EmailRemoteControlSettingsActivity
-import org.fossify.messages.forwarding.MultiForwardConfig
-import org.fossify.messages.remote.EmailRemoteCommandPoller
-import java.util.concurrent.atomic.AtomicBoolean
+import org.fossify.messages.remote.repository.RemoteSourceRepository
+import org.fossify.messages.remote.repository.RemoteSourceType
 
+/**
+ * 邮箱远程控制前台保活服务
+ * 职责：仅负责前台通知与进程优先级守护，实际多实例网络连接由 RemoteSourceRuntimeManager 统一管理。
+ */
 class EmailRemoteControlService : Service() {
-    private val mainHandler = Handler(Looper.getMainLooper())
-    private val running = AtomicBoolean(false)
-    private var poller: EmailRemoteCommandPoller? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -30,57 +28,21 @@ class EmailRemoteControlService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val config = MultiForwardConfig(applicationContext)
-        if (!config.emailRemoteControlEnabled) {
-            stopLoop()
+        val repo = RemoteSourceRepository.getInstance(applicationContext)
+        val hasEnabled = repo.getSourcesByType(RemoteSourceType.EMAIL).any { it.enabled }
+        if (!hasEnabled) {
             stopSelf()
             return START_NOT_STICKY
         }
-        val host = config.emailRemoteHost()
-        val user = config.emailRemoteUser()
-        val pass = config.emailRemotePassword()
-        if (host.isBlank() || user.isBlank() || pass.isBlank()) {
-            config.appendEmailRemoteLog("缺少邮箱主机 / 账号 / 授权码")
-            stopLoop()
-            stopSelf()
-            return START_NOT_STICKY
-        }
-        poller = EmailRemoteCommandPoller(applicationContext)
-        startLoop()
+        updateNotification("邮箱 IMAP 远程指令服务运行中")
         return START_STICKY
     }
 
     override fun onDestroy() {
-        stopLoop()
         super.onDestroy()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
-
-    private fun startLoop() {
-        if (!running.compareAndSet(false, true)) return
-        Thread {
-            while (running.get()) {
-                val processed = poller?.pollOnce() ?: 0
-                val status = if (processed > 0) "已处理 $processed 条邮件指令" else "邮箱指令监听中 · 正常"
-                MultiForwardConfig(applicationContext).appendEmailRemoteLog(status)
-                mainHandler.post { updateNotification(status) }
-                try {
-                    Thread.sleep(POLL_INTERVAL_MS)
-                } catch (_: InterruptedException) {
-                    break
-                }
-            }
-        }.apply {
-            name = "email-remote"
-            isDaemon = true
-            start()
-        }
-    }
-
-    private fun stopLoop() {
-        running.set(false)
-    }
 
     private fun updateNotification(status: String) {
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
@@ -117,7 +79,7 @@ class EmailRemoteControlService : Service() {
                 },
             )
         }
-        updateNotification("正在连接邮箱…")
+        updateNotification("邮箱 IMAP 远程指令服务已就绪")
     }
 
     private fun startForegroundCompat(notification: android.app.Notification) {
@@ -135,11 +97,11 @@ class EmailRemoteControlService : Service() {
     companion object {
         private const val CHANNEL_ID = "email_remote_control"
         private const val NOTIFICATION_ID = 19086
-        private const val POLL_INTERVAL_MS = 60_000L
 
         fun ensureStarted(context: Context) {
-            val config = MultiForwardConfig(context)
-            if (!config.emailRemoteControlEnabled) {
+            val repo = RemoteSourceRepository.getInstance(context)
+            val isEnabled = repo.getSourcesByType(RemoteSourceType.EMAIL).any { it.enabled }
+            if (!isEnabled) {
                 context.stopService(Intent(context, EmailRemoteControlService::class.java))
                 return
             }
@@ -148,8 +110,6 @@ class EmailRemoteControlService : Service() {
                     context,
                     Intent(context, EmailRemoteControlService::class.java),
                 )
-            }.onFailure { error ->
-                config.appendEmailRemoteLog("启动失败：${error.message ?: error.javaClass.simpleName}")
             }
         }
 

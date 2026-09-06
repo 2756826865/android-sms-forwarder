@@ -87,15 +87,15 @@
     <string name="settings_display">显示</string>
     <string name="settings_functions">功能</string>
     <string name="settings_system">系统</string>
-    <string name="settings_home_bottom_nav">显示首页底部导航</string>
-    <string name="settings_home_bottom_nav_summary">默认开启；关闭后首页保留短信列表和新建按钮，仍可从右上角进入设置</string>
-    <string name="settings_home_list_density">首页列表显示条数</string>
+    <string name="settings_home_bottom_nav">首页导航</string>
+    <string name="settings_home_bottom_nav_summary">默认关闭；开启后可从首页底部快速进入转发、批量发送和设置</string>
+    <string name="settings_home_list_density">列表密度</string>
     <string name="settings_home_list_density_summary">调节会话列表疏密，约一屏显示 %1$d 条</string>
     <string name="settings_home_list_density_4">约 4 条（很宽松）</string>
     <string name="settings_home_list_density_6">约 6 条（宽松）</string>
     <string name="settings_home_list_density_8">约 8 条（适中）</string>
     <string name="settings_home_list_density_10">约 10 条（紧凑）</string>
-    <string name="settings_live_island">灵动岛提示（实验）</string>
+    <string name="settings_live_island">灵动岛</string>
     <string name="settings_live_island_summary">说明：网上常见的悬浮窗或私有参数方案不等同于官方灵动岛。小米正式焦点通知/超级岛需要开发者平台授权；未获授权或系统不支持时以普通通知为准。</string>
     <string name="live_island_status_disabled">已关闭</string>
     <string name="live_island_status_xiaomi">实验检测 · 小米系统支持焦点参数，正式展示取决于平台授权</string>
@@ -110,11 +110,11 @@
     <string name="settings_text_avatars">文字头像</string>
     <string name="settings_text_avatars_summary">为没有头像的联系人自动添加文字头像</string>
     <string name="settings_blocking">骚扰拦截</string>
-    <string name="settings_recently_deleted">最近删除</string>
-    <string name="settings_sync">短信同步管理</string>
+    <string name="settings_recently_deleted">回收站</string>
+    <string name="settings_sync">短信同步</string>
     <string name="settings_sync_summary">重新读取系统短信库中的全部短信</string>
     <string name="settings_sync_confirm">将从系统短信库重新读取全部短信。短信较多时请保持应用在前台，是否继续？</string>
-    <string name="settings_forwarding">短信转发功能</string>
+    <string name="settings_forwarding">转发通道</string>
     <string name="forwarding_title">短信转发</string>
     <string name="forwarding_in_progress">正在发送转发任务</string>
     <string name="forwarding_channels">转发渠道</string>
@@ -188,19 +188,12 @@
     <string name="dingtalk_remote_section_credentials">应用凭证</string>
     <string name="dingtalk_remote_section_status">连接状态</string>
 
-    <string name="feishu_remote_title">飞书远程指令</string>
+    <string name="feishu_remote_title">飞书来源</string>
     <string name="feishu_remote_enable">启用飞书远程指令</string>
     <string name="feishu_remote_app_id">App ID</string>
     <string name="feishu_remote_app_secret">App Secret</string>
 
-    <string name="wecom_remote_title">企业微信远程指令</string>
-    <string name="wecom_remote_enable">启用企业微信远程指令</string>
-    <string name="wecom_remote_corp_id">Corp ID</string>
-    <string name="wecom_remote_agent_id">Agent ID</string>
-    <string name="wecom_remote_secret">Secret</string>
-    <string name="wecom_remote_auth_users">授权成员 UserID</string>
-
-    <string name="email_remote_title">邮箱远程指令</string>
+    <string name="email_remote_title">邮箱来源</string>
     <string name="email_remote_enable">启用邮箱远程指令</string>
     <string name="email_remote_host">IMAP 服务器</string>
     <string name="email_remote_port">端口 (默认993)</string>
@@ -209,25 +202,18 @@
     <string name="email_remote_auth_senders">授权发件人邮箱</string>
     <string name="email_remote_security">加密方式</string>
 
-    <string name="telegram_remote_title">Telegram 远程指令</string>
+    <string name="telegram_remote_title">Telegram 来源</string>
     <string name="telegram_remote_enable">启用 Telegram 远程指令</string>
     <string name="telegram_remote_bot_token">Bot Token</string>
     <string name="telegram_remote_chat_id">默认 Chat ID</string>
     <string name="telegram_remote_custom_host">自定义 API 反代地址 (选填)</string>
     <string name="telegram_remote_auth_users">授权 ChatID / UserID</string>
 
-    <string name="websocket_remote_title">WebSocket 远程指令</string>
+    <string name="websocket_remote_title">WebSocket 来源</string>
     <string name="websocket_remote_enable">启用 WebSocket 远程指令</string>
     <string name="websocket_remote_url">WebSocket URL (ws:// 或 wss://)</string>
     <string name="websocket_remote_token">认证 Token (选填)</string>
 
-    <string name="qq_remote_title">QQ (OneBot 11) 远程指令</string>
-    <string name="qq_remote_enable">启用 QQ 远程指令</string>
-    <string name="qq_remote_ws_url">OneBot 11 WebSocket URL</string>
-    <string name="qq_remote_token">Access Token (选填)</string>
-    <string name="qq_remote_auth_users">授权 QQ 号</string>
-    <string name="qq_remote_auth_groups">授权 QQ 群号</string>
-    <string name="qq_remote_require_at">群聊中必须 @机器人 才执行</string>
     <string name="remote_sms_section_command">指令与安全</string>
     <string name="remote_sms_section_receipt">发送回执转发</string>
     <string name="remote_sms_section_log">执行日志</string>
@@ -246,7 +232,7 @@
     <string name="forwarding_disclaimer_decline">不同意并退出</string>
     <string name="forwarding_disclaimer_body">短信转发会将收到的短信内容、发送号码、SIM 标识及接收时间发送到您配置的第三方服务（PushPlus、钉钉、飞书、企业微信或电子邮箱）。短信可能包含验证码、账户信息和其他敏感内容。请仅配置由您本人控制且可信的接收端，并妥善保管 Token、Webhook、密钥和邮箱凭据。因第三方平台、网络、系统限制、配置错误或凭据泄露造成的延迟、丢失或信息泄露风险由使用者承担。请勿将本功能用于未经授权的监控、转发或其他违法用途。点击“我已阅读并同意”表示您理解并同意上述内容。</string>
     <string name="first_use_notice_title">首次使用提示</string>
-    <string name="first_use_notice_message">本软件免费提供，不含付费解锁功能。\n\n短信发送、彩信、批量发送及远程代发可能产生运营商通信费用；短信转发会将内容发送至您自行配置的第三方服务。\n\n请仅在本人设备或已获得明确授权的设备上使用。严禁用于诈骗、骚扰、垃圾短信、未经授权的监控或转发，以及其他违法违规用途。使用者应自行承担配置、通信费用、数据安全及使用行为产生的责任。</string>
+    <string name="first_use_notice_message">本软件免费，请注意没有任何收费服务！！！\n\n短信发送、彩信、批量发送及远程代发可能产生运营商通信费用；短信转发会将内容发送至您自行配置的第三方服务。\n\n请仅在本人设备或已获得明确授权的设备上使用。严禁用于诈骗、骚扰、垃圾短信、未经授权的监控或转发，以及其他违法违规用途。使用者应自行承担配置、通信费用、数据安全及使用行为产生的责任。\n\nAPK仅用于测试和学习研究，禁止用于商业用途，不能保证其合法性，准确性，完整性和有效性，请根据情况自行判断。</string>
     <string name="first_use_notice_accept">我已知晓</string>
     <string name="forwarding_display">转发显示</string>
     <string name="forwarding_sim_one_label">SIM1 自定义名称</string>
@@ -340,7 +326,7 @@
         <item>SIM1</item>
         <item>SIM2</item>
     </string-array>
-    <string name="remote_forwarding_title">短信远程发送</string>
+    <string name="remote_forwarding_title">远程发送</string>
     <string name="remote_forwarding_section">短信远程发送</string>
     <string name="remote_forwarding_intro">通过授权短信或钉钉 Stream 远程代发本机短信。命令格式：/短信发送 [SIM1|SIM2|默认] 手机号 内容。默认关闭，需分别配置并启用。</string>
     <string name="remote_forwarding_channels_section">转发方式</string>
@@ -349,7 +335,7 @@
     <string name="remote_forwarding_hub_dingtalk_enabled">钉钉远程已启用</string>
     <string name="remote_forwarding_hub_both_enabled">短信远程、钉钉远程均已启用</string>
     <string name="remote_control_section">短信远程发送</string>
-    <string name="remote_sms_title">短信远程指令</string>
+    <string name="remote_sms_title">短信来源</string>
     <string name="remote_sms_summary">默认关闭 · 授权号码白名单、频率限制与重复拦截</string>
     <string name="remote_sms_enable">启用远程短信命令（默认关闭）</string>
     <string name="remote_sms_format_hint">命令格式：/短信发送 [SIM1|SIM2|默认|系统默认] 手机号 内容。方括号内选一项，不要输入 |。省略 SIM 时跟随接收卡；命令短信不进入正常转发。</string>
@@ -362,8 +348,8 @@
     <string name="remote_sms_receipt_delivered">回执包含送达报告（需开启送达报告）</string>
     <string name="remote_sms_receipt_channels">回执转发渠道</string>
     <string name="remote_sms_receipt_channels_empty">未选择回执转发渠道</string>
-    <string name="remote_sms_receipt_scope_hint">回执配置同时适用于短信远程指令与钉钉远程指令</string>
-    <string name="dingtalk_remote_title">钉钉远程指令</string>
+    <string name="remote_sms_receipt_scope_hint">回执配置适用于全部远程来源；短信和邮箱来源需选择普通通道接收回执</string>
+    <string name="dingtalk_remote_title">钉钉来源</string>
     <string name="dingtalk_remote_summary">通过钉钉 Stream 长连接接收 /短信发送 指令</string>
     <string name="dingtalk_remote_connecting">正在连接…</string>
     <string name="scheduled_management">定时发送</string>
@@ -377,7 +363,7 @@
     <string name="scheduled_cancel_confirmation">确定取消这条定时短信吗？</string>
     <string name="scheduled_actions">定时短信操作</string>
     <string name="scheduled_created">已创建定时短信</string>
-    <string name="compatibility_title">后台运行与系统兼容</string>
+    <string name="compatibility_title">后台与兼容</string>
     <string name="compatibility_device">%1$s %2$s · Android %3$s</string>
     <string name="compatibility_default_sms">设为默认短信应用</string>
     <string name="compatibility_try_legacy_sms_switch">尝试兼容修复默认短信状态</string>
@@ -427,13 +413,14 @@
     <string name="compatibility_brand_xiaomi_advice">允许自启动，省电策略设为无限制，并允许后台弹出界面与锁屏通知。息屏收不到短信时，到本页确认 SMS Role 与 WRITE_SMS 为正常；若 WRITE_SMS 未允许，可展开高级诊断复制 ADB 命令修复。HyperOS 更新后建议重新确认以上项。</string>
     <string name="compatibility_brand_huawei_title">华为 / 荣耀专属建议</string>
     <string name="compatibility_brand_huawei_advice">在应用启动管理中改为手动管理，并允许自启动、关联启动和后台活动。若 SMS Role、底层路由与 WRITE_SMS 不同步，请展开高级诊断使用 ADB 修复。</string>
-    <string name="low_battery_reminder">低电量提醒</string>
+    <string name="low_battery_reminder">电量提醒</string>
+    <string name="low_battery_enable_title">开启提醒</string>
     <string name="low_battery_reminder_summary">电量低于阈值时通过转发渠道发送提醒</string>
-    <string name="low_battery_threshold_label">电量阈值</string>
+    <string name="low_battery_threshold_label">提醒电量</string>
     <string name="low_battery_threshold_summary">当前阈值：%d%%</string>
-    <string name="low_battery_alert_title">⚠️ 低电量提醒</string>
+    <string name="low_battery_alert_title">⚠️ 电量提醒</string>
     <string name="low_battery_alert_body">设备电量已低于 %1$d%%，请及时充电！当前电量：%2$d%%</string>
-    <string name="low_battery_channels_label">提醒渠道</string>
+    <string name="low_battery_channels_label">发送通道</string>
     <string name="low_battery_channels_empty">未选择渠道</string>
     <string name="low_battery_channels_required">请至少选择一个提醒渠道，低电量提醒仍保持关闭</string>
     <string name="low_battery_system_sender">系统电量监控</string>
@@ -469,7 +456,7 @@
     <string name="keep_alive_notification_text">正在保持短信接收、同步与转发</string>
     <string name="batch_delay_now">立即发送</string>
     <string name="batch_delay_seconds">%1$d 秒</string>
-    <string name="blocking_settings">骚扰拦截设置</string>
+    <string name="blocking_settings">骚扰拦截</string>
     <string name="call_blocking">来电拦截</string>
     <string name="sms_blocking">短信拦截</string>
     <string name="list_management">名单管理</string>
@@ -655,11 +642,11 @@
     <string name="faq_3_text">Yes, you can schedule messages to be sent in the future by long pressing the Send button and picking the desired date and time.</string>
     <string name="faq_4_title">Why do my group message replies appear as individual texts to recipients?</string>
     <!-- Autofill Verification Code -->
-    <string name="autofill_settings_title">验证码自动填充</string>
+    <string name="autofill_settings_title">验证码剪贴板</string>
     <string name="autofill_service_name">短信转发器验证码自动填充服务</string>
     <string name="autofill_accessibility_description">用于检测当前前台登录/验证界面，收到验证码短信时自动填充并可选自动提交，免去手动输入的繁琐。</string>
     <string name="message_templates">消息模板</string>
-    <string name="call_forwarding_settings_title">未接来电转发</string>
+    <string name="call_forwarding_settings_title">未接提醒</string>
     <string name="enable_call_forwarding">启用未接来电转发</string>
     <string name="privacy_mask_settings_title">隐私数据脱敏</string>
     <string name="enable_privacy_mask">启用手机号/身份证/卡号自动掩码</string>

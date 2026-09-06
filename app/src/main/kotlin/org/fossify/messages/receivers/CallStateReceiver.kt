@@ -12,6 +12,7 @@ import org.fossify.messages.forwarding.CallForwardConfig
 import org.fossify.messages.forwarding.ForwardingMessageFormatter
 import org.fossify.messages.forwarding.MultiChannelForwardWorker
 import org.fossify.messages.forwarding.MultiForwardConfig
+import org.fossify.messages.forwarding.repository.ChannelRepository
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -70,7 +71,9 @@ class CallStateReceiver : BroadcastReceiver() {
                             val ringDurationSeconds = ((now - ringStart) / 1000).coerceAtLeast(1)
                             val wasMissed = !isAnswered
 
-                            if (wasMissed && callConfig.missedCallOnly) {
+                            // “仅未接来电”不能反过来导致关闭后连未接来电也不发送。
+                            // 未接来电始终属于本功能范围；已接通话由独立开关控制。
+                            if (wasMissed) {
                                 dispatchCallNotification(
                                     context = appContext,
                                     callerNumber = number,
@@ -120,7 +123,7 @@ class CallStateReceiver : BroadcastReceiver() {
             ForwardingMessageFormatter.getSimDescription(context, multiConfig, subId)
         } else ""
 
-        val body = buildString {
+        val defaultBody = buildString {
             appendLine(if (isMissed) "🔴 $eventTitle" else "🟢 $eventTitle")
             appendLine("📞 来电号码：$contactDisplay")
             appendLine(if (isMissed) "⏱️ 响铃时长：${durationSeconds}秒" else "⏱️ 通话时长：${durationSeconds}秒")
@@ -130,21 +133,51 @@ class CallStateReceiver : BroadcastReceiver() {
             }
         }.trim()
 
-        val channels = multiConfig.enabledChannelIds()
+        val callConfig = CallForwardConfig(context)
+        val body = callConfig.customTemplate.takeIf(String::isNotBlank)?.let { template ->
+            template
+                .replace("[type]", if (isMissed) "未接来电" else "通话结束")
+                .replace("[number]", callerNumber)
+                .replace("[name]", contactName.orEmpty())
+                .replace("[caller]", contactDisplay)
+                .replace("[duration]", durationSeconds.toString())
+                .replace("[time]", timeFormatted)
+                .replace("[sim]", simDesc)
+        } ?: defaultBody
         val uniqueId = "call-${System.currentTimeMillis()}"
 
-        channels.forEach { target ->
-            MultiChannelForwardWorker.enqueueSingle(
-                context = context,
-                sender = callerNumber,
-                body = body,
-                receivedAt = timestamp,
-                subscriptionId = subId,
-                uniqueId = uniqueId,
-                targetChannel = target,
-                allowedChannels = setOf(target),
-                isTest = false
-            )
+        if (callConfig.hasChannelSelection) {
+            val selectedIds = callConfig.channelInstanceIds
+            ChannelRepository.getInstance(context).getEnabledInstances()
+                .filter { it.id in selectedIds }
+                .forEach { instance ->
+                    MultiChannelForwardWorker.enqueueSingle(
+                        context = context,
+                        sender = callerNumber,
+                        body = body,
+                        receivedAt = timestamp,
+                        subscriptionId = subId,
+                        uniqueId = uniqueId,
+                        targetChannel = instance.channelType,
+                        allowedChannels = setOf(instance.id),
+                        isTest = false,
+                        targetInstanceId = instance.id
+                    )
+                }
+        } else {
+            multiConfig.enabledChannelIds().forEach { target ->
+                MultiChannelForwardWorker.enqueueSingle(
+                    context = context,
+                    sender = callerNumber,
+                    body = body,
+                    receivedAt = timestamp,
+                    subscriptionId = subId,
+                    uniqueId = uniqueId,
+                    targetChannel = target,
+                    allowedChannels = setOf(target),
+                    isTest = false
+                )
+            }
         }
     }
 

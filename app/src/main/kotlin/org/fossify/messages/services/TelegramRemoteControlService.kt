@@ -8,19 +8,19 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
-import android.os.Handler
 import android.os.IBinder
-import android.os.Looper
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import org.fossify.messages.R
 import org.fossify.messages.activities.TelegramRemoteControlSettingsActivity
-import org.fossify.messages.forwarding.MultiForwardConfig
-import org.fossify.messages.remote.TelegramRemotePoller
+import org.fossify.messages.remote.repository.RemoteSourceRepository
+import org.fossify.messages.remote.repository.RemoteSourceType
 
+/**
+ * Telegram 远程控制前台保活服务
+ * 职责：仅负责前台通知与进程优先级守护，实际多实例网络连接由 RemoteSourceRuntimeManager 统一管理。
+ */
 class TelegramRemoteControlService : Service() {
-    private val mainHandler = Handler(Looper.getMainLooper())
-    private var poller: TelegramRemotePoller? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -28,41 +28,21 @@ class TelegramRemoteControlService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val config = MultiForwardConfig(applicationContext)
-        if (!config.telegramRemoteControlEnabled) {
-            stopPoller()
+        val repo = RemoteSourceRepository.getInstance(applicationContext)
+        val hasEnabled = repo.getSourcesByType(RemoteSourceType.TELEGRAM).any { it.enabled }
+        if (!hasEnabled) {
             stopSelf()
             return START_NOT_STICKY
         }
-        val token = config.telegramRemoteBotToken()
-        if (token.isBlank()) {
-            config.appendTelegramRemoteLog("缺少 Telegram Bot Token")
-            stopPoller()
-            stopSelf()
-            return START_NOT_STICKY
-        }
-        stopPoller()
-        poller = TelegramRemotePoller(
-            context = applicationContext,
-            onStatus = { status ->
-                MultiForwardConfig(applicationContext).appendTelegramRemoteLog(status)
-                mainHandler.post { updateNotification(status) }
-            },
-        ).also { it.start() }
+        updateNotification("Telegram 远程指令服务运行中")
         return START_STICKY
     }
 
     override fun onDestroy() {
-        stopPoller()
         super.onDestroy()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
-
-    private fun stopPoller() {
-        poller?.stop()
-        poller = null
-    }
 
     private fun updateNotification(status: String) {
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
@@ -99,7 +79,7 @@ class TelegramRemoteControlService : Service() {
                 },
             )
         }
-        updateNotification("正在连接 Telegram…")
+        updateNotification("Telegram 远程指令服务已就绪")
     }
 
     private fun startForegroundCompat(notification: android.app.Notification) {
@@ -119,8 +99,9 @@ class TelegramRemoteControlService : Service() {
         private const val NOTIFICATION_ID = 19087
 
         fun ensureStarted(context: Context) {
-            val config = MultiForwardConfig(context)
-            if (!config.telegramRemoteControlEnabled) {
+            val repo = RemoteSourceRepository.getInstance(context)
+            val isEnabled = repo.getSourcesByType(RemoteSourceType.TELEGRAM).any { it.enabled }
+            if (!isEnabled) {
                 context.stopService(Intent(context, TelegramRemoteControlService::class.java))
                 return
             }
@@ -129,8 +110,6 @@ class TelegramRemoteControlService : Service() {
                     context,
                     Intent(context, TelegramRemoteControlService::class.java),
                 )
-            }.onFailure { error ->
-                config.appendTelegramRemoteLog("启动失败：${error.message ?: error.javaClass.simpleName}")
             }
         }
 
