@@ -200,8 +200,10 @@ object ChannelTestSender {
                     val server = config.barkServerUrl()
                     val key = config.barkDeviceKey()
                     require(key.isNotBlank()) { "Bark DeviceKey 不能为空，请先配置" }
+                    ForwardingUrlPolicy.requireAllowed(server.trim().trimEnd('/'), config.barkAllowHttp)
                     val url = "${server.trimEnd('/')}/$key/${URLEncoder.encode(title, "UTF-8")}/${URLEncoder.encode(content, "UTF-8")}"
-                    getJson(url)
+                    val res = getJson(url)
+                    check(res.optInt("code", -1) == 200) { res.optString("message", "Bark 请求失败") }
                     "Bark 消息已推送至苹果 APNs！"
                 }
                 ForwardingChannels.TELEGRAM -> {
@@ -217,6 +219,7 @@ object ChannelTestSender {
                 ForwardingChannels.DISCORD -> {
                     val webhook = config.discordWebhook()
                     require(webhook.isNotBlank()) { "Discord Webhook 不能为空，请先配置" }
+                    ForwardingUrlPolicy.requireAllowed(webhook, false)
                     val embed = JSONObject().put("title", title).put("description", content).put("color", 5814783)
                     val payload = JSONObject().put("embeds", org.json.JSONArray().put(embed))
                     postJson(webhook, payload)
@@ -225,16 +228,17 @@ object ChannelTestSender {
                 ForwardingChannels.TENCENT_CLOUD -> {
                     val webhook = config.tencentCloudWebhook()
                     require(webhook.isNotBlank()) { "腾讯云告警 Webhook 不能为空，请先配置" }
+                    ForwardingUrlPolicy.requireAllowed(webhook, false)
                     postJson(webhook, JSONObject().put("text", "$title\n$content"))
                     "腾讯云自定义告警触发成功！"
                 }
                 ForwardingChannels.CUSTOM_WEBHOOK -> {
                     val url = config.customWebhookUrl()
                     require(url.isNotBlank()) { "自定义 Webhook URL 不能为空，请先配置" }
-                    postJson(
-                        url,
-                        JSONObject().put("title", title).put("content", content),
-                        parseCustomHeaders(config.customWebhookHeaders())
+                    sendCustomWebhookTest(
+                        url, config.customWebhookHeaders(), config.customWebhookMethod(),
+                        config.customWebhookContentType(), config.customWebhookBodyTemplate(),
+                        title, content, now
                     )
                     "自定义 Webhook 请求成功送达！"
                 }
@@ -398,7 +402,7 @@ object ChannelTestSender {
                         .put("msg_type", "text")
                         .put("content", JSONObject().put("text", "$title\n$content").toString())
                     val res = postJson(msgUrl, sendPayload, mapOf("Authorization" to "Bearer $token"))
-                    check(res.optInt("code", -1) == 0 || res.has("data")) { res.optString("msg", "飞书发送失败") }
+                    check(res.optInt("code", -1) == 0) { res.optString("msg", "飞书发送失败") }
                     "飞书自建应用消息推送成功！"
                 }
                 ForwardingChannels.FEISHU, ForwardingChannels.FEISHU_BOT -> {
@@ -445,8 +449,10 @@ object ChannelTestSender {
                     val server = instance.optString("serverUrl").ifBlank { "https://api.day.app" }
                     val key = instance.optString("deviceKey")
                     require(key.isNotBlank()) { "Bark DeviceKey 不能为空，请先配置" }
+                    ForwardingUrlPolicy.requireAllowed(server.trim().trimEnd('/'), server.startsWith("http://"))
                     val url = "${server.trimEnd('/')}/$key/${URLEncoder.encode(title, "UTF-8")}/${URLEncoder.encode(content, "UTF-8")}"
-                    getJson(url)
+                    val res = getJson(url)
+                    check(res.optInt("code", -1) == 200) { res.optString("message", "Bark 请求失败") }
                     "Bark 消息已推送至苹果 APNs！"
                 }
                 ForwardingChannels.TELEGRAM -> {
@@ -462,6 +468,7 @@ object ChannelTestSender {
                 ForwardingChannels.DISCORD -> {
                     val webhook = instance.optString("webhook")
                     require(webhook.isNotBlank()) { "Discord Webhook 不能为空，请先配置" }
+                    ForwardingUrlPolicy.requireAllowed(webhook, false)
                     val embed = JSONObject().put("title", title).put("description", content).put("color", 5814783)
                     val payload = JSONObject().put("embeds", org.json.JSONArray().put(embed))
                     postJson(webhook, payload)
@@ -470,16 +477,18 @@ object ChannelTestSender {
                 ForwardingChannels.TENCENT_CLOUD -> {
                     val webhook = instance.optString("webhook")
                     require(webhook.isNotBlank()) { "腾讯云告警 Webhook 不能为空，请先配置" }
+                    ForwardingUrlPolicy.requireAllowed(webhook, false)
                     postJson(webhook, JSONObject().put("text", "$title\n$content"))
                     "腾讯云自定义告警触发成功！"
                 }
                 ForwardingChannels.CUSTOM_WEBHOOK -> {
                     val url = instance.optString("url")
                     require(url.isNotBlank()) { "自定义 Webhook URL 不能为空，请先配置" }
-                    postJson(
-                        url,
-                        JSONObject().put("title", title).put("content", content),
-                        parseCustomHeaders(instance.optString("headers"))
+                    sendCustomWebhookTest(
+                        url, instance.optString("headers"), instance.optString("method", "POST"),
+                        instance.optString("contentType", "application/json"),
+                        instance.optString("bodyTemplate", MultiForwardConfig.DEFAULT_CUSTOM_WEBHOOK_BODY),
+                        title, content, now
                     )
                     "自定义 Webhook 请求成功送达！"
                 }
@@ -487,6 +496,7 @@ object ChannelTestSender {
                     val serverUrl = instance.optString("serverUrl").trim().trimEnd('/')
                     val token = instance.optString("token")
                     require(serverUrl.isNotBlank() && token.isNotBlank()) { "Gotify URL 或 Token 不能为空" }
+                    ForwardingUrlPolicy.requireAllowed(serverUrl, serverUrl.startsWith("http://"))
                     val res = postJson(
                         "$serverUrl/message?token=${URLEncoder.encode(token, "UTF-8")}",
                         JSONObject().put("title", title).put("message", content).put("priority", 5)
@@ -500,6 +510,7 @@ object ChannelTestSender {
                     val token = instance.optString("token")
                     val priority = instance.optString("priority").ifBlank { "default" }
                     require(topic.isNotBlank()) { "ntfy Topic 不能为空，请先配置" }
+                    ForwardingUrlPolicy.requireAllowed(serverUrl, serverUrl.startsWith("http://"))
                     val headers = mutableMapOf("Title" to title, "Priority" to priority)
                     if (token.isNotBlank()) headers["Authorization"] = "Bearer ${token.trim()}"
                     instance.optString("tags").takeIf { it.isNotBlank() }?.let { headers["Tags"] = it.trim() }
@@ -602,6 +613,63 @@ object ChannelTestSender {
         }
     }
 
+    private fun sendCustomWebhookTest(
+        url: String,
+        headersValue: String,
+        methodValue: String,
+        contentTypeValue: String,
+        template: String,
+        title: String,
+        content: String,
+        time: String
+    ) {
+        val normalizedUrl = url.trim()
+        ForwardingUrlPolicy.requireAllowed(normalizedUrl, normalizedUrl.startsWith("http://", ignoreCase = true))
+        val method = methodValue.trim().uppercase().ifBlank { "POST" }
+        require(method in setOf("GET", "POST", "PUT")) { "请求方式仅支持 GET、POST 或 PUT" }
+        val contentType = contentTypeValue.trim().ifBlank { "application/json" }
+        fun encoded(value: String): String = when {
+            method == "GET" -> URLEncoder.encode(value, "UTF-8")
+            contentType.contains("json", ignoreCase = true) -> JSONObject.quote(value).removeSurrounding("\"")
+            contentType.contains("x-www-form-urlencoded", ignoreCase = true) -> URLEncoder.encode(value, "UTF-8")
+            else -> value
+        }
+        val body = template.ifBlank { MultiForwardConfig.DEFAULT_CUSTOM_WEBHOOK_BODY }
+            .replace("[title]", encoded(title))
+            .replace("[msg]", encoded(content))
+            .replace("[from]", encoded("10086"))
+            .replace("[time]", encoded(time))
+            .replace("[sim]", encoded("SIM 1"))
+        val requestUrl = if (method == "GET" && body.isNotBlank()) {
+            val separator = when {
+                !normalizedUrl.contains('?') -> "?"
+                normalizedUrl.endsWith('?') || normalizedUrl.endsWith('&') -> ""
+                else -> "&"
+            }
+            "$normalizedUrl$separator${body.removePrefix("?").removePrefix("&")}"
+        } else normalizedUrl
+        val conn = URL(requestUrl).openConnection() as HttpURLConnection
+        conn.run {
+            requestMethod = method
+            connectTimeout = 8000
+            readTimeout = 8000
+            setRequestProperty("Accept", "application/json, text/plain, */*")
+            parseCustomHeaders(headersValue).forEach { (name, value) -> setRequestProperty(name, value) }
+            if (method != "GET") {
+                doOutput = true
+                if (getRequestProperty("Content-Type").isNullOrBlank()) {
+                    setRequestProperty("Content-Type", "$contentType; charset=utf-8")
+                }
+                outputStream.bufferedWriter(StandardCharsets.UTF_8).use { it.write(body) }
+            }
+            val code = responseCode
+            val response = (if (code in 200..299) inputStream else errorStream)
+                ?.bufferedReader(StandardCharsets.UTF_8)?.use { it.readText() }.orEmpty()
+            disconnect()
+            check(code in 200..299) { "HTTP $code: ${response.take(200)}" }
+        }
+    }
+
     private fun sendWebSocketTest(serverUrl: String, token: String, title: String, content: String) {
         require(serverUrl.isNotBlank()) { "WebSocket 地址不能为空" }
         val payload = JSONObject()
@@ -610,10 +678,17 @@ object ChannelTestSender {
             .put("token", token)
             .put("time", System.currentTimeMillis())
         if (serverUrl.startsWith("http://") || serverUrl.startsWith("https://")) {
+            ForwardingUrlPolicy.requireAllowed(serverUrl, serverUrl.startsWith("http://"))
             postJson(serverUrl, payload)
             return
         }
         require(serverUrl.startsWith("ws://") || serverUrl.startsWith("wss://")) { "WebSocket 地址格式错误" }
+        val policyUrl = if (serverUrl.startsWith("wss://")) {
+            "https://${serverUrl.removePrefix("wss://")}"
+        } else {
+            "http://${serverUrl.removePrefix("ws://")}"
+        }
+        ForwardingUrlPolicy.requireAllowed(policyUrl, serverUrl.startsWith("ws://"))
         val latch = CountDownLatch(1)
         val sent = AtomicBoolean(false)
         val failure = AtomicReference<Throwable?>(null)

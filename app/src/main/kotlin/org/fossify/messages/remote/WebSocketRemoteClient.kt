@@ -10,6 +10,7 @@ import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import org.fossify.messages.forwarding.MultiForwardConfig
+import org.fossify.messages.forwarding.ForwardingUrlPolicy
 import org.fossify.messages.remote.repository.RemoteSourceConnectionState
 import org.fossify.messages.remote.repository.RemoteSourceRepository
 import org.fossify.messages.remote.repository.RemoteSourceType
@@ -98,6 +99,12 @@ class WebSocketRemoteClient(
 
     private fun connectAndListen(url: String, token: String, activeInstanceId: String) {
         val latch = CountDownLatch(1)
+        val policyUrl = when {
+            url.startsWith("wss://") -> "https://${url.removePrefix("wss://")}"
+            url.startsWith("ws://") -> "http://${url.removePrefix("ws://")}"
+            else -> error("远程 WebSocket 地址必须使用 ws:// 或 wss://")
+        }
+        ForwardingUrlPolicy.requireAllowed(policyUrl, url.startsWith("ws://"))
         val requestBuilder = Request.Builder().url(url)
         if (token.isNotBlank()) {
             requestBuilder.header("Authorization", "Bearer $token")
@@ -107,12 +114,15 @@ class WebSocketRemoteClient(
         val repo = RemoteSourceRepository.getInstance(context)
         webSocket = http.newWebSocket(requestBuilder.build(), object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
-                // HTTP Upgrade 成功即代表握手层（含可选 Bearer/X-Token）已被服务端接受。
-                // 同时发送兼容性的应用层 auth 消息；服务端若随后明确 auth_fail 仍会撤销认证。
-                isAuthenticated.set(true)
-                onStatus(if (token.isBlank()) "WebSocket 已连接 · 无鉴权模式" else "WebSocket 已连接 · Token 握手成功")
-                repo.updateConnectionState(activeInstanceId, RemoteSourceConnectionState.READY)
-                if (token.isNotBlank()) {
+                // 无 Token 时由用户明确选择无鉴权模式；配置 Token 时必须等待应用层 auth_ok，
+                // 不能仅凭 HTTP Upgrade 成功就开放远程发信门禁。
+                val noAuthMode = token.isBlank()
+                isAuthenticated.set(noAuthMode)
+                if (noAuthMode) {
+                    onStatus("WebSocket 已连接 · 无鉴权模式")
+                    repo.updateConnectionState(activeInstanceId, RemoteSourceConnectionState.READY)
+                } else {
+                    onStatus("WebSocket 已连接 · 等待 Token 认证")
                     val authMsg = JSONObject().put("action", "auth").put("token", token)
                     webSocket.send(authMsg.toString())
                 }

@@ -19,11 +19,14 @@ import android.provider.Settings
 import android.provider.Telephony
 import android.text.TextUtils
 import android.view.View
+import android.view.ViewGroup
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.content.res.AppCompatResources
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import org.fossify.commons.dialogs.PermissionRequiredDialog
 import org.fossify.commons.extensions.adjustAlpha
 import org.fossify.commons.extensions.appLockManager
@@ -176,9 +179,10 @@ class MainActivity : SimpleActivity() {
 
         setupEdgeToEdge(
             padTopSystem = listOf(binding.homeHeader),
-            padBottomSystem = listOf(binding.homeBottomNavigation, binding.selectionBottomBar),
+            padBottomSystem = listOf(binding.selectionBottomBar),
             padBottomImeAndSystem = listOf(binding.mainCoordinatorWrapper),
         )
+        setupClassicBottomNavigationInsets()
         clearHomeBottomSystemScrim()
         binding.mainCoordinator.post {
             clearHomeBottomSystemScrim()
@@ -486,6 +490,34 @@ class MainActivity : SimpleActivity() {
             searchResultsList.paddingRight,
             contentBottomPadding,
         )
+    }
+
+    /**
+     * The floating classic dock is outside the content wrapper, so it needs a real bottom margin
+     * instead of padding. This keeps gesture-navigation devices unchanged while lifting the dock
+     * and FAB above OEM three-button navigation bars.
+     */
+    private fun setupClassicBottomNavigationInsets() {
+        val dockBaseMargin = resources.getDimensionPixelSize(R.dimen.home_bottom_nav_bottom_margin)
+        val fabBaseMargin = resources.getDimensionPixelSize(R.dimen.home_fab_bottom_margin)
+        ViewCompat.setOnApplyWindowInsetsListener(binding.mainCoordinator) { _, insets ->
+            val navigationBottom = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
+            (binding.homeBottomNavigation.layoutParams as? ViewGroup.MarginLayoutParams)?.let { params ->
+                if (params.bottomMargin != dockBaseMargin + navigationBottom) {
+                    params.bottomMargin = dockBaseMargin + navigationBottom
+                    binding.homeBottomNavigation.layoutParams = params
+                }
+            }
+            (binding.conversationsFab.layoutParams as? ViewGroup.MarginLayoutParams)?.let { params ->
+                if (params.bottomMargin != fabBaseMargin + navigationBottom) {
+                    params.bottomMargin = fabBaseMargin + navigationBottom
+                    binding.conversationsFab.layoutParams = params
+                }
+            }
+            applyHomeBottomNavigationPreference()
+            insets
+        }
+        ViewCompat.requestApplyInsets(binding.mainCoordinator)
     }
 
     private fun isDefaultSmsApp(): Boolean {

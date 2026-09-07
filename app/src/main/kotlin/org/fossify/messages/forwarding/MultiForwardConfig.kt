@@ -498,12 +498,26 @@ class MultiForwardConfig(
     fun smsDirectPhone() = getSecret(KEY_SMS_DIRECT_PHONE)
 
     // 16. 自定义 Webhook
-    fun saveCustomWebhook(url: String, headers: String = "") {
+    fun saveCustomWebhook(
+        url: String,
+        headers: String = "",
+        method: String = "POST",
+        contentType: String = "application/json",
+        bodyTemplate: String = DEFAULT_CUSTOM_WEBHOOK_BODY
+    ) {
         saveSecret(KEY_CUSTOM_WEBHOOK_URL, url)
         saveSecret(KEY_CUSTOM_WEBHOOK_HEADERS, headers)
+        prefs.edit()
+            .putString(KEY_CUSTOM_WEBHOOK_METHOD, method.uppercase())
+            .putString(KEY_CUSTOM_WEBHOOK_CONTENT_TYPE, contentType)
+            .putString(KEY_CUSTOM_WEBHOOK_BODY, bodyTemplate)
+            .apply()
     }
     fun customWebhookUrl() = getSecret(KEY_CUSTOM_WEBHOOK_URL)
     fun customWebhookHeaders() = getSecret(KEY_CUSTOM_WEBHOOK_HEADERS)
+    fun customWebhookMethod() = prefs.getString(KEY_CUSTOM_WEBHOOK_METHOD, "POST").orEmpty().ifBlank { "POST" }
+    fun customWebhookContentType() = prefs.getString(KEY_CUSTOM_WEBHOOK_CONTENT_TYPE, "application/json").orEmpty().ifBlank { "application/json" }
+    fun customWebhookBodyTemplate() = prefs.getString(KEY_CUSTOM_WEBHOOK_BODY, DEFAULT_CUSTOM_WEBHOOK_BODY).orEmpty()
 
     // 17. 群组消息成员
     fun saveChannelGroupMembers(members: Set<String>) {
@@ -645,7 +659,7 @@ class MultiForwardConfig(
     }
 
     fun enabledChannelIds(includePushPlus: Boolean = false): Set<String> = buildSet {
-        channelInstances().filter { it.enabled }.forEach { add(it.channelType) }
+        channelInstances().filter { it.enabled && it.hasDispatchConfiguration() }.forEach { add(it.channelType) }
         if (includePushPlus || pushPlusEnabled) add(ForwardingChannels.PUSHPLUS)
         if (wechatTestEnabled) add(ForwardingChannels.WECHAT_TEST)
         if (qqEnabled) add(ForwardingChannels.QQ)
@@ -747,6 +761,11 @@ class MultiForwardConfig(
         private const val KEY_CUSTOM_WEBHOOK_ENABLED = "custom_webhook_enabled"
         private const val KEY_CUSTOM_WEBHOOK_URL = "custom_webhook_url"
         private const val KEY_CUSTOM_WEBHOOK_HEADERS = "custom_webhook_headers"
+        private const val KEY_CUSTOM_WEBHOOK_METHOD = "custom_webhook_method"
+        private const val KEY_CUSTOM_WEBHOOK_CONTENT_TYPE = "custom_webhook_content_type"
+        private const val KEY_CUSTOM_WEBHOOK_BODY = "custom_webhook_body"
+        // 保持旧版固定 {"content": ...} 请求体兼容；用户可在界面扩展更多字段。
+        const val DEFAULT_CUSTOM_WEBHOOK_BODY = "{\"content\":\"[msg]\"}"
         private const val KEY_CHANNEL_GROUP_ENABLED = "channel_group_enabled"
         private const val KEY_CHANNEL_GROUP_MEMBERS = "channel_group_members"
         private const val KEY_GOTIFY_ENABLED = "gotify_enabled"

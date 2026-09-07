@@ -115,6 +115,14 @@ class RemoteSourceRuntimeManager private constructor(private val appContext: Con
         val runnableSources = enabledSources.filter { it.hasValidCredentials() }
         val runnableMap = runnableSources.associateBy { it.id }
 
+        enabledSources.filterNot { it.hasValidCredentials() }.forEach { instance ->
+            repo.updateConnectionState(
+                instance.id,
+                RemoteSourceConnectionState.CONFIG_REQUIRED,
+                errorMessage = "来源配置不完整"
+            )
+        }
+
         // 1. 检查已运行的实例：如果已禁用/删除，或者配置发生变更，则先停止旧实例
         runningHandles.entries.forEach { (runningId, handle) ->
             val currentInstance = runnableMap[runningId]

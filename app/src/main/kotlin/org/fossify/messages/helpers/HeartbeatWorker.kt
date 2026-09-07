@@ -3,6 +3,7 @@ package org.fossify.messages.helpers
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.net.TrafficStats
 import android.os.SystemClock
 import android.util.Log
 import androidx.work.CoroutineWorker
@@ -12,11 +13,11 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.fossify.messages.forwarding.ForwardingMessageFormatter
 import org.fossify.messages.forwarding.HeartbeatConfig
 import org.fossify.messages.forwarding.MultiChannelForwardWorker
 import org.fossify.messages.forwarding.MultiForwardConfig
 import org.fossify.messages.forwarding.TemplateDataRetriever
+import org.fossify.messages.forwarding.repository.ChannelRepository
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -32,8 +33,19 @@ class HeartbeatWorker(
         if (!config.enabled) return@withContext Result.success()
 
         val multiConfig = MultiForwardConfig(applicationContext)
-        val channels = multiConfig.enabledChannelIds()
-        if (channels.isEmpty()) return@withContext Result.success()
+        val allEnabledInstances = ChannelRepository.getInstance(applicationContext).getEnabledInstances()
+        val instances = if (config.hasChannelSelection) {
+            allEnabledInstances.filter { it.id in config.channelInstanceIds }
+        } else {
+            allEnabledInstances
+        }
+        val instanceTypes = instances.mapTo(mutableSetOf()) { it.channelType }
+        val legacyChannels = if (config.hasChannelSelection) {
+            emptySet()
+        } else {
+            multiConfig.enabledChannelIds().filterNotTo(mutableSetOf()) { it in instanceTypes }
+        }
+        if (instances.isEmpty() && legacyChannels.isEmpty()) return@withContext Result.success()
 
         val now = System.currentTimeMillis()
         config.lastReportTime = now
@@ -41,20 +53,34 @@ class HeartbeatWorker(
         val reportBody = buildReport(applicationContext, multiConfig, now)
         val uniqueId = "heartbeat-$now"
 
-        channels.forEach { target ->
+        instances.forEach { instance ->
             MultiChannelForwardWorker.enqueueSingle(
                 context = applicationContext,
                 sender = "设备心跳",
                 body = reportBody,
                 receivedAt = now,
                 subscriptionId = -1,
-                uniqueId = uniqueId,
+                uniqueId = "$uniqueId-${instance.id}",
+                targetChannel = instance.channelType,
+                targetInstanceId = instance.id,
+                allowedChannels = setOf(instance.id),
+                isTest = false
+            )
+        }
+        legacyChannels.forEach { target ->
+            MultiChannelForwardWorker.enqueueSingle(
+                context = applicationContext,
+                sender = "设备心跳",
+                body = reportBody,
+                receivedAt = now,
+                subscriptionId = -1,
+                uniqueId = "$uniqueId-$target",
                 targetChannel = target,
                 allowedChannels = setOf(target),
                 isTest = false
             )
         }
-        Log.i(TAG, "Heartbeat report enqueued to ${channels.size} channels")
+        Log.i(TAG, "Heartbeat report enqueued to ${instances.size + legacyChannels.size} channel targets")
         Result.success()
     }
 
@@ -62,6 +88,7 @@ class HeartbeatWorker(
         val timeFormatted = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date(now))
         val batteryInfo = TemplateDataRetriever.getBatteryInfo(context)
         val networkInfo = getNetworkStatus(context)
+        val trafficInfo = getTrafficStatus()
         val uptimeInfo = getUptimeString()
         val deviceName = TemplateDataRetriever.getDeviceName()
 
@@ -73,6 +100,7 @@ class HeartbeatWorker(
             appendLine("📱 设备机型：$deviceName")
             appendLine("🔋 电池状态：$batteryInfo")
             appendLine("📶 网络环境：$networkInfo")
+            appendLine("📊 累计流量：$trafficInfo")
             appendLine("💳 卡槽一：$sim1Desc")
             appendLine("💳 卡槽二：$sim2Desc")
             appendLine("⏱️ 运行时间：$uptimeInfo")
@@ -98,6 +126,27 @@ class HeartbeatWorker(
         val hours = TimeUnit.MILLISECONDS.toHours(uptimeMillis) % 24
         val minutes = TimeUnit.MILLISECONDS.toMinutes(uptimeMillis) % 60
         return if (days > 0) "${days}天 ${hours}小时 ${minutes}分" else "${hours}小时 ${minutes}分"
+    }
+
+    private fun getTrafficStatus(): String {
+        val received = TrafficStats.getTotalRxBytes()
+        val sent = TrafficStats.getTotalTxBytes()
+        if (received == TrafficStats.UNSUPPORTED.toLong() || sent == TrafficStats.UNSUPPORTED.toLong()) {
+            return "设备不支持统计"
+        }
+        return "接收 ${formatBytes(received)} · 发送 ${formatBytes(sent)}"
+    }
+
+    private fun formatBytes(bytes: Long): String {
+        if (bytes < 1024L) return "$bytes B"
+        val units = arrayOf("KB", "MB", "GB", "TB")
+        var value = bytes.toDouble() / 1024.0
+        var unitIndex = 0
+        while (value >= 1024.0 && unitIndex < units.lastIndex) {
+            value /= 1024.0
+            unitIndex++
+        }
+        return String.format(Locale.getDefault(), "%.1f %s", value, units[unitIndex])
     }
 
     companion object {

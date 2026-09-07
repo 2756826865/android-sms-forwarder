@@ -89,7 +89,7 @@ class MultiChannelForwardWorker(
         )
         val enabledInstanceTypes = config.channelInstances()
             .asSequence()
-            .filter { it.enabled }
+            .filter { it.enabled && it.hasDispatchConfiguration() }
             .map { it.channelType }
             .toSet()
         fun shouldRun(channel: String, enabled: Boolean): Boolean {
@@ -232,7 +232,12 @@ class MultiChannelForwardWorker(
                         val url = instance.optString("url")
                         val headers = instance.optString("headers")
                         check(url.isNotBlank()) { "自定义 Webhook URL 未配置" }
-                        sendCustomWebhook(url, headers, content)
+                        sendCustomWebhook(
+                            url, headers, instance.optString("method", "POST"),
+                            instance.optString("contentType", "application/json"),
+                            instance.optString("bodyTemplate", MultiForwardConfig.DEFAULT_CUSTOM_WEBHOOK_BODY),
+                            title, content, sender, receivedAt, subscriptionId
+                        )
                     }
                     ForwardingChannels.DISCORD -> {
                         val webhook = instance.optString("webhook")
@@ -380,14 +385,18 @@ class MultiChannelForwardWorker(
             )
         }
         if (shouldRun(ForwardingChannels.CUSTOM_WEBHOOK, config.customWebhookEnabled)) runChannel("自定义Webhook", ForwardingChannels.CUSTOM_WEBHOOK) {
-            sendCustomWebhook(config.customWebhookUrl(), config.customWebhookHeaders(), content)
+            sendCustomWebhook(
+                config.customWebhookUrl(), config.customWebhookHeaders(), config.customWebhookMethod(),
+                config.customWebhookContentType(), config.customWebhookBodyTemplate(),
+                title, content, sender, receivedAt, subscriptionId
+            )
         }
         if (shouldRun(ForwardingChannels.GOTIFY, config.gotifyEnabled)) runChannel("Gotify", ForwardingChannels.GOTIFY) {
             sendGotify(config.gotifyServerUrl(), config.gotifyToken(), title, content, config.gotifyAllowHttp)
         }
 
         // 多实例渠道池定向调度 (Multi-Instance Channel Hub Dispatch)
-        val instances = config.channelInstances().filter { it.enabled }
+        val instances = config.channelInstances().filter { it.enabled && it.hasDispatchConfiguration() }
         for (instance in instances) {
             val matchesTargetChannel = targetChannel.isBlank() ||
                 targetChannel == ForwardingChannels.ALL ||
@@ -461,7 +470,12 @@ class MultiChannelForwardWorker(
                         val url = instance.optString("url")
                         val headers = instance.optString("headers")
                         check(url.isNotBlank()) { "自定义 Webhook URL 未配置" }
-                        sendCustomWebhook(url, headers, content)
+                        sendCustomWebhook(
+                            url, headers, instance.optString("method", "POST"),
+                            instance.optString("contentType", "application/json"),
+                            instance.optString("bodyTemplate", MultiForwardConfig.DEFAULT_CUSTOM_WEBHOOK_BODY),
+                            title, content, sender, receivedAt, subscriptionId
+                        )
                     }
                     ForwardingChannels.DISCORD -> {
                         val webhook = instance.optString("webhook")
@@ -1035,6 +1049,7 @@ class MultiChannelForwardWorker(
             .put("token", token)
             .put("time", System.currentTimeMillis())
         if (serverUrl.startsWith("http://") || serverUrl.startsWith("https://")) {
+            ForwardingUrlPolicy.requireAllowed(serverUrl, serverUrl.startsWith("http://"))
             postJson(serverUrl, payload)
             return
         }
@@ -1042,6 +1057,12 @@ class MultiChannelForwardWorker(
         require(serverUrl.startsWith("ws://") || serverUrl.startsWith("wss://")) {
             "WebSocket 地址必须使用 ws://、wss://、http:// 或 https://"
         }
+        val policyUrl = if (serverUrl.startsWith("wss://")) {
+            "https://${serverUrl.removePrefix("wss://")}"
+        } else {
+            "http://${serverUrl.removePrefix("ws://")}"
+        }
+        ForwardingUrlPolicy.requireAllowed(policyUrl, serverUrl.startsWith("ws://"))
         val latch = CountDownLatch(1)
         val sent = AtomicBoolean(false)
         val failure = AtomicReference<Throwable?>(null)
@@ -1075,10 +1096,68 @@ class MultiChannelForwardWorker(
         check(sent.get()) { "WebSocket 消息未能加入发送队列" }
     }
 
-    private fun sendCustomWebhook(url: String, headersStr: String, content: String) {
+    private fun sendCustomWebhook(
+        url: String,
+        headersStr: String,
+        methodValue: String,
+        contentTypeValue: String,
+        bodyTemplate: String,
+        title: String,
+        content: String,
+        sender: String,
+        receivedAt: Long,
+        subscriptionId: Int
+    ) {
         require(url.isNotBlank()) { "自定义 Webhook URL 不能为空" }
-        val payload = JSONObject().put("content", content)
-        postJson(url, payload, parseCustomHeaders(headersStr))
+        val normalizedUrl = url.trim()
+        ForwardingUrlPolicy.requireAllowed(normalizedUrl, normalizedUrl.startsWith("http://", ignoreCase = true))
+        val method = methodValue.trim().uppercase().ifBlank { "POST" }
+        require(method in setOf("GET", "POST", "PUT")) { "请求方式仅支持 GET、POST 或 PUT" }
+        val contentType = contentTypeValue.trim().ifBlank { "application/json" }
+        val time = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date(receivedAt))
+        val sim = if (subscriptionId >= 0) {
+            ForwardingMessageFormatter.getSimDescription(applicationContext, MultiForwardConfig(applicationContext), subscriptionId)
+        } else ""
+        fun encoded(value: String): String = when {
+            method == "GET" -> URLEncoder.encode(value, "UTF-8")
+            contentType.contains("json", ignoreCase = true) -> JSONObject.quote(value).removeSurrounding("\"")
+            contentType.contains("x-www-form-urlencoded", ignoreCase = true) -> URLEncoder.encode(value, "UTF-8")
+            else -> value
+        }
+        val rendered = bodyTemplate.ifBlank { MultiForwardConfig.DEFAULT_CUSTOM_WEBHOOK_BODY }
+            .replace("[title]", encoded(title))
+            .replace("[msg]", encoded(content))
+            .replace("[from]", encoded(sender))
+            .replace("[time]", encoded(time))
+            .replace("[sim]", encoded(sim))
+        val requestUrl = if (method == "GET" && rendered.isNotBlank()) {
+            val separator = when {
+                !normalizedUrl.contains('?') -> "?"
+                normalizedUrl.endsWith('?') || normalizedUrl.endsWith('&') -> ""
+                else -> "&"
+            }
+            "$normalizedUrl$separator${rendered.removePrefix("?").removePrefix("&")}"
+        } else normalizedUrl
+        val connection = URL(requestUrl).openConnection() as HttpURLConnection
+        connection.run {
+            requestMethod = method
+            connectTimeout = 10_000
+            readTimeout = 12_000
+            setRequestProperty("Accept", "application/json, text/plain, */*")
+            parseCustomHeaders(headersStr).forEach { (name, value) -> setRequestProperty(name, value) }
+            if (method != "GET") {
+                doOutput = true
+                if (getRequestProperty("Content-Type").isNullOrBlank()) {
+                    setRequestProperty("Content-Type", "$contentType; charset=utf-8")
+                }
+                outputStream.bufferedWriter(StandardCharsets.UTF_8).use { it.write(rendered) }
+            }
+            val statusCode = responseCode
+            val response = (if (statusCode in 200..299) inputStream else errorStream)
+                ?.bufferedReader(StandardCharsets.UTF_8)?.use { it.readText() }.orEmpty()
+            disconnect()
+            check(statusCode in 200..299) { "HTTP $statusCode: ${response.take(200)}" }
+        }
     }
 
     private fun parseCustomHeaders(raw: String): Map<String, String> {

@@ -6,6 +6,8 @@ import android.content.Intent
 import org.fossify.commons.helpers.ensureBackgroundThread
 import org.fossify.messages.extensions.rescheduleAllScheduledMessages
 import org.fossify.messages.messaging.SmsRecoveryWorker
+import org.fossify.messages.helpers.HeartbeatWorker
+import org.fossify.messages.helpers.LowBatteryCheckWorker
 import org.fossify.messages.services.SmsKeepAliveService
 
 /**
@@ -17,6 +19,8 @@ class RescheduleAlarmsReceiver : BroadcastReceiver() {
         ensureBackgroundThread {
             try {
                 context.rescheduleAllScheduledMessages()
+                HeartbeatWorker.sync(context)
+                LowBatteryCheckWorker.sync(context)
                 SmsRecoveryWorker.schedule(context)
                 SmsRecoveryWorker.enqueueFullResync(context)
                 SmsKeepAliveService.ensureStarted(context)

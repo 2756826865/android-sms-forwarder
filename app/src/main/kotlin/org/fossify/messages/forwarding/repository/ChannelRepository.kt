@@ -54,7 +54,7 @@ class ChannelRepository internal constructor(
     }
 
     fun getEnabledInstances(): List<ForwardingChannelInstance> = synchronized(lock) {
-        multiConfig.channelInstances().filter { it.enabled }
+        multiConfig.channelInstances().filter { it.enabled && it.hasDispatchConfiguration() }
     }
 
     fun saveInstance(instance: ForwardingChannelInstance) = synchronized(lock) {
@@ -299,6 +299,9 @@ class ChannelRepository internal constructor(
                     configJson = JSONObject()
                         .put("url", multiConfig.customWebhookUrl())
                         .put("headers", multiConfig.customWebhookHeaders())
+                        .put("method", multiConfig.customWebhookMethod())
+                        .put("contentType", multiConfig.customWebhookContentType())
+                        .put("bodyTemplate", multiConfig.customWebhookBodyTemplate())
                         .toString()
                 )
             )

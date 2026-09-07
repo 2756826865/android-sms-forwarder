@@ -51,6 +51,7 @@ import org.fossify.messages.forwarding.CallForwardConfig
 import org.fossify.messages.forwarding.HeartbeatConfig
 import org.fossify.messages.forwarding.MultiChannelForwardWorker
 import org.fossify.messages.forwarding.MultiForwardConfig
+import org.fossify.messages.forwarding.TemplateDataRetriever
 import org.fossify.messages.forwarding.repository.ChannelRepository
 import org.fossify.messages.helpers.HeartbeatWorker
 import org.fossify.messages.helpers.LowBatteryCheckWorker
@@ -218,6 +219,9 @@ fun MissedCallEmbeddedScreen() {
     var selectedIds by remember { mutableStateOf(cfg.channelInstanceIds) }
     var hasSelection by remember { mutableStateOf(cfg.hasChannelSelection) }
     var choosingChannels by remember { mutableStateOf(false) }
+    val hasUnavailableSelection = hasSelection && selectedIds.any { selectedId ->
+        realInstances.none { it.id == selectedId && it.enabled && it.hasDispatchConfiguration() }
+    }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item { FeatureCard {
             SettingSwitch("来电提醒", "将来电记录发送到指定推送通道", enabled) { checked ->
@@ -234,20 +238,25 @@ fun MissedCallEmbeddedScreen() {
                 fontSize = 12.sp,
                 color = TextSecondary
             )
+            if (hasUnavailableSelection) {
+                Text("部分已选通道已停用、删除或配置不完整", fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
+            }
             OutlinedButton(onClick = { choosingChannels = true }, modifier = Modifier.fillMaxWidth()) { Text("选择通道实例") }
         } }
         item {
             Button(
                 onClick = {
-                    val selectedInstances = if (hasSelection) {
-                        realInstances.filter { it.enabled && it.id in selectedIds }
-                    } else {
-                        emptyList()
+                    val selectedInstances = realInstances.filter { instance ->
+                        instance.enabled && instance.hasDispatchConfiguration() &&
+                            (!hasSelection || instance.id in selectedIds)
                     }
+                    val selectedInstanceTypes = selectedInstances.mapTo(mutableSetOf()) { it.channelType }
                     val legacyChannels = if (hasSelection) {
                         emptySet()
                     } else {
-                        MultiForwardConfig(context).enabledChannelIds()
+                        MultiForwardConfig(context).enabledChannelIds().filterNotTo(mutableSetOf()) {
+                            it in selectedInstanceTypes
+                        }
                     }
                     if (selectedInstances.isEmpty() && legacyChannels.isEmpty()) {
                         android.widget.Toast.makeText(
@@ -302,7 +311,10 @@ fun MissedCallEmbeddedScreen() {
     }
     if (choosingChannels) {
         var selected by remember(choosingChannels) {
-            mutableStateOf(if (hasSelection) selectedIds else realInstances.filter { it.enabled }.map { it.id }.toSet())
+            mutableStateOf(
+                if (hasSelection) selectedIds
+                else realInstances.filter { it.enabled && it.hasDispatchConfiguration() }.map { it.id }.toSet()
+            )
         }
         AlertDialog(
             onDismissRequest = { choosingChannels = false },
@@ -310,20 +322,30 @@ fun MissedCallEmbeddedScreen() {
             text = { LazyColumn {
                 if (realInstances.isEmpty()) item { Text("请先添加并配置推送通道", color = TextSecondary) }
                 items(realInstances, key = { it.id }) { instance ->
+                    val usable = instance.enabled && instance.hasDispatchConfiguration()
+                    val canToggle = usable || instance.id in selected
                     Row(
-                        Modifier.fillMaxWidth().clickable(enabled = instance.enabled) {
+                        Modifier.fillMaxWidth().clickable(enabled = canToggle) {
                             selected = if (instance.id in selected) selected - instance.id else selected + instance.id
                         }.padding(vertical = 5.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Checkbox(
                             checked = instance.id in selected,
-                            enabled = instance.enabled,
-                            onCheckedChange = { checked -> selected = if (checked) selected + instance.id else selected - instance.id }
+                            enabled = canToggle,
+                            onCheckedChange = { checked -> selected = if (checked && usable) selected + instance.id else selected - instance.id }
                         )
                         Column {
                             Text(instance.name, fontSize = 13.sp)
-                            Text(if (instance.enabled) getInstanceSummary(instance) else "已停用", fontSize = 11.sp, color = TextSecondary)
+                            Text(
+                                when {
+                                    !instance.enabled -> "已停用"
+                                    !instance.hasDispatchConfiguration() -> "配置不完整"
+                                    else -> getInstanceSummary(instance)
+                                },
+                                fontSize = 11.sp,
+                                color = TextSecondary
+                            )
                         }
                     }
                 }
@@ -352,6 +374,9 @@ fun LowBatteryEmbeddedScreen() {
     var selectedIds by remember { mutableStateOf(cfg.lowBatteryChannelInstanceIds) }
     var hasSelection by remember { mutableStateOf(cfg.hasLowBatteryInstanceSelection) }
     var choosingChannels by remember { mutableStateOf(false) }
+    val hasUnavailableSelection = hasSelection && selectedIds.any { selectedId ->
+        realInstances.none { it.id == selectedId && it.enabled && it.hasDispatchConfiguration() }
+    }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item { FeatureCard {
             SettingSwitch("电量提醒", "电量低于阈值时发送一次提醒", enabled) { checked ->
@@ -373,13 +398,19 @@ fun LowBatteryEmbeddedScreen() {
                 fontSize = 12.sp,
                 color = TextSecondary
             )
+            if (hasUnavailableSelection) {
+                Text("部分已选通道已停用、删除或配置不完整", fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
+            }
             OutlinedButton(onClick = { choosingChannels = true }, modifier = Modifier.fillMaxWidth()) { Text("选择通道实例") }
         } }
         item { Spacer(Modifier.height(100.dp)) }
     }
     if (choosingChannels) {
         var selected by remember(choosingChannels) {
-            mutableStateOf(if (hasSelection) selectedIds else realInstances.filter { it.enabled }.map { it.id }.toSet())
+            mutableStateOf(
+                if (hasSelection) selectedIds
+                else realInstances.filter { it.enabled && it.hasDispatchConfiguration() }.map { it.id }.toSet()
+            )
         }
         AlertDialog(
             onDismissRequest = { choosingChannels = false },
@@ -387,11 +418,21 @@ fun LowBatteryEmbeddedScreen() {
             text = { LazyColumn {
                 if (realInstances.isEmpty()) item { Text("请先添加并配置推送通道", color = TextSecondary) }
                 items(realInstances, key = { it.id }) { instance ->
-                    Row(Modifier.fillMaxWidth().clickable(enabled = instance.enabled) { selected = if (instance.id in selected) selected - instance.id else selected + instance.id }.padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(checked = instance.id in selected, enabled = instance.enabled, onCheckedChange = { checked -> selected = if (checked) selected + instance.id else selected - instance.id })
+                    val usable = instance.enabled && instance.hasDispatchConfiguration()
+                    val canToggle = usable || instance.id in selected
+                    Row(Modifier.fillMaxWidth().clickable(enabled = canToggle) { selected = if (instance.id in selected) selected - instance.id else selected + instance.id }.padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = instance.id in selected, enabled = canToggle, onCheckedChange = { checked -> selected = if (checked && usable) selected + instance.id else selected - instance.id })
                         Column {
                             Text(instance.name, fontSize = 13.sp)
-                            Text(if (instance.enabled) getInstanceSummary(instance) else "已停用", fontSize = 11.sp, color = TextSecondary)
+                            Text(
+                                when {
+                                    !instance.enabled -> "已停用"
+                                    !instance.hasDispatchConfiguration() -> "配置不完整"
+                                    else -> getInstanceSummary(instance)
+                                },
+                                fontSize = 11.sp,
+                                color = TextSecondary
+                            )
                         }
                     }
                 }
@@ -446,14 +487,6 @@ fun AutofillEmbeddedScreen() {
                         )
                     }
                 }
-                OutlinedButton(
-                    onClick = {
-                        context.startActivity(android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS))
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("打开辅助功能授权")
-                }
             }
         }
         item { Spacer(Modifier.height(100.dp)) }
@@ -467,6 +500,18 @@ fun HeartbeatEmbeddedScreen() {
     var enabled by remember { mutableStateOf(cfg.enabled) }
     var intervalHours by remember { mutableStateOf(cfg.intervalHours) }
     val channelConfig = remember { MultiForwardConfig(context) }
+    val channelRepository = remember { ChannelRepository.getInstance(context) }
+    val allInstances by channelRepository.instancesFlow.collectAsState()
+    val enabledInstances = allInstances.filter {
+        it.enabled && !it.id.startsWith("catalog:") && it.hasDispatchConfiguration()
+    }
+    val realInstances = allInstances.filterNot { it.id.startsWith("catalog:") }
+    var selectedIds by remember { mutableStateOf(cfg.channelInstanceIds) }
+    var hasSelection by remember { mutableStateOf(cfg.hasChannelSelection) }
+    var choosingChannels by remember { mutableStateOf(false) }
+    val hasUnavailableSelection = hasSelection && selectedIds.any { selectedId ->
+        realInstances.none { it.id == selectedId && it.enabled && it.hasDispatchConfiguration() }
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -476,7 +521,12 @@ fun HeartbeatEmbeddedScreen() {
         item {
             FeatureCard {
                 SettingSwitch("定时心跳", "周期发送设备状态，确认手机仍在线", enabled) { checked ->
-                    if (checked && channelConfig.enabledChannelIds().isEmpty()) {
+                    val hasTarget = if (hasSelection) {
+                        enabledInstances.any { it.id in selectedIds }
+                    } else {
+                        enabledInstances.isNotEmpty() || channelConfig.enabledChannelIds().isNotEmpty()
+                    }
+                    if (checked && !hasTarget) {
                         android.widget.Toast.makeText(context, "请先启用至少一个发送通道", android.widget.Toast.LENGTH_SHORT).show()
                     } else {
                         enabled = checked
@@ -500,15 +550,77 @@ fun HeartbeatEmbeddedScreen() {
                         }
                     }
                 }
+                Text("发送通道", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    if (!hasSelection) "全部已启用通道（兼容模式）"
+                    else realInstances.filter { it.id in selectedIds }.joinToString("、") { it.name }
+                        .ifBlank { "尚未选择通道" },
+                    fontSize = 12.sp,
+                    color = TextSecondary
+                )
+                if (hasUnavailableSelection) {
+                    Text(
+                        "部分已选通道已停用或删除；心跳仅发送到仍可用的实例",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+                OutlinedButton(
+                    onClick = { choosingChannels = true },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("选择通道实例") }
                 Button(
                     onClick = {
-                        val channels = channelConfig.enabledChannelIds()
-                        if (channels.isEmpty()) {
-                            android.widget.Toast.makeText(context, "请先启用至少一个发送通道", android.widget.Toast.LENGTH_SHORT).show()
+                        val targetInstances = enabledInstances.filter { !hasSelection || it.id in selectedIds }
+                        val instanceTypes = targetInstances.mapTo(mutableSetOf()) { it.channelType }
+                        val legacyChannels = if (hasSelection) emptySet() else {
+                            channelConfig.enabledChannelIds().filterNotTo(mutableSetOf()) { it in instanceTypes }
+                        }
+                        if (targetInstances.isEmpty() && legacyChannels.isEmpty()) {
+                            android.widget.Toast.makeText(
+                                context,
+                                if (hasSelection) {
+                                    "已选择的心跳通道均已停用或删除，请重新选择"
+                                } else {
+                                    "请先启用至少一个发送通道"
+                                },
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
                         } else {
                             val now = System.currentTimeMillis()
-                            val body = "【设备心跳·模拟测试】\n设备状态：在线\n电量状态：测试数据\n发送时间：刚刚"
-                            channels.forEach { channel ->
+                            val uptimeMillis = android.os.SystemClock.elapsedRealtime()
+                            val uptimeHours = java.util.concurrent.TimeUnit.MILLISECONDS.toHours(uptimeMillis)
+                            val rx = android.net.TrafficStats.getTotalRxBytes()
+                            val tx = android.net.TrafficStats.getTotalTxBytes()
+                            val traffic = if (rx < 0L || tx < 0L) {
+                                "设备不支持统计"
+                            } else {
+                                "接收 ${formatHeartbeatBytes(rx)} · 发送 ${formatHeartbeatBytes(tx)}"
+                            }
+                            val body = buildString {
+                                appendLine("【设备心跳·模拟测试】")
+                                appendLine("设备机型：${TemplateDataRetriever.getDeviceName()}")
+                                appendLine("电池状态：${TemplateDataRetriever.getBatteryInfo(context)}")
+                                appendLine("网络环境：${TemplateDataRetriever.getNetworkType(context)}")
+                                appendLine("累计流量：$traffic")
+                                appendLine("运行时间：${uptimeHours / 24}天 ${uptimeHours % 24}小时")
+                                append("设备时间：${TemplateDataRetriever.getCurrentTime()}")
+                            }
+                            targetInstances.forEach { instance ->
+                                MultiChannelForwardWorker.enqueueSingle(
+                                    context = context,
+                                    sender = "设备心跳",
+                                    body = body,
+                                    receivedAt = now,
+                                    subscriptionId = -1,
+                                    uniqueId = "test-heartbeat-$now-${instance.id}",
+                                    targetChannel = instance.channelType,
+                                    targetInstanceId = instance.id,
+                                    allowedChannels = setOf(instance.id),
+                                    isTest = true
+                                )
+                            }
+                            legacyChannels.forEach { channel ->
                                 MultiChannelForwardWorker.enqueueSingle(
                                     context = context,
                                     sender = "设备心跳",
@@ -533,6 +645,83 @@ fun HeartbeatEmbeddedScreen() {
         }
         item { Spacer(Modifier.height(100.dp)) }
     }
+    if (choosingChannels) {
+        var selected by remember(choosingChannels) {
+            mutableStateOf(if (hasSelection) selectedIds else enabledInstances.map { it.id }.toSet())
+        }
+        AlertDialog(
+            onDismissRequest = { choosingChannels = false },
+            title = { Text("选择心跳发送通道") },
+            text = {
+                LazyColumn {
+                    if (realInstances.isEmpty()) {
+                        item { Text("请先添加并配置推送通道", color = TextSecondary) }
+                    }
+                    items(realInstances, key = { it.id }) { instance ->
+                        val usable = instance.enabled && instance.hasDispatchConfiguration()
+                        val canToggle = usable || instance.id in selected
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable(enabled = canToggle) {
+                                    selected = if (instance.id in selected) selected - instance.id else selected + instance.id
+                                }
+                                .padding(vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(
+                                checked = instance.id in selected,
+                                enabled = canToggle,
+                                onCheckedChange = { checked ->
+                                    selected = if (checked && usable) selected + instance.id else selected - instance.id
+                                }
+                            )
+                            Column {
+                                Text(instance.name, fontSize = 13.sp)
+                                Text(
+                                    when {
+                                        !instance.enabled -> "已停用"
+                                        !instance.hasDispatchConfiguration() -> "配置不完整"
+                                        else -> getInstanceSummary(instance)
+                                    },
+                                    fontSize = 11.sp,
+                                    color = TextSecondary
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    selectedIds = selected
+                    hasSelection = true
+                    cfg.channelInstanceIds = selected
+                    if (selected.isEmpty()) {
+                        enabled = false
+                        cfg.enabled = false
+                    }
+                    HeartbeatWorker.sync(context.applicationContext)
+                    choosingChannels = false
+                }) { Text("确定") }
+            },
+            dismissButton = {
+                TextButton(onClick = { choosingChannels = false }) { Text("取消") }
+            }
+        )
+    }
+}
+
+private fun formatHeartbeatBytes(bytes: Long): String {
+    if (bytes < 1024L) return "$bytes B"
+    val units = arrayOf("KB", "MB", "GB", "TB")
+    var value = bytes.toDouble() / 1024.0
+    var unitIndex = 0
+    while (value >= 1024.0 && unitIndex < units.lastIndex) {
+        value /= 1024.0
+        unitIndex++
+    }
+    return String.format(java.util.Locale.getDefault(), "%.1f %s", value, units[unitIndex])
 }
 
 @Composable

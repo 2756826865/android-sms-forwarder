@@ -9,6 +9,7 @@ import org.fossify.messages.forwarding.HeartbeatConfig
 import org.fossify.messages.forwarding.MultiChannelForwardWorker
 import org.fossify.messages.forwarding.MultiForwardConfig
 import org.fossify.messages.forwarding.TemplateDataRetriever
+import org.fossify.messages.forwarding.repository.ChannelRepository
 import org.fossify.messages.helpers.HeartbeatWorker
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -50,9 +51,26 @@ class HeartbeatSettingsActivity : SimpleActivity() {
 
         binding.heartbeatBtnTest.setOnClickListener {
             val multiConfig = MultiForwardConfig(this)
-            val channels = multiConfig.enabledChannelIds()
-            if (channels.isEmpty()) {
-                toast("请先在「转发通道」中启用至少一个推送渠道")
+            val allEnabledInstances = ChannelRepository.getInstance(this).getEnabledInstances()
+            val targetInstances = if (heartbeatConfig.hasChannelSelection) {
+                allEnabledInstances.filter { it.id in heartbeatConfig.channelInstanceIds }
+            } else {
+                allEnabledInstances
+            }
+            val instanceTypes = targetInstances.mapTo(mutableSetOf()) { it.channelType }
+            val legacyChannels = if (heartbeatConfig.hasChannelSelection) {
+                emptySet()
+            } else {
+                multiConfig.enabledChannelIds().filterNotTo(mutableSetOf()) { it in instanceTypes }
+            }
+            if (targetInstances.isEmpty() && legacyChannels.isEmpty()) {
+                toast(
+                    if (heartbeatConfig.hasChannelSelection) {
+                        "已选择的心跳通道均已停用或删除，请到开发版通道页重新选择"
+                    } else {
+                        "请先在「转发通道」中启用至少一个推送渠道"
+                    }
+                )
                 return@setOnClickListener
             }
 
@@ -70,14 +88,28 @@ class HeartbeatSettingsActivity : SimpleActivity() {
                 appendLine("🕒 测试时间：$timeFormatted")
             }.trim()
 
-            channels.forEach { target ->
+            targetInstances.forEach { instance ->
                 MultiChannelForwardWorker.enqueueSingle(
                     context = this,
                     sender = "设备心跳",
                     body = testBody,
                     receivedAt = now,
                     subscriptionId = -1,
-                    uniqueId = "test-hb-$now",
+                    uniqueId = "test-hb-$now-${instance.id}",
+                    targetChannel = instance.channelType,
+                    targetInstanceId = instance.id,
+                    allowedChannels = setOf(instance.id),
+                    isTest = true
+                )
+            }
+            legacyChannels.forEach { target ->
+                MultiChannelForwardWorker.enqueueSingle(
+                    context = this,
+                    sender = "设备心跳",
+                    body = testBody,
+                    receivedAt = now,
+                    subscriptionId = -1,
+                    uniqueId = "test-hb-$now-$target",
                     targetChannel = target,
                     allowedChannels = setOf(target),
                     isTest = true

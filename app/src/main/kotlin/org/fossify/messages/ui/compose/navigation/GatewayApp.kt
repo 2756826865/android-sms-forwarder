@@ -126,7 +126,7 @@ fun GatewayApp(
                 horizontalArrangement = Arrangement.SpaceAround,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                GatewayTab.values().forEach { tab ->
+                GatewayTab.values().filterNot { it == GatewayTab.RULES }.forEach { tab ->
                     val isSelected = selectedTab == tab
 
                     val itemBgColor by animateColorAsState(

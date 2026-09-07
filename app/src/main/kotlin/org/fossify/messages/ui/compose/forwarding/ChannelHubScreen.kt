@@ -65,6 +65,7 @@ import kotlinx.coroutines.launch
 import org.fossify.messages.forwarding.ChannelTestSender
 import org.fossify.messages.forwarding.ForwardingChannelInstance
 import org.fossify.messages.forwarding.ForwardingChannels
+import org.fossify.messages.forwarding.MultiForwardConfig
 import org.fossify.messages.forwarding.repository.ChannelRepository
 import org.fossify.messages.remote.repository.RemoteSourceConnectionState
 import org.fossify.messages.remote.repository.RemoteSourceInstance
@@ -273,10 +274,11 @@ fun getChannelTutorial(channelId: String): String = when (channelId) {
         填入目标手机号码即可。
     """.trimIndent()
     ForwardingChannels.CUSTOM_WEBHOOK -> """
-        1. 填写接收 JSON 的 HTTP POST 接口地址
-        2. 需要鉴权时填写自定义 Headers，支持 JSON 或每行“名称: 值”格式
-        3. 公网地址使用 HTTPS；HTTP 仅适合可信局域网服务
-        4. 保存后先点击测试，确认接收端返回 HTTP 2xx
+        1. 填写 HTTP 地址，并选择 GET、POST 或 PUT
+        2. 可设置 Content-Type、Headers 和请求体模板
+        3. 模板支持 [title]、[msg]、[from]、[time]、[sim]
+        4. GET 模式将模板作为查询参数；公网地址应使用 HTTPS
+        5. 保存后先点击测试，接收端返回 HTTP 2xx 才算成功
     """.trimIndent()
     ForwardingChannels.CHANNEL_GROUP -> """
         自由勾选多个已配置的通道组合为一个群组。
@@ -566,10 +568,10 @@ fun ChannelHubScreen(
                     ChannelNavChip("💚 定时心跳", selectedSection == "heartbeat", isDark) { selectedSection = "heartbeat" }
                 }
                 item {
-                    ChannelNavChip("⏰ 定时短信", selectedSection == "scheduled", isDark) { selectedSection = "scheduled" }
+                    ChannelNavChip("📨 批量发送", selectedSection == "bulk_send", isDark) { selectedSection = "bulk_send" }
                 }
                 item {
-                    ChannelNavChip("📨 批量发送", selectedSection == "bulk_send", isDark) { selectedSection = "bulk_send" }
+                    ChannelNavChip("⏰ 定时短信", selectedSection == "scheduled", isDark) { selectedSection = "scheduled" }
                 }
             }
 
@@ -1059,6 +1061,18 @@ fun InstanceEditorDialog(
         )
     }
     var f7 by remember { mutableStateOf(existingInstance?.optString("authorizedGroups") ?: "") }
+    var customWebhookMethod by remember {
+        mutableStateOf(existingInstance?.optString("method")?.ifBlank { "POST" } ?: "POST")
+    }
+    var customWebhookContentType by remember {
+        mutableStateOf(existingInstance?.optString("contentType")?.ifBlank { "application/json" } ?: "application/json")
+    }
+    var customWebhookBody by remember {
+        mutableStateOf(
+            existingInstance?.optString("bodyTemplate")?.ifBlank { MultiForwardConfig.DEFAULT_CUSTOM_WEBHOOK_BODY }
+                ?: MultiForwardConfig.DEFAULT_CUSTOM_WEBHOOK_BODY
+        )
+    }
     var dingTalkWhitelistEnabled by remember {
         mutableStateOf(existingInstance?.optBoolean("whitelistEnabled", false) ?: false)
     }
@@ -1066,6 +1080,30 @@ fun InstanceEditorDialog(
     var typeMenuExpanded by remember { mutableStateOf(false) }
     var isTesting by remember { mutableStateOf(false) }
     var testFeedback by remember { mutableStateOf<String?>(null) }
+
+    fun hasRequiredConfiguration(): Boolean = when (selectedType) {
+        ForwardingChannels.PUSHPLUS -> f1.isNotBlank()
+        ForwardingChannels.WECHAT_TEST -> listOf(f1, f2, f3, f4).all { it.isNotBlank() }
+        ForwardingChannels.QQ -> f1.isNotBlank()
+        ForwardingChannels.WECOM, ForwardingChannels.WECOM_APP -> listOf(f1, f2, f3, f4).all { it.isNotBlank() }
+        ForwardingChannels.WECOM_BOT -> f1.isNotBlank()
+        ForwardingChannels.FEISHU_APP -> listOf(f1, f2, f3).all { it.isNotBlank() }
+        ForwardingChannels.FEISHU, ForwardingChannels.FEISHU_BOT -> f1.isNotBlank()
+        ForwardingChannels.DINGTALK -> f1.isNotBlank() && (
+            !dingTalkWhitelistEnabled || f3.isBlank() || f4.isBlank() || f6.isNotBlank()
+            )
+        ForwardingChannels.BARK -> f1.isNotBlank() && f2.isNotBlank()
+        ForwardingChannels.WEBSOCKET -> f1.isNotBlank()
+        ForwardingChannels.TELEGRAM -> f1.isNotBlank() && f2.isNotBlank()
+        ForwardingChannels.DISCORD, ForwardingChannels.TENCENT_CLOUD -> f1.isNotBlank()
+        ForwardingChannels.EMAIL -> listOf(f1, f2, f3, f4).all { it.isNotBlank() }
+        ForwardingChannels.SMS_DIRECT -> f1.isNotBlank()
+        ForwardingChannels.CUSTOM_WEBHOOK -> f1.isNotBlank() &&
+            customWebhookMethod.uppercase() in setOf("GET", "POST", "PUT")
+        ForwardingChannels.GOTIFY -> f1.isNotBlank() && f2.isNotBlank()
+        ForwardingChannels.NTFY -> f1.isNotBlank() && f2.isNotBlank()
+        else -> false
+    }
 
     fun currentInstance(): ForwardingChannelInstance {
         val configJson = JSONObject()
@@ -1092,6 +1130,9 @@ fun InstanceEditorDialog(
             ForwardingChannels.EMAIL -> configJson.put("host", f1).put("port", 465).put("user", f2).put("password", f3).put("recipients", f4)
             ForwardingChannels.SMS_DIRECT -> configJson.put("phone", f1)
             ForwardingChannels.CUSTOM_WEBHOOK -> configJson.put("url", f1).put("headers", f2)
+                .put("method", customWebhookMethod.uppercase())
+                .put("contentType", customWebhookContentType)
+                .put("bodyTemplate", customWebhookBody)
             ForwardingChannels.GOTIFY -> configJson.put("serverUrl", f1).put("token", f2)
             ForwardingChannels.NTFY -> configJson.put("serverUrl", f1).put("topic", f2).put("token", f3)
                 .put("priority", f4).put("tags", f5).put("clickUrl", f6)
@@ -1141,23 +1182,28 @@ fun InstanceEditorDialog(
                                     onClick = {
                                         selectedType = def.type
                                         instanceName = "${def.name} 1"
-                                        if (def.type == ForwardingChannels.NTFY) {
-                                            f1 = "https://ntfy.sh"
-                                            f2 = ""
-                                            f3 = ""
-                                            f4 = "default"
-                                            f5 = ""
-                                            f6 = ""
-                                            f7 = ""
-                                        } else if (def.type == ForwardingChannels.DINGTALK) {
-                                            f1 = ""
-                                            f2 = ""
-                                            f3 = ""
-                                            f4 = ""
-                                            f5 = ""
-                                            f6 = ""
-                                            f7 = ""
+                                        // 新增时切换类型必须清空上一类型的输入，避免凭据串入其它通道。
+                                        f1 = when (def.type) {
+                                            ForwardingChannels.BARK -> "https://api.day.app"
+                                            ForwardingChannels.EMAIL -> "smtp.qq.com"
+                                            ForwardingChannels.NTFY -> "https://ntfy.sh"
+                                            else -> ""
                                         }
+                                        f2 = ""
+                                        f3 = ""
+                                        f4 = when (def.type) {
+                                            ForwardingChannels.WECOM, ForwardingChannels.WECOM_APP -> "@all"
+                                            ForwardingChannels.NTFY -> "default"
+                                            else -> ""
+                                        }
+                                        f5 = ""
+                                        f6 = ""
+                                        f7 = ""
+                                        dingTalkWhitelistEnabled = false
+                                        customWebhookMethod = "POST"
+                                        customWebhookContentType = "application/json"
+                                        customWebhookBody = MultiForwardConfig.DEFAULT_CUSTOM_WEBHOOK_BODY
+                                        testFeedback = null
                                         typeMenuExpanded = false
                                     }
                                 )
@@ -1292,8 +1338,28 @@ fun InstanceEditorDialog(
                         OutlinedTextField(value = f1, onValueChange = { f1 = it }, label = { Text("目标接收手机号码") }, modifier = Modifier.fillMaxWidth())
                     }
                     ForwardingChannels.CUSTOM_WEBHOOK -> {
-                        OutlinedTextField(value = f1, onValueChange = { f1 = it }, label = { Text("接收端 HTTP URL (POST)") }, modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(value = f2, onValueChange = { f2 = it }, label = { Text("自定义 Headers (可选)") }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(value = f1, onValueChange = { f1 = it }, label = { Text("请求地址") }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(
+                            value = customWebhookMethod,
+                            onValueChange = { customWebhookMethod = it.uppercase() },
+                            label = { Text("请求方式（GET / POST / PUT）") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = customWebhookContentType,
+                            onValueChange = { customWebhookContentType = it },
+                            label = { Text("Content-Type") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(value = f2, onValueChange = { f2 = it }, label = { Text("自定义 Headers（JSON 或每行 Key: Value）") }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(
+                            value = customWebhookBody,
+                            onValueChange = { customWebhookBody = it },
+                            label = { Text("请求体模板") },
+                            supportingText = { Text("支持 [title] [msg] [from] [time] [sim]；GET 时作为查询参数模板") },
+                            minLines = 5,
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
                     ForwardingChannels.GOTIFY -> {
                         OutlinedTextField(value = f1, onValueChange = { f1 = it }, label = { Text("Gotify 服务地址 (http://... 或 https://...)") }, modifier = Modifier.fillMaxWidth())
@@ -1312,6 +1378,14 @@ fun InstanceEditorDialog(
                     }
                 }
 
+                if (!hasRequiredConfiguration()) {
+                    Text(
+                        text = "请先填写当前通道的必填配置，再保存实例",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+
                 testFeedback?.let { feedback ->
                     Text(
                         text = feedback,
@@ -1324,11 +1398,7 @@ fun InstanceEditorDialog(
         confirmButton = {
             Button(
                 onClick = { onSaved(currentInstance()) },
-                enabled = !isTesting && !(
-                    selectedType == ForwardingChannels.DINGTALK &&
-                        f3.isNotBlank() && f4.isNotBlank() &&
-                        dingTalkWhitelistEnabled && f6.isBlank()
-                    )
+                enabled = !isTesting && hasRequiredConfiguration()
             ) {
                 Text("保存实例")
             }

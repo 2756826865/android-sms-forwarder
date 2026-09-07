@@ -140,8 +140,10 @@ class SmsAutofillAccessibilityService : AccessibilityService() {
             val config = AutofillConfig(context)
             if (!config.enabled) return
 
-            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-            clipboard?.setPrimaryClip(ClipData.newPlainText("VerificationCode", code))
+            if (config.copyToClipboard) {
+                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                clipboard?.setPrimaryClip(ClipData.newPlainText("VerificationCode", code))
+            }
 
             // 弹出屏幕顶部 5 秒悬浮胶囊
             if (config.enableFloatingPill) {

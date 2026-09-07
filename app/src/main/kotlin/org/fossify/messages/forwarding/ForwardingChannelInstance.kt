@@ -27,6 +27,32 @@ data class ForwardingChannelInstance(
         JSONObject(configJson).optInt(key, default)
     }.getOrDefault(default)
 
+    /** Whether this instance contains the minimum fields required for forwarding dispatch. */
+    fun hasDispatchConfiguration(): Boolean = when (channelType) {
+        ForwardingChannels.PUSHPLUS -> optString("token").isNotBlank()
+        ForwardingChannels.WECHAT_TEST -> listOf("appId", "appSecret", "templateId", "openId")
+            .all { optString(it).isNotBlank() }
+        ForwardingChannels.QQ -> optString("qmsgKey").isNotBlank() || optString("onebotUrl").isNotBlank()
+        ForwardingChannels.WECOM, ForwardingChannels.WECOM_APP ->
+            listOf("corpId", "agentId", "secret", "toUser").all { optString(it).isNotBlank() }
+        ForwardingChannels.WECOM_BOT -> optString("webhook").isNotBlank()
+        ForwardingChannels.FEISHU_APP -> listOf("appId", "appSecret", "receiveId")
+            .all { optString(it).isNotBlank() }
+        ForwardingChannels.FEISHU, ForwardingChannels.FEISHU_BOT,
+        ForwardingChannels.DINGTALK, ForwardingChannels.DISCORD,
+        ForwardingChannels.TENCENT_CLOUD -> optString("webhook").isNotBlank()
+        ForwardingChannels.BARK -> optString("serverUrl").isNotBlank() && optString("deviceKey").isNotBlank()
+        ForwardingChannels.WEBSOCKET -> optString("serverUrl").isNotBlank()
+        ForwardingChannels.TELEGRAM -> optString("botToken").isNotBlank() && optString("chatId").isNotBlank()
+        ForwardingChannels.EMAIL -> listOf("host", "user", "password", "recipients")
+            .all { optString(it).isNotBlank() }
+        ForwardingChannels.SMS_DIRECT -> optString("phone").isNotBlank()
+        ForwardingChannels.CUSTOM_WEBHOOK -> optString("url").isNotBlank()
+        ForwardingChannels.GOTIFY -> optString("serverUrl").isNotBlank() && optString("token").isNotBlank()
+        ForwardingChannels.NTFY -> optString("topic").isNotBlank()
+        else -> false
+    }
+
     fun toJson(): JSONObject = JSONObject()
         .put("id", id)
         .put("channelType", channelType)

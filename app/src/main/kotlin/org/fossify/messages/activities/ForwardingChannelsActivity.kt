@@ -435,18 +435,29 @@ class ForwardingChannelsActivity : SimpleActivity() {
     }
 
     private fun showCustomWebhookDialog() {
-        val guide = "💡 极速指引：支持填入任意 HTTP GET/POST 接口，支持自定义 Headers 与请求体模板 (支持 [from]、[msg] 等变量插值)。"
+        val guide = "💡 支持 GET、POST、PUT；请求体可使用 [title]、[msg]、[from]、[time]、[sim]。GET 模式下请求体模板会作为查询参数。"
         showChannelConfigDialog(
             title = "自定义 Webhook",
             guide = guide,
             channelId = ForwardingChannels.CUSTOM_WEBHOOK,
             fields = listOf(
                 "Webhook URL" to multiConfig.customWebhookUrl(),
-                "自定义 Headers (JSON/KeyValue)" to multiConfig.customWebhookHeaders()
+                "自定义 Headers (JSON/KeyValue)" to multiConfig.customWebhookHeaders(),
+                "请求方式 (GET/POST/PUT)" to multiConfig.customWebhookMethod(),
+                "Content-Type" to multiConfig.customWebhookContentType(),
+                "请求体模板" to multiConfig.customWebhookBodyTemplate()
             ),
-            isPassword = listOf(false, false),
+            isPassword = listOf(false, false, false, false, false),
+            validate = { values ->
+                when {
+                    values[0].isBlank() -> "请填写 Webhook URL"
+                    values[2].uppercase() !in setOf("GET", "POST", "PUT") -> "请求方式仅支持 GET、POST 或 PUT"
+                    values[3].isBlank() -> "请填写 Content-Type"
+                    else -> null
+                }
+            },
             onSave = { values, enabled ->
-                multiConfig.saveCustomWebhook(values[0], values[1])
+                multiConfig.saveCustomWebhook(values[0], values[1], values[2], values[3], values[4])
                 multiConfig.setChannelEnabled(ForwardingChannels.CUSTOM_WEBHOOK, enabled)
             }
         )
@@ -500,6 +511,7 @@ class ForwardingChannelsActivity : SimpleActivity() {
         channelId: String,
         fields: List<Pair<String, String>>,
         isPassword: List<Boolean>,
+        validate: (List<String>) -> String? = { null },
         onSave: (List<String>, Boolean) -> Unit
     ) {
         val density = resources.displayMetrics.density
@@ -581,6 +593,10 @@ class ForwardingChannelsActivity : SimpleActivity() {
             }
             setOnClickListener {
                 val values = editTexts.map { it.text.toString().trim() }
+                validate(values)?.let { message ->
+                    toast(message)
+                    return@setOnClickListener
+                }
                 onSave(values, channelSwitch.isChecked)
                 val progress = ProgressDialog.show(this@ForwardingChannelsActivity, "正在测试", "正在连接服务接口...", true, false)
                 lifecycleScope.launch {
@@ -603,9 +619,14 @@ class ForwardingChannelsActivity : SimpleActivity() {
             .setView(scroll)
             .setPositiveButton(R.string.forwarding_save) { _, _ ->
                 val values = editTexts.map { it.text.toString().trim() }
-                onSave(values, channelSwitch.isChecked)
-                updateSummaries()
-                toast("保存成功")
+                val validationError = validate(values)
+                if (validationError != null) {
+                    toast(validationError)
+                } else {
+                    onSave(values, channelSwitch.isChecked)
+                    updateSummaries()
+                    toast("保存成功")
+                }
             }
             .setNegativeButton(android.R.string.cancel, null)
             .create()

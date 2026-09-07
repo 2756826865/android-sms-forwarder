@@ -22,11 +22,19 @@ class HeartbeatConfig(context: Context) {
         get() = prefs.getString(KEY_CUSTOM_TEMPLATE, "").orEmpty()
         set(value) = prefs.edit().putString(KEY_CUSTOM_TEMPLATE, value).apply()
 
+    val hasChannelSelection: Boolean
+        get() = prefs.contains(KEY_CHANNEL_INSTANCE_IDS)
+
+    var channelInstanceIds: Set<String>
+        get() = prefs.getStringSet(KEY_CHANNEL_INSTANCE_IDS, emptySet()).orEmpty().toSet()
+        set(value) = prefs.edit().putStringSet(KEY_CHANNEL_INSTANCE_IDS, value.toSet()).apply()
+
     companion object {
         private const val PREFS_NAME = "heartbeat_config"
         private const val KEY_ENABLED = "heartbeat_enabled"
         private const val KEY_INTERVAL_HOURS = "heartbeat_interval_hours"
         private const val KEY_LAST_REPORT_TIME = "heartbeat_last_report_time"
         private const val KEY_CUSTOM_TEMPLATE = "heartbeat_custom_template"
+        private const val KEY_CHANNEL_INSTANCE_IDS = "heartbeat_channel_instance_ids"
     }
 }
