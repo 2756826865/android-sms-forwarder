@@ -598,6 +598,38 @@ object ChannelTestSender {
                     )
                     "测试短信已通过本机 SIM 卡发送！"
                 }
+                ForwardingChannels.CHANNEL_GROUP -> {
+                    val members = runCatching {
+                        val array = JSONObject(instance.configJson).optJSONArray("members") ?: org.json.JSONArray()
+                        buildList {
+                            for (i in 0 until array.length()) {
+                                array.optString(i).trim().takeIf(String::isNotBlank)?.let(::add)
+                            }
+                        }
+                    }.getOrDefault(emptyList())
+                    require(members.isNotEmpty()) { "通道组中尚未添加任何成员通道" }
+                    val repo = org.fossify.messages.forwarding.repository.ChannelRepository.getInstance(context)
+                    val results = mutableListOf<String>()
+                    members.forEach { memberId ->
+                        val subInstance = repo.getInstanceById(memberId)
+                        if (subInstance != null) {
+                            val res = sendTestInstance(context, subInstance)
+                            if (res.isSuccess) {
+                                results.add("✅ ${subInstance.name}")
+                            } else {
+                                results.add("❌ ${subInstance.name}: ${res.exceptionOrNull()?.message}")
+                            }
+                        } else {
+                            val res = sendTest(context, memberId)
+                            if (res.isSuccess) {
+                                results.add("✅ ${ForwardingChannels.displayName(memberId)}")
+                            } else {
+                                results.add("❌ ${ForwardingChannels.displayName(memberId)}: ${res.exceptionOrNull()?.message}")
+                            }
+                        }
+                    }
+                    "群组实例分发完成:\n" + results.joinToString("\n")
+                }
                 else -> error("该通道暂不支持实例测试：${instance.channelType}")
             }
         }
