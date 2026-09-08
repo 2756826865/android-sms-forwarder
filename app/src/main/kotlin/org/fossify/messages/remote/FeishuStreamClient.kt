@@ -111,12 +111,27 @@ class FeishuStreamClient(
         val mentions = message.mentions
         val isMentioned = mentions != null && mentions.isNotEmpty()
 
-        RemoteSmsCommand.parse(textContent, customPrefix)?.let { command ->
+        // 剥离飞书消息中的 @ 机器人占位符（如 @_user_1、@机器人名称 等），确保群聊 @ 机器人指令能够正常解析
+        var cleanText = textContent
+        mentions?.forEach { mention ->
+            val key = mention.key.orEmpty()
+            if (key.isNotBlank()) {
+                cleanText = cleanText.replace("@$key", " ")
+            }
+            val name = mention.name.orEmpty()
+            if (name.isNotBlank()) {
+                cleanText = cleanText.replace("@$name", " ")
+            }
+        }
+        // 通用正则清理开头的 @提及 及全半角空格
+        cleanText = cleanText.replaceFirst(Regex("^(\\s*@[^\\s]+\\s*)+"), "").trim().trim('　', ' ')
+
+        RemoteSmsCommand.parse(cleanText, customPrefix)?.let { command ->
             onCommand(
                 FeishuRemoteCommand(
                     messageId = messageId,
                     command = command,
-                    rawContent = textContent,
+                    rawContent = cleanText,
                     senderId = senderId,
                     chatId = message.chatId.orEmpty(),
                     chatType = message.chatType.orEmpty(),
@@ -149,9 +164,14 @@ class FeishuStreamClient(
         return runCatching {
             http.newCall(request).execute().use { response ->
                 val body = response.body?.string().orEmpty()
-                response.isSuccessful && runCatching {
+                val isOk = response.isSuccessful && runCatching {
                     JSONObject(body).optInt("code", -1) == 0
                 }.getOrDefault(false)
+                if (!isOk) {
+                    Log.e(TAG, "Feishu reply rejected: HTTP ${response.code}, body=$body")
+                    onStatus("飞书回复回执失败：HTTP ${response.code} $body")
+                }
+                isOk
             }
         }.onFailure { Log.e(TAG, "Feishu reply failed", it) }.getOrDefault(false)
     }

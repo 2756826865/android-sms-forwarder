@@ -164,7 +164,14 @@ object RemoteCommandProcessor {
             if (isSmsSource) RemoteSmsCommandConfig(context).customPrefix else ""
         }.orEmpty()
 
-        val parsedCommand = RemoteSmsCommand.parse(envelope.rawContent, customPrefix)
+        // 容错处理群聊消息中可能残余的前导 @ 提及（如 @机器人 /发信 ...）
+        val normalizedRawContent = envelope.rawContent.trim()
+            .replaceFirst(Regex("^(\\s*@[^\\s]+\\s*)+"), "")
+            .trim()
+            .trim('　', ' ')
+
+        val parsedCommand = RemoteSmsCommand.parse(normalizedRawContent, customPrefix)
+            ?: RemoteSmsCommand.parse(envelope.rawContent, customPrefix)
             ?: return RemoteProcessResult.Ignored("内容不符合远程发信命令语法规范")
 
         // 步骤 6: 目标号码与正文有效性
