@@ -6,8 +6,72 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### 🚧 进行中的修改与新功能 (Work In Progress for v1.1.6)
-- 准备开始 1.1.6 迭代修改。
+## [1.1.6] - 2026-09-08
+
+### 🌟 核心新特性与重大升级 (Major Features)
+
+- **🎛️ 现代化 Compose 架构全面重构 (Modern Jetpack Compose UI)**：
+  - 全面淘汰老旧繁琐的传统 XML 布局与分散 Activity，重构为高度组件化、响应式的 Jetpack Compose 现代化界面；
+  - **全新通道管理枢纽 (`ChannelHubScreen`)**：支持全渠道卡片式管理、多类型实时过滤、健康状态呼吸灯与连接诊断；
+  - **全新远程控制控制台 (`RemoteControlScreen`)**：支持国内推荐（钉钉/飞书）、专业接入（WebSocket）、应急备用（邮箱/短信）及海外渠道的分组流式交互。
+
+- **🎨 可视化规则工作室 V2 (Rule Studio & Targeted Dispatch)**：
+  - **条件与动作彻底解耦**：支持单条规则绑定任意多个目标通道实例，实现“一条短信同时抄送多端”或“根据发信人/卡槽定向精准分流”；
+  - **多维组合过滤**：同时支持卡槽（SIM 1/2）、发信人号码前缀/通配符、关键词包含与高级正则表达式；
+  - **动态正则替换 (`RegexReplacementList`)**：支持在转发前对短信文本进行局部正则清洗、敏感信息脱敏与格式重组；
+  - **内置实时调试沙箱 (`RuleTestSection`)**：支持在界面直接输入模拟短信，毫秒级验证规则匹配度与最终渲染效果。
+
+- **🛡️ 远程控制安全收敛与六大标准免公网协议 (Remote Control Matrix)**：
+  - 彻底下线存在安全隐患的外部中继广播与旧版注入代码，收敛为 6 种标准安全的双向通信协议：
+    1. **钉钉 Stream 长连接**：免公网 IP、免内网穿透，官方 Stream 协议全双工指令下发；
+    2. **飞书长连接**：飞书企业自建应用官方 WebSocket 协议，原生安全长连；
+    3. **双向 WebSocket 客户端**：支持连接用户自建服务，支持自定义 Token 认证与自签名证书信任；
+    4. **邮箱 IMAP 轮询收信**：基于标准 IMAP 协议拉取指令，支持 SSL 993 及 STARTTLS，强制拒绝明文登录；
+    5. **Telegram Bot 长轮询**：支持自定义反代 API 地址及 ChatID / UserID 白名单鉴权；
+    6. **白名单应急短信指令**：无网环境或备用机断网时的本地自愈与指令控制。
+  - **闭环原路回执**：远程发信完成后，严格通过 `sourceInstanceId` 靶向回传给原发起人，禁止跨实例回退。
+
+- **🔐 硬件级敏感凭据加密存储 (AndroidKeyStore AES-GCM)**：
+  - 所有通道与远程来源的敏感字段（如 AppSecret、Bot Token、邮箱密码等）全面接入 AndroidKeyStore 硬件加密，以 `ENC:` 前缀密文持久化存储，手机丢失或 root 环境下亦无法被逆向嗅探。
+
+- **🔑 XXPermissions 现代化权限网关集成 (`XXPermissionGateway`)**：
+  - 接入成熟的 XXPermissions 框架，统一接管 SMS 收发、通知、电池优化、无障碍与通话状态等全部危险权限申请，深度兼容 Android 12~15 及 HyperOS、ColorOS、OriginOS 等品牌系统。
+
+---
+
+### 🛡️ 底层架构加固与并发安全治理 (Architectural Hardening)
+
+- **⚡ 远程仓库死锁彻底清零 (`RemoteSourceRepository.kt`)**：
+  - 彻底解除 Repository 锁与 RuntimeManager 锁的反向依赖，将所有运行时通知移至数据库同步块外执行，完全粉碎 AB-BA 死锁闭环；
+  - 数据读取-修改-持久化保持全流程 `@Synchronized` 原子性，避免多线程并发修改导致快照覆盖或漏同步。
+- **🛑 句柄生命周期与迟到回调隔离 (`RemoteSourceRuntimeManager.kt`)**：
+  - 引入 `isHandleActive` 双重检查（`!isStopped && runningHandles[id] === handle`），基于引用一致性拦截旧连接停止过程中迟到触发的异常或状态变更，杜绝热重启时旧连接把新实例的 `READY` 覆盖为 `ERROR`；
+  - 钉钉、飞书与 WebSocket 客户端在停止后全面拦截 `onClosed`、`onFailure` 及消息队列消费，杜绝越权处理历史指令。
+- **🧹 网络连接无条件断开保障 (`HttpConnectionScope.withDisconnect`)**：
+  - 封装内联泛型扩展函数，确保底层 `HttpURLConnection` 无论在正常返回、I/O 超时还是断言抛错时，均在 `finally` 块中 100% 执行 `disconnect()`，彻底杜绝底层 Socket 泄漏与连接池枯竭。
+- **🔒 Webhook 模板单次单遍渲染 (`WebhookTemplateRenderer.kt`)**：
+  - 采用单遍正则扫描，短信正文中的 `[time]`、`[from]`、`[sim]` 等字符绝不会被二次递归展开，彻底封堵模板二次注入漏洞；
+  - 优化 GET 请求 URL 拼接（`WebhookRequestUrl.kt`），确保参数精确追加在 `#` 锚点前，智能保留原有查询参数与编码格式。
+- **🔋 低电量提醒状态机与容量计算加固 (`LowBatteryCheckWorker.kt`)**：
+  - 即使所有通道均处于停用状态，只要电量回升至阈值以上即可强制复位已提醒状态，解决重新启用通道后不报警问题；
+  - 增加对电池 `scale <= 0` 异常刻度的防御，防除零崩溃，计算过程全面转为 Long 防溢出；
+  - 每次低电量事件生成独立 UUID 任务标识，避免历史任务去重误伤。
+- **🚨 开机与系统广播安全性拦截 (`RescheduleAlarmsReceiver.kt`)**：
+  - 导出接收器显式限制只处理系统注册的标准系统 Action（开机、应用覆盖升级、时间及时区变更），拦截外部恶意广播触发高负载调度。
+
+---
+
+### 🐛 细节优化与 Bug 修复 (Bug Fixes & Polish)
+
+- **Gotify 测试逻辑对齐**：测试发送与正式发送统一使用 `id > 0` 校验响应，并对 Token 执行空格修剪；
+- **Bark & ntfy 凭据防呆**：对输入的服务器地址和 DeviceKey / Token 自动进行前后空格修剪，防止误输入空格导致推送失败；
+- **HTTP 业务码防伪装**：JSON 转换失败时改用 `_httpStatus` 字段记录底层状态码，防止将非 JSON 的 HTTP 200 响应误判为业务层 `code: 200` 成功；
+- **通道编辑数据防丢**：保存通道实例时自动保留 UI 未展示的高级字段；已有邮箱端口（如 587/25）不再被强制改成 465；QQ 切换模式时自动清理互斥的旧凭据；同类型重复点击下拉菜单不再清空输入；
+- **测试配置快照联动**：通道测试点击时抓取参数快照，参数被再次修改后旧成功提示自动失效，避免误导用户；
+- **提醒通道选择弹窗优化**：来电、电量、心跳通道选择弹窗中明确提示已失效的删除通道，仅在用户点击“确定”时清理，停用但存在的通道予以安全保留；
+- **定时闹钟平滑降级**：当系统未授予精准闹钟权限时，自动平滑回退至非精准系统空闲闹钟，避免 Android 14+ 抛错崩溃。
+
+---
 
 ## [1.1.5] - 2026-09-03
 
