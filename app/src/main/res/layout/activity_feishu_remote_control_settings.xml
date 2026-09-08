@@ -146,6 +146,17 @@
                 style="@style/SmsChannelPrimaryButton"
                 android:layout_marginTop="8dp"
                 android:text="@string/dingtalk_remote_save" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:background="@drawable/settings_card_background"
+                android:padding="14dp"
+                android:textColor="@color/miui_secondary_text"
+                android:textSize="12sp"
+                android:lineSpacingExtra="3dp"
+                android:text="📌 飞书开放平台长连接配置注意事项：\n1. 【创建自建应用】在飞书开放平台 (open.feishu.cn) 创建企业应用，在「凭证与基础信息」中获取 App ID 与 App Secret；\n2. 【开启机器人能力】在「应用能力 → 机器人」中开通机器人；\n3. 【事件配置（关键）】在「开发配置 → 事件与回调」中，进入【事件配置】Tab（切勿选成回调配置！）：\n   • 订阅方式选择「使用长连接接收事件」；\n   • 点击「添加事件」，勾选「接收消息 v2.0」(im.message.receive_v1)；\n4. 【长连接验证】手机端填好 App ID/Secret 并点击【保存并连接】，待状态显示「已连接」后，再前往飞书后台点击「重新验证/保存」；\n5. 【群聊远程发信】在电脑端将该自建应用拉入群聊，在群内 @机器人 /发信 10086 查询 即可真实发信。" />
         </LinearLayout>
     </androidx.core.widget.NestedScrollView>
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

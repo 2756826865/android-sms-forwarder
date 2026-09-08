@@ -147,6 +147,17 @@
                 style="@style/SmsChannelSaveButton"
                 android:text="@string/dingtalk_remote_save" />
 
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:background="@drawable/settings_card_background"
+                android:padding="14dp"
+                android:textColor="@color/miui_secondary_text"
+                android:textSize="12sp"
+                android:lineSpacingExtra="3dp"
+                android:text="📌 钉钉开放平台 Stream 模式配置指南：\n1. 【企业自建应用】前往钉钉开放平台 (open.dingtalk.com) 创建自建应用，获取 Client ID (AppKey) 与 Client Secret (AppSecret)；\n2. 【机器人与消息模式】在「应用能力 → 添加机器人」中开启机器人，并在「消息接收模式」中选择【Stream 模式】；\n3. 【版本发布】在钉钉后台发布该版本应用；\n4. 【群聊发信】在电脑端将该机器人拉入群聊，在群内 @机器人 /发信 10086 查询 即可真实发信。" />
+
             <View style="@style/SmsChannelDivider" />
 
             <TextView

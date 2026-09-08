@@ -59,6 +59,18 @@
                     android:layout_height="wrap_content"
                     android:inputType="text" />
             </com.google.android.material.textfield.TextInputLayout>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/settings_card_background"
+                android:padding="14dp"
+                android:textColor="@color/miui_secondary_text"
+                android:textSize="12sp"
+                android:lineSpacingExtra="3dp"
+                android:text="📌 飞书群自定义机器人获取指南：\n1. 【电脑端操作】飞书移动端在群设置中默认隐藏了自定义机器人添加入口，请在电脑端（PC / Mac 桌面客户端）操作；\n2. 打开电脑端飞书群聊 → 点击右上角群设置 (...) →【群机器人】→【添加机器人】→ 选择【自定义机器人】；\n3. 复制生成的 Webhook 地址及可选的签名密钥填入上方；\n4. 【注意】本通道仅用于将短信、来电及低电量推送到飞书群；若需通过飞书发送指令让手机代发短信，请前往【远程控制 → 飞书 Stream】配置企业自建应用。" />
+
             <View
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
