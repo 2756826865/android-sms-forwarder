@@ -568,6 +568,9 @@ fun ChannelHubScreen(
                     ChannelNavChip("💚 定时心跳", selectedSection == "heartbeat", isDark) { selectedSection = "heartbeat" }
                 }
                 item {
+                    ChannelNavChip("🔔 通知转发", selectedSection == "notification_forward", isDark) { selectedSection = "notification_forward" }
+                }
+                item {
                     ChannelNavChip("📨 批量发送", selectedSection == "bulk_send", isDark) { selectedSection = "bulk_send" }
                 }
                 item {
@@ -605,6 +608,8 @@ fun ChannelHubScreen(
                 AutofillEmbeddedScreen()
             } else if (selectedSection == "heartbeat") {
                 HeartbeatEmbeddedScreen()
+            } else if (selectedSection == "notification_forward") {
+                NotificationForwardEmbeddedScreen()
             } else if (selectedSection == "scheduled") {
                 ClassicFeatureEntryScreen(
                     title = "定时短信",

@@ -269,6 +269,58 @@ object ChannelTestSender {
                     }
                     "群组分发完成:\n" + results.joinToString("\n")
                 }
+                ForwardingChannels.EMAIL -> {
+                    sendEmailTest(
+                        host = config.emailHost(),
+                        port = config.emailPort,
+                        user = config.emailUser(),
+                        password = config.emailPassword(),
+                        recipientsText = config.emailRecipients(),
+                        subject = title,
+                        content = content,
+                        security = config.emailSecurity
+                    )
+                    "邮件测试消息已发送！"
+                }
+                ForwardingChannels.GOTIFY -> {
+                    val serverUrl = config.gotifyServerUrl().trim().trimEnd('/')
+                    val token = config.gotifyToken()
+                    require(serverUrl.isNotBlank() && token.isNotBlank()) { "Gotify URL 或 Token 不能为空" }
+                    ForwardingUrlPolicy.requireAllowed(serverUrl, serverUrl.startsWith("http://"))
+                    val res = postJson(
+                        "$serverUrl/message?token=${URLEncoder.encode(token.trim(), "UTF-8")}",
+                        JSONObject().put("title", title).put("message", content).put("priority", 5)
+                    )
+                    check(res.optLong("id", -1L) > 0L) { "Gotify 推送失败" }
+                    "Gotify 消息推送成功！"
+                }
+                ForwardingChannels.NTFY -> {
+                    val serverUrl = config.ntfyServerUrl().trim().ifBlank { "https://ntfy.sh" }.trimEnd('/')
+                    val topic = config.ntfyTopic()
+                    val token = config.ntfyToken()
+                    val priority = config.ntfyPriority().ifBlank { "default" }
+                    require(topic.isNotBlank()) { "ntfy Topic 不能为空，请先配置" }
+                    ForwardingUrlPolicy.requireAllowed(serverUrl, serverUrl.startsWith("http://"))
+                    val headers = mutableMapOf("Title" to title, "Priority" to priority)
+                    if (token.isNotBlank()) headers["Authorization"] = "Bearer ${token.trim()}"
+                    config.ntfyTags().takeIf { it.isNotBlank() }?.let { headers["Tags"] = it.trim() }
+                    config.ntfyClickUrl().takeIf { it.isNotBlank() }?.let { headers["Click"] = it.trim() }
+                    postText(
+                        "$serverUrl/${URLEncoder.encode(topic.trim(), "UTF-8")}",
+                        content,
+                        headers
+                    )
+                    "ntfy 消息推送成功！"
+                }
+                ForwardingChannels.WEBSOCKET -> {
+                    sendWebSocketTest(
+                        config.websocketServerUrl(),
+                        config.websocketToken(),
+                        title,
+                        content
+                    )
+                    "WebSocket 测试消息已发送！"
+                }
                 else -> error("该通道暂不支持测试：$channelId")
             }
         }
@@ -532,14 +584,20 @@ object ChannelTestSender {
                     "WebSocket 测试消息已发送！"
                 }
                 ForwardingChannels.EMAIL -> {
+                    val port = instance.optInt("port", 465)
+                    val security = instance.optInt(
+                        "security",
+                        if (port == 587) MultiForwardConfig.EMAIL_SECURITY_STARTTLS else MultiForwardConfig.EMAIL_SECURITY_SSL
+                    )
                     sendEmailTest(
                         host = instance.optString("host"),
-                        port = instance.optInt("port", 465),
+                        port = port,
                         user = instance.optString("user"),
                         password = instance.optString("password"),
                         recipientsText = instance.optString("recipients"),
                         subject = title,
-                        content = content
+                        content = content,
+                        security = security
                     )
                     "邮件测试消息已发送！"
                 }
@@ -719,39 +777,77 @@ object ChannelTestSender {
         password: String,
         recipientsText: String,
         subject: String,
-        content: String
+        content: String,
+        security: Int = if (port == 587) MultiForwardConfig.EMAIL_SECURITY_STARTTLS else MultiForwardConfig.EMAIL_SECURITY_SSL
     ) {
         val recipients = recipientsText.split(',', ';').map(String::trim).filter(String::isNotBlank)
         require(host.isNotBlank() && user.isNotBlank() && password.isNotBlank() && recipients.isNotEmpty()) {
             "邮件配置不完整"
         }
-        val socket = SSLSocketFactory.getDefault().createSocket(host, port) as SSLSocket
-        socket.soTimeout = 10_000
-        socket.sslParameters = socket.sslParameters.apply { endpointIdentificationAlgorithm = "HTTPS" }
-        socket.startHandshake()
-        socket.use {
-            val reader = it.inputStream.bufferedReader(StandardCharsets.UTF_8)
-            val writer = it.outputStream.bufferedWriter(StandardCharsets.UTF_8)
-            expectSmtp(reader, 220)
-            smtpCommand(writer, reader, "EHLO android-sms-forwarder", 250)
-            smtpCommand(writer, reader, "AUTH LOGIN", 334)
-            smtpCommand(writer, reader, Base64.encodeToString(user.toByteArray(), Base64.NO_WRAP), 334)
-            smtpCommand(writer, reader, Base64.encodeToString(password.toByteArray(), Base64.NO_WRAP), 235)
-            smtpCommand(writer, reader, "MAIL FROM:<$user>", 250)
-            recipients.forEach { recipient -> smtpCommand(writer, reader, "RCPT TO:<$recipient>", 250) }
-            smtpCommand(writer, reader, "DATA", 354)
-            val encodedSubject = Base64.encodeToString(subject.toByteArray(StandardCharsets.UTF_8), Base64.NO_WRAP)
-            val encodedBody = java.util.Base64.getMimeEncoder(76, "\r\n".toByteArray())
-                .encodeToString(content.toByteArray(StandardCharsets.UTF_8))
-            writer.write("From: <$user>\r\n")
-            writer.write("To: ${recipients.joinToString(", ")}\r\n")
-            writer.write("Subject: =?UTF-8?B?$encodedSubject?=\r\n")
-            writer.write("MIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\n")
-            writer.write("Content-Transfer-Encoding: base64\r\n\r\n$encodedBody\r\n.\r\n")
-            writer.flush()
-            expectSmtp(reader, 250)
-            smtpCommand(writer, reader, "QUIT", 221)
+        if (security == MultiForwardConfig.EMAIL_SECURITY_STARTTLS) {
+            val plainSocket = java.net.Socket()
+            plainSocket.connect(java.net.InetSocketAddress(host, port), 8_000)
+            plainSocket.soTimeout = 8_000
+            plainSocket.use {
+                val reader = it.inputStream.bufferedReader(StandardCharsets.UTF_8)
+                val writer = it.outputStream.bufferedWriter(StandardCharsets.UTF_8)
+                expectSmtp(reader, 220)
+                smtpCommand(writer, reader, "EHLO android-sms-forwarder", 250)
+                smtpCommand(writer, reader, "STARTTLS", 220)
+
+                val tlsSocket = (SSLSocketFactory.getDefault() as SSLSocketFactory)
+                    .createSocket(it, host, port, true) as SSLSocket
+                tlsSocket.soTimeout = 8_000
+                tlsSocket.sslParameters = tlsSocket.sslParameters.apply { endpointIdentificationAlgorithm = "HTTPS" }
+                tlsSocket.startHandshake()
+                tlsSocket.use { ssl ->
+                    runSmtpSession(ssl, user, password, recipients, subject, content)
+                }
+            }
+        } else {
+            val plainSocket = java.net.Socket()
+            plainSocket.connect(java.net.InetSocketAddress(host, port), 8_000)
+            plainSocket.soTimeout = 8_000
+            val socket = (SSLSocketFactory.getDefault() as SSLSocketFactory)
+                .createSocket(plainSocket, host, port, true) as SSLSocket
+            socket.soTimeout = 8_000
+            socket.sslParameters = socket.sslParameters.apply { endpointIdentificationAlgorithm = "HTTPS" }
+            socket.startHandshake()
+            socket.use {
+                expectSmtp(it.inputStream.bufferedReader(StandardCharsets.UTF_8), 220)
+                runSmtpSession(it, user, password, recipients, subject, content)
+            }
         }
+    }
+
+    private fun runSmtpSession(
+        socket: java.net.Socket,
+        user: String,
+        password: String,
+        recipients: List<String>,
+        subject: String,
+        content: String
+    ) {
+        val reader = socket.inputStream.bufferedReader(StandardCharsets.UTF_8)
+        val writer = socket.outputStream.bufferedWriter(StandardCharsets.UTF_8)
+        smtpCommand(writer, reader, "EHLO android-sms-forwarder", 250)
+        smtpCommand(writer, reader, "AUTH LOGIN", 334)
+        smtpCommand(writer, reader, Base64.encodeToString(user.toByteArray(), Base64.NO_WRAP), 334)
+        smtpCommand(writer, reader, Base64.encodeToString(password.toByteArray(), Base64.NO_WRAP), 235)
+        smtpCommand(writer, reader, "MAIL FROM:<$user>", 250)
+        recipients.forEach { recipient -> smtpCommand(writer, reader, "RCPT TO:<$recipient>", 250) }
+        smtpCommand(writer, reader, "DATA", 354)
+        val encodedSubject = Base64.encodeToString(subject.toByteArray(StandardCharsets.UTF_8), Base64.NO_WRAP)
+        val encodedBody = java.util.Base64.getMimeEncoder(76, "\r\n".toByteArray())
+            .encodeToString(content.toByteArray(StandardCharsets.UTF_8))
+        writer.write("From: <$user>\r\n")
+        writer.write("To: ${recipients.joinToString(", ")}\r\n")
+        writer.write("Subject: =?UTF-8?B?$encodedSubject?=\r\n")
+        writer.write("MIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\n")
+        writer.write("Content-Transfer-Encoding: base64\r\n\r\n$encodedBody\r\n.\r\n")
+        writer.flush()
+        expectSmtp(reader, 250)
+        smtpCommand(writer, reader, "QUIT", 221)
     }
 
     private fun smtpCommand(writer: BufferedWriter, reader: BufferedReader, command: String, expected: Int) {

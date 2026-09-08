@@ -284,8 +284,12 @@ class MultiChannelForwardWorker(
                         val user = instance.optString("user")
                         val pass = instance.optString("password")
                         val recipients = instance.optString("recipients")
+                        val security = instance.optInt(
+                            "security",
+                            if (port == 587) MultiForwardConfig.EMAIL_SECURITY_STARTTLS else MultiForwardConfig.EMAIL_SECURITY_SSL
+                        )
                         check(host.isNotBlank() && user.isNotBlank()) { "邮件配置不完整" }
-                        sendEmail(host, port, 0, user, pass, recipients, title, content)
+                        sendEmail(host, port, security, user, pass, recipients, title, content)
                     }
                     ForwardingChannels.QQ -> {
                         val qmsgKey = instance.optString("qmsgKey")
@@ -717,19 +721,21 @@ class MultiChannelForwardWorker(
         subject: String,
         content: String,
     ) {
-        Socket(host, port).use { plainSocket ->
-            plainSocket.soTimeout = SMTP_TIMEOUT_MS
-            val reader = plainSocket.inputStream.bufferedReader(StandardCharsets.UTF_8)
-            val writer = plainSocket.outputStream.bufferedWriter(StandardCharsets.UTF_8)
+        val plainSocket = Socket()
+        plainSocket.connect(java.net.InetSocketAddress(host, port), SMTP_TIMEOUT_MS)
+        plainSocket.soTimeout = SMTP_TIMEOUT_MS
+        plainSocket.use {
+            val reader = it.inputStream.bufferedReader(StandardCharsets.UTF_8)
+            val writer = it.outputStream.bufferedWriter(StandardCharsets.UTF_8)
             expectSmtp(reader, 220)
             smtpCommand(writer, reader, "EHLO android-sms-forwarder", 250)
             smtpCommand(writer, reader, "STARTTLS", 220)
 
             val tlsSocket = (SSLSocketFactory.getDefault() as SSLSocketFactory)
-                .createSocket(plainSocket, host, port, true) as SSLSocket
+                .createSocket(it, host, port, true) as SSLSocket
             configureTls(tlsSocket)
-            tlsSocket.use {
-                runSmtpSession(it, user, password, recipients, subject, content)
+            tlsSocket.use { ssl ->
+                runSmtpSession(ssl, user, password, recipients, subject, content)
             }
         }
     }
@@ -768,8 +774,15 @@ class MultiChannelForwardWorker(
         smtpCommand(writer, reader, "QUIT", 221)
     }
 
-    private fun createTlsSocket(host: String, port: Int): SSLSocket =
-        (SSLSocketFactory.getDefault().createSocket(host, port) as SSLSocket).also(::configureTls)
+    private fun createTlsSocket(host: String, port: Int): SSLSocket {
+        val plainSocket = Socket()
+        plainSocket.connect(java.net.InetSocketAddress(host, port), SMTP_TIMEOUT_MS)
+        plainSocket.soTimeout = SMTP_TIMEOUT_MS
+        val sslSocket = (SSLSocketFactory.getDefault() as SSLSocketFactory)
+            .createSocket(plainSocket, host, port, true) as SSLSocket
+        configureTls(sslSocket)
+        return sslSocket
+    }
 
     private fun configureTls(socket: SSLSocket) {
         socket.soTimeout = SMTP_TIMEOUT_MS

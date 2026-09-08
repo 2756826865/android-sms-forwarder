@@ -442,6 +442,16 @@
             android:name="com.android.mms.transaction.TransactionService"
             android:exported="false" />
 
+        <service
+            android:name=".services.NotificationForwardListenerService"
+            android:label="短信转发器 - 通知监听服务"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
         <receiver
             android:name=".receivers.SmsStatusSentReceiver"
             android:exported="false" />

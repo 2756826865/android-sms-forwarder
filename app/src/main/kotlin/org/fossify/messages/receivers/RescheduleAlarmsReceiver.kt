@@ -33,6 +33,7 @@ class RescheduleAlarmsReceiver : BroadcastReceiver() {
                 SmsRecoveryWorker.enqueueFullResync(context)
                 SmsKeepAliveService.ensureStarted(context)
                 org.fossify.messages.remote.runtime.RemoteSourceRuntimeManager.getInstance(context).sync()
+                org.fossify.messages.services.NotificationForwardListenerService.rebindService(context)
             } finally {
                 pendingResult.finish()
             }

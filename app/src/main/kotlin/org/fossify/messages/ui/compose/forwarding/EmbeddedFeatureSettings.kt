@@ -51,8 +51,10 @@ import org.fossify.messages.forwarding.CallForwardConfig
 import org.fossify.messages.forwarding.HeartbeatConfig
 import org.fossify.messages.forwarding.MultiChannelForwardWorker
 import org.fossify.messages.forwarding.MultiForwardConfig
+import org.fossify.messages.forwarding.NotificationForwardConfig
 import org.fossify.messages.forwarding.TemplateDataRetriever
 import org.fossify.messages.forwarding.repository.ChannelRepository
+import org.fossify.messages.services.NotificationForwardListenerService
 import org.fossify.messages.helpers.HeartbeatWorker
 import org.fossify.messages.helpers.LowBatteryCheckWorker
 import org.fossify.messages.ui.compose.theme.BrandGreen
@@ -765,5 +767,352 @@ fun ClassicFeatureEntryScreen(
             }
         }
         item { Spacer(Modifier.height(100.dp)) }
+    }
+}
+
+private val PRESET_NOTIFICATION_APPS = listOf(
+    "com.tencent.mm" to "微信",
+    "com.eg.android.AlipayGphone" to "支付宝",
+    "com.tencent.mobileqq" to "QQ",
+    "com.tencent.wework" to "企业微信",
+    "com.alibaba.android.rimet" to "钉钉",
+    "com.ss.android.lark" to "飞书",
+    "com.jingdong.app.mall" to "京东",
+    "com.taobao.taobao" to "淘宝"
+)
+
+@Composable
+fun NotificationForwardEmbeddedScreen() {
+    val context = LocalContext.current
+    val cfg = remember { NotificationForwardConfig(context) }
+    var enabled by remember { mutableStateOf(cfg.enabled) }
+    var ignoreOngoing by remember { mutableStateOf(cfg.ignoreOngoing) }
+    var targetPackages by remember { mutableStateOf(cfg.targetPackageNames) }
+    var selectedIds by remember { mutableStateOf(cfg.channelInstanceIds) }
+    var hasPermission by remember { mutableStateOf(NotificationForwardListenerService.isPermissionGranted(context)) }
+
+    val channelRepo = remember { ChannelRepository.getInstance(context) }
+    val instances by channelRepo.instancesFlow.collectAsState()
+    val realInstances = remember(instances) {
+        instances.filterNot { it.id.startsWith("catalog:") }
+    }
+
+    var choosingChannels by remember { mutableStateOf(false) }
+    var choosingPackages by remember { mutableStateOf(false) }
+    var customPackageInput by remember { mutableStateOf("") }
+
+    val dark = isSystemInDarkTheme()
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        // 权限状态提示卡片
+        item {
+            FeatureCard {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                        Text(
+                            text = if (hasPermission) "✅ 通知监听权限已授予" else "⚠️ 未授予通知监听使用权",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (hasPermission) BrandGreen else Color(0xFFEAB308)
+                        )
+                        Spacer(modifier = Modifier.height(3.dp))
+                        Text(
+                            text = if (hasPermission) "系统通知栏监听服务处于就绪状态" else "Android 系统要求必须手动在系统设置中允许本应用读取通知",
+                            fontSize = 12.sp,
+                            color = if (dark) Color(0xFF9CA3AF) else TextSecondary
+                        )
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            NotificationForwardListenerService.requestPermission(context)
+                            hasPermission = NotificationForwardListenerService.isPermissionGranted(context)
+                        }
+                    ) {
+                        Text(if (hasPermission) "重新检查" else "去授权")
+                    }
+                }
+            }
+        }
+
+        // 功能总开关卡片
+        item {
+            FeatureCard {
+                SettingSwitch(
+                    title = "通知栏转发",
+                    subtitle = "监听指定 App 的状态栏通知并转发至目标通道",
+                    checked = enabled
+                ) { checked ->
+                    if (checked && !hasPermission) {
+                        Toast.makeText(context, "请先授予通知监听权限", Toast.LENGTH_SHORT).show()
+                        NotificationForwardListenerService.requestPermission(context)
+                        return@SettingSwitch
+                    }
+                    if (checked && selectedIds.isEmpty()) {
+                        choosingChannels = true
+                        return@SettingSwitch
+                    }
+                    enabled = checked
+                    cfg.enabled = checked
+                }
+
+                SettingSwitch(
+                    title = "过滤常驻通知",
+                    subtitle = "自动忽略音乐播放、后台下载、计步器等非交互式常驻通知",
+                    checked = ignoreOngoing
+                ) { checked ->
+                    ignoreOngoing = checked
+                    cfg.ignoreOngoing = checked
+                }
+            }
+        }
+
+        // 监听应用列表卡片
+        item {
+            FeatureCard {
+                Text("监听目标应用", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                val summaryText = if (targetPackages.isEmpty()) {
+                    "未配置任何监听目标（不会转发通知）"
+                } else {
+                    targetPackages.joinToString("、") { pkg ->
+                        PRESET_NOTIFICATION_APPS.firstOrNull { it.first == pkg }?.second ?: pkg
+                    }
+                }
+                Text(
+                    summaryText,
+                    fontSize = 12.sp,
+                    color = if (dark) Color(0xFF9CA3AF) else TextSecondary,
+                    maxLines = 3
+                )
+                OutlinedButton(
+                    onClick = { choosingPackages = true },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("选择目标应用 (${targetPackages.size})")
+                }
+            }
+        }
+
+        // 推送通道卡片
+        item {
+            FeatureCard {
+                Text("转发推送通道", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                val channelSummary = if (selectedIds.isEmpty()) {
+                    "尚未选择通道"
+                } else {
+                    realInstances.filter { it.id in selectedIds }.joinToString("、") { it.name }.ifBlank { "尚未选择通道" }
+                }
+                Text(
+                    channelSummary,
+                    fontSize = 12.sp,
+                    color = if (dark) Color(0xFF9CA3AF) else TextSecondary
+                )
+                OutlinedButton(
+                    onClick = { choosingChannels = true },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("选择通道实例 (${selectedIds.size})")
+                }
+            }
+        }
+
+        // 模拟测试与操作
+        item {
+            FeatureCard {
+                Text("功能测试与诊断", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    "向当前已选的推送通道发送一条模拟的微信通知转发消息，验证全链路是否畅通。",
+                    fontSize = 12.sp,
+                    color = if (dark) Color(0xFF9CA3AF) else TextSecondary
+                )
+                Button(
+                    onClick = {
+                        if (selectedIds.isEmpty()) {
+                            Toast.makeText(context, "请先选择至少一个推送通道", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
+                        NotificationForwardListenerService.testForward(context)
+                        Toast.makeText(context, "已触发模拟通知转发测试", Toast.LENGTH_SHORT).show()
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = BrandGreen)
+                ) {
+                    Text("发送模拟通知测试")
+                }
+            }
+        }
+
+        item { Spacer(Modifier.height(100.dp)) }
+    }
+
+    // 选择通道弹窗
+    if (choosingChannels) {
+        var tempSelected by remember(choosingChannels) {
+            mutableStateOf(
+                if (selectedIds.isNotEmpty()) selectedIds
+                else realInstances.filter { it.enabled && it.hasDispatchConfiguration() }.map { it.id }.toSet()
+            )
+        }
+        AlertDialog(
+            onDismissRequest = { choosingChannels = false },
+            title = { Text("选择推送通道") },
+            text = {
+                LazyColumn {
+                    if (realInstances.isEmpty()) {
+                        item { Text("请先添加并配置推送通道", color = TextSecondary) }
+                    }
+                    items(realInstances, key = { it.id }) { instance ->
+                        val usable = instance.enabled && instance.hasDispatchConfiguration()
+                        val isChecked = instance.id in tempSelected
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable(enabled = usable || isChecked) {
+                                    tempSelected = if (isChecked) tempSelected - instance.id else tempSelected + instance.id
+                                }
+                                .padding(vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(
+                                checked = isChecked,
+                                enabled = usable || isChecked,
+                                onCheckedChange = { checked ->
+                                    tempSelected = if (checked && usable) tempSelected + instance.id else tempSelected - instance.id
+                                }
+                            )
+                            Column {
+                                Text(instance.name, fontSize = 13.sp)
+                                Text(
+                                    when {
+                                        !instance.enabled -> "已停用"
+                                        !instance.hasDispatchConfiguration() -> "配置不完整"
+                                        else -> getInstanceSummary(instance)
+                                    },
+                                    fontSize = 11.sp,
+                                    color = TextSecondary
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    val retained = tempSelected.intersect(realInstances.map { it.id }.toSet())
+                    selectedIds = retained
+                    cfg.channelInstanceIds = retained
+                    if (retained.isEmpty()) {
+                        enabled = false
+                        cfg.enabled = false
+                    }
+                    choosingChannels = false
+                }) {
+                    Text("确定")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { choosingChannels = false }) { Text("取消") }
+            }
+        )
+    }
+
+    // 选择目标应用弹窗
+    if (choosingPackages) {
+        var tempPackages by remember(choosingPackages) { mutableStateOf(targetPackages) }
+        AlertDialog(
+            onDismissRequest = { choosingPackages = false },
+            title = { Text("选择监听目标应用") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TextButton(onClick = {
+                            tempPackages = PRESET_NOTIFICATION_APPS.map { it.first }.toSet()
+                        }) {
+                            Text("勾选常用全部")
+                        }
+                        TextButton(onClick = {
+                            tempPackages = emptySet()
+                        }) {
+                            Text("清空")
+                        }
+                    }
+
+                    LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
+                        items(PRESET_NOTIFICATION_APPS, key = { it.first }) { (pkg, appName) ->
+                            val isChecked = pkg in tempPackages
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        tempPackages = if (isChecked) tempPackages - pkg else tempPackages + pkg
+                                    }
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Checkbox(
+                                    checked = isChecked,
+                                    onCheckedChange = { checked ->
+                                        tempPackages = if (checked) tempPackages + pkg else tempPackages - pkg
+                                    }
+                                )
+                                Column {
+                                    Text(appName, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                                    Text(pkg, fontSize = 11.sp, color = TextSecondary)
+                                }
+                            }
+                        }
+                    }
+
+                    // 自定义添加包名
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedTextField(
+                            value = customPackageInput,
+                            onValueChange = { customPackageInput = it.trim() },
+                            placeholder = { Text("输入自定义包名", fontSize = 12.sp) },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        TextButton(
+                            onClick = {
+                                if (customPackageInput.isNotBlank()) {
+                                    tempPackages = tempPackages + customPackageInput
+                                    customPackageInput = ""
+                                }
+                            },
+                            enabled = customPackageInput.isNotBlank()
+                        ) {
+                            Text("添加")
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    targetPackages = tempPackages
+                    cfg.targetPackageNames = tempPackages
+                    choosingPackages = false
+                }) {
+                    Text("确定")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { choosingPackages = false }) { Text("取消") }
+            }
+        )
     }
 }
