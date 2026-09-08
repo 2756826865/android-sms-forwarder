@@ -10,6 +10,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🌟 核心新特性与重大升级 (Major Features)
 
+- **🔔 旁路通知栏消息监听与全渠道转发 (`NotificationForwardListenerService`)**：
+  - **无侵入纯旁路监听**：基于 Android 原生 `NotificationListenerService` 架构开发，监听微信、QQ、支付宝、钉钉、飞书、云闪付及任意第三方 App 弹出的状态栏通知；
+  - **白名单与预设常用 App**：预设 9 款高频常用 App（微信、QQ、支付宝等），支持用户在控制台中一键勾选常用应用，或直接输入自定义包名；
+  - **多维防轰炸与高频防抖**：内置 5 秒时间窗口内容指纹防抖（包名 + 标题 + 正文），避免即时通讯软件高频刷屏造成通知轰炸；
+  - **智能缓存与自身循环阻断**：严格过滤自身应用发出的通知，彻底杜绝转发自身提示造成的死循环；内置 500 条 LRU 缓存避免频繁 IPC 读取；
+  - **独立控制面板与通道绑定**：在通道中心顶部新增「🔔 通知转发」标签页，提供权限状态检测、一键去系统授权、常驻通知智能过滤、目标通道绑定以及「🧪 发送模拟通知测试」。
+
+- **🚀 经典版 / 开发版双 UI 引擎无缝切换 (Dual-UI Engine)**：
+  - **经典极简原生版**：保留极致轻量流畅的经典短信列表和设置页，占用极低内存；
+  - **开发版工作台 (SMS Gateway)**：基于 Jetpack Compose 构建的 5-Tab 运维级控制台（大盘监控、信息中心、通道枢纽、规则中心、设置）；
+  - **首页显式快捷入口**：在经典版首页右上角常驻绿色胶囊按钮 **`🚀 开发版`**，在开发版工作台顶部常驻 **`📱 经典版`**，用户可随时秒级双向无缝切换，偏好配置持久化保存。
+
 - **🎛️ 现代化 Compose 架构全面重构 (Modern Jetpack Compose UI)**：
   - 全面淘汰老旧繁琐的传统 XML 布局与分散 Activity，重构为高度组件化、响应式的 Jetpack Compose 现代化界面；
   - **全新通道管理枢纽 (`ChannelHubScreen`)**：支持全渠道卡片式管理、多类型实时过滤、健康状态呼吸灯与连接诊断；
@@ -57,12 +69,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 增加对电池 `scale <= 0` 异常刻度的防御，防除零崩溃，计算过程全面转为 Long 防溢出；
   - 每次低电量事件生成独立 UUID 任务标识，避免历史任务去重误伤。
 - **🚨 开机与系统广播安全性拦截 (`RescheduleAlarmsReceiver.kt`)**：
-  - 导出接收器显式限制只处理系统注册的标准系统 Action（开机、应用覆盖升级、时间及时区变更），拦截外部恶意广播触发高负载调度。
+  - 导出接收器显式限制只处理系统注册的标准系统 Action（开机、应用覆盖升级、时间及时区变更），拦截外部恶意广播触发高负载调度；
+  - 广播自愈中安全加入 `NotificationForwardListenerService.rebindService`，并在后台线程结合 `config.enabled` 与 `runCatching` 执行，零主线程卡死风险。
+- **⏱️ 全通道底层网络显式超时加固 (`MultiChannelForwardWorker.kt` & `ChannelTestSender.kt`)**：
+  - 为所有底层的 Raw Socket、SMTP 邮件协议及 HTTP 请求增加 8~12 秒显式连接超时与读超时（`connect(InetSocketAddress, timeout)`）；
+  - 彻底杜绝弱网、飞行模式或路由黑洞下底层连接无限挂起导致后台线程池卡死耗尽的隐患。
 
 ---
 
 ### 🐛 细节优化与 Bug 修复 (Bug Fixes & Polish)
 
+- **SMTP 邮件 STARTTLS 自动适配**：修复多实例邮件通道中端口 587 错误硬编码 SSL 导致的握手中断问题，智能支持 STARTTLS / SSL 协议自适应；并在单通道测试器中对齐全套邮件鉴权逻辑；
+- **通道群组实例测试支持**：单通道测试器深度支持 `CHANNEL_GROUP`，允许在多实例控制台中一键递归分发测试，并提供防循环调用与成员有效性校验；
+- **通知消息格式防篡改**：在通知转发与模拟测试入队中传递 `bodyAlreadyRendered = true`，防止短信模板对通知内容进行二次包裹；
+- **全通道单测逻辑对齐**：彻底清理旧版测试器中的冗余分支与未解析引用，全面对齐 19 大通道多实例调度架构；
+- **CI/CD 自动化构建工作流增强 (`build-custom-apk.yml`)**：新增对 `master` 分支推送的自动触发支持，构建完成后自动签名并发布 GitHub Release APK 安装包；
 - **Gotify 测试逻辑对齐**：测试发送与正式发送统一使用 `id > 0` 校验响应，并对 Token 执行空格修剪；
 - **Bark & ntfy 凭据防呆**：对输入的服务器地址和 DeviceKey / Token 自动进行前后空格修剪，防止误输入空格导致推送失败；
 - **HTTP 业务码防伪装**：JSON 转换失败时改用 `_httpStatus` 字段记录底层状态码，防止将非 JSON 的 HTTP 200 响应误判为业务层 `code: 200` 成功；
