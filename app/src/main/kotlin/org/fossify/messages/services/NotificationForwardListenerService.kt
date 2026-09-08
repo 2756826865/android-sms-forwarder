@@ -128,6 +128,7 @@ class NotificationForwardListenerService : NotificationListenerService() {
                 targetChannel = instance.channelType,
                 targetInstanceId = instance.id,
                 allowedChannels = setOf(instance.id),
+                isTest = false,
                 bodyAlreadyRendered = true
             )
         }
@@ -142,6 +143,7 @@ class NotificationForwardListenerService : NotificationListenerService() {
                 uniqueId = "$uniqueBase-legacy-$channel",
                 targetChannel = channel,
                 allowedChannels = setOf(channel),
+                isTest = false,
                 bodyAlreadyRendered = true
             )
         }

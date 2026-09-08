@@ -294,34 +294,18 @@ object ChannelTestSender {
                     check(res.optLong("id", -1L) > 0L) { "Gotify 推送失败" }
                     "Gotify 消息推送成功！"
                 }
-                ForwardingChannels.NTFY -> {
-                    val serverUrl = config.ntfyServerUrl().trim().ifBlank { "https://ntfy.sh" }.trimEnd('/')
-                    val topic = config.ntfyTopic()
-                    val token = config.ntfyToken()
-                    val priority = config.ntfyPriority().ifBlank { "default" }
-                    require(topic.isNotBlank()) { "ntfy Topic 不能为空，请先配置" }
-                    ForwardingUrlPolicy.requireAllowed(serverUrl, serverUrl.startsWith("http://"))
-                    val headers = mutableMapOf("Title" to title, "Priority" to priority)
-                    if (token.isNotBlank()) headers["Authorization"] = "Bearer ${token.trim()}"
-                    config.ntfyTags().takeIf { it.isNotBlank() }?.let { headers["Tags"] = it.trim() }
-                    config.ntfyClickUrl().takeIf { it.isNotBlank() }?.let { headers["Click"] = it.trim() }
-                    postText(
-                        "$serverUrl/${URLEncoder.encode(topic.trim(), "UTF-8")}",
-                        content,
-                        headers
-                    )
-                    "ntfy 消息推送成功！"
-                }
                 ForwardingChannels.WEBSOCKET -> {
+                    val serverUrl = config.websocketUrl()
+                    require(serverUrl.isNotBlank()) { "WebSocket URL 不能为空，请先配置" }
                     sendWebSocketTest(
-                        config.websocketServerUrl(),
+                        serverUrl,
                         config.websocketToken(),
                         title,
                         content
                     )
                     "WebSocket 测试消息已发送！"
                 }
-                else -> error("该通道暂不支持测试：$channelId")
+                else -> error("该通道请在多实例通道管理中配置并测试：$channelId")
             }
         }
         if (res.isSuccess) {

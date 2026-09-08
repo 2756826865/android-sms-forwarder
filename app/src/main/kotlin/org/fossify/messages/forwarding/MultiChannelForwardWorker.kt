@@ -1299,7 +1299,7 @@ class MultiChannelForwardWorker(
             uniqueId: String,
             targetChannel: String,
             allowedChannels: Set<String>?,
-            isTest: Boolean,
+            isTest: Boolean = false,
             operationId: String? = null,
             targetInstanceId: String = "",
             ruleId: String = "",
