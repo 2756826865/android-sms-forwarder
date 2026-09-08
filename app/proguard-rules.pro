@@ -4,6 +4,11 @@
 -dontwarn android.hardware.fingerprint.FingerprintManager$CryptoObject
 -dontwarn android.hardware.fingerprint.FingerprintManager
 
+# Apache HTTP Client / Android HTTP Client R8 conflict
+-dontwarn org.apache.http.**
+-dontwarn android.net.http.**
+-dontwarn org.slf4j.**
+
 # OkHttp (DingTalk Stream WebSocket)
 -dontwarn okhttp3.**
 -dontwarn okio.**
