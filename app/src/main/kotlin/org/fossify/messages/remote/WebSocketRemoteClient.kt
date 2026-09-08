@@ -129,7 +129,9 @@ class WebSocketRemoteClient(
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
-                handleIncomingJson(text, activeInstanceId)
+                if (running.get()) {
+                    handleIncomingJson(text, activeInstanceId)
+                }
             }
 
             override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
@@ -139,19 +141,23 @@ class WebSocketRemoteClient(
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                 isAuthenticated.set(false)
-                onStatus("连接已关闭：$reason")
-                if (activeInstanceId.isNotBlank()) {
-                    repo.updateConnectionState(activeInstanceId, RemoteSourceConnectionState.ERROR, errorMessage = "已关闭: $reason")
+                if (running.get()) {
+                    onStatus("连接已关闭：$reason")
+                    if (activeInstanceId.isNotBlank()) {
+                        repo.updateConnectionState(activeInstanceId, RemoteSourceConnectionState.ERROR, errorMessage = "已关闭: $reason")
+                    }
                 }
                 latch.countDown()
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 isAuthenticated.set(false)
-                val err = "连接异常：${t.message ?: t.javaClass.simpleName}"
-                onStatus(err)
-                if (activeInstanceId.isNotBlank()) {
-                    repo.updateConnectionState(activeInstanceId, RemoteSourceConnectionState.ERROR, errorMessage = err)
+                if (running.get()) {
+                    val err = "连接异常：${t.message ?: t.javaClass.simpleName}"
+                    onStatus(err)
+                    if (activeInstanceId.isNotBlank()) {
+                        repo.updateConnectionState(activeInstanceId, RemoteSourceConnectionState.ERROR, errorMessage = err)
+                    }
                 }
                 latch.countDown()
             }

@@ -183,8 +183,13 @@ class RemoteSourceRepository internal constructor(
     fun getSourcesByType(type: RemoteSourceType): List<RemoteSourceInstance> =
         _sourcesFlow.value.filter { it.type == type }
 
-    @Synchronized
     fun saveSource(instance: RemoteSourceInstance) {
+        saveSourceLocked(instance)
+        syncRuntime()
+    }
+
+    @Synchronized
+    private fun saveSourceLocked(instance: RemoteSourceInstance) {
         val current = _sourcesFlow.value.toMutableList()
         val index = current.indexOfFirst { it.id == instance.id }
         val updatedInstance = if (!instance.hasValidCredentials() && instance.type != RemoteSourceType.SMS) {
@@ -198,22 +203,28 @@ class RemoteSourceRepository internal constructor(
             current.add(updatedInstance)
         }
         persist(current)
-        appContext?.let { org.fossify.messages.remote.runtime.RemoteSourceRuntimeManager.getInstance(it).sync() }
     }
 
-    @Synchronized
     fun deleteSource(id: String) {
-        val updated = _sourcesFlow.value.filterNot { it.id == id }
-        persist(updated)
-        appContext?.let { org.fossify.messages.remote.runtime.RemoteSourceRuntimeManager.getInstance(it).sync() }
+        synchronized(this) {
+            val updated = _sourcesFlow.value.filterNot { it.id == id }
+            persist(updated)
+        }
+        syncRuntime()
     }
 
-    @Synchronized
     fun toggleEnabled(id: String, enabled: Boolean) {
-        val updated = _sourcesFlow.value.map {
-            if (it.id == id) it.copy(enabled = enabled) else it
+        synchronized(this) {
+            val updated = _sourcesFlow.value.map {
+                if (it.id == id) it.copy(enabled = enabled) else it
+            }
+            persist(updated)
         }
-        persist(updated)
+        syncRuntime()
+    }
+
+    // Never acquire the runtime manager lock while holding this repository's monitor.
+    private fun syncRuntime() {
         appContext?.let { org.fossify.messages.remote.runtime.RemoteSourceRuntimeManager.getInstance(it).sync() }
     }
 
@@ -501,10 +512,19 @@ class RemoteSourceRepository internal constructor(
         }
     }
 
-    @Synchronized
     fun importLegacySources(
         customMultiConfig: MultiForwardConfig? = null,
         customSmsConfig: RemoteSmsCommandConfig? = null
+    ): Int {
+        val importedCount = importLegacySourcesLocked(customMultiConfig, customSmsConfig)
+        if (importedCount > 0) syncRuntime()
+        return importedCount
+    }
+
+    @Synchronized
+    private fun importLegacySourcesLocked(
+        customMultiConfig: MultiForwardConfig?,
+        customSmsConfig: RemoteSmsCommandConfig?
     ): Int {
         val candidates = detectLegacyConfiguredSources(customMultiConfig, customSmsConfig)
         if (candidates.isEmpty()) return 0
@@ -523,14 +543,17 @@ class RemoteSourceRepository internal constructor(
 
         if (importedCount > 0) {
             persist(current)
-            appContext?.let { org.fossify.messages.remote.runtime.RemoteSourceRuntimeManager.getInstance(it).sync() }
         }
         return importedCount
     }
 
     /** 将经典版单实例配置同步为开发版 legacy_* 实例，不覆盖开发版创建的其他实例。 */
-    @Synchronized
     fun syncLegacySourcesFromClassic() {
+        if (syncLegacySourcesFromClassicLocked()) syncRuntime()
+    }
+
+    @Synchronized
+    private fun syncLegacySourcesFromClassicLocked(): Boolean {
         val incoming = detectLegacyConfiguredSources()
             .map { it.createInstance() }
             .associateBy { it.id }
@@ -587,10 +610,9 @@ class RemoteSourceRepository internal constructor(
 
         if (updated != _sourcesFlow.value) {
             persist(updated)
-            appContext?.let {
-                org.fossify.messages.remote.runtime.RemoteSourceRuntimeManager.getInstance(it).sync()
-            }
+            return true
         }
+        return false
     }
 
     private fun parseJson(raw: String): List<RemoteSourceInstance> = runCatching {

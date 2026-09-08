@@ -35,6 +35,7 @@ class RemoteSourceRuntimeManager private constructor(private val appContext: Con
     sealed class RuntimeHandle {
         abstract val instanceId: String
         abstract val configFingerprint: String
+        val isStopped = java.util.concurrent.atomic.AtomicBoolean(false)
         abstract fun stop()
 
         data class Passive(
@@ -177,25 +178,33 @@ class RemoteSourceRuntimeManager private constructor(private val appContext: Con
                 poller.start()
             }
             RemoteSourceType.WEBSOCKET -> {
+                var handleRef: RuntimeHandle.WebSocket? = null
                 val client = WebSocketRemoteClient(
                     context = appContext,
                     sourceInstanceId = instance.id,
                     onStatus = { status ->
+                        val currentHandle = handleRef ?: return@WebSocketRemoteClient
+                        if (!isHandleActive(currentHandle)) return@WebSocketRemoteClient
                         MultiForwardConfig(appContext).appendWebSocketRemoteLog("[${instance.name}] $status")
                     }
                 )
-                runningHandles[instance.id] = RuntimeHandle.WebSocket(instance.id, fingerprint, client)
+                val handle = RuntimeHandle.WebSocket(instance.id, fingerprint, client)
+                handleRef = handle
+                runningHandles[instance.id] = handle
                 client.start()
             }
             RemoteSourceType.DINGTALK -> {
                 val clientId = instance.optString("clientId")
                 val clientSecret = instance.optString("clientSecret")
                 if (clientId.isNotBlank() && clientSecret.isNotBlank()) {
+                    var handleRef: RuntimeHandle.DingTalk? = null
                     val client = DingTalkStreamClient(
                         clientId = clientId,
                         clientSecret = clientSecret,
                         customPrefix = instance.customCommandPrefix,
                         onCommand = { cmd ->
+                            val currentHandle = handleRef ?: return@DingTalkStreamClient
+                            if (!isHandleActive(currentHandle)) return@DingTalkStreamClient
                             val envelope = org.fossify.messages.remote.RemoteCommandEnvelope(
                                 sourceType = RemoteSourceType.DINGTALK,
                                 sourceInstanceId = instance.id,
@@ -211,6 +220,8 @@ class RemoteSourceRuntimeManager private constructor(private val appContext: Con
                             org.fossify.messages.remote.RemoteCommandProcessor.process(appContext, envelope)
                         },
                         onStatus = { status ->
+                            val currentHandle = handleRef ?: return@DingTalkStreamClient
+                            if (!isHandleActive(currentHandle)) return@DingTalkStreamClient
                             MultiForwardConfig(appContext).appendDingTalkRemoteLog("[${instance.name}] $status")
                             if (status.contains("连接成功") || status.contains("已连接") || status.contains("就绪")) {
                                 repo.updateConnectionState(instance.id, RemoteSourceConnectionState.READY)
@@ -219,7 +230,9 @@ class RemoteSourceRuntimeManager private constructor(private val appContext: Con
                             }
                         }
                     )
-                    runningHandles[instance.id] = RuntimeHandle.DingTalk(instance.id, fingerprint, client)
+                    val handle = RuntimeHandle.DingTalk(instance.id, fingerprint, client)
+                    handleRef = handle
+                    runningHandles[instance.id] = handle
                     client.start()
                 }
             }
@@ -227,11 +240,14 @@ class RemoteSourceRuntimeManager private constructor(private val appContext: Con
                 val appId = instance.optString("appId")
                 val appSecret = instance.optString("appSecret")
                 if (appId.isNotBlank() && appSecret.isNotBlank()) {
+                    var handleRef: RuntimeHandle.Feishu? = null
                     val client = FeishuStreamClient(
                         appId = appId,
                         appSecret = appSecret,
                         customPrefix = instance.customCommandPrefix,
                         onCommand = { cmd ->
+                            val currentHandle = handleRef ?: return@FeishuStreamClient
+                            if (!isHandleActive(currentHandle)) return@FeishuStreamClient
                             val envelope = org.fossify.messages.remote.RemoteCommandEnvelope(
                                 sourceType = RemoteSourceType.FEISHU,
                                 sourceInstanceId = instance.id,
@@ -252,6 +268,8 @@ class RemoteSourceRuntimeManager private constructor(private val appContext: Con
                             org.fossify.messages.remote.RemoteCommandProcessor.process(appContext, envelope)
                         },
                         onStatus = { status ->
+                            val currentHandle = handleRef ?: return@FeishuStreamClient
+                            if (!isHandleActive(currentHandle)) return@FeishuStreamClient
                             MultiForwardConfig(appContext).appendFeishuRemoteLog("[${instance.name}] $status")
                             if (status.contains("已就绪") || status.contains("已连接")) {
                                 repo.updateConnectionState(instance.id, RemoteSourceConnectionState.READY)
@@ -260,18 +278,29 @@ class RemoteSourceRuntimeManager private constructor(private val appContext: Con
                             }
                         }
                     )
-                    runningHandles[instance.id] = RuntimeHandle.Feishu(instance.id, fingerprint, client)
+                    val handle = RuntimeHandle.Feishu(instance.id, fingerprint, client)
+                    handleRef = handle
+                    runningHandles[instance.id] = handle
                     client.start()
                 }
             }
             RemoteSourceType.EMAIL -> {
+                var handleRef: RuntimeHandle.Email? = null
                 val poller = EmailRemoteCommandPoller(appContext, sourceInstanceId = instance.id)
-                runningHandles[instance.id] = RuntimeHandle.Email(instance.id, fingerprint, poller)
+                val handle = RuntimeHandle.Email(instance.id, fingerprint, poller)
+                handleRef = handle
+                runningHandles[instance.id] = handle
                 poller.start(intervalMs = 60_000L, onStatus = { status ->
+                    val currentHandle = handleRef ?: return@start
+                    if (!isHandleActive(currentHandle)) return@start
                     MultiForwardConfig(appContext).appendEmailRemoteLog("[${instance.name}] $status")
                 })
             }
         }
+    }
+
+    private fun isHandleActive(handle: RuntimeHandle): Boolean {
+        return !handle.isStopped.get() && runningHandles[handle.instanceId] === handle
     }
 
     /**
@@ -280,6 +309,7 @@ class RemoteSourceRuntimeManager private constructor(private val appContext: Con
     @Synchronized
     fun stopSource(instanceId: String) {
         val handle = runningHandles.remove(instanceId)
+        handle?.isStopped?.set(true)
         try {
             handle?.stop()
         } catch (e: Exception) {

@@ -1080,6 +1080,7 @@ fun InstanceEditorDialog(
     var typeMenuExpanded by remember { mutableStateOf(false) }
     var isTesting by remember { mutableStateOf(false) }
     var testFeedback by remember { mutableStateOf<String?>(null) }
+    var testedConfiguration by remember { mutableStateOf<Pair<String, String>?>(null) }
 
     fun hasRequiredConfiguration(): Boolean = when (selectedType) {
         ForwardingChannels.PUSHPLUS -> f1.isNotBlank()
@@ -1106,11 +1107,17 @@ fun InstanceEditorDialog(
     }
 
     fun currentInstance(): ForwardingChannelInstance {
-        val configJson = JSONObject()
+        // Keep persisted settings that this editor does not expose (for example SMTP port).
+        val configJson = existingInstance?.takeIf { it.channelType == selectedType }?.let {
+            runCatching { JSONObject(it.configJson) }.getOrNull()
+        } ?: JSONObject()
         when (selectedType) {
             ForwardingChannels.PUSHPLUS -> configJson.put("token", f1).put("topic", f2)
             ForwardingChannels.WECHAT_TEST -> configJson.put("appId", f1).put("appSecret", f2).put("templateId", f3).put("openId", f4)
             ForwardingChannels.QQ -> {
+                // Only one provider target may remain after changing the QQ provider.
+                configJson.remove("qmsgKey")
+                configJson.remove("onebotUrl")
                 if (f2 == "qmsg" || !f1.startsWith("http")) configJson.put("qmsgKey", f1).put("type", "qmsg")
                 else configJson.put("onebotUrl", f1).put("type", "onebot")
             }
@@ -1127,7 +1134,10 @@ fun InstanceEditorDialog(
             ForwardingChannels.TELEGRAM -> configJson.put("botToken", f1).put("chatId", f2)
             ForwardingChannels.DISCORD -> configJson.put("webhook", f1)
             ForwardingChannels.TENCENT_CLOUD -> configJson.put("webhook", f1).put("secret", f2)
-            ForwardingChannels.EMAIL -> configJson.put("host", f1).put("port", 465).put("user", f2).put("password", f3).put("recipients", f4)
+            ForwardingChannels.EMAIL -> {
+                if (!configJson.has("port")) configJson.put("port", 465)
+                configJson.put("host", f1).put("user", f2).put("password", f3).put("recipients", f4)
+            }
             ForwardingChannels.SMS_DIRECT -> configJson.put("phone", f1)
             ForwardingChannels.CUSTOM_WEBHOOK -> configJson.put("url", f1).put("headers", f2)
                 .put("method", customWebhookMethod.uppercase())
@@ -1179,7 +1189,11 @@ fun InstanceEditorDialog(
                             ALL_CHANNEL_TYPE_DEFINITIONS.forEach { def ->
                                 DropdownMenuItem(
                                     text = { Text("${def.iconEmoji} ${def.name} (${def.category.title})") },
-                                    onClick = {
+                                    onClick = selectType@{
+                                        if (selectedType == def.type) {
+                                            typeMenuExpanded = false
+                                            return@selectType
+                                        }
                                         selectedType = def.type
                                         instanceName = "${def.name} 1"
                                         // 新增时切换类型必须清空上一类型的输入，避免凭据串入其它通道。
@@ -1387,10 +1401,13 @@ fun InstanceEditorDialog(
                 }
 
                 testFeedback?.let { feedback ->
+                    val current = currentInstance()
+                    val matchesTest = testedConfiguration == (current.channelType to current.configJson)
                     Text(
-                        text = feedback,
+                        text = if (matchesTest) feedback else "配置已变更，请重新测试；上次结果仅适用于测试时的配置",
                         fontSize = 11.sp,
-                        color = if (feedback.startsWith("测试成功")) BrandGreen else MaterialTheme.colorScheme.error
+                        color = if (!matchesTest) MaterialTheme.colorScheme.onSurfaceVariant
+                            else if (feedback.startsWith("测试成功")) BrandGreen else MaterialTheme.colorScheme.error
                     )
                 }
             }
@@ -1408,15 +1425,20 @@ fun InstanceEditorDialog(
                 TextButton(onClick = onDismiss, enabled = !isTesting) { Text("取消") }
                 OutlinedButton(
                     onClick = {
+                        val snapshot = currentInstance()
                         isTesting = true
                         testFeedback = null
+                        testedConfiguration = snapshot.channelType to snapshot.configJson
                         scope.launch {
-                            val result = ChannelTestSender.sendTestInstance(context, currentInstance())
-                            testFeedback = result.fold(
-                                onSuccess = { "测试成功：$it" },
-                                onFailure = { "测试失败：${it.message ?: "未知错误"}" }
-                            )
-                            isTesting = false
+                            try {
+                                val result = ChannelTestSender.sendTestInstance(context, snapshot)
+                                testFeedback = result.fold(
+                                    onSuccess = { "测试成功：$it" },
+                                    onFailure = { "测试失败：${it.message ?: "未知错误"}" }
+                                )
+                            } finally {
+                                isTesting = false
+                            }
                         }
                     },
                     enabled = !isTesting

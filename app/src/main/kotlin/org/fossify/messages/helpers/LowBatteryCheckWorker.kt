@@ -15,6 +15,7 @@ import org.fossify.messages.forwarding.MultiChannelForwardWorker
 import org.fossify.messages.forwarding.MultiForwardConfig
 import org.fossify.messages.forwarding.PushPlusConfig
 import org.fossify.messages.forwarding.repository.ChannelRepository
+import java.util.UUID
 import java.util.concurrent.TimeUnit
 
 class LowBatteryCheckWorker(
@@ -26,6 +27,17 @@ class LowBatteryCheckWorker(
         val config = Config(appContext)
 
         if (!config.enableLowBatteryReminder) {
+            return Result.success()
+        }
+
+        val batteryLevel = getBatteryLevel()
+        if (batteryLevel == -1) {
+            return Result.success()
+        }
+        val threshold = config.lowBatteryThreshold
+        // Recovery must be observed even while all selected channels are unavailable.
+        if (batteryLevel > threshold) {
+            config.lowBatteryLastNotifiedLevel = -1
             return Result.success()
         }
 
@@ -46,12 +58,6 @@ class LowBatteryCheckWorker(
             return Result.success()
         }
 
-        val batteryLevel = getBatteryLevel()
-        if (batteryLevel == -1) {
-            return Result.success()
-        }
-
-        val threshold = config.lowBatteryThreshold
         val lastNotifiedLevel = config.lowBatteryLastNotifiedLevel
 
         if (batteryLevel <= threshold && lastNotifiedLevel == -1) {
@@ -62,7 +68,9 @@ class LowBatteryCheckWorker(
             try {
                 // Claim before enqueue so a process death cannot enqueue the same alert twice.
                 config.lowBatteryLastNotifiedLevel = batteryLevel
-                val uniqueId = "low-battery-$threshold"
+                // A new low-battery episode must not overwrite or collide with an older alert.
+                // All destinations below share this event ID; WorkManager retries keep it unchanged.
+                val uniqueId = "low-battery-$threshold-${UUID.randomUUID()}"
                 val now = System.currentTimeMillis()
                 if (config.hasLowBatteryInstanceSelection) {
                     selectedInstances.forEach { instance ->
@@ -98,8 +106,6 @@ class LowBatteryCheckWorker(
                 config.lowBatteryLastNotifiedLevel = -1
                 return Result.retry()
             }
-        } else if (batteryLevel > threshold) {
-            config.lowBatteryLastNotifiedLevel = -1
         }
 
         return Result.success()
@@ -114,11 +120,11 @@ class LowBatteryCheckWorker(
         val level = batteryIntent?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
         val scale = batteryIntent?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
 
-        if (level == -1 || scale == -1) {
+        if (level < 0 || scale <= 0 || level > scale) {
             return -1
         }
 
-        return (level * 100) / scale
+        return ((level.toLong() * 100) / scale).toInt()
     }
 
     companion object {

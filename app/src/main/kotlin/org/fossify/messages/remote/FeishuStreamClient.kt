@@ -53,8 +53,8 @@ class FeishuStreamClient(
                     .eventHandler(dispatcher)
                     .autoReconnect(true)
                     .source("android-sms-forwarder")
-                    .onReconnecting { onStatus("飞书连接已断开，正在重连…") }
-                    .onReconnected { onStatus("已重新连接 · 等待飞书机器人指令") }
+                    .onReconnecting { if (running.get()) onStatus("飞书连接已断开，正在重连…") }
+                    .onReconnected { if (running.get()) onStatus("已重新连接 · 等待飞书机器人指令") }
                     .build()
                 if (!running.get()) {
                     client.close()

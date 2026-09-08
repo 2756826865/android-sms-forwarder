@@ -197,11 +197,11 @@ object ChannelTestSender {
                     "钉钉群机器人推送成功！"
                 }
                 ForwardingChannels.BARK -> {
-                    val server = config.barkServerUrl()
-                    val key = config.barkDeviceKey()
+                    val server = config.barkServerUrl().trim().trimEnd('/')
+                    val key = config.barkDeviceKey().trim()
                     require(key.isNotBlank()) { "Bark DeviceKey 不能为空，请先配置" }
                     ForwardingUrlPolicy.requireAllowed(server.trim().trimEnd('/'), config.barkAllowHttp)
-                    val url = "${server.trimEnd('/')}/$key/${URLEncoder.encode(title, "UTF-8")}/${URLEncoder.encode(content, "UTF-8")}"
+                    val url = "$server/${URLEncoder.encode(key, "UTF-8")}/${URLEncoder.encode(title, "UTF-8")}/${URLEncoder.encode(content, "UTF-8")}"
                     val res = getJson(url)
                     check(res.optInt("code", -1) == 200) { res.optString("message", "Bark 请求失败") }
                     "Bark 消息已推送至苹果 APNs！"
@@ -446,11 +446,11 @@ object ChannelTestSender {
                     "钉钉群机器人推送成功！"
                 }
                 ForwardingChannels.BARK -> {
-                    val server = instance.optString("serverUrl").ifBlank { "https://api.day.app" }
-                    val key = instance.optString("deviceKey")
-                    require(key.isNotBlank()) { "Bark DeviceKey 不能为空，请先配置" }
+                    val server = instance.optString("serverUrl").trim().trimEnd('/')
+                    val key = instance.optString("deviceKey").trim()
+                    require(server.isNotBlank() && key.isNotBlank()) { "Bark URL 或 DeviceKey 不能为空，请先配置" }
                     ForwardingUrlPolicy.requireAllowed(server.trim().trimEnd('/'), server.startsWith("http://"))
-                    val url = "${server.trimEnd('/')}/$key/${URLEncoder.encode(title, "UTF-8")}/${URLEncoder.encode(content, "UTF-8")}"
+                    val url = "$server/${URLEncoder.encode(key, "UTF-8")}/${URLEncoder.encode(title, "UTF-8")}/${URLEncoder.encode(content, "UTF-8")}"
                     val res = getJson(url)
                     check(res.optInt("code", -1) == 200) { res.optString("message", "Bark 请求失败") }
                     "Bark 消息已推送至苹果 APNs！"
@@ -498,14 +498,14 @@ object ChannelTestSender {
                     require(serverUrl.isNotBlank() && token.isNotBlank()) { "Gotify URL 或 Token 不能为空" }
                     ForwardingUrlPolicy.requireAllowed(serverUrl, serverUrl.startsWith("http://"))
                     val res = postJson(
-                        "$serverUrl/message?token=${URLEncoder.encode(token, "UTF-8")}",
+                        "$serverUrl/message?token=${URLEncoder.encode(token.trim(), "UTF-8")}",
                         JSONObject().put("title", title).put("message", content).put("priority", 5)
                     )
-                    check(res.has("id")) { "Gotify 推送失败" }
+                    check(res.optLong("id", -1L) > 0L) { "Gotify 推送失败" }
                     "Gotify 消息推送成功！"
                 }
                 ForwardingChannels.NTFY -> {
-                    val serverUrl = instance.optString("serverUrl").ifBlank { "https://ntfy.sh" }.trimEnd('/')
+                    val serverUrl = instance.optString("serverUrl").trim().ifBlank { "https://ntfy.sh" }.trimEnd('/')
                     val topic = instance.optString("topic")
                     val token = instance.optString("token")
                     val priority = instance.optString("priority").ifBlank { "default" }
@@ -578,13 +578,14 @@ object ChannelTestSender {
             setRequestProperty("Accept", "application/json")
             headers.forEach { (k, v) -> setRequestProperty(k, v) }
         }
-        conn.outputStream.bufferedWriter(StandardCharsets.UTF_8).use { it.write(payload.toString()) }
-        val code = conn.responseCode
-        val stream = if (code in 200..299) conn.inputStream else (conn.errorStream ?: conn.inputStream)
-        val response = stream?.bufferedReader(StandardCharsets.UTF_8)?.use { it.readText() }.orEmpty()
-        conn.disconnect()
-        check(code in 200..299) { "HTTP $code: ${response.take(200)}" }
-        return runCatching { JSONObject(response) }.getOrDefault(JSONObject().put("code", code).put("raw", response))
+        return conn.withDisconnect {
+            outputStream.bufferedWriter(StandardCharsets.UTF_8).use { it.write(payload.toString()) }
+            val code = responseCode
+            val stream = if (code in 200..299) inputStream else errorStream
+            val response = stream?.bufferedReader(StandardCharsets.UTF_8)?.use { it.readText() }.orEmpty()
+            check(code in 200..299) { "HTTP $code: ${response.take(200)}" }
+            runCatching { JSONObject(response) }.getOrElse { JSONObject().put("_httpStatus", code).put("raw", response) }
+        }
     }
 
     private fun parseCustomHeaders(raw: String): Map<String, String> {
@@ -634,22 +635,18 @@ object ChannelTestSender {
             contentType.contains("x-www-form-urlencoded", ignoreCase = true) -> URLEncoder.encode(value, "UTF-8")
             else -> value
         }
-        val body = template.ifBlank { MultiForwardConfig.DEFAULT_CUSTOM_WEBHOOK_BODY }
-            .replace("[title]", encoded(title))
-            .replace("[msg]", encoded(content))
-            .replace("[from]", encoded("10086"))
-            .replace("[time]", encoded(time))
-            .replace("[sim]", encoded("SIM 1"))
+        val body = WebhookTemplateRenderer.render(
+            template.ifBlank { MultiForwardConfig.DEFAULT_CUSTOM_WEBHOOK_BODY },
+            mapOf(
+                "title" to encoded(title), "msg" to encoded(content),
+                "from" to encoded("10086"), "time" to encoded(time), "sim" to encoded("SIM 1")
+            )
+        )
         val requestUrl = if (method == "GET" && body.isNotBlank()) {
-            val separator = when {
-                !normalizedUrl.contains('?') -> "?"
-                normalizedUrl.endsWith('?') || normalizedUrl.endsWith('&') -> ""
-                else -> "&"
-            }
-            "$normalizedUrl$separator${body.removePrefix("?").removePrefix("&")}"
+            WebhookRequestUrl.appendQuery(normalizedUrl, body)
         } else normalizedUrl
         val conn = URL(requestUrl).openConnection() as HttpURLConnection
-        conn.run {
+        conn.withDisconnect {
             requestMethod = method
             connectTimeout = 8000
             readTimeout = 8000
@@ -665,7 +662,6 @@ object ChannelTestSender {
             val code = responseCode
             val response = (if (code in 200..299) inputStream else errorStream)
                 ?.bufferedReader(StandardCharsets.UTF_8)?.use { it.readText() }.orEmpty()
-            disconnect()
             check(code in 200..299) { "HTTP $code: ${response.take(200)}" }
         }
     }
@@ -781,12 +777,13 @@ object ChannelTestSender {
             setRequestProperty("Accept", "application/json")
             headers.forEach { (key, value) -> setRequestProperty(key, value) }
         }
-        conn.outputStream.bufferedWriter(StandardCharsets.UTF_8).use { it.write(body) }
-        val code = conn.responseCode
-        val response = (if (code in 200..299) conn.inputStream else conn.errorStream)
-            ?.bufferedReader(StandardCharsets.UTF_8)?.use { it.readText() }.orEmpty()
-        conn.disconnect()
-        check(code in 200..299) { "ntfy HTTP $code: ${response.take(200)}" }
+        conn.withDisconnect {
+            outputStream.bufferedWriter(StandardCharsets.UTF_8).use { it.write(body) }
+            val code = responseCode
+            val response = (if (code in 200..299) inputStream else errorStream)
+                ?.bufferedReader(StandardCharsets.UTF_8)?.use { it.readText() }.orEmpty()
+            check(code in 200..299) { "ntfy HTTP $code: ${response.take(200)}" }
+        }
     }
 
     private fun getJson(urlString: String): JSONObject {
@@ -797,11 +794,12 @@ object ChannelTestSender {
             readTimeout = 8000
             setRequestProperty("Accept", "application/json")
         }
-        val code = conn.responseCode
-        val stream = if (code in 200..299) conn.inputStream else (conn.errorStream ?: conn.inputStream)
-        val response = stream?.bufferedReader(StandardCharsets.UTF_8)?.use { it.readText() }.orEmpty()
-        conn.disconnect()
-        check(code in 200..299) { "HTTP $code: ${response.take(200)}" }
-        return runCatching { JSONObject(response) }.getOrDefault(JSONObject().put("code", code).put("raw", response))
+        return conn.withDisconnect {
+            val code = responseCode
+            val stream = if (code in 200..299) inputStream else errorStream
+            val response = stream?.bufferedReader(StandardCharsets.UTF_8)?.use { it.readText() }.orEmpty()
+            check(code in 200..299) { "HTTP $code: ${response.take(200)}" }
+            runCatching { JSONObject(response) }.getOrElse { JSONObject().put("_httpStatus", code).put("raw", response) }
+        }
     }
 }

@@ -15,6 +15,14 @@ import org.fossify.messages.services.SmsKeepAliveService
  */
 class RescheduleAlarmsReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        // Explicit broadcasts bypass intent filters; only handle the system events we register.
+        when (intent.action) {
+            Intent.ACTION_BOOT_COMPLETED,
+            Intent.ACTION_MY_PACKAGE_REPLACED,
+            Intent.ACTION_TIME_CHANGED,
+            Intent.ACTION_TIMEZONE_CHANGED -> Unit
+            else -> return
+        }
         val pendingResult = goAsync()
         ensureBackgroundThread {
             try {

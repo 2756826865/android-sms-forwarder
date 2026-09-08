@@ -860,7 +860,7 @@ class MultiChannelForwardWorker(
         val base = serverUrl.trim().trimEnd('/')
         requireHttpsOrAllowedHttp(base, base.startsWith("http://"))
         val connection = URL("$base/${URLEncoder.encode(topic.trim(), "UTF-8")}").openConnection() as HttpURLConnection
-        connection.run {
+        connection.withDisconnect {
             requestMethod = "POST"
             connectTimeout = 10_000
             readTimeout = 12_000
@@ -875,7 +875,6 @@ class MultiChannelForwardWorker(
             val statusCode = responseCode
             val response = (if (statusCode in 200..299) inputStream else errorStream)
                 ?.bufferedReader(StandardCharsets.UTF_8)?.use { it.readText() }.orEmpty()
-            disconnect()
             check(statusCode in 200..299) { "ntfy HTTP $statusCode: ${response.take(200)}" }
         }
     }
@@ -895,7 +894,7 @@ class MultiChannelForwardWorker(
         headers: Map<String, String> = emptyMap()
     ): JSONObject {
         val connection = URL(url).openConnection() as HttpURLConnection
-        return connection.run {
+        return connection.withDisconnect {
             requestMethod = method
             connectTimeout = 10_000
             readTimeout = 12_000
@@ -911,7 +910,6 @@ class MultiChannelForwardWorker(
                 ?.bufferedReader(StandardCharsets.UTF_8)
                 ?.use { it.readText() }
                 .orEmpty()
-            disconnect()
             check(statusCode in 200..299) {
                 val detail = runCatching {
                     JSONObject(response).optString("message")
@@ -1124,22 +1122,18 @@ class MultiChannelForwardWorker(
             contentType.contains("x-www-form-urlencoded", ignoreCase = true) -> URLEncoder.encode(value, "UTF-8")
             else -> value
         }
-        val rendered = bodyTemplate.ifBlank { MultiForwardConfig.DEFAULT_CUSTOM_WEBHOOK_BODY }
-            .replace("[title]", encoded(title))
-            .replace("[msg]", encoded(content))
-            .replace("[from]", encoded(sender))
-            .replace("[time]", encoded(time))
-            .replace("[sim]", encoded(sim))
+        val rendered = WebhookTemplateRenderer.render(
+            bodyTemplate.ifBlank { MultiForwardConfig.DEFAULT_CUSTOM_WEBHOOK_BODY },
+            mapOf(
+                "title" to encoded(title), "msg" to encoded(content),
+                "from" to encoded(sender), "time" to encoded(time), "sim" to encoded(sim)
+            )
+        )
         val requestUrl = if (method == "GET" && rendered.isNotBlank()) {
-            val separator = when {
-                !normalizedUrl.contains('?') -> "?"
-                normalizedUrl.endsWith('?') || normalizedUrl.endsWith('&') -> ""
-                else -> "&"
-            }
-            "$normalizedUrl$separator${rendered.removePrefix("?").removePrefix("&")}"
+            WebhookRequestUrl.appendQuery(normalizedUrl, rendered)
         } else normalizedUrl
         val connection = URL(requestUrl).openConnection() as HttpURLConnection
-        connection.run {
+        connection.withDisconnect {
             requestMethod = method
             connectTimeout = 10_000
             readTimeout = 12_000
@@ -1155,7 +1149,6 @@ class MultiChannelForwardWorker(
             val statusCode = responseCode
             val response = (if (statusCode in 200..299) inputStream else errorStream)
                 ?.bufferedReader(StandardCharsets.UTF_8)?.use { it.readText() }.orEmpty()
-            disconnect()
             check(statusCode in 200..299) { "HTTP $statusCode: ${response.take(200)}" }
         }
     }

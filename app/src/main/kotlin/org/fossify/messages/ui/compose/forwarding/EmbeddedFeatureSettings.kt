@@ -320,6 +320,9 @@ fun MissedCallEmbeddedScreen() {
             onDismissRequest = { choosingChannels = false },
             title = { Text("选择来电提醒通道") },
             text = { LazyColumn {
+                if (selected.any { id -> realInstances.none { it.id == id } }) {
+                    item { Text("部分已选通道已删除，点击确定将清除失效选择", color = TextSecondary) }
+                }
                 if (realInstances.isEmpty()) item { Text("请先添加并配置推送通道", color = TextSecondary) }
                 items(realInstances, key = { it.id }) { instance ->
                     val usable = instance.enabled && instance.hasDispatchConfiguration()
@@ -351,10 +354,11 @@ fun MissedCallEmbeddedScreen() {
                 }
             } },
             confirmButton = { Button(onClick = {
-                selectedIds = selected
+                val retained = selected.intersect(realInstances.map { it.id }.toSet())
+                selectedIds = retained
                 hasSelection = true
-                cfg.channelInstanceIds = selected
-                if (selected.isEmpty()) { enabled = false; cfg.enabled = false }
+                cfg.channelInstanceIds = retained
+                if (retained.isEmpty()) { enabled = false; cfg.enabled = false }
                 choosingChannels = false
             }) { Text("确定") } },
             dismissButton = { TextButton(onClick = { choosingChannels = false }) { Text("取消") } }
@@ -416,6 +420,9 @@ fun LowBatteryEmbeddedScreen() {
             onDismissRequest = { choosingChannels = false },
             title = { Text("选择发送通道") },
             text = { LazyColumn {
+                if (selected.any { id -> realInstances.none { it.id == id } }) {
+                    item { Text("部分已选通道已删除，点击确定将清除失效选择", color = TextSecondary) }
+                }
                 if (realInstances.isEmpty()) item { Text("请先添加并配置推送通道", color = TextSecondary) }
                 items(realInstances, key = { it.id }) { instance ->
                     val usable = instance.enabled && instance.hasDispatchConfiguration()
@@ -438,10 +445,11 @@ fun LowBatteryEmbeddedScreen() {
                 }
             } },
             confirmButton = { Button(onClick = {
-                selectedIds = selected
+                val retained = selected.intersect(realInstances.map { it.id }.toSet())
+                selectedIds = retained
                 hasSelection = true
-                cfg.lowBatteryChannelInstanceIds = selected
-                if (selected.isEmpty()) { enabled = false; cfg.enableLowBatteryReminder = false }
+                cfg.lowBatteryChannelInstanceIds = retained
+                if (retained.isEmpty()) { enabled = false; cfg.enableLowBatteryReminder = false }
                 else if (!enabled) { enabled = true; cfg.enableLowBatteryReminder = true }
                 LowBatteryCheckWorker.sync(context.applicationContext); choosingChannels = false
             }) { Text("确定") } },
@@ -654,6 +662,9 @@ fun HeartbeatEmbeddedScreen() {
             title = { Text("选择心跳发送通道") },
             text = {
                 LazyColumn {
+                    if (selected.any { id -> realInstances.none { it.id == id } }) {
+                        item { Text("部分已选通道已删除，点击确定将清除失效选择", color = TextSecondary) }
+                    }
                     if (realInstances.isEmpty()) {
                         item { Text("请先添加并配置推送通道", color = TextSecondary) }
                     }
@@ -694,10 +705,11 @@ fun HeartbeatEmbeddedScreen() {
             },
             confirmButton = {
                 Button(onClick = {
-                    selectedIds = selected
+                    val retained = selected.intersect(realInstances.map { it.id }.toSet())
+                    selectedIds = retained
                     hasSelection = true
-                    cfg.channelInstanceIds = selected
-                    if (selected.isEmpty()) {
+                    cfg.channelInstanceIds = retained
+                    if (retained.isEmpty()) {
                         enabled = false
                         cfg.enabled = false
                     }
