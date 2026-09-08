@@ -1,10 +1,7 @@
 name: Release
 
 on:
-  push:
-    branches: [ main ]
-    paths:
-      - ".fossify/release-marker.txt"
+  workflow_dispatch:
 
 jobs:
   call-release-workflow:
