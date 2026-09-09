@@ -4,8 +4,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.1.7] - 2026-09-09
 
+### 🌟 改进与问题修复 (Improvements & Fixes)
+
+- **🔇 钉钉与飞书远程发信双重回执智能去重**：
+  - 彻底解决在钉钉/飞书群内艾特机器人发信时，由于同时配置了群 Webhook 机器人导致群内收到两条重复回执卡片的问题；
+  - 架构级优先派发原路会话回执（Direct Session Reply），成功送达后自动屏蔽向同平台普通 Webhook 机器人的冗余派发，同时保留向邮箱、Bark、PushPlus 等异构备份通道的正常派发。
+- **⚡ 飞书 Stream 长连接稳定性加固与凭证清洗**：
+  - 强制对 `appId` 与 `appSecret` 进行首尾空白符过滤清洗，避免复制带入不可见空格导致飞书网关拒绝；
+  - 增加对运行时配置热重载的主动识别，消除重载时偶现的 `websocket client closed` 误报为连接失败；
+  - 补充关键鉴权错误码（如 `1000040346`）的清晰中文引导。
 - **📖 钉钉与飞书机器人配置全指南与端差异指引**：
   - 在 `README.md` 及 App 内部设置界面（飞书/钉钉群机器人与远程控制页）新增显眼的配置指引卡片；
   - 重点提示：飞书与钉钉移动端默认隐藏了「群自定义机器人」入口，必须在电脑端（PC / Mac 桌面端）群设置中添加并获取 Webhook 地址；
