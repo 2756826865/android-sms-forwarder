@@ -263,6 +263,10 @@ class MultiForwardConfig(
     fun weComRemoteChatId() = getSecret(KEY_WECOM_REMOTE_CHAT_ID)
     fun weComRemoteCustomPrefix() = prefs.getString(KEY_WECOM_REMOTE_CUSTOM_PREFIX, "").orEmpty()
 
+    var lastCapturedWeComChatId: String
+        get() = prefs.getString(KEY_LAST_CAPTURED_WECOM_CHAT_ID, "").orEmpty()
+        set(value) = prefs.edit().putString(KEY_LAST_CAPTURED_WECOM_CHAT_ID, value.trim()).apply()
+
     var simOneLabel: String
         get() = prefs.getString(KEY_SIM_ONE_LABEL, "").orEmpty()
         set(value) = prefs.edit().putString(KEY_SIM_ONE_LABEL, value.trim()).apply()
@@ -874,6 +878,7 @@ class MultiForwardConfig(
         private const val KEY_WECOM_REMOTE_SEND_SIM = "wecom_remote_send_sim"
         private const val KEY_WECOM_REMOTE_STATUS = "wecom_remote_status"
         private const val KEY_WECOM_REMOTE_LOGS = "wecom_remote_logs"
+        private const val KEY_LAST_CAPTURED_WECOM_CHAT_ID = "last_captured_wecom_chat_id"
 
         private const val KEY_LAST_STATUS = "last_status"
         private const val KEY_SIM_ONE_LABEL = "sim_one_label"

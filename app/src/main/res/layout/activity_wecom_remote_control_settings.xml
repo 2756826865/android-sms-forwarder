@@ -90,6 +90,46 @@
                     android:maxLines="1" />
             </com.google.android.material.textfield.TextInputLayout>
 
+            <LinearLayout
+                android:id="@+id/wecom_remote_auto_chat_id_layout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:visibility="gone">
+
+                <TextView
+                    android:id="@+id/wecom_remote_auto_chat_id_text"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:textSize="12sp"
+                    android:textColor="@color/brand_green"
+                    android:text="💡 检测到最近会话: "
+                    android:ellipsize="middle"
+                    android:singleLine="true" />
+
+                <Button
+                    android:id="@+id/wecom_remote_auto_chat_id_btn"
+                    style="@style/SmsChannelSecondaryButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="36dp"
+                    android:paddingHorizontal="10dp"
+                    android:textSize="11sp"
+                    android:text="填入" />
+
+                <Button
+                    android:id="@+id/wecom_remote_copy_chat_id_btn"
+                    style="@style/SmsChannelSecondaryButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="36dp"
+                    android:layout_marginStart="4dp"
+                    android:paddingHorizontal="10dp"
+                    android:textSize="11sp"
+                    android:text="复制" />
+            </LinearLayout>
+
             <com.google.android.material.textfield.TextInputLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"

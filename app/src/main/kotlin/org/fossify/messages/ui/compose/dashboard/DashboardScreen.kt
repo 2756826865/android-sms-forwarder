@@ -6,6 +6,7 @@ import android.os.Build
 import android.provider.Settings
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -24,6 +25,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -34,16 +36,21 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -232,8 +239,21 @@ fun DashboardContent(
     onSwitchToClassic: () -> Unit = {}
 ) {
     val context = LocalContext.current
+    val channelRepo = remember { org.fossify.messages.forwarding.repository.ChannelRepository.getInstance(context) }
+    val channelInstances by channelRepo.instancesFlow.collectAsState()
+    var selectedRecord by remember { mutableStateOf<org.fossify.messages.forwarding.ForwardingHistoryRecord?>(null) }
     val timeFormat = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
     val isDark = isSystemInDarkTheme()
+
+    fun resolveChannelName(channel: String): String {
+        if (channel.startsWith("instance_")) {
+            val instId = channel.removePrefix("instance_")
+            val found = channelInstances.firstOrNull { it.id == instId }
+            if (found != null) return found.name
+            return "实例 " + instId.take(8) + "…"
+        }
+        return ForwardingChannels.displayName(channel)
+    }
 
     // 动态计算真实保活健康指数 (Keep-Alive Health Score 0~100)
     val healthScore = remember(stats) {
@@ -808,6 +828,7 @@ fun DashboardContent(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(vertical = 2.5.dp)
+                                    .clickable { selectedRecord = record }
                             ) {
                                 Column(modifier = Modifier.padding(10.dp)) {
                                     Row(
@@ -816,14 +837,18 @@ fun DashboardContent(
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Row(
+                                            modifier = Modifier.weight(1f, fill = false),
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                                         ) {
                                             Text(
-                                                text = ForwardingChannels.displayName(record.channel),
+                                                text = resolveChannelName(record.channel),
                                                 fontWeight = FontWeight.Bold,
                                                 fontSize = 12.sp,
-                                                color = if (isDark) Color.White else TextPrimary
+                                                color = if (isDark) Color.White else TextPrimary,
+                                                maxLines = 1,
+                                                softWrap = false,
+                                                overflow = TextOverflow.Ellipsis
                                             )
                                             if (record.isTest) {
                                                 Surface(
@@ -841,6 +866,8 @@ fun DashboardContent(
                                             }
                                         }
 
+                                        Spacer(modifier = Modifier.width(8.dp))
+
                                         Row(
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -849,13 +876,17 @@ fun DashboardContent(
                                                 text = timeFormat.format(Date(record.updatedAt)),
                                                 fontSize = 10.5.sp,
                                                 fontFamily = FontFamily.Monospace,
-                                                color = if (isDark) Color(0xFF9CA3AF) else TextSecondary
+                                                color = if (isDark) Color(0xFF9CA3AF) else TextSecondary,
+                                                maxLines = 1,
+                                                softWrap = false
                                             )
                                             Text(
                                                 text = statusText,
                                                 fontSize = 11.5.sp,
                                                 fontWeight = FontWeight.Bold,
-                                                color = statusColor
+                                                color = statusColor,
+                                                maxLines = 1,
+                                                softWrap = false
                                             )
                                         }
                                     }
@@ -953,6 +984,14 @@ fun DashboardContent(
 
         item { Spacer(modifier = Modifier.height(110.dp)) }
     }
+
+    selectedRecord?.let { record ->
+        ForwardingRecordDetailDialog(
+            record = record,
+            resolvedChannelName = resolveChannelName(record.channel),
+            onDismiss = { selectedRecord = null }
+        )
+    }
 }
 
 @Composable
@@ -1036,5 +1075,201 @@ private fun StatMetricColumn(
                 Text(text = icon, fontSize = 14.sp)
             }
         }
+    }
+}
+
+@Composable
+private fun ForwardingRecordDetailDialog(
+    record: org.fossify.messages.forwarding.ForwardingHistoryRecord,
+    resolvedChannelName: String,
+    onDismiss: () -> Unit
+) {
+    val isDark = isSystemInDarkTheme()
+    val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
+    val fullDateFormat = remember { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()) }
+
+    val statusColor = when (record.status) {
+        "success" -> GatewayGreen
+        "failed" -> GatewayRed
+        "retry" -> GatewayOrange
+        "running" -> GatewayBlue
+        else -> if (isDark) Color(0xFF9CA3AF) else TextSecondary
+    }
+
+    val statusText = when (record.status) {
+        "success" -> "✅ 发送成功"
+        "failed" -> "❌ 发送失败"
+        "retry" -> "🔄 正在重试"
+        "running" -> "⚡ 正在发送中"
+        "skipped" -> "⏭️ 规则跳过"
+        else -> "⏳ 队列等待中"
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "转发流水详情",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 17.sp,
+                    color = if (isDark) Color.White else TextPrimary
+                )
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = statusColor.copy(alpha = if (isDark) 0.25f else 0.15f)
+                ) {
+                    Text(
+                        text = statusText,
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = statusColor,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // 1. 通道信息
+                DetailRowItem(label = "目标通道", value = resolvedChannelName)
+
+                // 2. 原始时间
+                DetailRowItem(
+                    label = "时间",
+                    value = fullDateFormat.format(Date(record.updatedAt))
+                )
+
+                // 3. 发信人
+                if (record.sender.isNotBlank()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "发信人号码",
+                                fontSize = 11.sp,
+                                color = if (isDark) Color(0xFF9CA3AF) else TextSecondary
+                            )
+                            Text(
+                                text = record.sender,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (isDark) Color.White else TextPrimary
+                            )
+                        }
+                        TextButton(
+                            onClick = {
+                                clipboardManager.setText(AnnotatedString(record.sender))
+                                Toast.makeText(context, "已复制发信人号码", Toast.LENGTH_SHORT).show()
+                            }
+                        ) {
+                            Text("复制", fontSize = 12.sp, color = BrandGreen)
+                        }
+                    }
+                }
+
+                // 4. 详细回执状态/报错日志
+                if (record.detail.isNotBlank()) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (isDark) Color(0xFF1E2227) else Color(0xFFF1F5F9))
+                            .padding(8.dp)
+                    ) {
+                        Text(
+                            text = "通道回执 / 报错",
+                            fontSize = 10.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (record.status == "failed") GatewayRed else (if (isDark) Color(0xFF9CA3AF) else TextSecondary)
+                        )
+                        Spacer(modifier = Modifier.height(3.dp))
+                        Text(
+                            text = record.detail,
+                            fontSize = 11.5.sp,
+                            color = if (record.status == "failed") GatewayRed else (if (isDark) Color(0xFFD1D5DB) else Color(0xFF334155))
+                        )
+                    }
+                }
+
+                // 5. 短信内容
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (isDark) Color(0xFF1E2227) else Color(0xFFF1F5F9))
+                        .padding(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "短信完整正文",
+                            fontSize = 10.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isDark) Color(0xFF9CA3AF) else TextSecondary
+                        )
+                        TextButton(
+                            onClick = {
+                                clipboardManager.setText(AnnotatedString(record.body))
+                                Toast.makeText(context, "已复制短信正文", Toast.LENGTH_SHORT).show()
+                            }
+                        ) {
+                            Text("复制正文", fontSize = 11.5.sp, color = BrandGreen)
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = record.body.ifBlank { "(无正文)" },
+                        fontSize = 12.5.sp,
+                        color = if (isDark) Color.White else TextPrimary
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onDismiss,
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = BrandGreen)
+            ) {
+                Text("关闭", color = Color.White)
+            }
+        }
+    )
+}
+
+@Composable
+private fun DetailRowItem(label: String, value: String) {
+    val isDark = isSystemInDarkTheme()
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            fontSize = 11.5.sp,
+            color = if (isDark) Color(0xFF9CA3AF) else TextSecondary
+        )
+        Text(
+            text = value,
+            fontSize = 12.5.sp,
+            fontWeight = FontWeight.Medium,
+            color = if (isDark) Color.White else TextPrimary
+        )
     }
 }

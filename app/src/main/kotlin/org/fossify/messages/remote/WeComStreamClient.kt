@@ -312,6 +312,10 @@ class WeComStreamClient(
         val textObj = body.optJSONObject("text") ?: JSONObject()
         val rawContent = textObj.optString("content").trim()
 
+        // 无论是否为发信指令，先记录接收日志并捕获会话 ID，方便用户快速获取 Chat ID / User ID
+        val chatTarget = if (chatType == "group") "群聊 Chat ID: $chatId" else "单聊 User ID: $senderId"
+        onStatus("收到消息 -> $chatTarget (内容: ${rawContent.take(20)})")
+
         // 去掉企微群聊中自动附加的前导 @机器人昵称（如 "@智能机器人 /短信发送 ..."）
         val cleanContent = cleanAtPrefix(rawContent)
 

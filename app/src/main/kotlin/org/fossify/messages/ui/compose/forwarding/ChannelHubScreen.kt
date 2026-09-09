@@ -1346,6 +1346,37 @@ fun InstanceEditorDialog(
                             placeholder = { Text("群聊填 Chat ID，单聊填成员 User ID") },
                             modifier = Modifier.fillMaxWidth()
                         )
+                        val lastCaptured = MultiForwardConfig(context).lastCapturedWeComChatId.trim()
+                        if (lastCaptured.isNotBlank() && f1 != lastCaptured) {
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = BrandGreen.copy(alpha = 0.1f),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { f1 = lastCaptured }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "💡 检测到最近远程发信会话：$lastCaptured",
+                                        fontSize = 11.sp,
+                                        color = BrandGreen,
+                                        modifier = Modifier.weight(1f),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = "点击填入 ↵",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = BrandGreen
+                                    )
+                                }
+                            }
+                        }
                         val selectedSource = weComSources.firstOrNull { it.id == weComSourceId }
                         Text(
                             text = when {

@@ -330,6 +330,16 @@ class RemoteSourceRuntimeManager private constructor(private val appContext: Con
                         onStatus = { status ->
                             val currentHandle = handleRef ?: return@WeComStreamClient
                             if (!isHandleActive(currentHandle)) return@WeComStreamClient
+                            if (status.startsWith("收到消息 -> ")) {
+                                val captured = if (status.contains("群聊 Chat ID: ")) {
+                                    status.substringAfter("群聊 Chat ID: ").substringBefore(" ").trim()
+                                } else if (status.contains("单聊 User ID: ")) {
+                                    status.substringAfter("单聊 User ID: ").substringBefore(" ").trim()
+                                } else ""
+                                if (captured.isNotBlank()) {
+                                    MultiForwardConfig(appContext).lastCapturedWeComChatId = captured
+                                }
+                            }
                             MultiForwardConfig(appContext).appendWeComRemoteLog("[${instance.name}] $status")
                             if (status.contains("已就绪") || status.contains("已连接")) {
                                 repo.updateConnectionState(instance.id, RemoteSourceConnectionState.READY)

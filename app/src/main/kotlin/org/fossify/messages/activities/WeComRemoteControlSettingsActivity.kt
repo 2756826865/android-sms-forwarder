@@ -96,6 +96,23 @@ class WeComRemoteControlSettingsActivity : SimpleActivity() {
         )
         wecomRemoteStatus.text = config.weComRemoteConnectionStatus.ifBlank { "尚未连接" }
         wecomRemoteLogs.text = config.weComRemoteLogs().ifBlank { "暂无日志" }
+
+        val capturedChatId = config.lastCapturedWeComChatId.trim()
+        if (capturedChatId.isNotBlank()) {
+            wecomRemoteAutoChatIdLayout.visibility = android.view.View.VISIBLE
+            wecomRemoteAutoChatIdText.text = "💡 检测到最近会话: $capturedChatId"
+            wecomRemoteAutoChatIdBtn.setOnClickListener {
+                wecomRemoteChatId.setText(capturedChatId)
+                toast("已填入最近捕获的会话 ID")
+            }
+            wecomRemoteCopyChatIdBtn.setOnClickListener {
+                val clipboard = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Chat ID", capturedChatId))
+                toast("已复制会话 ID 到剪贴板")
+            }
+        } else {
+            wecomRemoteAutoChatIdLayout.visibility = android.view.View.GONE
+        }
     }
 
     private fun saveConfig(): Boolean {
