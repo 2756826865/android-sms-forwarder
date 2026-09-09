@@ -426,7 +426,17 @@ class RemoteSourceRuntimeManager private constructor(private val appContext: Con
     }
 
     fun sendWeComPush(sourceInstanceId: String, chatId: String, content: String): Boolean {
-        val handle = runningHandles[sourceInstanceId] as? RuntimeHandle.WeCom ?: return false
+        val handle = if (sourceInstanceId.isNotBlank()) {
+            runningHandles[sourceInstanceId] as? RuntimeHandle.WeCom
+                ?: runningHandles.values.filterIsInstance<RuntimeHandle.WeCom>().firstOrNull {
+                    val repo = RemoteSourceRepository.getInstance(appContext)
+                    val inst = repo.getSourceById(it.instanceId)
+                    inst?.optString("botId") == sourceInstanceId
+                }
+        } else {
+            runningHandles.values.filterIsInstance<RuntimeHandle.WeCom>().firstOrNull()
+        } ?: return false
+
         return handle.client.push(chatId, content)
     }
 

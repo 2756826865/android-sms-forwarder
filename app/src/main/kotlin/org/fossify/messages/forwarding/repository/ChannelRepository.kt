@@ -89,6 +89,60 @@ class ChannelRepository internal constructor(
         }
     }
 
+    /**
+     * 自动联动同步企业微信智能机器人（长连接）转发通道
+     * 当远程渠道配置了企业微信机器人长连接并填写了推送目标 ChatID/UserID 时，自动在转发通道生成/更新对应的通道实例
+     * 保留用户在通道界面手动开关的状态（若已存在且用户手动关闭，则不强制开启）
+     */
+    fun syncLinkedWeComStreamChannel(
+        sourceInstanceId: String,
+        botId: String,
+        chatId: String,
+        sourceName: String = "企业微信智能机器人 (长连接)"
+    ) = synchronized(lock) {
+        val linkedChannelId = "linked_wecom_stream_$sourceInstanceId"
+        val current = multiConfig.channelInstances().toMutableList()
+        val existingIndex = current.indexOfFirst { it.id == linkedChannelId }
+
+        if (botId.isBlank() || chatId.isBlank()) {
+            // 若配置被清空，则自动清理对应的联动通道实例
+            if (existingIndex >= 0) {
+                current.removeAt(existingIndex)
+                multiConfig.saveChannelInstances(current)
+                _instancesFlow.value = current
+            }
+            return@synchronized
+        }
+
+        val configJson = JSONObject().apply {
+            put("sourceInstanceId", sourceInstanceId)
+            put("botId", botId)
+            put("chatId", chatId)
+        }.toString()
+
+        if (existingIndex >= 0) {
+            val existing = current[existingIndex]
+            current[existingIndex] = existing.copy(
+                name = sourceName.ifBlank { "企业微信智能机器人 (长连接)" },
+                channelType = ForwardingChannels.WECOM_STREAM,
+                configJson = configJson
+                // 保留 existing.enabled，允许用户按需自由开关！
+            )
+        } else {
+            current.add(
+                ForwardingChannelInstance(
+                    id = linkedChannelId,
+                    channelType = ForwardingChannels.WECOM_STREAM,
+                    name = sourceName.ifBlank { "企业微信智能机器人 (长连接)" },
+                    enabled = true, // 初始自动配置默认开启，用户可随时在通道界面关闭
+                    configJson = configJson
+                )
+            )
+        }
+        multiConfig.saveChannelInstances(current)
+        _instancesFlow.value = current
+    }
+
     fun getReferencingRules(instanceId: String): List<ForwardingRule> {
         val ctx = appContext ?: return emptyList()
         val ruleRepo = RuleRepository.getInstance(ctx)
@@ -408,6 +462,7 @@ class ChannelRepository internal constructor(
             ForwardingChannels.DINGTALK,
             ForwardingChannels.DISCORD,
             ForwardingChannels.TENCENT_CLOUD -> listOf("webhook")
+            ForwardingChannels.WECOM_STREAM -> listOf("chatId")
             ForwardingChannels.FEISHU_APP -> listOf("appId", "receiveId")
             ForwardingChannels.BARK -> listOf("serverUrl", "deviceKey")
             ForwardingChannels.WEBSOCKET -> listOf("serverUrl", "token")

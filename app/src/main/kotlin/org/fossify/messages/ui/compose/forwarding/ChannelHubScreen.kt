@@ -111,6 +111,7 @@ val ALL_CHANNEL_TYPE_DEFINITIONS = listOf(
     ChannelTypeDefinition(ForwardingChannels.PUSHPLUS, "PushPlus 微信推送", "微信服务号一对一或群组推送", "💬", ChannelCategory.WECHAT),
     ChannelTypeDefinition(ForwardingChannels.WECHAT_TEST, "微信测试号", "微信公众平台测试号模板消息直推", "🟢", ChannelCategory.WECHAT),
     ChannelTypeDefinition(ForwardingChannels.WECOM_BOT, "企业微信群机器人", "企业微信内部群 Webhook 机器人", "🤖", ChannelCategory.WECHAT),
+    ChannelTypeDefinition(ForwardingChannels.WECOM_STREAM, "企业微信智能机器人 (长连接)", "通过官方长连接主动推送消息（免公网IP）", "💬", ChannelCategory.WECHAT),
     ChannelTypeDefinition(ForwardingChannels.WECOM_APP, "企业微信应用号", "企业微信自建应用 Agent 卡片消息", "💼", ChannelCategory.WECHAT),
     ChannelTypeDefinition(ForwardingChannels.DINGTALK, "钉钉群机器人", "钉钉群自定义机器人 Webhook + 加签", "🤖", ChannelCategory.WORK),
     ChannelTypeDefinition(ForwardingChannels.FEISHU_BOT, "飞书群机器人", "飞书群自定义机器人 Webhook + 加签", "🕊️", ChannelCategory.WORK),
@@ -211,6 +212,11 @@ fun getChannelTutorial(channelId: String): String = when (channelId) {
         1. 电脑或手机企业微信群聊 -> 右上角设置 ->【添加群机器人】
         2. 复制生成的 Webhook URL 填入即可
     """.trimIndent()
+    ForwardingChannels.WECOM_STREAM -> """
+        1. 在「远程控制」或企业微信后台创建并配置好智能机器人（长连接模式）
+        2. 填写接收推送的目标 Chat ID 或 User ID
+        3. 保存后点击测试验证，无需公网 IP 即可实现企业微信双向互动与主动推送
+    """.trimIndent()
     ForwardingChannels.FEISHU_APP -> """
         1. 登录飞书开放平台 (open.feishu.cn) 创建“企业自建应用”
         2. 在【凭证与基础信息】复制 App ID 与 App Secret
@@ -305,6 +311,10 @@ fun getInstanceSummary(instance: ForwardingChannelInstance): String {
         ForwardingChannels.WECOM, ForwardingChannels.WECOM_APP -> {
             val corpId = instance.optString("corpId")
             if (corpId.isNotBlank()) "企业ID: $corpId" else "未配置应用"
+        }
+        ForwardingChannels.WECOM_STREAM -> {
+            val chatId = instance.optString("chatId")
+            if (chatId.isNotBlank()) "目标: $chatId" else "未配置推送目标"
         }
         ForwardingChannels.WECOM_BOT, ForwardingChannels.FEISHU_BOT, ForwardingChannels.FEISHU,
         ForwardingChannels.DISCORD, ForwardingChannels.TENCENT_CLOUD -> {
@@ -988,6 +998,7 @@ fun InstanceEditorDialog(
                 ForwardingChannels.WECHAT_TEST -> existingInstance?.optString("appId") ?: ""
                 ForwardingChannels.QQ -> existingInstance?.optString("qmsgKey")?.ifBlank { existingInstance.optString("onebotUrl") } ?: ""
                 ForwardingChannels.WECOM, ForwardingChannels.WECOM_APP -> existingInstance?.optString("corpId") ?: ""
+                ForwardingChannels.WECOM_STREAM -> existingInstance?.optString("chatId") ?: ""
                 ForwardingChannels.WECOM_BOT, ForwardingChannels.FEISHU_BOT, ForwardingChannels.FEISHU,
                 ForwardingChannels.DINGTALK, ForwardingChannels.DISCORD, ForwardingChannels.TENCENT_CLOUD -> existingInstance?.optString("webhook") ?: ""
                 ForwardingChannels.FEISHU_APP -> existingInstance?.optString("appId") ?: ""
@@ -1093,6 +1104,7 @@ fun InstanceEditorDialog(
         ForwardingChannels.QQ -> f1.isNotBlank()
         ForwardingChannels.WECOM, ForwardingChannels.WECOM_APP -> listOf(f1, f2, f3, f4).all { it.isNotBlank() }
         ForwardingChannels.WECOM_BOT -> f1.isNotBlank()
+        ForwardingChannels.WECOM_STREAM -> f1.isNotBlank()
         ForwardingChannels.FEISHU_APP -> listOf(f1, f2, f3).all { it.isNotBlank() }
         ForwardingChannels.FEISHU, ForwardingChannels.FEISHU_BOT -> f1.isNotBlank()
         ForwardingChannels.DINGTALK -> f1.isNotBlank() && (
@@ -1128,6 +1140,7 @@ fun InstanceEditorDialog(
             }
             ForwardingChannels.WECOM, ForwardingChannels.WECOM_APP -> configJson.put("corpId", f1).put("agentId", f2).put("secret", f3).put("toUser", f4)
             ForwardingChannels.WECOM_BOT -> configJson.put("webhook", f1)
+            ForwardingChannels.WECOM_STREAM -> configJson.put("chatId", f1)
             ForwardingChannels.FEISHU_APP -> configJson.put("appId", f1).put("appSecret", f2).put("receiveId", f3)
             ForwardingChannels.FEISHU, ForwardingChannels.FEISHU_BOT -> configJson.put("webhook", f1).put("secret", f2)
             ForwardingChannels.DINGTALK -> configJson.put("webhook", f1).put("secret", f2)
@@ -1277,6 +1290,15 @@ fun InstanceEditorDialog(
                         OutlinedTextField(value = f2, onValueChange = { f2 = it }, label = { Text("应用ID (agentid)") }, modifier = Modifier.fillMaxWidth())
                         OutlinedTextField(value = f3, onValueChange = { f3 = it }, label = { Text("应用Secret (corpsecret)") }, modifier = Modifier.fillMaxWidth())
                         OutlinedTextField(value = f4, onValueChange = { f4 = it }, label = { Text("接收人 (touser 如 @all)") }, modifier = Modifier.fillMaxWidth())
+                    }
+                    ForwardingChannels.WECOM_STREAM -> {
+                        OutlinedTextField(
+                            value = f1,
+                            onValueChange = { f1 = it },
+                            label = { Text("推送目标 Chat ID / User ID") },
+                            placeholder = { Text("例如 wrkXXX 或具体成员账号") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
                     ForwardingChannels.FEISHU_APP -> {
                         OutlinedTextField(value = f1, onValueChange = { f1 = it }, label = { Text("App ID (cli_xxx)") }, modifier = Modifier.fillMaxWidth())

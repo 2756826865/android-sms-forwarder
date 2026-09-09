@@ -36,6 +36,7 @@ data class ForwardingChannelInstance(
         ForwardingChannels.WECOM, ForwardingChannels.WECOM_APP ->
             listOf("corpId", "agentId", "secret", "toUser").all { optString(it).isNotBlank() }
         ForwardingChannels.WECOM_BOT -> optString("webhook").isNotBlank()
+        ForwardingChannels.WECOM_STREAM -> optString("chatId").isNotBlank()
         ForwardingChannels.FEISHU_APP -> listOf("appId", "appSecret", "receiveId")
             .all { optString(it).isNotBlank() }
         ForwardingChannels.FEISHU, ForwardingChannels.FEISHU_BOT,

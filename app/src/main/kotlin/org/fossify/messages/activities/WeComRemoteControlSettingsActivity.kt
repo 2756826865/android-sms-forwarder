@@ -117,6 +117,9 @@ class WeComRemoteControlSettingsActivity : SimpleActivity() {
         org.fossify.messages.remote.repository.RemoteSourceRepository
             .getInstance(applicationContext)
             .syncLegacySourcesFromClassic()
+        org.fossify.messages.forwarding.repository.ChannelRepository
+            .getInstance(applicationContext)
+            .syncLinkedWeComStreamChannel("legacy_remote_wecom", botId, chatId, "企业微信智能机器人 (长连接)")
         return true
     }
 }

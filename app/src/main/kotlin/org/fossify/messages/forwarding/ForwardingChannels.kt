@@ -8,6 +8,7 @@ object ForwardingChannels {
     const val WECOM_APP = "wecom_app"
     const val WECOM = "wecom"
     const val WECOM_BOT = "wecom_bot"
+    const val WECOM_STREAM = "wecom_stream"
     const val FEISHU_APP = "feishu_app"
     const val FEISHU_BOT = "feishu_bot"
     const val FEISHU = "feishu"
@@ -25,19 +26,19 @@ object ForwardingChannels {
     const val NTFY = "ntfy"
 
     val networkChannels = setOf(
-        PUSHPLUS, WECHAT_TEST, QQ, WECOM_APP, WECOM, WECOM_BOT,
+        PUSHPLUS, WECHAT_TEST, QQ, WECOM_APP, WECOM, WECOM_BOT, WECOM_STREAM,
         FEISHU_APP, FEISHU_BOT, FEISHU, DINGTALK, BARK, WEBSOCKET,
         TELEGRAM, DISCORD, TENCENT_CLOUD, EMAIL, CUSTOM_WEBHOOK, GOTIFY, NTFY
     )
 
     val allRuleChannels = listOf(
-        PUSHPLUS, WECHAT_TEST, QQ, WECOM_APP, WECOM_BOT,
+        PUSHPLUS, WECHAT_TEST, QQ, WECOM_APP, WECOM_BOT, WECOM_STREAM,
         FEISHU_APP, FEISHU_BOT, DINGTALK, BARK, WEBSOCKET,
         TELEGRAM, DISCORD, TENCENT_CLOUD, EMAIL, SMS_DIRECT, CUSTOM_WEBHOOK, CHANNEL_GROUP, GOTIFY, NTFY
     )
 
     val lowBatteryChannels = listOf(
-        PUSHPLUS, BARK, GOTIFY, NTFY, DINGTALK, FEISHU, WECOM, WECOM_BOT, EMAIL, SMS_DIRECT
+        PUSHPLUS, BARK, GOTIFY, NTFY, DINGTALK, FEISHU, WECOM, WECOM_BOT, WECOM_STREAM, EMAIL, SMS_DIRECT
     )
 
     fun displayName(channel: String): String = when (channel) {
@@ -46,6 +47,7 @@ object ForwardingChannels {
         QQ -> "QQ 消息 (Qmsg/OneBot)"
         WECOM, WECOM_APP -> "企业微信应用号"
         WECOM_BOT -> "企业微信群机器人"
+        WECOM_STREAM -> "企业微信智能机器人 (长连接)"
         FEISHU_APP -> "飞书自建应用"
         FEISHU, FEISHU_BOT -> "飞书群机器人"
         DINGTALK -> "钉钉群机器人"

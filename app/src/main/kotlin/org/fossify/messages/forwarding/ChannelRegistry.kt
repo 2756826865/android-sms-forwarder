@@ -46,6 +46,13 @@ object ChannelRegistry {
             category = ChannelCategory.WECHAT
         ),
         ChannelDefinition(
+            id = ForwardingChannels.WECOM_STREAM,
+            name = "企业微信智能机器人 (长连接)",
+            description = "官方长连接通道，免公网IP，支持主动推信与双向互动",
+            iconEmoji = "💬",
+            category = ChannelCategory.WECHAT
+        ),
+        ChannelDefinition(
             id = ForwardingChannels.WECOM_APP,
             name = "企业微信自建应用",
             description = "企业号应用消息，支持全员或精准指定接收人",

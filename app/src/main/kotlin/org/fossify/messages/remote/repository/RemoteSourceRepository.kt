@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.fossify.messages.forwarding.MultiForwardConfig
+import org.fossify.messages.forwarding.repository.ChannelRepository
 import org.fossify.messages.messaging.SubscriptionResolver
 import org.fossify.messages.remote.RemoteSmsCommandConfig
 import org.json.JSONArray
@@ -187,6 +188,18 @@ class RemoteSourceRepository internal constructor(
 
     fun saveSource(instance: RemoteSourceInstance) {
         saveSourceLocked(instance)
+        if (instance.type == RemoteSourceType.WECOM) {
+            appContext?.let { ctx ->
+                val botId = instance.optString("botId")
+                val chatId = instance.optString("chatId")
+                ChannelRepository.getInstance(ctx).syncLinkedWeComStreamChannel(
+                    sourceInstanceId = instance.id,
+                    botId = botId,
+                    chatId = chatId,
+                    sourceName = "${instance.name} (长连接)"
+                )
+            }
+        }
         syncRuntime()
     }
 
@@ -208,9 +221,20 @@ class RemoteSourceRepository internal constructor(
     }
 
     fun deleteSource(id: String) {
-        synchronized(this) {
+        val deleted = synchronized(this) {
+            val target = _sourcesFlow.value.firstOrNull { it.id == id }
             val updated = _sourcesFlow.value.filterNot { it.id == id }
             persist(updated)
+            target
+        }
+        if (deleted?.type == RemoteSourceType.WECOM) {
+            appContext?.let { ctx ->
+                ChannelRepository.getInstance(ctx).syncLinkedWeComStreamChannel(
+                    sourceInstanceId = id,
+                    botId = "",
+                    chatId = ""
+                )
+            }
         }
         syncRuntime()
     }
