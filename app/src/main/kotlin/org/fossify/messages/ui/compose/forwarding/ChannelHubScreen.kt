@@ -213,9 +213,10 @@ fun getChannelTutorial(channelId: String): String = when (channelId) {
         2. 复制生成的 Webhook URL 填入即可
     """.trimIndent()
     ForwardingChannels.WECOM_STREAM -> """
-        1. 在「远程控制」或企业微信后台创建并配置好智能机器人（长连接模式）
-        2. 填写接收推送的目标 Chat ID 或 User ID
-        3. 保存后点击测试验证，无需公网 IP 即可实现企业微信双向互动与主动推送
+        1. 先在「远程发送」中添加并启用企业微信长连接来源
+        2. 回到此处选择对应的连接来源；不要重复填写 Bot ID 和 Secret
+        3. 填写接收推送的会话 ID：群聊用 Chat ID，单聊用成员 User ID
+        4. 等连接状态显示“就绪”后再保存并测试；回复与主动推送共用连接，但使用不同协议
     """.trimIndent()
     ForwardingChannels.FEISHU_APP -> """
         1. 登录飞书开放平台 (open.feishu.cn) 创建“企业自建应用”
@@ -980,6 +981,8 @@ fun InstanceEditorDialog(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val remoteSources by RemoteSourceRepository.getInstance(context).sourcesFlow.collectAsState()
+    val weComSources = remoteSources.filter { it.type == RemoteSourceType.WECOM }
     val isEditing = existingInstance != null
     var selectedType by remember {
         mutableStateOf(existingInstance?.channelType ?: ForwardingChannels.WECOM_BOT)
@@ -1092,8 +1095,12 @@ fun InstanceEditorDialog(
     var dingTalkWhitelistEnabled by remember {
         mutableStateOf(existingInstance?.optBoolean("whitelistEnabled", false) ?: false)
     }
+    var weComSourceId by remember {
+        mutableStateOf(existingInstance?.optString("sourceInstanceId").orEmpty())
+    }
 
     var typeMenuExpanded by remember { mutableStateOf(false) }
+    var weComSourceMenuExpanded by remember { mutableStateOf(false) }
     var isTesting by remember { mutableStateOf(false) }
     var testFeedback by remember { mutableStateOf<String?>(null) }
     var testedConfiguration by remember { mutableStateOf<Pair<String, String>?>(null) }
@@ -1104,7 +1111,7 @@ fun InstanceEditorDialog(
         ForwardingChannels.QQ -> f1.isNotBlank()
         ForwardingChannels.WECOM, ForwardingChannels.WECOM_APP -> listOf(f1, f2, f3, f4).all { it.isNotBlank() }
         ForwardingChannels.WECOM_BOT -> f1.isNotBlank()
-        ForwardingChannels.WECOM_STREAM -> f1.isNotBlank()
+        ForwardingChannels.WECOM_STREAM -> weComSourceId.isNotBlank() && f1.isNotBlank()
         ForwardingChannels.FEISHU_APP -> listOf(f1, f2, f3).all { it.isNotBlank() }
         ForwardingChannels.FEISHU, ForwardingChannels.FEISHU_BOT -> f1.isNotBlank()
         ForwardingChannels.DINGTALK -> f1.isNotBlank() && (
@@ -1140,7 +1147,7 @@ fun InstanceEditorDialog(
             }
             ForwardingChannels.WECOM, ForwardingChannels.WECOM_APP -> configJson.put("corpId", f1).put("agentId", f2).put("secret", f3).put("toUser", f4)
             ForwardingChannels.WECOM_BOT -> configJson.put("webhook", f1)
-            ForwardingChannels.WECOM_STREAM -> configJson.put("chatId", f1)
+            ForwardingChannels.WECOM_STREAM -> configJson.put("sourceInstanceId", weComSourceId).put("chatId", f1)
             ForwardingChannels.FEISHU_APP -> configJson.put("appId", f1).put("appSecret", f2).put("receiveId", f3)
             ForwardingChannels.FEISHU, ForwardingChannels.FEISHU_BOT -> configJson.put("webhook", f1).put("secret", f2)
             ForwardingChannels.DINGTALK -> configJson.put("webhook", f1).put("secret", f2)
@@ -1232,6 +1239,9 @@ fun InstanceEditorDialog(
                                         f6 = ""
                                         f7 = ""
                                         dingTalkWhitelistEnabled = false
+                                        weComSourceId = if (def.type == ForwardingChannels.WECOM_STREAM && weComSources.size == 1) {
+                                            weComSources.single().id
+                                        } else ""
                                         customWebhookMethod = "POST"
                                         customWebhookContentType = "application/json"
                                         customWebhookBody = MultiForwardConfig.DEFAULT_CUSTOM_WEBHOOK_BODY
@@ -1292,12 +1302,60 @@ fun InstanceEditorDialog(
                         OutlinedTextField(value = f4, onValueChange = { f4 = it }, label = { Text("接收人 (touser 如 @all)") }, modifier = Modifier.fillMaxWidth())
                     }
                     ForwardingChannels.WECOM_STREAM -> {
+                        ExposedDropdownMenuBox(
+                            expanded = weComSourceMenuExpanded,
+                            onExpandedChange = { weComSourceMenuExpanded = !weComSourceMenuExpanded }
+                        ) {
+                            val source = weComSources.firstOrNull { it.id == weComSourceId }
+                            OutlinedTextField(
+                                value = source?.let { "${it.name} · ${it.connectionState.label}" }
+                                    ?: if (weComSourceId.isBlank()) "请选择企业微信远程来源" else "关联来源已失效",
+                                onValueChange = {},
+                                readOnly = true,
+                                label = { Text("连接来源") },
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = weComSourceMenuExpanded) },
+                                modifier = Modifier.menuAnchor().fillMaxWidth()
+                            )
+                            ExposedDropdownMenu(
+                                expanded = weComSourceMenuExpanded,
+                                onDismissRequest = { weComSourceMenuExpanded = false }
+                            ) {
+                                if (weComSources.isEmpty()) {
+                                    DropdownMenuItem(
+                                        text = { Text("暂无企业微信远程来源，请先在远程发送中添加") },
+                                        onClick = { weComSourceMenuExpanded = false },
+                                        enabled = false
+                                    )
+                                }
+                                weComSources.forEach { source ->
+                                    DropdownMenuItem(
+                                        text = { Text("${source.name} · ${source.connectionState.label}") },
+                                        onClick = {
+                                            weComSourceId = source.id
+                                            testFeedback = null
+                                            weComSourceMenuExpanded = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
                         OutlinedTextField(
                             value = f1,
                             onValueChange = { f1 = it },
-                            label = { Text("推送目标 Chat ID / User ID") },
-                            placeholder = { Text("例如 wrkXXX 或具体成员账号") },
+                            label = { Text("会话 ID") },
+                            placeholder = { Text("群聊填 Chat ID，单聊填成员 User ID") },
                             modifier = Modifier.fillMaxWidth()
+                        )
+                        val selectedSource = weComSources.firstOrNull { it.id == weComSourceId }
+                        Text(
+                            text = when {
+                                selectedSource == null && weComSourceId.isNotBlank() -> "关联来源已失效，请重新选择"
+                                selectedSource == null -> "推送通道必须关联一条企业微信远程来源"
+                                !selectedSource.enabled -> "关联来源已停用，请先在远程发送中开启"
+                                else -> "连接状态：${selectedSource.connectionState.label}"
+                            },
+                            fontSize = 11.sp,
+                            color = if (selectedSource?.enabled == true) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error
                         )
                     }
                     ForwardingChannels.FEISHU_APP -> {

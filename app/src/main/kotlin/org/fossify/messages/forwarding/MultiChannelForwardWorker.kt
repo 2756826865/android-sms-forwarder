@@ -199,10 +199,12 @@ class MultiChannelForwardWorker(
                         val chatId = instance.optString("chatId")
                         val sourceInstanceId = instance.optString("sourceInstanceId")
                         check(chatId.isNotBlank()) { "企微智能机器人长连接推送目标 ChatID / UserID 未配置" }
-                        val sent = org.fossify.messages.remote.runtime.RemoteSourceRuntimeManager
+                        val result = org.fossify.messages.remote.runtime.RemoteSourceRuntimeManager
                             .getInstance(applicationContext)
                             .sendWeComPush(sourceInstanceId, chatId, "$title\n$content")
-                        check(sent) { "企微智能机器人长连接尚未就绪或推送失败，请检查远程控制中是否已配置并连接" }
+                        check(result.isSuccess) {
+                            result.weComErrorCode?.let { "${result.message}（错误码 $it）" } ?: result.message
+                        }
                     }
                     ForwardingChannels.DINGTALK -> {
                         val webhook = instance.optString("webhook")
@@ -447,10 +449,12 @@ class MultiChannelForwardWorker(
                         val chatId = instance.optString("chatId")
                         val sourceInstanceId = instance.optString("sourceInstanceId")
                         check(chatId.isNotBlank()) { "企微智能机器人长连接推送目标 ChatID / UserID 未配置" }
-                        val sent = org.fossify.messages.remote.runtime.RemoteSourceRuntimeManager
+                        val result = org.fossify.messages.remote.runtime.RemoteSourceRuntimeManager
                             .getInstance(applicationContext)
                             .sendWeComPush(sourceInstanceId, chatId, "$title\n$content")
-                        check(sent) { "企微智能机器人长连接尚未就绪或推送失败，请检查远程控制中是否已配置并连接" }
+                        check(result.isSuccess) {
+                            result.weComErrorCode?.let { "${result.message}（错误码 $it）" } ?: result.message
+                        }
                     }
                     ForwardingChannels.DINGTALK -> {
                         val webhook = instance.optString("webhook")

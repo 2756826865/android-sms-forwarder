@@ -1,3 +1,5 @@
+@file:Suppress("SpellCheckingInspection")
+
 package org.fossify.messages.remote
 
 import android.util.Log
@@ -20,18 +22,18 @@ import java.util.concurrent.atomic.AtomicInteger
 /**
  * 企业微信官方智能机器人 WebSocket 长连接客户端。
  *
- * 协议严格以 WeCom 官方开源 SDK (aibot-node-sdk / wecom-aibot-python-sdk) 源码为唯一依据：
- * 1. 默认 WebSocket URL: wss://openws.work.weixin.qq.com
- * 2. 鉴权帧:
+ * 协议严格以 WeCom 官方开源 SDK (aibot-node-sdk / wecom-aibot-python-sdk) 源码为唯一依据。
+ * 1. 默认 WebSocket URL：wss://openws.work.weixin.qq.com
+ * 2. 鉴权帧：
  *    cmd: "aibot_subscribe"
  *    headers: { "req_id": "aibot_subscribe_..." }
  *    body: { "bot_id": "...", "secret": "..." }
- * 3. 心跳帧:
+ * 3. 心跳帧：
  *    cmd: "ping"
  *    headers: { "req_id": "ping_..." }
  *    body: {}
  *    间隔 30 秒，未收到 pong 计数累加，>= 2 时触发重连。
- * 4. 消息回调帧:
+ * 4. 消息回调帧：
  *    cmd: "aibot_msg_callback"
  *    headers: { "req_id": "..." }
  *    body: {
@@ -42,14 +44,14 @@ import java.util.concurrent.atomic.AtomicInteger
  *       "msgtype": "text",
  *       "text": { "content": "..." }
  *    }
- * 5. 被动回复:
+ * 5. 被动回复：
  *    cmd: "aibot_respond_msg"
- *    headers: { "req_id": <回调中收到的原始 req_id> }
+ *    headers: { "req_id": [回调中收到的原始 req_id] }
  *    body: {
  *       "msgtype": "stream",
  *       "stream": { "id": "...", "finish": true, "content": "..." }
  *    }
- * 6. 主动推送:
+ * 6. 主动推送：
  *    cmd: "aibot_send_msg"
  *    headers: { "req_id": "aibot_send_msg_..." }
  *    body: {
@@ -57,7 +59,7 @@ import java.util.concurrent.atomic.AtomicInteger
  *       "msgtype": "markdown",
  *       "markdown": { "content": "..." }
  *    }
- * 7. 事件帧 (服务端踢线通知):
+ * 7. 事件帧 (服务端踢线通知)：
  *    cmd: "aibot_event_callback"
  *    body: { "event": { "eventtype": "disconnected_event" } }
  *    当相同 bot_id 建立新连接时触发，此时必须停止重连并标记下线。
@@ -69,6 +71,16 @@ class WeComStreamClient(
     private val onCommand: (WeComRemoteCommand) -> Unit,
     private val onStatus: (String) -> Unit,
 ) {
+    data class PushResult(
+        val isSuccess: Boolean,
+        val code: String,
+        val message: String,
+        val weComErrorCode: Int? = null,
+    ) {
+        companion object {
+            val SUCCESS = PushResult(true, "success", "企业微信已确认接收")
+        }
+    }
     private val http = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(0, TimeUnit.MILLISECONDS)
@@ -224,7 +236,7 @@ class WeComStreamClient(
 
         when (cmd) {
             // 鉴权响应 / 心跳 pong / 通用响应 (errcode 属于根节点或 body 节点)
-            "", "pong", "aibot_subscribe_resp", "ping_resp" -> {
+            "", "aibot_subscribe_resp", "ping_resp" -> {
                 val errCode = if (json.has("errcode")) json.optInt("errcode") else body.optInt("errcode", 0)
                 val errMsg = if (json.has("errmsg")) json.optString("errmsg") else body.optString("errmsg")
 
@@ -408,7 +420,7 @@ class WeComStreamClient(
                     val errCode = if (res.has("errcode")) res.optInt("errcode") else res.optJSONObject("body")?.optInt("errcode", 0) ?: 0
                     errCode == 0
                 } else {
-                    sent
+                    true
                 }
             }.get(7, TimeUnit.SECONDS)
         } catch (e: Throwable) {
@@ -421,12 +433,15 @@ class WeComStreamClient(
      * 主动向群聊或私聊推送消息。
      * 官方协议：cmd = "aibot_send_msg"，headers = { req_id }，body = { chatid, msgtype: "markdown", markdown: { content } }
      */
-    fun push(chatId: String, content: String): Boolean {
-        if (!isAuthenticated.get()) return false
-        val ws = webSocket ?: return false
+    fun isReady(): Boolean = running.get() && isAuthenticated.get() && webSocket != null
+
+    fun push(chatId: String, content: String): PushResult {
+        if (chatId.isBlank()) return PushResult(false, "chat_id_missing", "会话 ID 不能为空")
+        if (!isAuthenticated.get()) return PushResult(false, "not_authenticated", "企业微信长连接尚未完成鉴权")
+        val ws = webSocket ?: return PushResult(false, "disconnected", "企业微信 WebSocket 已断开")
 
         return try {
-            sendExecutor.submit<Boolean> {
+            sendExecutor.submit<PushResult> {
                 val reqId = "aibot_send_msg_${System.currentTimeMillis()}_${UUID.randomUUID().toString().take(8)}"
                 val pushFrame = JSONObject().apply {
                     put("cmd", "aibot_send_msg")
@@ -443,22 +458,32 @@ class WeComStreamClient(
                 val sent = ws.send(pushFrame.toString())
                 if (!sent) {
                     pendingAcks.remove(reqId)
-                    return@submit false
+                    return@submit PushResult(false, "send_failed", "消息未能写入企业微信连接")
                 }
 
                 val ok = ack.latch.await(5, TimeUnit.SECONDS)
                 pendingAcks.remove(reqId)
-                if (ok && ack.responseJson != null) {
-                    val res = ack.responseJson!!
-                    val errCode = if (res.has("errcode")) res.optInt("errcode") else res.optJSONObject("body")?.optInt("errcode", 0) ?: 0
-                    errCode == 0
-                } else {
-                    sent
+                if (!ok || ack.responseJson == null) {
+                    return@submit PushResult(false, "ack_timeout", "等待企业微信确认超时")
                 }
+                val res = ack.responseJson!!
+                val body = res.optJSONObject("body")
+                val hasErrorCode = res.has("errcode") || body?.has("errcode") == true
+                if (!hasErrorCode) {
+                    return@submit PushResult(false, "invalid_ack", "企业微信返回了无法识别的确认响应")
+                }
+                val errCode = if (res.has("errcode")) res.optInt("errcode") else body!!.optInt("errcode")
+                val errMsg = if (res.has("errmsg")) res.optString("errmsg") else body?.optString("errmsg").orEmpty()
+                if (errCode == 0) PushResult.SUCCESS else PushResult(
+                    false,
+                    "wecom_rejected",
+                    errMsg.ifBlank { "企业微信拒绝主动推送" },
+                    errCode,
+                )
             }.get(7, TimeUnit.SECONDS)
         } catch (e: Throwable) {
             Log.e(TAG, "push error", e)
-            false
+            PushResult(false, "internal_error", e.message ?: e.javaClass.simpleName)
         }
     }
 

@@ -33,6 +33,13 @@ import java.util.concurrent.ConcurrentHashMap
  */
 class RemoteSourceRuntimeManager private constructor(private val appContext: Context) {
 
+    data class WeComPushResult(
+        val isSuccess: Boolean,
+        val code: String,
+        val message: String,
+        val weComErrorCode: Int? = null,
+    )
+
     sealed class RuntimeHandle {
         abstract val instanceId: String
         abstract val configFingerprint: String
@@ -425,19 +432,33 @@ class RemoteSourceRuntimeManager private constructor(private val appContext: Con
         if (hasEmail) EmailRemoteControlService.ensureStarted(appContext) else EmailRemoteControlService.stop(appContext)
     }
 
-    fun sendWeComPush(sourceInstanceId: String, chatId: String, content: String): Boolean {
-        val handle = if (sourceInstanceId.isNotBlank()) {
-            runningHandles[sourceInstanceId] as? RuntimeHandle.WeCom
-                ?: runningHandles.values.filterIsInstance<RuntimeHandle.WeCom>().firstOrNull {
-                    val repo = RemoteSourceRepository.getInstance(appContext)
-                    val inst = repo.getSourceById(it.instanceId)
-                    inst?.optString("botId") == sourceInstanceId
-                }
-        } else {
-            runningHandles.values.filterIsInstance<RuntimeHandle.WeCom>().firstOrNull()
-        } ?: return false
-
-        return handle.client.push(chatId, content)
+    fun sendWeComPush(sourceInstanceId: String, chatId: String, content: String): WeComPushResult {
+        if (sourceInstanceId.isBlank()) {
+            return WeComPushResult(false, "source_missing", "推送通道尚未关联企业微信远程来源")
+        }
+        if (chatId.isBlank()) {
+            return WeComPushResult(false, "chat_id_missing", "会话 ID 不能为空")
+        }
+        val source = RemoteSourceRepository.getInstance(appContext).getSourceById(sourceInstanceId)
+            ?: return WeComPushResult(false, "source_not_found", "关联的企业微信远程来源已不存在")
+        if (source.type != RemoteSourceType.WECOM) {
+            return WeComPushResult(false, "source_type_invalid", "关联来源不是企业微信长连接")
+        }
+        if (!source.enabled) {
+            return WeComPushResult(false, "source_disabled", "关联的企业微信远程来源已停用")
+        }
+        val handle = runningHandles[sourceInstanceId] as? RuntimeHandle.WeCom
+            ?: return WeComPushResult(
+                false,
+                if (source.connectionState == RemoteSourceConnectionState.CONNECTING) "connecting" else "disconnected",
+                if (source.connectionState == RemoteSourceConnectionState.CONNECTING) "企业微信长连接正在连接，请稍后重试"
+                else source.lastErrorMessage.ifBlank { "企业微信长连接尚未运行" },
+            )
+        if (!isHandleActive(handle) || !handle.client.isReady()) {
+            return WeComPushResult(false, "connecting", "企业微信长连接尚未完成连接与鉴权")
+        }
+        val result = handle.client.push(chatId.trim(), content)
+        return WeComPushResult(result.isSuccess, result.code, result.message, result.weComErrorCode)
     }
 
     companion object {

@@ -1,3 +1,5 @@
+@file:Suppress("SpellCheckingInspection")
+
 package org.fossify.messages.remote.repository
 
 import android.content.Context
@@ -293,8 +295,8 @@ class RemoteSourceRepository internal constructor(
         val recent = readRateTimestamps(id).filter { now - it < DAY_MS }
         val hourlyCount = recent.count { now - it < HOUR_MS }
         val dailyCount = recent.size
-        val hourlyBlocked = instance.hourlyLimit > 0 && hourlyCount >= instance.hourlyLimit
-        val dailyBlocked = instance.dailyLimit > 0 && dailyCount >= instance.dailyLimit
+        val hourlyBlocked = instance.hourlyLimit > 0 && hourlyCount !in 0 until instance.hourlyLimit
+        val dailyBlocked = instance.dailyLimit > 0 && dailyCount !in 0 until instance.dailyLimit
         return hourlyBlocked || dailyBlocked
     }
 
@@ -667,6 +669,19 @@ class RemoteSourceRepository internal constructor(
 
         if (updated != _sourcesFlow.value) {
             persist(updated)
+            val wecomSource = updated.firstOrNull { it.type == RemoteSourceType.WECOM }
+            if (wecomSource != null && appContext != null) {
+                val botId = wecomSource.optString("botId")
+                val chatId = wecomSource.optString("chatId")
+                if (botId.isNotBlank() && chatId.isNotBlank()) {
+                    ChannelRepository.getInstance(appContext).syncLinkedWeComStreamChannel(
+                        sourceInstanceId = wecomSource.id,
+                        botId = botId,
+                        chatId = chatId,
+                        sourceName = "${wecomSource.name} (长连接)"
+                    )
+                }
+            }
             return true
         }
         return false
@@ -782,7 +797,7 @@ class RemoteSourceRepository internal constructor(
                     val cipherText = value.removePrefix("ENC:")
                     val decrypted = org.fossify.messages.forwarding.ForwardingCipher.decrypt(cipherText)
                     // 解密失败时保留 ENC 标记，防止下次持久化把密文本身再次加密。
-                    json.put(key, if (decrypted.isNotBlank()) decrypted else value)
+                    json.put(key, decrypted.ifBlank { value })
                 }
             }
         }

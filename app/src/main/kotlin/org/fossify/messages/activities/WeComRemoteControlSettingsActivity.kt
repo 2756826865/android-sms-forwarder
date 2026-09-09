@@ -59,14 +59,15 @@ class WeComRemoteControlSettingsActivity : SimpleActivity() {
             org.fossify.commons.helpers.ensureBackgroundThread {
                 val runtimeManager = RemoteSourceRuntimeManager.getInstance(applicationContext)
                 val testContent = "【短信转发器 · 企业微信长连接测试】\n连接状态正常，握手与主动消息推送成功！"
-                val ok = runtimeManager.sendWeComPush("legacy_remote_wecom", chatId, testContent)
+                val result = runtimeManager.sendWeComPush("legacy_remote_wecom", chatId, testContent)
                 runOnUiThread {
-                    if (ok) {
+                    if (result.isSuccess) {
                         toast("测试推送成功！")
                         config.appendWeComRemoteLog("测试推送成功 -> $chatId")
                     } else {
-                        toast("测试推送失败，请检查连接状态或 Chat ID 是否正确")
-                        config.appendWeComRemoteLog("测试推送失败 -> $chatId")
+                        val detail = result.weComErrorCode?.let { "${result.message}（错误码 $it）" } ?: result.message
+                        toast("测试推送失败：$detail")
+                        config.appendWeComRemoteLog("测试推送失败 -> $chatId：$detail")
                     }
                     loadConfig()
                 }
@@ -117,9 +118,6 @@ class WeComRemoteControlSettingsActivity : SimpleActivity() {
         org.fossify.messages.remote.repository.RemoteSourceRepository
             .getInstance(applicationContext)
             .syncLegacySourcesFromClassic()
-        org.fossify.messages.forwarding.repository.ChannelRepository
-            .getInstance(applicationContext)
-            .syncLinkedWeComStreamChannel("legacy_remote_wecom", botId, chatId, "企业微信智能机器人 (长连接)")
         return true
     }
 }

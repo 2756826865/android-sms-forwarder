@@ -424,10 +424,12 @@ object ChannelTestSender {
                     val chatId = instance.optString("chatId")
                     val sourceInstanceId = instance.optString("sourceInstanceId")
                     require(chatId.isNotBlank()) { "企业微信智能机器人推送目标 ChatID / UserID 不能为空，请先配置" }
-                    val sent = org.fossify.messages.remote.runtime.RemoteSourceRuntimeManager
+                    val result = org.fossify.messages.remote.runtime.RemoteSourceRuntimeManager
                         .getInstance(context)
                         .sendWeComPush(sourceInstanceId, chatId, "$title\n$content")
-                    check(sent) { "测试推送失败：企业微信长连接尚未连接，或目标 ChatID / UserID 不正确" }
+                    check(result.isSuccess) {
+                        result.weComErrorCode?.let { "${result.message}（错误码 $it）" } ?: result.message
+                    }
                     "企业微信智能机器人 (长连接) 测试消息推送成功！"
                 }
                 ForwardingChannels.FEISHU_APP -> {
