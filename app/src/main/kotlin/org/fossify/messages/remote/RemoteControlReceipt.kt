@@ -227,9 +227,32 @@ object RemoteControlReceiptForwarder {
             SOURCE_WEBSOCKET -> multiConfig.appendWebSocketRemoteLog("回执[$status] -> ${pending.target}$receiptSimSuffix")
         }
 
-        // 普通转发通道精准派发（按用户选择的实例分别调用 enqueueSingle）
-        if (targetInstances.isNotEmpty()) {
-            targetInstances.forEach { inst ->
+        // 1. 所有具备双向会话能力的远程渠道，优先按 sourceInstanceId 原路精准回执。
+        val directDelivered = org.fossify.messages.remote.runtime.RemoteSourceRuntimeManager
+            .getInstance(context)
+            .sendDirectReceipt(pending, status, body)
+
+        // 2. 普通转发通道精准派发（按用户选择的实例分别调用 enqueueSingle）
+        // 关键防重优化：如果当前指令来自钉钉/飞书等平台且已通过原路会话直接回复成功，
+        // 则在普通转发通道中自动排除同类型的机器人，彻底杜绝群内双重回执轰炸。
+        val deduplicatedInstances = if (directDelivered) {
+            targetInstances.filterNot { inst ->
+                when (pending.source) {
+                    SOURCE_DINGTALK -> inst.channelType == org.fossify.messages.forwarding.ForwardingChannels.DINGTALK
+                    SOURCE_FEISHU -> inst.channelType == org.fossify.messages.forwarding.ForwardingChannels.FEISHU ||
+                        inst.channelType == org.fossify.messages.forwarding.ForwardingChannels.FEISHU_APP ||
+                        inst.channelType == org.fossify.messages.forwarding.ForwardingChannels.FEISHU_BOT
+                    SOURCE_TELEGRAM -> inst.channelType == org.fossify.messages.forwarding.ForwardingChannels.TELEGRAM
+                    SOURCE_WEBSOCKET -> inst.channelType == org.fossify.messages.forwarding.ForwardingChannels.WEBSOCKET
+                    else -> false
+                }
+            }
+        } else {
+            targetInstances
+        }
+
+        if (deduplicatedInstances.isNotEmpty()) {
+            deduplicatedInstances.forEach { inst ->
                 MultiChannelForwardWorker.enqueueSingle(
                     context = context,
                     sender = title,
@@ -244,10 +267,5 @@ object RemoteControlReceiptForwarder {
                 )
             }
         }
-
-        // 所有远程渠道统一按 sourceInstanceId 原路回执，禁止跨实例回退。
-        org.fossify.messages.remote.runtime.RemoteSourceRuntimeManager
-            .getInstance(context)
-            .sendDirectReceipt(pending, status, body)
     }
 }

@@ -49,7 +49,9 @@ class FeishuStreamClient(
                         }
                     })
                     .build()
-                val client = Client.Builder(appId, appSecret)
+                val cleanAppId = appId.trim()
+                val cleanAppSecret = appSecret.trim()
+                val client = Client.Builder(cleanAppId, cleanAppSecret)
                     .eventHandler(dispatcher)
                     .autoReconnect(true)
                     .source("android-sms-forwarder")
@@ -67,10 +69,19 @@ class FeishuStreamClient(
                     onStatus("已连接 · 等待飞书机器人指令")
                 }
             } catch (error: Throwable) {
-                Log.e(TAG, "Feishu official stream client failed", error)
-                if (running.get()) {
-                    onStatus("连接失败：${error.message ?: error.javaClass.simpleName}")
+                // 如果运行状态已被外部主动停止或重载 close，则不作为异常失败抛出给用户
+                if (!running.get()) {
+                    Log.i(TAG, "Feishu stream client was stopped or reloaded during connection")
+                    return@Thread
                 }
+                Log.e(TAG, "Feishu official stream client failed", error)
+                val rawMsg = error.message.orEmpty()
+                val tip = when {
+                    rawMsg.contains("websocket client closed", ignoreCase = true) -> "连接已重置，正在重新建立长连接…"
+                    rawMsg.contains("invalid", ignoreCase = true) || rawMsg.contains("1000040346") -> "App ID 或 Secret 格式无效，请核对飞书后台"
+                    else -> "连接失败：${error.message ?: error.javaClass.simpleName}"
+                }
+                onStatus(tip)
                 streamClient?.close()
                 streamClient = null
                 running.set(false)
