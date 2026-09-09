@@ -173,7 +173,7 @@
                 android:textColor="@color/miui_secondary_text"
                 android:textSize="12sp"
                 android:lineSpacingExtra="3dp"
-                android:text="📌 企业微信智能机器人官方长连接配置指南：\n1. 【进入企业微信管理后台】企业管理员登录企业微信后台 (work.weixin.qq.com)，进入「应用管理 → 机器人」；\n2. 【创建智能机器人】点击「创建机器人」，填写机器人名称与介绍，创建成功后获取 Bot ID 与 Secret 密钥；\n3. 【长连接模式优势】无需公网 IP，无需配置服务器回调 URL，由手机 App 直连腾讯官方长连网关；\n4. 【配置与建连】将 Bot ID 与 Secret 填入上方输入框，点击【保存并连接】，状态显示「已连接」即表示握手成功；\n5. 【群聊与单聊发信】将该机器人拉入企业微信群聊或发起单聊，在群内 @机器人 /发信 [SIM1|SIM2|默认] 手机号 短信内容 即可远程发信，并原路接收发送状态及送达回执。" />
+                android:text="📌 企业微信智能机器人官方长连接配置指南：\n\n【入口 1：电脑端企业微信后台】\n1. 电脑端登录企业微信后台 (work.weixin.qq.com)，进入左侧菜单「安全与管理 → 管理工具」；\n2. 找到「智能专区」中的【智能机器人】，点击「创建智能机器人」；\n3. 模式选择【API模式】，连接方式勾选【使用长连接】（免域名/免公网IP）；\n4. 复制生成的 Bot ID，并点击获取 Secret 密钥。\n\n【入口 2：企业微信手机 App 直接创建】\n打开企业微信 App →「通讯录」→「智能机器人」→「创建智能机器人」→ 选择【API模式】并选择【使用长连接】。\n\n【使用方式】\n将 Bot ID 与 Secret 填入上方输入框并保存连接。将该机器人添加到企业群聊或发起单聊，在聊天框内发送：\n/发信 [SIM1|SIM2|默认] 手机号 短信内容\n即可直接驱动备用机发信，并原路接收发送状态及送达回执。" />
         </LinearLayout>
     </androidx.core.widget.NestedScrollView>
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

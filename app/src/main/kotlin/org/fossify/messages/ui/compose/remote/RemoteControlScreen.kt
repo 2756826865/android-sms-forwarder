@@ -1009,16 +1009,21 @@ private fun RemoteSourceEditDialog(
                         ) {
                             Column(modifier = Modifier.padding(10.dp)) {
                                 Text(
-                                    text = "📌 企业微信官方长连接配置指南",
+                                    text = "📌 企业微信智能机器人官方长连接配置指南",
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = GatewayBlue
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = "1. 登录企微后台 (work.weixin.qq.com) 进入「应用管理 → 机器人」创建智能机器人；\n" +
-                                           "2. 获取 Bot ID 与 Secret 填入下方，点击保存即可免公网 IP 直连腾讯官方长连通道；\n" +
-                                           "3. 将机器人拉入群聊或单聊，@机器人 发送 /发信 10086 查询 即可远程发信并原路接收回执。",
+                                    text = "【电脑端后台创建】\n" +
+                                           "1. 登录企业微信后台 (work.weixin.qq.com)，进入「安全与管理 → 管理工具 → 智能专区 → 智能机器人」；\n" +
+                                           "2. 点击「创建机器人」，选择【API模式】；\n" +
+                                           "3. 连接方式必须勾选【使用长连接】（免公网IP/免域名），点击查看/获取 Bot ID 与 Secret 密钥；\n\n" +
+                                           "【手机企微App直接创建】\n" +
+                                           "打开企业微信手机端 →「通讯录」→「智能机器人」→「创建智能机器人」→ 选择【API模式】并勾选【使用长连接】；\n\n" +
+                                           "【使用说明】\n" +
+                                           "将获取的 Bot ID 与 Secret 填入下方保存；把机器人拉入群聊或单聊，@机器人 发送 /发信 10086 查询 即可远程代发短信并原路接收回执。",
                                     fontSize = 11.sp,
                                     color = TextSecondary,
                                     lineHeight = 16.sp
