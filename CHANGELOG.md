@@ -6,10 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.1.7] - 2026-09-09
 
+### 🌟 核心新特性与重大升级 (Major Features)
+
+- **💬 企业微信智能机器人官方长连接支持 (WeCom WebSocket Bot Stream)**：
+  - 基于腾讯企业微信官方 SDK (`aibot-node-sdk`) 规范，在 Kotlin 端原生移植 WebSocket 全双工长连接；
+  - **免公网 IP / 免配置回调 URL**：通过官方长连接通道 `wss://openapis.work.weixin.qq.com/aibot-stream`，凭借 `bot_id` 与 `secret` 即可接入；
+  - **双向发信与原路回执**：支持解析 `aibot_msg_callback` 指令并触发备用机发信；支持通过 `aibot_respond_msg`（带 `req_id`）快速应答与 `aibot_send_msg` 异步定向推送，实现原路精准回执；
+  - **白名单与连接保活自愈**：内置 30 秒官方心跳保活机制与网络抖动断线自愈重连，支持 UserID / ChatID 权限校验，并由 `RemoteSourceRuntimeManager` 和常驻服务全生命周期托管。
+
 ### 🌟 改进与问题修复 (Improvements & Fixes)
 
-- **🔇 钉钉与飞书远程发信双重回执智能去重**：
-  - 彻底解决在钉钉/飞书群内艾特机器人发信时，由于同时配置了群 Webhook 机器人导致群内收到两条重复回执卡片的问题；
+- **🔇 远程发信（企业微信/钉钉/飞书/TG/WS）双重回执智能去重与防重闭环 (`RemoteControlReceipt.kt`)**：
+  - 彻底解决在机器人会话内发信时，由于同时配置了群 Webhook 机器人导致群内收到两条重复回执卡片的问题；
   - 架构级优先派发原路会话回执（Direct Session Reply），成功送达后自动屏蔽向同平台普通 Webhook 机器人的冗余派发，同时保留向邮箱、Bark、PushPlus 等异构备份通道的正常派发。
 - **⚡ 飞书 Stream 长连接稳定性加固与凭证清洗**：
   - 强制对 `appId` 与 `appSecret` 进行首尾空白符过滤清洗，避免复制带入不可见空格导致飞书网关拒绝；
