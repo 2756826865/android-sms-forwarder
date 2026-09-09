@@ -24,6 +24,7 @@ enum class RemoteSourceType(val label: String, val emoji: String) {
     TELEGRAM("Telegram Bot", "✈️"),
     DINGTALK("钉钉 Stream", "🤖"),
     FEISHU("飞书长连接", "🕊️"),
+    WECOM("企业微信长连接", "💬"),
     EMAIL("邮箱 IMAP", "📧"),
     WEBSOCKET("WebSocket 客户端", "🔌");
 
@@ -99,6 +100,7 @@ data class RemoteSourceInstance(
             RemoteSourceType.TELEGRAM -> credential("botToken").isNotBlank()
             RemoteSourceType.DINGTALK -> credential("clientId").isNotBlank() && credential("clientSecret").isNotBlank()
             RemoteSourceType.FEISHU -> credential("appId").isNotBlank() && credential("appSecret").isNotBlank()
+            RemoteSourceType.WECOM -> credential("botId").isNotBlank() && credential("secret").isNotBlank()
             RemoteSourceType.EMAIL -> credential("host").isNotBlank() && credential("user").isNotBlank() && credential("pass").isNotBlank()
             // 自建服务可以不启用鉴权；Token 与编辑页面保持为可选。
             RemoteSourceType.WEBSOCKET -> credential("url").isNotBlank()
@@ -469,6 +471,36 @@ class RemoteSourceRepository internal constructor(
             )
         }
 
+        // 6. 企业微信长连接
+        val wecomBotId = multiConfig.weComRemoteBotId().trim()
+        val wecomSecret = multiConfig.weComRemoteSecret().trim()
+        if (wecomBotId.isNotBlank() && wecomSecret.isNotBlank()) {
+            candidates.add(
+                LegacySourceCandidate(
+                    type = RemoteSourceType.WECOM,
+                    defaultName = "企业微信长连接",
+                    credentialsSummary = "Bot ID: ${wecomBotId.take(8)}***",
+                    createInstance = {
+                        val json = JSONObject().apply {
+                            put("botId", wecomBotId)
+                            put("secret", wecomSecret)
+                            put("chatId", multiConfig.weComRemoteChatId().trim())
+                        }
+                        RemoteSourceInstance(
+                            id = "legacy_remote_wecom",
+                            name = "企业微信长连接",
+                            type = RemoteSourceType.WECOM,
+                            enabled = multiConfig.weComRemoteControlEnabled,
+                            connectionState = if (multiConfig.weComRemoteControlEnabled) RemoteSourceConnectionState.CONNECTING else RemoteSourceConnectionState.DISABLED,
+                            customCommandPrefix = multiConfig.weComRemoteCustomPrefix(),
+                            defaultSimMode = multiConfig.weComRemoteSendSimMode,
+                            configJson = json.toString()
+                        )
+                    }
+                )
+            )
+        }
+
         // 7. WebSocket
         val wsUrl = multiConfig.websocketRemoteUrl().trim()
         if (wsUrl.isNotBlank()) {
@@ -562,6 +594,7 @@ class RemoteSourceRepository internal constructor(
             "legacy_remote_telegram",
             "legacy_remote_dingtalk",
             "legacy_remote_feishu",
+            "legacy_remote_wecom",
             "legacy_remote_email",
             "legacy_remote_websocket"
         )
@@ -695,7 +728,7 @@ class RemoteSourceRepository internal constructor(
         val json = JSONObject(rawConfig)
         val sensitiveKeys = listOf(
             "secret", "relaySharedSecret", "botToken", "clientSecret",
-            "appSecret", "pass", "token"
+            "appSecret", "pass", "token", "botId"
         )
         sensitiveKeys.forEach { key ->
             if (json.has(key)) {
@@ -716,7 +749,7 @@ class RemoteSourceRepository internal constructor(
         val json = JSONObject(rawConfig)
         val sensitiveKeys = listOf(
             "secret", "relaySharedSecret", "botToken", "clientSecret",
-            "appSecret", "pass", "token"
+            "appSecret", "pass", "token", "botId"
         )
         sensitiveKeys.forEach { key ->
             if (json.has(key)) {

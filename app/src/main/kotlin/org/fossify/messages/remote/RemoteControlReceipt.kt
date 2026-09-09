@@ -225,6 +225,7 @@ object RemoteControlReceiptForwarder {
             SOURCE_EMAIL -> multiConfig.appendEmailRemoteLog("回执[$status] -> ${pending.target}$receiptSimSuffix")
             SOURCE_TELEGRAM -> multiConfig.appendTelegramRemoteLog("回执[$status] -> ${pending.target}$receiptSimSuffix")
             SOURCE_WEBSOCKET -> multiConfig.appendWebSocketRemoteLog("回执[$status] -> ${pending.target}$receiptSimSuffix")
+            SOURCE_WECOM -> multiConfig.appendWeComRemoteLog("回执[$status] -> ${pending.target}$receiptSimSuffix")
         }
 
         // 1. 所有具备双向会话能力的远程渠道，优先按 sourceInstanceId 原路精准回执。
@@ -233,17 +234,21 @@ object RemoteControlReceiptForwarder {
             .sendDirectReceipt(pending, status, body)
 
         // 2. 普通转发通道精准派发（按用户选择的实例分别调用 enqueueSingle）
-        // 关键防重优化：如果当前指令来自钉钉/飞书等平台且已通过原路会话直接回复成功，
+        // 关键防重优化：如果当前指令来自微信/钉钉/飞书等平台且已通过原路会话直接回复成功，
         // 则在普通转发通道中自动排除同类型的机器人，彻底杜绝群内双重回执轰炸。
         val deduplicatedInstances = if (directDelivered) {
             targetInstances.filterNot { inst ->
                 when (pending.source) {
                     SOURCE_DINGTALK -> inst.channelType == org.fossify.messages.forwarding.ForwardingChannels.DINGTALK
                     SOURCE_FEISHU -> inst.channelType == org.fossify.messages.forwarding.ForwardingChannels.FEISHU ||
-                        inst.channelType == org.fossify.messages.forwarding.ForwardingChannels.FEISHU_APP ||
-                        inst.channelType == org.fossify.messages.forwarding.ForwardingChannels.FEISHU_BOT
+                                     inst.channelType == org.fossify.messages.forwarding.ForwardingChannels.FEISHU_BOT ||
+                                     inst.channelType == org.fossify.messages.forwarding.ForwardingChannels.FEISHU_APP
+                    SOURCE_WECOM -> inst.channelType == org.fossify.messages.forwarding.ForwardingChannels.WECOM ||
+                                    inst.channelType == org.fossify.messages.forwarding.ForwardingChannels.WECOM_BOT ||
+                                    inst.channelType == org.fossify.messages.forwarding.ForwardingChannels.WECOM_APP
                     SOURCE_TELEGRAM -> inst.channelType == org.fossify.messages.forwarding.ForwardingChannels.TELEGRAM
                     SOURCE_WEBSOCKET -> inst.channelType == org.fossify.messages.forwarding.ForwardingChannels.WEBSOCKET
+                    SOURCE_EMAIL -> inst.channelType == org.fossify.messages.forwarding.ForwardingChannels.EMAIL
                     else -> false
                 }
             }

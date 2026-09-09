@@ -214,6 +214,14 @@
     <string name="websocket_remote_url">WebSocket URL (ws:// 或 wss://)</string>
     <string name="websocket_remote_token">认证 Token (选填)</string>
 
+    <string name="wecom_remote_title">企业微信来源</string>
+    <string name="wecom_remote_enable">启用企业微信智能机器人长连接</string>
+    <string name="wecom_remote_bot_id">Bot ID (机器人 ID)</string>
+    <string name="wecom_remote_secret">Secret (机器人密钥)</string>
+    <string name="wecom_remote_chat_id">默认推送 Chat ID / User ID (选填)</string>
+    <string name="wecom_remote_secret_hint">安全存储，严格不写入任何日志</string>
+    <string name="wecom_remote_format_hint">无需公网！通过官方 WebSocket 协议连接。在企微后台将机器人添加至群聊或单聊后，@机器人 发送 /短信发送 [SIM1|SIM2|默认] 手机号 内容 即可代发短信并原路接收回执。</string>
+
     <string name="remote_sms_section_command">指令与安全</string>
     <string name="remote_sms_section_receipt">发送回执转发</string>
     <string name="remote_sms_section_log">执行日志</string>

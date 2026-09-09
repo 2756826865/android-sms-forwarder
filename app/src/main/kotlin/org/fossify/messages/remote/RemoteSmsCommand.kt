@@ -369,6 +369,7 @@ class RemoteSmsCommandWorker(appContext: Context, params: WorkerParameters) : Co
             SOURCE_EMAIL -> org.fossify.messages.models.SmsSendTriggerType.REMOTE_EMAIL_COMMAND
             SOURCE_TELEGRAM -> org.fossify.messages.models.SmsSendTriggerType.REMOTE_TELEGRAM_COMMAND
             SOURCE_WEBSOCKET -> org.fossify.messages.models.SmsSendTriggerType.REMOTE_WEBSOCKET_COMMAND
+            SOURCE_WECOM -> org.fossify.messages.models.SmsSendTriggerType.REMOTE_DINGTALK_COMMAND
             else -> org.fossify.messages.models.SmsSendTriggerType.REMOTE_SMS_COMMAND
         }
         return runCatching {
@@ -417,6 +418,7 @@ class RemoteSmsCommandWorker(appContext: Context, params: WorkerParameters) : Co
             SOURCE_EMAIL -> multiConfig.appendEmailRemoteLog(message)
             SOURCE_TELEGRAM -> multiConfig.appendTelegramRemoteLog(message)
             SOURCE_WEBSOCKET -> multiConfig.appendWebSocketRemoteLog(message)
+            SOURCE_WECOM -> multiConfig.appendWeComRemoteLog(message)
         }
     }
 
@@ -470,6 +472,7 @@ const val SOURCE_FEISHU = "飞书远程指令"
 const val SOURCE_EMAIL = "邮箱远程指令"
 const val SOURCE_TELEGRAM = "Telegram远程指令"
 const val SOURCE_WEBSOCKET = "WebSocket远程指令"
+const val SOURCE_WECOM = "企业微信远程指令"
 
 private fun normalizeNumber(value: String): String = value.filter(Char::isDigit).takeLast(11)
 

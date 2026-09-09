@@ -8,6 +8,7 @@ import org.fossify.messages.remote.EmailRemoteCommandPoller
 import org.fossify.messages.remote.FeishuStreamClient
 import org.fossify.messages.remote.RemoteControlPendingReceipt
 import org.fossify.messages.remote.TelegramRemotePoller
+import org.fossify.messages.remote.WeComStreamClient
 import org.fossify.messages.remote.WebSocketRemoteClient
 import org.fossify.messages.remote.repository.RemoteSourceConnectionState
 import org.fossify.messages.remote.repository.RemoteSourceInstance
@@ -73,6 +74,14 @@ class RemoteSourceRuntimeManager private constructor(private val appContext: Con
             override val instanceId: String,
             override val configFingerprint: String,
             val client: FeishuStreamClient
+        ) : RuntimeHandle() {
+            override fun stop() = client.stop()
+        }
+
+        data class WeCom(
+            override val instanceId: String,
+            override val configFingerprint: String,
+            val client: WeComStreamClient
         ) : RuntimeHandle() {
             override fun stop() = client.stop()
         }
@@ -284,6 +293,50 @@ class RemoteSourceRuntimeManager private constructor(private val appContext: Con
                     client.start()
                 }
             }
+            RemoteSourceType.WECOM -> {
+                val botId = instance.optString("botId")
+                val secret = instance.optString("secret")
+                if (botId.isNotBlank() && secret.isNotBlank()) {
+                    var handleRef: RuntimeHandle.WeCom? = null
+                    val client = WeComStreamClient(
+                        botId = botId,
+                        secret = secret,
+                        customPrefix = instance.customCommandPrefix,
+                        onCommand = { cmd ->
+                            val currentHandle = handleRef ?: return@WeComStreamClient
+                            if (!isHandleActive(currentHandle)) return@WeComStreamClient
+                            val envelope = org.fossify.messages.remote.RemoteCommandEnvelope(
+                                sourceType = RemoteSourceType.WECOM,
+                                sourceInstanceId = instance.id,
+                                sourceMessageKey = cmd.msgId,
+                                senderId = cmd.senderId,
+                                groupId = cmd.chatId.takeIf { cmd.chatType == "group" }.orEmpty(),
+                                rawContent = cmd.rawContent,
+                                isMentioned = cmd.isMentioned,
+                                receivedAt = System.currentTimeMillis(),
+                                extraMeta = mapOf(
+                                    "receiptTarget" to cmd.reqId
+                                )
+                            )
+                            org.fossify.messages.remote.RemoteCommandProcessor.process(appContext, envelope)
+                        },
+                        onStatus = { status ->
+                            val currentHandle = handleRef ?: return@WeComStreamClient
+                            if (!isHandleActive(currentHandle)) return@WeComStreamClient
+                            MultiForwardConfig(appContext).appendWeComRemoteLog("[${instance.name}] $status")
+                            if (status.contains("已就绪") || status.contains("已连接")) {
+                                repo.updateConnectionState(instance.id, RemoteSourceConnectionState.READY)
+                            } else if (status.contains("失败") || status.contains("异常") || status.contains("断开")) {
+                                repo.updateConnectionState(instance.id, RemoteSourceConnectionState.ERROR, errorMessage = status)
+                            }
+                        }
+                    )
+                    val handle = RuntimeHandle.WeCom(instance.id, fingerprint, client)
+                    handleRef = handle
+                    runningHandles[instance.id] = handle
+                    client.start()
+                }
+            }
             RemoteSourceType.EMAIL -> {
                 var handleRef: RuntimeHandle.Email? = null
                 val poller = EmailRemoteCommandPoller(appContext, sourceInstanceId = instance.id)
@@ -347,6 +400,10 @@ class RemoteSourceRuntimeManager private constructor(private val appContext: Con
                 val handle = runningHandles[sourceInstanceId] as? RuntimeHandle.Feishu ?: return false
                 handle.client.sendReply(pending.requester, "【短信远程指令回执】\n$body")
             }
+            RemoteSourceType.WECOM -> {
+                val handle = runningHandles[sourceInstanceId] as? RuntimeHandle.WeCom ?: return false
+                handle.client.sendReply(pending.requester, "【短信远程指令回执】\n$body")
+            }
             RemoteSourceType.SMS,
             RemoteSourceType.EMAIL -> false
         }
@@ -357,13 +414,20 @@ class RemoteSourceRuntimeManager private constructor(private val appContext: Con
         val hasWs = enabledSources.any { it.type == RemoteSourceType.WEBSOCKET }
         val hasDing = enabledSources.any { it.type == RemoteSourceType.DINGTALK }
         val hasFeishu = enabledSources.any { it.type == RemoteSourceType.FEISHU }
+        val hasWeCom = enabledSources.any { it.type == RemoteSourceType.WECOM }
         val hasEmail = enabledSources.any { it.type == RemoteSourceType.EMAIL }
 
         if (hasTg) TelegramRemoteControlService.ensureStarted(appContext) else TelegramRemoteControlService.stop(appContext)
         if (hasWs) WebSocketRemoteControlService.ensureStarted(appContext) else WebSocketRemoteControlService.stop(appContext)
         if (hasDing) DingTalkRemoteControlService.ensureStarted(appContext) else DingTalkRemoteControlService.stop(appContext)
         if (hasFeishu) FeishuRemoteControlService.ensureStarted(appContext) else FeishuRemoteControlService.stop(appContext)
+        if (hasWeCom) org.fossify.messages.services.WeComRemoteControlService.ensureStarted(appContext) else org.fossify.messages.services.WeComRemoteControlService.stop(appContext)
         if (hasEmail) EmailRemoteControlService.ensureStarted(appContext) else EmailRemoteControlService.stop(appContext)
+    }
+
+    fun sendWeComPush(sourceInstanceId: String, chatId: String, content: String): Boolean {
+        val handle = runningHandles[sourceInstanceId] as? RuntimeHandle.WeCom ?: return false
+        return handle.client.push(chatId, content)
     }
 
     companion object {

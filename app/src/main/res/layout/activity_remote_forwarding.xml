@@ -97,6 +97,15 @@
                 </LinearLayout>
 
                 <View style="@style/SmsSettingsDivider" />
+                <LinearLayout android:id="@+id/remote_forwarding_wecom_holder" style="@style/SmsForwardingRow">
+                    <LinearLayout style="@style/SmsForwardingTextColumn">
+                        <TextView style="@style/SmsForwardingTitle" android:text="@string/wecom_remote_title" />
+                        <TextView android:id="@+id/remote_forwarding_wecom_summary" style="@style/SmsForwardingSummary" />
+                    </LinearLayout>
+                    <ImageView style="@style/SmsForwardingChevron" />
+                </LinearLayout>
+
+                <View style="@style/SmsSettingsDivider" />
                 <LinearLayout android:id="@+id/remote_forwarding_email_holder" style="@style/SmsForwardingRow">
                     <LinearLayout style="@style/SmsForwardingTextColumn">
                         <TextView style="@style/SmsForwardingTitle" android:text="@string/email_remote_title" />

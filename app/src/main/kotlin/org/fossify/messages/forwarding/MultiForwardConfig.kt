@@ -215,6 +215,54 @@ class MultiForwardConfig(
 
     fun websocketRemoteLogs(): String = prefs.getString(KEY_WEBSOCKET_REMOTE_LOGS, "").orEmpty()
 
+    // 企业微信智能机器人长连接远程控制
+    var weComRemoteControlEnabled by booleanPreference(KEY_WECOM_REMOTE_CONTROL_ENABLED)
+    var weComRemoteSendSimMode: Int
+        get() = prefs.getInt(KEY_WECOM_REMOTE_SEND_SIM, SimSendMode.DEFAULT).let { mode ->
+            when (mode) {
+                SimSendMode.SIM1, SimSendMode.SIM2, SimSendMode.DEFAULT -> mode
+                else -> SimSendMode.DEFAULT
+            }
+        }
+        set(value) = prefs.edit().putInt(
+            KEY_WECOM_REMOTE_SEND_SIM,
+            when (value) {
+                SimSendMode.SIM1, SimSendMode.SIM2, SimSendMode.DEFAULT -> value
+                else -> SimSendMode.DEFAULT
+            },
+        ).apply()
+
+    var weComRemoteConnectionStatus: String
+        get() = prefs.getString(KEY_WECOM_REMOTE_STATUS, "").orEmpty()
+        set(value) = prefs.edit().putString(KEY_WECOM_REMOTE_STATUS, value).apply()
+
+    fun appendWeComRemoteLog(message: String) {
+        val now = java.text.SimpleDateFormat("MM-dd HH:mm:ss", java.util.Locale.getDefault())
+            .format(java.util.Date())
+        val line = "$now $message"
+        val current = prefs.getString(KEY_WECOM_REMOTE_LOGS, "").orEmpty().lines().filter(String::isNotBlank)
+        val logs = (listOf(line) + current).take(30).joinToString("\n")
+        prefs.edit().putString(KEY_WECOM_REMOTE_LOGS, logs).putString(KEY_WECOM_REMOTE_STATUS, line).apply()
+    }
+
+    fun weComRemoteLogs(): String = prefs.getString(KEY_WECOM_REMOTE_LOGS, "").orEmpty()
+
+    fun saveWeComRemoteControl(
+        botId: String,
+        secret: String,
+        chatId: String = "",
+        customPrefix: String = "",
+    ) {
+        saveSecret(KEY_WECOM_REMOTE_BOT_ID, botId)
+        saveSecret(KEY_WECOM_REMOTE_SECRET, secret)
+        saveSecret(KEY_WECOM_REMOTE_CHAT_ID, chatId)
+        prefs.edit().putString(KEY_WECOM_REMOTE_CUSTOM_PREFIX, customPrefix.trim()).apply()
+    }
+    fun weComRemoteBotId() = getSecret(KEY_WECOM_REMOTE_BOT_ID)
+    fun weComRemoteSecret() = getSecret(KEY_WECOM_REMOTE_SECRET)
+    fun weComRemoteChatId() = getSecret(KEY_WECOM_REMOTE_CHAT_ID)
+    fun weComRemoteCustomPrefix() = prefs.getString(KEY_WECOM_REMOTE_CUSTOM_PREFIX, "").orEmpty()
+
     var simOneLabel: String
         get() = prefs.getString(KEY_SIM_ONE_LABEL, "").orEmpty()
         set(value) = prefs.edit().putString(KEY_SIM_ONE_LABEL, value.trim()).apply()
@@ -817,6 +865,15 @@ class MultiForwardConfig(
         private const val KEY_WEBSOCKET_REMOTE_SEND_SIM = "websocket_remote_send_sim"
         private const val KEY_WEBSOCKET_REMOTE_STATUS = "websocket_remote_status"
         private const val KEY_WEBSOCKET_REMOTE_LOGS = "websocket_remote_logs"
+
+        private const val KEY_WECOM_REMOTE_CONTROL_ENABLED = "wecom_remote_control_enabled"
+        private const val KEY_WECOM_REMOTE_BOT_ID = "wecom_remote_bot_id"
+        private const val KEY_WECOM_REMOTE_SECRET = "wecom_remote_secret"
+        private const val KEY_WECOM_REMOTE_CHAT_ID = "wecom_remote_chat_id"
+        private const val KEY_WECOM_REMOTE_CUSTOM_PREFIX = "wecom_remote_custom_prefix"
+        private const val KEY_WECOM_REMOTE_SEND_SIM = "wecom_remote_send_sim"
+        private const val KEY_WECOM_REMOTE_STATUS = "wecom_remote_status"
+        private const val KEY_WECOM_REMOTE_LOGS = "wecom_remote_logs"
 
         private const val KEY_LAST_STATUS = "last_status"
         private const val KEY_SIM_ONE_LABEL = "sim_one_label"

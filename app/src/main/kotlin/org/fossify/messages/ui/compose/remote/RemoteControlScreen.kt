@@ -533,7 +533,7 @@ private fun RemoteSourceTypePickerDialog(
                 RemoteSourceTypeSection(
                     title = "国内推荐",
                     subtitle = "无需公网回调地址",
-                    types = listOf(RemoteSourceType.DINGTALK, RemoteSourceType.FEISHU),
+                    types = listOf(RemoteSourceType.DINGTALK, RemoteSourceType.FEISHU, RemoteSourceType.WECOM),
                     isDark = isDark,
                     onSelect = onSelect
                 )
@@ -596,7 +596,7 @@ private fun RemoteSourceTypeSection(
                     Column(modifier = Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(type.label, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                            if (type == RemoteSourceType.DINGTALK || type == RemoteSourceType.FEISHU) {
+                            if (type == RemoteSourceType.DINGTALK || type == RemoteSourceType.FEISHU || type == RemoteSourceType.WECOM) {
                                 Spacer(modifier = Modifier.width(6.dp))
                                 StatusBadge(text = "Beta", color = GatewayOrange)
                             }
@@ -605,6 +605,7 @@ private fun RemoteSourceTypeSection(
                             text = when (type) {
                                 RemoteSourceType.DINGTALK -> "钉钉企业内部应用 Stream 长连接"
                                 RemoteSourceType.FEISHU -> "飞书企业自建应用 WebSocket 长连接"
+                                RemoteSourceType.WECOM -> "企业微信智能机器人 WebSocket 长连接"
                                 RemoteSourceType.WEBSOCKET -> "连接您的自建 WebSocket 服务端"
                                 RemoteSourceType.EMAIL -> "通过 IMAP 轮询接收指令"
                                 RemoteSourceType.SMS -> "从白名单号码接收应急短信指令"
@@ -803,6 +804,7 @@ private fun RemoteSourceEditDialog(
                 .ifBlank { initialSource?.optString("botToken").orEmpty() }
                 .ifBlank { initialSource?.optString("clientId").orEmpty() }
                 .ifBlank { initialSource?.optString("appId").orEmpty() }
+                .ifBlank { initialSource?.optString("botId").orEmpty() }
                 .ifBlank { initialSource?.optString("corpId").orEmpty() }
                 .ifBlank { initialSource?.optString("host").orEmpty() }
                 .ifBlank { initialSource?.optString("url").orEmpty() }
@@ -857,14 +859,14 @@ private fun RemoteSourceEditDialog(
                         Text(type.emoji, fontSize = 20.sp)
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(type.label, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-                        if (type == RemoteSourceType.DINGTALK || type == RemoteSourceType.FEISHU) {
+                        if (type == RemoteSourceType.DINGTALK || type == RemoteSourceType.FEISHU || type == RemoteSourceType.WECOM) {
                             Spacer(modifier = Modifier.width(6.dp))
                             StatusBadge(text = "Beta", color = GatewayOrange)
                         }
                     }
                 }
 
-                if (type == RemoteSourceType.DINGTALK || type == RemoteSourceType.FEISHU) {
+                if (type == RemoteSourceType.DINGTALK || type == RemoteSourceType.FEISHU || type == RemoteSourceType.WECOM) {
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(8.dp),
@@ -872,10 +874,11 @@ private fun RemoteSourceEditDialog(
                         border = BorderStroke(1.dp, GatewayOrange.copy(alpha = 0.25f))
                     ) {
                         Text(
-                            text = if (type == RemoteSourceType.DINGTALK) {
-                                "Beta：通过钉钉官方 Stream 长连接直接接收指令，无需公网回调地址。需要企业内部应用并启用机器人 Stream 模式。"
-                            } else {
-                                "Beta：通过飞书官方 WebSocket 长连接接收指令，无需公网回调地址。需要企业自建应用、机器人能力和消息事件权限。"
+                            text = when (type) {
+                                RemoteSourceType.DINGTALK -> "Beta：通过钉钉官方 Stream 长连接直接接收指令，无需公网回调地址。需要企业内部应用并启用机器人 Stream 模式。"
+                                RemoteSourceType.FEISHU -> "Beta：通过飞书官方 WebSocket 长连接接收指令，无需公网回调地址。需要企业自建应用、机器人能力和消息事件权限。"
+                                RemoteSourceType.WECOM -> "Beta：通过企业微信官方智能机器人 WebSocket 长连接直接接收指令，无需公网回调地址。配置 Bot ID 与 Secret 即可建连。"
+                                else -> ""
                             },
                             modifier = Modifier.padding(10.dp),
                             fontSize = 11.sp,
@@ -993,6 +996,29 @@ private fun RemoteSourceEditDialog(
                             value = param2,
                             onValueChange = { param2 = it },
                             label = { Text("App Secret") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                    RemoteSourceType.WECOM -> {
+                        OutlinedTextField(
+                            value = param1,
+                            onValueChange = { param1 = it },
+                            label = { Text("Bot ID (企业微信智能机器人 ID)") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = param2,
+                            onValueChange = { param2 = it },
+                            label = { Text("Secret (机器人密钥)") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = param3,
+                            onValueChange = { param3 = it },
+                            label = { Text("默认推送 Chat ID (选填)") },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -1201,6 +1227,11 @@ private fun RemoteSourceEditDialog(
                                 put("appId", param1.trim())
                                 put("appSecret", param2.trim())
                             }
+                            RemoteSourceType.WECOM -> {
+                                put("botId", param1.trim())
+                                put("secret", param2.trim())
+                                put("chatId", param3.trim())
+                            }
                             RemoteSourceType.EMAIL -> {
                                 put("host", param1.trim())
                                 put("user", param2.trim())
@@ -1220,6 +1251,7 @@ private fun RemoteSourceEditDialog(
                         RemoteSourceType.TELEGRAM -> param1.isNotBlank()
                         RemoteSourceType.DINGTALK -> param1.isNotBlank() && param2.isNotBlank()
                         RemoteSourceType.FEISHU -> param1.isNotBlank() && param2.isNotBlank()
+                        RemoteSourceType.WECOM -> param1.isNotBlank() && param2.isNotBlank()
                         RemoteSourceType.EMAIL -> param1.isNotBlank() && param2.isNotBlank() && param3.isNotBlank()
                         RemoteSourceType.WEBSOCKET -> param1.isNotBlank()
                     }
@@ -1317,7 +1349,7 @@ private fun ReceiptSettingsDialog(
                 )
 
                 Text(
-                    "钉钉、飞书、Telegram 和 WebSocket 可原路返回；短信与邮箱来源为避免额外资费或缺少 SMTP 凭据，需选择下方普通通道接收回执。",
+                    "企业微信、钉钉、飞书、Telegram 和 WebSocket 可原路返回；短信与邮箱来源为避免额外资费或缺少 SMTP 凭据，需选择下方普通通道接收回执。",
                     fontSize = 11.sp,
                     lineHeight = 16.sp,
                     color = TextSecondary

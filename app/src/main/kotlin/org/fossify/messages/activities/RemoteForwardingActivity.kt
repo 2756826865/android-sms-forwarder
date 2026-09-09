@@ -38,6 +38,9 @@ class RemoteForwardingActivity : SimpleActivity() {
         binding.remoteForwardingFeishuHolder.setOnClickListener {
             startActivity(Intent(this, FeishuRemoteControlSettingsActivity::class.java))
         }
+        binding.remoteForwardingWecomHolder.setOnClickListener {
+            startActivity(Intent(this, WeComRemoteControlSettingsActivity::class.java))
+        }
         binding.remoteForwardingEmailHolder.setOnClickListener {
             startActivity(Intent(this, EmailRemoteControlSettingsActivity::class.java))
         }
@@ -65,6 +68,10 @@ class RemoteForwardingActivity : SimpleActivity() {
         remoteForwardingFeishuSummary.text = summary(
             multiConfig.feishuRemoteAppId().isNotBlank(),
             multiConfig.feishuRemoteControlEnabled
+        )
+        remoteForwardingWecomSummary.text = summary(
+            multiConfig.weComRemoteBotId().isNotBlank(),
+            multiConfig.weComRemoteControlEnabled
         )
         remoteForwardingEmailSummary.text = summary(
             multiConfig.emailRemoteHost().isNotBlank() && multiConfig.emailRemoteUser().isNotBlank(),

@@ -271,6 +271,12 @@
             android:parentActivityName=".activities.RemoteForwardingActivity" />
 
         <activity
+            android:name=".activities.WeComRemoteControlSettingsActivity"
+            android:exported="false"
+            android:label="@string/wecom_remote_title"
+            android:parentActivityName=".activities.RemoteForwardingActivity" />
+
+        <activity
             android:name=".activities.AutoReplySettingsActivity"
             android:exported="false"
             android:label="短信自动回复"
@@ -426,6 +432,16 @@
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Maintains WebSocket duplex connection for remote SMS commands" />
+        </service>
+
+        <service
+            android:name=".services.WeComRemoteControlService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse"
+            android:stopWithTask="false">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Maintains WeCom WebSocket connection for remote SMS commands" />
         </service>
 
         <service

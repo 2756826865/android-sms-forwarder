@@ -378,6 +378,7 @@ object RemoteCommandProcessor {
         RemoteSourceType.SMS -> RemoteCommandSourceType.SMS
         RemoteSourceType.DINGTALK -> RemoteCommandSourceType.DINGTALK
         RemoteSourceType.FEISHU -> RemoteCommandSourceType.FEISHU
+        RemoteSourceType.WECOM -> RemoteCommandSourceType.WECOM
         RemoteSourceType.EMAIL -> RemoteCommandSourceType.EMAIL
         RemoteSourceType.TELEGRAM -> RemoteCommandSourceType.TELEGRAM
         RemoteSourceType.WEBSOCKET -> RemoteCommandSourceType.WEBSOCKET
@@ -387,6 +388,7 @@ object RemoteCommandProcessor {
         RemoteSourceType.SMS -> SOURCE_SMS
         RemoteSourceType.DINGTALK -> SOURCE_DINGTALK
         RemoteSourceType.FEISHU -> SOURCE_FEISHU
+        RemoteSourceType.WECOM -> SOURCE_WECOM
         RemoteSourceType.EMAIL -> SOURCE_EMAIL
         RemoteSourceType.TELEGRAM -> SOURCE_TELEGRAM
         RemoteSourceType.WEBSOCKET -> SOURCE_WEBSOCKET
