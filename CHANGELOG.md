@@ -12,7 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 基于腾讯企业微信官方 SDK (`aibot-node-sdk`) 规范，在 Kotlin 端原生移植 WebSocket 全双工长连接；
   - **免公网 IP / 免配置回调 URL**：通过官方长连接通道 `wss://openapis.work.weixin.qq.com/aibot-stream`，凭借 `bot_id` 与 `secret` 即可接入；
   - **双向发信与原路回执**：支持解析 `aibot_msg_callback` 指令并触发备用机发信；支持通过 `aibot_respond_msg`（带 `req_id`）快速应答与 `aibot_send_msg` 异步定向推送，实现原路精准回执；
-  - **白名单与连接保活自愈**：内置 30 秒官方心跳保活机制与网络抖动断线自愈重连，支持 UserID / ChatID 权限校验，并由 `RemoteSourceRuntimeManager` 和常驻服务全生命周期托管。
+  - **白名单与连接保活自愈**：内置 30 秒官方心跳保活机制与网络抖动断线自愈重连，支持 UserID / ChatID 权限校验，并由 `RemoteSourceRuntimeManager` 和常驻服务全生命周期托管；
+  - **🔄 远程渠道与转发通道自动联动生成**：在「远程控制」中配置企业微信智能机器人后，系统自动在「转发通道」中同步生成「企业微信智能机器人 (长连接)」通道实例，自带独立启闭 Switch，无需推送时可自由关闭，且开关状态被持久化保护，不影响远程发信。
 
 ### 🌟 改进与问题修复 (Improvements & Fixes)
 
