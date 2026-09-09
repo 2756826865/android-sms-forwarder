@@ -1001,6 +1001,30 @@ private fun RemoteSourceEditDialog(
                         )
                     }
                     RemoteSourceType.WECOM -> {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp),
+                            color = GatewayBlue.copy(alpha = 0.08f),
+                            border = BorderStroke(1.dp, GatewayBlue.copy(alpha = 0.2f))
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp)) {
+                                Text(
+                                    text = "📌 企业微信官方长连接配置指南",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = GatewayBlue
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "1. 登录企微后台 (work.weixin.qq.com) 进入「应用管理 → 机器人」创建智能机器人；\n" +
+                                           "2. 获取 Bot ID 与 Secret 填入下方，点击保存即可免公网 IP 直连腾讯官方长连通道；\n" +
+                                           "3. 将机器人拉入群聊或单聊，@机器人 发送 /发信 10086 查询 即可远程发信并原路接收回执。",
+                                    fontSize = 11.sp,
+                                    color = TextSecondary,
+                                    lineHeight = 16.sp
+                                )
+                            }
+                        }
                         OutlinedTextField(
                             value = param1,
                             onValueChange = { param1 = it },
