@@ -6,6 +6,8 @@ import org.fossify.messages.forwarding.ForwardingChannelInstance
 import org.fossify.messages.forwarding.ForwardingChannels
 import org.fossify.messages.forwarding.MultiForwardConfig
 import org.fossify.messages.forwarding.repository.ChannelRepository
+import org.fossify.messages.remote.repository.RemoteSourceInstance
+import org.fossify.messages.remote.repository.RemoteSourceType
 import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -18,6 +20,57 @@ import org.junit.Test
 import java.lang.reflect.Proxy
 
 class ChannelRepositoryTest {
+    @Test
+    fun weComLegacyIsLinkedOnStartupAndRefreshWithoutReenabling() {
+        val config = MultiForwardConfig(customPrefs = createFakeSharedPrefs())
+        config.saveWeComRemoteControl("bot", "secret", "chat")
+        val repo = ChannelRepository(multiConfig = config)
+        val id = "linked_wecom_stream_legacy_remote_wecom"
+        assertEquals(1, repo.getInstances().count { it.channelType == ForwardingChannels.WECOM_STREAM })
+        assertTrue(repo.getInstanceById(id)!!.enabled)
+        repo.toggleInstanceEnabled(id, false)
+        config.saveWeComRemoteControl("bot", "secret", "new-chat")
+        repo.refresh()
+        assertEquals("new-chat", repo.getInstanceById(id)!!.optString("chatId"))
+        assertFalse(repo.getInstanceById(id)!!.enabled)
+        assertEquals(0, repo.importLegacyChannels())
+        assertEquals(1, repo.getInstances().size)
+    }
+
+    @Test
+    fun weComSourcesWithSameChatRemainDistinctAndRemoteSettingsWin() {
+        val config = MultiForwardConfig(customPrefs = createFakeSharedPrefs())
+        config.saveWeComRemoteControl("old-bot", "secret", "old-chat")
+        val sources = listOf("legacy_remote_wecom", "custom-wecom").map { id ->
+            RemoteSourceInstance(
+                id = id, name = id, type = RemoteSourceType.WECOM, enabled = false,
+                configJson = JSONObject().put("botId", id).put("secret", "secret")
+                    .put("chatId", "same-chat").toString()
+            )
+        }
+        val repo = ChannelRepository(multiConfig = config, remoteSourcesProvider = { sources })
+        repo.refresh()
+        assertEquals(2, repo.getInstances().size)
+        assertTrue(repo.getInstances().all { it.enabled && it.optString("chatId") == "same-chat" })
+        assertEquals(0, repo.importLegacyChannels())
+        assertTrue(sources.all { !it.enabled })
+    }
+
+    @Test
+    fun weComRefreshFindsNewSourcesButDoesNotUseStaleLegacyTarget() {
+        val config = MultiForwardConfig(customPrefs = createFakeSharedPrefs())
+        val source = RemoteSourceInstance(
+            id = "legacy_remote_wecom", name = "机器人", type = RemoteSourceType.WECOM,
+            configJson = JSONObject().put("botId", "bot").put("secret", "secret").put("chatId", "").toString()
+        )
+        var sources = listOf(source)
+        config.saveWeComRemoteControl("old-bot", "secret", "old-chat")
+        val repo = ChannelRepository(multiConfig = config, remoteSourcesProvider = { sources })
+        assertTrue(repo.getInstances().isEmpty())
+        sources = listOf(source.copyWithConfig { put("chatId", "new-chat") })
+        repo.refresh()
+        assertEquals("new-chat", repo.getInstances().single().optString("chatId"))
+    }
 
     @Before
     @After
@@ -250,4 +303,3 @@ class ChannelRepositoryTest {
         assertTrue(multiConfig.enabledChannelIds().contains(ForwardingChannels.FEISHU_BOT))
     }
 }
-

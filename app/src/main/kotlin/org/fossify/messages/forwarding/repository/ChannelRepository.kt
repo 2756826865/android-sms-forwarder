@@ -8,6 +8,9 @@ import org.fossify.messages.forwarding.ForwardingChannelInstance
 import org.fossify.messages.forwarding.ForwardingChannels
 import org.fossify.messages.forwarding.ForwardingRule
 import org.fossify.messages.forwarding.MultiForwardConfig
+import org.fossify.messages.remote.repository.RemoteSourceInstance
+import org.fossify.messages.remote.repository.RemoteSourceRepository
+import org.fossify.messages.remote.repository.RemoteSourceType
 import org.json.JSONObject
 import java.util.UUID
 
@@ -20,7 +23,10 @@ data class LegacyChannelInfo(
 
 class ChannelRepository internal constructor(
     context: Context? = null,
-    private val multiConfig: MultiForwardConfig = MultiForwardConfig(context!!.applicationContext)
+    private val multiConfig: MultiForwardConfig = MultiForwardConfig(context!!.applicationContext),
+    private val remoteSourcesProvider: () -> List<RemoteSourceInstance> = {
+        context?.applicationContext?.let { RemoteSourceRepository.getInstance(it).getAllSources() }.orEmpty()
+    }
 ) {
     private val appContext = context?.applicationContext
 
@@ -40,7 +46,10 @@ class ChannelRepository internal constructor(
     }
 
     fun refresh() {
+        // Resolve sources before taking the channel lock; never start remote runtimes here.
+        val linkedSources = detectConfiguredWeComStreams()
         synchronized(lock) {
+            linkedSources.forEach { syncDetectedWeComStream(it) }
             _instancesFlow.value = multiConfig.channelInstances()
         }
     }
@@ -122,12 +131,14 @@ class ChannelRepository internal constructor(
 
         if (existingIndex >= 0) {
             val existing = current[existingIndex]
-            current[existingIndex] = existing.copy(
+            val updated = existing.copy(
                 name = sourceName.ifBlank { "企业微信智能机器人 (长连接)" },
                 channelType = ForwardingChannels.WECOM_STREAM,
                 configJson = configJson
                 // 保留 existing.enabled，允许用户按需自由开关！
             )
+            if (updated == existing) return@synchronized
+            current[existingIndex] = updated
         } else {
             current.add(
                 ForwardingChannelInstance(
@@ -403,45 +414,88 @@ class ChannelRepository internal constructor(
             )
         }
 
+        list.addAll(detectConfiguredWeComStreams())
         return list
+    }
+
+    private fun detectConfiguredWeComStreams(): List<LegacyChannelInfo> {
+        val sources = remoteSourcesProvider()
+        val candidates = sources.filter { it.type == RemoteSourceType.WECOM && it.hasValidCredentials() }
+            .mapNotNull { source ->
+                val botId = source.optString("botId").trim()
+                val chatId = source.optString("chatId").trim()
+                if (source.id.isBlank() || chatId.isBlank()) null else LegacyChannelInfo(
+                    ForwardingChannels.WECOM_STREAM, "${source.name} (长连接)", true,
+                    JSONObject().put("sourceInstanceId", source.id).put("botId", botId)
+                        .put("chatId", chatId).toString()
+                )
+            }.toMutableList()
+        // A persisted source is authoritative, including deliberate clearing of its target.
+        if (sources.none { it.id == "legacy_remote_wecom" }) {
+            val botId = multiConfig.weComRemoteBotId().trim()
+            val chatId = multiConfig.weComRemoteChatId().trim()
+            if (botId.isNotBlank() && chatId.isNotBlank()) {
+                candidates.add(LegacyChannelInfo(
+                    ForwardingChannels.WECOM_STREAM, "企业微信智能机器人 (长连接)", true,
+                    JSONObject().put("sourceInstanceId", "legacy_remote_wecom").put("botId", botId)
+                        .put("chatId", chatId).toString()
+                ))
+            }
+        }
+        return candidates
+    }
+
+    private fun syncDetectedWeComStream(candidate: LegacyChannelInfo) {
+        val config = JSONObject(candidate.configJson)
+        syncLinkedWeComStreamChannel(
+            config.getString("sourceInstanceId"), config.getString("botId"),
+            config.getString("chatId"), candidate.defaultName
+        )
     }
 
     /**
      * 幂等导入旧版真实配置为实例，严禁生成未配置的内置通道，重复执行不会产生重复实例
      */
-    fun importLegacyChannels(): Int = synchronized(lock) {
+    fun importLegacyChannels(): Int {
         val detected = detectLegacyConfiguredChannels()
         if (detected.isEmpty()) return 0
 
-        val current = multiConfig.channelInstances().toMutableList()
-        var importedCount = 0
-
-        for (legacy in detected) {
-            // 幂等防重：检查是否已有该类型的实例且配置主要凭据相同
-            val alreadyExists = current.any { existing ->
-                existing.channelType == legacy.channelType &&
-                    isSameConfig(legacy.channelType, existing.configJson, legacy.configJson)
+        return synchronized(lock) {
+            var importedCount = 0
+            detected.filter { it.channelType == ForwardingChannels.WECOM_STREAM }.forEach { candidate ->
+                val sourceId = JSONObject(candidate.configJson).getString("sourceInstanceId")
+                if (multiConfig.channelInstances().none { it.id == "linked_wecom_stream_$sourceId" }) importedCount++
+                syncDetectedWeComStream(candidate)
             }
-            if (!alreadyExists) {
-                current.add(
-                    ForwardingChannelInstance(
-                        id = UUID.randomUUID().toString(),
-                        channelType = legacy.channelType,
-                        name = legacy.defaultName,
-                        enabled = legacy.isEnabled,
-                        configJson = legacy.configJson
+            val current = multiConfig.channelInstances().toMutableList()
+
+            for (legacy in detected.filterNot { it.channelType == ForwardingChannels.WECOM_STREAM }) {
+                // 幂等防重：检查是否已有该类型的实例且配置主要凭据相同
+                val alreadyExists = current.any { existing ->
+                    existing.channelType == legacy.channelType &&
+                        isSameConfig(legacy.channelType, existing.configJson, legacy.configJson)
+                }
+                if (!alreadyExists) {
+                    current.add(
+                        ForwardingChannelInstance(
+                            id = UUID.randomUUID().toString(),
+                            channelType = legacy.channelType,
+                            name = legacy.defaultName,
+                            enabled = legacy.isEnabled,
+                            configJson = legacy.configJson
+                        )
                     )
-                )
-                importedCount++
+                    importedCount++
+                }
             }
-        }
 
-        if (importedCount > 0) {
-            multiConfig.saveChannelInstances(current)
-            _instancesFlow.value = current
-        }
+            if (importedCount > 0) {
+                multiConfig.saveChannelInstances(current)
+                _instancesFlow.value = current
+            }
 
-        importedCount
+            importedCount
+        }
     }
 
     private fun isSameConfig(channelType: String, json1: String, json2: String): Boolean = runCatching {
@@ -462,7 +516,7 @@ class ChannelRepository internal constructor(
             ForwardingChannels.DINGTALK,
             ForwardingChannels.DISCORD,
             ForwardingChannels.TENCENT_CLOUD -> listOf("webhook")
-            ForwardingChannels.WECOM_STREAM -> listOf("chatId")
+            ForwardingChannels.WECOM_STREAM -> listOf("sourceInstanceId", "botId", "chatId")
             ForwardingChannels.FEISHU_APP -> listOf("appId", "receiveId")
             ForwardingChannels.BARK -> listOf("serverUrl", "deviceKey")
             ForwardingChannels.WEBSOCKET -> listOf("serverUrl", "token")
