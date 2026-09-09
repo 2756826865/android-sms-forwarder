@@ -215,10 +215,8 @@ fun getChannelTutorial(channelId: String): String = when (channelId) {
     ForwardingChannels.WECOM_STREAM -> """
         1. 先在「远程发送」中添加并启用企业微信长连接来源
         2. 回到此处选择对应的连接来源；不要重复填写 Bot ID 和 Secret
-        3. 填写接收推送的会话 ID：
-           · 群聊 Chat ID：将机器人拉入群，在群内 @机器人 随便发一句话，在 App 远程设置的实时日志中复制打印的 chatid: R:xxxx 填入
-           · 单聊 User ID：直接填成员企业微信账号/UserID，或私聊机器人后在实时日志中查看 from_user
-        4. 等连接状态显示“就绪”后再保存并测试；回复与主动推送共用连接
+        3. 填写接收推送的会话 ID：群聊用 Chat ID，单聊用成员 User ID
+        4. 等连接状态显示“就绪”后再保存并测试；回复与主动推送共用连接，但使用不同协议
     """.trimIndent()
     ForwardingChannels.FEISHU_APP -> """
         1. 登录飞书开放平台 (open.feishu.cn) 创建“企业自建应用”
@@ -1551,8 +1549,6 @@ fun ChannelFullTutorialDialog(onDismiss: () -> Unit) {
         ),
         "转发通道" to listOf(
             "PushPlus" to "登录 pushplus.plus，在一对一推送中复制 Token；群组推送可再填写 Topic。",
-            "企业微信长连接" to "先在「远程发送」启用长连接。群聊 Chat ID：拉机器人进群后 @机器人 发一句，在实时日志复制 chatid 填入；单聊直接填成员账号 User ID。",
-            "企业微信应用 / 机器人" to "群机器人复制 Webhook；自建应用填写 corpid、agentid、corpsecret 以及接收人 touser。",
             "钉钉 / 飞书机器人" to "在群聊中添加自定义机器人，复制 Webhook；开启加签时还要填写对应 Secret。",
             "飞书自建应用" to "在飞书开放平台创建企业自建应用，填写 App ID、App Secret 和接收人的 open_id。",
             "Bark" to "在 iPhone 的 Bark App 中复制 Device Key；自建服务可填写自己的 HTTPS 或局域网 HTTP 地址。",
@@ -1565,12 +1561,11 @@ fun ChannelFullTutorialDialog(onDismiss: () -> Unit) {
             "通道组" to "把多个已配置实例组合后并发发送。不要把通道组互相循环引用。"
         ),
         "远程发送" to listOf(
-            "支持来源" to "短信指令、钉钉 Stream、飞书长连接、企业微信长连接、Telegram Bot、WebSocket 和邮箱 IMAP。",
-            "企业微信长连接" to "填写智能机器人 Bot ID 与 Secret 即可就绪；群内 @机器人 发消息可在 App 实时日志直接查阅群 chatid 与个人 userid。",
+            "支持来源" to "短信指令、钉钉 Stream、飞书长连接、Telegram Bot、WebSocket 和邮箱 IMAP。",
             "指令格式" to "默认格式：/发信 [SIM1或SIM2] 目标号码 短信内容。自定义前缀后，请使用该实例自己的前缀。",
             "白名单" to "关闭时接受所有符合格式的用户；开启后必须填写授权用户，群聊还应填写授权群组。",
             "卡槽与限制" to "每个来源可设置默认卡槽、免打扰时段、每小时限额和每日限额。",
-            "回执" to "钉钉、飞书、企业微信、Telegram、WebSocket 支持原路回执；短信和邮箱来源需选择普通转发通道接收回执。",
+            "回执" to "钉钉、飞书、Telegram、WebSocket 支持原路回执；短信和邮箱来源需选择普通转发通道接收回执。",
             "安全提示" to "远程发送会真实调用本机 SIM 卡。请启用白名单、设置限额，并只在本人或明确授权的设备上使用。"
         ),
         "规则" to listOf(
