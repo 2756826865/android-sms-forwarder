@@ -6,7 +6,7 @@ composeMaterial3 = "1.4.0"
 composeActivity = "1.13.0"
 kotlinxSerializationJson = "1.11.0"
 #KSP
-ksp = "2.3.10"
+ksp = "2.3.11"
 #Detekt
 detekt = "1.23.8"
 detektCompose = "0.4.28"
