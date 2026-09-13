@@ -101,6 +101,9 @@ fun RemoteControlScreen(
     val channelRepo = remember { ChannelRepository.getInstance(context) }
     val sources by remoteRepo.sourcesFlow.collectAsState()
     val channelInstances by channelRepo.instancesFlow.collectAsState()
+    // 白名单已启用但名单为空：运行时会被 AUTHORIZED_USERS_REQUIRED 拒绝，需要常驻提示。
+    val missingAuthSources = sources.filter { it.whitelistEnabled && it.authorizedUsers.isEmpty() }
+    val autoBackfilledIds by remoteRepo.autoBackfilledIds.collectAsState()
 
     var showAddDialog by remember { mutableStateOf(false) }
     var selectedNewSourceType by remember { mutableStateOf<RemoteSourceType?>(null) }
@@ -153,6 +156,17 @@ fun RemoteControlScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp),
             contentPadding = PaddingValues(top = 16.dp, bottom = 120.dp)
         ) {
+            if (missingAuthSources.isNotEmpty()) {
+                item(key = "whitelist_missing_banner") {
+                    WhitelistMissingBanner(
+                        count = missingAuthSources.size,
+                        cardColor = cardColor,
+                        isDark = isDark,
+                        onFix = { editingSource = missingAuthSources.first() }
+                    )
+                }
+            }
+
             // 3. 远程来源列表头部与添加来源
             item {
                 Row(
@@ -205,6 +219,7 @@ fun RemoteControlScreen(
                         cardColor = cardColor,
                         outlineColor = outlineColor,
                         isDark = isDark,
+                        autoBackfilled = source.id in autoBackfilledIds,
                         onToggle = { enabled -> remoteRepo.toggleEnabled(source.id, enabled) },
                         onEdit = { editingSource = source },
                         onDelete = { remoteRepo.deleteSource(source.id) }
@@ -461,6 +476,51 @@ private fun PermissionMiniChip(
     }
 }
 
+/**
+ * 常驻安全横幅：升级后有来源处于「白名单已启用但未配置授权用户」状态，
+ * 这类来源在运行时会拒绝所有远程发短信指令，必须引导用户补齐名单。
+ */
+@Composable
+private fun WhitelistMissingBanner(
+    count: Int,
+    cardColor: Color,
+    isDark: Boolean,
+    onFix: () -> Unit
+) {
+    Surface(
+        color = cardColor,
+        shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(1.dp, GatewayRed)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onFix)
+                .padding(horizontal = 14.dp, vertical = 12.dp)
+        ) {
+            Text(
+                text = "⚠ 需要补充授权用户",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = GatewayRed
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "已为 $count 个远程来源启用白名单，请补充授权用户，否则远程发短信将失效。",
+                fontSize = 12.sp,
+                color = if (isDark) Color.White else TextPrimary
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = "点击前往配置 →",
+                fontSize = 11.sp,
+                color = GatewayOrange
+            )
+        }
+    }
+    Spacer(modifier = Modifier.height(4.dp))
+}
+
 @Composable
 private fun EmptySourcesPlaceholder(
     cardColor: Color,
@@ -629,6 +689,7 @@ private fun RemoteSourceCard(
     cardColor: Color,
     outlineColor: Color,
     isDark: Boolean,
+    autoBackfilled: Boolean = false,
     onToggle: (Boolean) -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit
@@ -694,9 +755,24 @@ private fun RemoteSourceCard(
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 SmallTag(text = simLabel, isDark = isDark)
                 SmallTag(text = prefixLabel, isDark = isDark)
-                if (source.authorizedUsers.isNotEmpty()) {
+                if (source.whitelistEnabled && source.authorizedUsers.isEmpty()) {
+                    WarningTag(text = "缺授权用户·远程发短信已停用", color = GatewayRed)
+                } else if (!source.whitelistEnabled) {
+                    WarningTag(text = "白名单已关闭·任何人可用本机发信", color = GatewayOrange)
+                } else {
                     SmallTag(text = "白名单: ${source.authorizedUsers.size}人", isDark = isDark)
                 }
+            }
+
+            // 名单是升级时由历史发信记录自动生成的，用户没亲手填过，必须提示核对。
+            // 仅提示，不阻断编辑与删除。
+            if (autoBackfilled) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "授权名单由历史发信记录自动生成，请核对",
+                    fontSize = 11.sp,
+                    color = GatewayOrange
+                )
             }
 
             if (source.lastMessageAt > 0L) {
@@ -770,6 +846,24 @@ private fun SmallTag(text: String, isDark: Boolean) {
     }
 }
 
+/** 安全告警标签：白名单缺失或显式关闭时使用警告色，提示该来源存在被滥发风险。 */
+@Composable
+private fun WarningTag(text: String, color: Color) {
+    Surface(
+        shape = RoundedCornerShape(6.dp),
+        color = color.copy(alpha = 0.12f),
+        border = BorderStroke(0.5.dp, color)
+    ) {
+        Text(
+            text = text,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = color,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+        )
+    }
+}
+
 @Composable
 private fun RemoteSourceEditDialog(
     initialSource: RemoteSourceInstance?,
@@ -786,7 +880,7 @@ private fun RemoteSourceEditDialog(
     var prefix by remember { mutableStateOf(initialSource?.customCommandPrefix ?: "") }
     var simMode by remember { mutableStateOf(initialSource?.defaultSimMode ?: SubscriptionResolver.MODE_FOLLOW_RECEIVE) }
 
-    var whitelistEnabled by remember { mutableStateOf(initialSource?.whitelistEnabled ?: false) }
+    var whitelistEnabled by remember { mutableStateOf(initialSource?.whitelistEnabled ?: true) }
     var authUsersText by remember { mutableStateOf(initialSource?.authorizedUsers?.joinToString("\n") ?: "") }
     var authGroupsText by remember { mutableStateOf(initialSource?.authorizedGroups?.joinToString("\n") ?: "") }
     var requireMention by remember { mutableStateOf(initialSource?.requireMention ?: true) }
@@ -1124,31 +1218,40 @@ private fun RemoteSourceEditDialog(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text("启用用户白名单", fontSize = 13.sp)
-                        Text(
-                            if (whitelistEnabled) "仅接受名单内用户" else "已关闭：接受所有用户的有效指令",
-                            fontSize = 11.sp,
-                            color = if (whitelistEnabled) TextSecondary else GatewayOrange
-                        )
+                        if (whitelistEnabled) {
+                            Text(
+                                "已开启：仅接受名单内用户的指令",
+                                fontSize = 11.sp,
+                                color = TextSecondary
+                            )
+                        } else {
+                            Text(
+                                "⚠ 安全风险：关闭后任何能联系到本来源的人，都可以用你的手机向任意号码发短信",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = GatewayRed
+                            )
+                        }
                     }
                     Switch(checked = whitelistEnabled, onCheckedChange = { whitelistEnabled = it })
                 }
 
-                if (whitelistEnabled) {
-                    OutlinedTextField(
-                        value = authUsersText,
-                        onValueChange = { authUsersText = it },
-                        label = { Text("用户白名单（必填，每行一个）") },
-                        placeholder = { Text("账号、手机号或用户 ID") },
-                        supportingText = {
-                            if (authUsersText.lines().none { it.isNotBlank() }) {
-                                Text("启用白名单后至少填写一个用户")
-                            }
-                        },
-                        isError = authUsersText.lines().none { it.isNotBlank() },
-                        modifier = Modifier.fillMaxWidth(),
-                        maxLines = 3
-                    )
-                }
+                OutlinedTextField(
+                    value = authUsersText,
+                    onValueChange = { authUsersText = it },
+                    label = { Text("用户白名单（必填，每行一个）") },
+                    placeholder = { Text("账号、手机号或用户 ID") },
+                    supportingText = {
+                        if (authUsersText.lines().none { it.isNotBlank() }) {
+                            Text("必须至少填写一个授权用户，否则无法保存")
+                        } else {
+                            Text("名单为空的来源不会执行任何远程发短信指令")
+                        }
+                    },
+                    isError = authUsersText.lines().none { it.isNotBlank() },
+                    modifier = Modifier.fillMaxWidth(),
+                    maxLines = 3
+                )
 
                 if (type != RemoteSourceType.SMS && type != RemoteSourceType.EMAIL) {
                     if (whitelistEnabled) {
@@ -1319,7 +1422,8 @@ private fun RemoteSourceEditDialog(
                     )
                     onSave(item)
                 },
-                enabled = !whitelistEnabled || authUsersText.lines().any { it.isNotBlank() },
+                // 无论白名单开关处于何种状态，都必须配置授权用户才能保存。
+                enabled = authUsersText.lines().any { it.isNotBlank() },
                 colors = ButtonDefaults.buttonColors(containerColor = BrandGreen)
             ) {
                 Text("保存")

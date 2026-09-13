@@ -8,6 +8,12 @@ enum class SecurityAuditEventType {
     SECRET_READ,
     SECRET_UPDATED,
     SECRET_DELETED,
+    /** 凭据解密失败：Keystore 不可用或密钥丢失，此时绝不把密文当明文外泄。 */
+    SECRET_DECRYPT_FAILED,
+    /** 凭据加密失败：此时绝不写盘，保留旧值以免凭据被静默清空。 */
+    SECRET_ENCRYPT_FAILED,
+    /** 因凭据不可信而跳过了一次联动通道同步（避免覆写既有配置）。 */
+    CREDENTIAL_SYNC_SKIPPED,
     REMOTE_ACCESS_GRANTED,
     REMOTE_ACCESS_DENIED,
     CONFIG_EXPORT

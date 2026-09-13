@@ -2,7 +2,9 @@ package org.fossify.messages.ui.compose.rules
 
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -433,46 +435,70 @@ fun RuleEditorScreen(
 
                         Spacer(modifier = Modifier.height(12.dp))
 
-                        // 模板变量快捷插入 Chips
+                        // 模板变量快捷插入 4 列紧凑小方块网格
                         val varChips = listOf(
-                            "{{FROM}}" to "发信人",
+                            "{{FROM}}" to "来源号码",
                             "{{CONTACT_NAME}}" to "联系人",
                             "{{CODE}}" to "验证码",
-                            "{{SMS}}" to "短信正文",
-                            "{{RECEIVE_TIME}}" to "完整时间",
+                            "{{SMS}}" to "短信内容",
+                            "{{RECEIVE_TIME}}" to "接收时间",
                             "{{DATE_YMD}}" to "日期",
                             "{{DATE_HMS}}" to "时间",
-                            "{{SIM_SLOT}}" to "卡槽",
+                            "{{CURRENT_TIME}}" to "当前时间",
+                            "{{SIM_SLOT}}" to "卡槽备注",
                             "{{SIM_INDEX}}" to "卡槽序号",
                             "{{RECEIVER_NUMBER}}" to "本机号码",
                             "{{DEVICE_NAME}}" to "设备名称",
                             "{{DEVICE_BRAND}}" to "设备品牌",
                             "{{DEVICE_MODEL}}" to "设备型号",
-                            "{{BATTERY_INFO}}" to "电量信息",
-                            "{{BATTERY_PCT}}" to "电量百分比",
-                            "{{NET_TYPE}}" to "网络类型",
-                            "{{IP_LIST}}" to "IP 地址",
+                            "{{BATTERY_PCT}}" to "电池电量",
+                            "{{BATTERY_INFO}}" to "完整电量",
+                            "{{NET_TYPE}}" to "网络状态",
+                            "{{IP_LIST}}" to "IP地址",
                             "{{APP_VERSION}}" to "应用版本"
                         )
                         Text(text = "点击插入变量：", fontSize = 11.sp, color = secondaryText)
                         Spacer(modifier = Modifier.height(6.dp))
-                        FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(5.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            varChips.forEach { (variable, label) ->
-                                Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = borderColor
+                            varChips.chunked(4).forEach { rowChips ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(5.dp)
                                 ) {
-                                    TextButton(
-                                        onClick = {
-                                            viewModel.updateCustomTemplate(uiState.customTemplate + variable)
-                                        },
-                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
-                                    ) {
-                                        Text(text = "$label $variable", fontSize = 10.sp, color = primaryText)
+                                    rowChips.forEach { (variable, label) ->
+                                        Surface(
+                                            shape = RoundedCornerShape(6.dp),
+                                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
+                                            border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .height(30.dp)
+                                        ) {
+                                            TextButton(
+                                                onClick = {
+                                                    viewModel.updateCustomTemplate(uiState.customTemplate + variable)
+                                                },
+                                                contentPadding = PaddingValues(horizontal = 2.dp, vertical = 0.dp),
+                                                modifier = Modifier.fillMaxSize()
+                                            ) {
+                                                Text(
+                                                    text = label,
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Medium,
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                    maxLines = 1,
+                                                    softWrap = false,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                            }
+                                        }
+                                    }
+                                    // 补齐末行不满 4 个的空白占位
+                                    repeat(4 - rowChips.size) {
+                                        Spacer(modifier = Modifier.weight(1f))
                                     }
                                 }
                             }

@@ -4,7 +4,11 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
-import android.util.Base64
+// 注意：这里用 java.util.Base64 而非 android.util.Base64。
+// android.jar 在 JVM 单元测试里是 Stub（android.util.Base64.decode 直接抛异常），
+// 若用它，"明文 / 密文"判定在单测中恒为 false，任何针对该判定的用例都会变成空跑。
+// 两者编码结果一致（标准字母表 + padding、无换行），存量密文可无缝互读；minSdk 26 已支持。
+import java.util.Base64
 import java.nio.charset.StandardCharsets
 import java.security.KeyStore
 import javax.crypto.Cipher
@@ -12,10 +16,16 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 import org.fossify.messages.messaging.SimSendResolver
+import org.fossify.messages.security.audit.SecurityAuditEventType
+import org.fossify.messages.security.audit.SecurityAuditManager
+import org.fossify.messages.security.crypto.CredentialHealth
 
 class MultiForwardConfig(
     private val context: Context? = null,
-    customPrefs: SharedPreferences? = null
+    customPrefs: SharedPreferences? = null,
+    // 凭据加解密实现可注入：生产走 AndroidKeystoreCipher，
+    // 单元测试环境无 AndroidKeyStore，注入 PlaintextCipher 才能覆盖凭据读写逻辑。
+    private val cipher: CredentialCipher = AndroidKeystoreCipher
 ) {
     private val prefs: SharedPreferences = customPrefs
         ?: context?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -627,14 +637,24 @@ class MultiForwardConfig(
                 val stored = ForwardingChannelInstance.fromJson(obj)
                 val encryptedConfig = obj.optString("configJsonEncrypted")
                 val decryptedConfig = encryptedConfig.takeIf(String::isNotBlank)
-                    ?.let(ForwardingCipher::decrypt)
+                    ?.let { cipher.decrypt(it) }
                     .orEmpty()
                 add(stored.copy(configJson = decryptedConfig.ifBlank { stored.configJson }))
             }
         }
     }.getOrDefault(emptyList())
 
-    fun saveChannelInstances(instances: List<ForwardingChannelInstance>) {
+    /**
+     * 保存通道实例列表。
+     *
+     * P0-3 止血：任一实例的 configJson 加密失败时**整批中止、完全不写盘**。
+     * 历史实现在 `encrypt()` 返回空串时会把明文 configJson 原样落盘，
+     * 且可能留下 configJson 为空、configJsonEncrypted 仍是旧值的半截不一致配置。
+     * 整批中止保证磁盘永远是自洽状态：要么全部加密成功，要么一点都不动。
+     *
+     * @return 是否成功落盘；false 表示本次未写入，磁盘保持原样。
+     */
+    fun saveChannelInstances(instances: List<ForwardingChannelInstance>): Boolean {
         val existingEncryptedById = runCatching {
             val previousRaw = prefs.getString(KEY_CHANNEL_INSTANCES, "[]").orEmpty().ifBlank { "[]" }
             val previous = org.json.JSONArray(previousRaw)
@@ -647,24 +667,46 @@ class MultiForwardConfig(
                 }
             }
         }.getOrDefault(emptyMap())
-        val array = org.json.JSONArray()
-        instances.forEach { instance ->
+        // 第一步：对全部实例逐个尝试加密并收集结果。任一项失败即整批中止，
+        // 绝不进入写盘阶段，避免留下"部分明文 + 部分旧密文"的半截配置。
+        val encryptedById = LinkedHashMap<String, String>()
+        for (instance in instances) {
             // 若旧密文因 Keystore 暂时不可用而未能解出，读取层会给出空对象。
             // 此时保留原密文，避免用户仅切换开关就永久覆盖凭据。
             val preservedEncrypted = existingEncryptedById[instance.id]
                 .takeIf { instance.configJson.isBlank() || instance.configJson == "{}" }
-            val encryptedConfig = preservedEncrypted
-                ?: instance.configJson.takeUnless { it.isBlank() || it == "{}" }
-                    ?.let(ForwardingCipher::encrypt)
-                    .orEmpty()
+            if (preservedEncrypted != null) {
+                encryptedById[instance.id] = preservedEncrypted
+                continue
+            }
+            val plaintextConfig = instance.configJson.takeUnless { it.isBlank() || it == "{}" } ?: continue
+            val encrypted = cipher.encrypt(plaintextConfig)
+            if (encrypted.isBlank()) {
+                CredentialHealth.markEncryptFailed(KEY_CHANNEL_INSTANCES)
+                SecurityAuditManager.logEvent(
+                    SecurityAuditEventType.SECRET_ENCRYPT_FAILED,
+                    KEY_CHANNEL_INSTANCES,
+                    "keystore unavailable; aborted the whole channel instance batch"
+                )
+                return false
+            }
+            encryptedById[instance.id] = encrypted
+        }
+
+        // 第二步：全部加密成功后才统一组装并落盘。
+        val array = org.json.JSONArray()
+        for (instance in instances) {
             val obj = instance.toJson()
-            if (encryptedConfig.isNotBlank()) {
+            val encryptedConfig = encryptedById[instance.id]
+            if (!encryptedConfig.isNullOrBlank()) {
                 obj.put("configJson", "{}")
                 obj.put("configJsonEncrypted", encryptedConfig)
             }
             array.put(obj)
         }
         prefs.edit().putString(KEY_CHANNEL_INSTANCES, array.toString()).apply()
+        CredentialHealth.clear(KEY_CHANNEL_INSTANCES)
+        return true
     }
 
     fun addChannelInstance(instance: ForwardingChannelInstance) {
@@ -741,22 +783,102 @@ class MultiForwardConfig(
         }
     }
 
-    private fun saveSecret(key: String, value: String) {
+    /**
+     * 写入加密凭据。
+     *
+     * P0-3 止血：加密失败（Keystore 不可用）时**不写盘、保留旧值**。
+     * 历史实现会把 `encrypt()` 失败得到的空串直接 `putString`，等于静默清空用户凭据。
+     *
+     * @return 是否成功落盘；false 表示本次未写入，旧值保留。
+     */
+    private fun saveSecret(key: String, value: String): Boolean {
         if (value.isBlank()) {
             prefs.edit().remove(key).apply()
-        } else {
-            prefs.edit().putString(key, ForwardingCipher.encrypt(value.trim())).apply()
+            CredentialHealth.clear(key)
+            return true
         }
+        val encrypted = cipher.encrypt(value.trim())
+        if (encrypted.isBlank()) {
+            CredentialHealth.markEncryptFailed(key)
+            SecurityAuditManager.logEvent(
+                SecurityAuditEventType.SECRET_ENCRYPT_FAILED,
+                key,
+                "keystore unavailable; kept previous value instead of overwriting"
+            )
+            return false
+        }
+        prefs.edit().putString(key, encrypted).apply()
+        CredentialHealth.clear(key)
+        return true
     }
 
+    /**
+     * 读取并解密凭据。
+     *
+     * P0-3 止血：解密失败时**返回空串，绝不返回 stored（密文）**。
+     * 历史实现 `if (decrypted.isNotEmpty()) decrypted else stored` 会把密文当明文返回，
+     * 上层据此误判"已配置"，进而用密文覆写真实凭据或重建联动通道（路径 B）。
+     */
     private fun getSecret(key: String): String {
         val stored = prefs.getString(key, null) ?: return ""
-        val decrypted = ForwardingCipher.decrypt(stored)
-        return if (decrypted.isNotEmpty()) decrypted else stored
+        if (stored.isBlank()) return ""
+        val decrypted = cipher.decrypt(stored)
+        if (decrypted.isNotEmpty()) {
+            // 解密成功但存量值没有版本前缀 ⇒ 升级前写入的老密文。
+            // 顺手重写为带前缀的新格式，之后该值不再依赖长度启发式判定。
+            // 前缀本身就是幂等标记：重写成功后 stored 已带前缀，不会再触发第二次；
+            // 这里额外用一次性的迁移记录，避免加密反复失败时每次读取都去打一次 KeyStore。
+            if (!stored.startsWith(CREDENTIAL_CIPHER_PREFIX) && legacyCipherMigrated.add(key)) {
+                SecurityAuditManager.logEvent(
+                    SecurityAuditEventType.SECRET_UPDATED,
+                    key,
+                    "legacy ciphertext without version prefix; re-encrypted in current format"
+                )
+                saveSecret(key, decrypted)
+            }
+            return decrypted
+        }
+
+        // 解不开有两种原因，必须分开处理：
+        // 1) 不是合法密文形态 ⇒ 老版本遗留的明文值，按明文返回以保证老用户仍能读出配置，
+        //    并顺手重新加密写回完成迁移（写回失败也只是维持原状，不会丢数据）；
+        // 2) 是合法密文形态但解不开 ⇒ 密钥丢失，绝不能把密文当明文外泄。
+        if (!cipher.looksLikeCiphertext(stored)) {
+            // 只迁移一次：若上一次回写已因加密失败被记录，本次不再重复打 KeyStore，
+            // 但仍按明文返回，保证老用户在 Keystore 故障期依然能读出配置。
+            if (key !in CredentialHealth.failedKeys()) {
+                SecurityAuditManager.logEvent(
+                    SecurityAuditEventType.SECRET_UPDATED,
+                    key,
+                    "legacy plaintext credential detected; re-encrypting in place"
+                )
+                saveSecret(key, stored)
+            }
+            return stored
+        }
+
+        CredentialHealth.markDecryptFailed(key)
+        SecurityAuditManager.logEvent(
+            SecurityAuditEventType.SECRET_DECRYPT_FAILED,
+            key,
+            "keystore unavailable or key lost; refusing to expose ciphertext as plaintext"
+        )
+        return ""
     }
 
     companion object {
         private const val PREFS_NAME = "multi_channel_forwarding"
+
+        /**
+         * 已尝试过"老密文 → 带前缀新格式"迁移的 key。
+         *
+         * 必须独立于 [CredentialHealth.failedKeys]：后者表示"加解密失败"，
+         * 前者表示"已尝试过迁移"。两者是不同的生命周期事件——一次加密失败后
+         * KeyStore 恢复时仍应获得一次迁移机会，共用一个集合会互相污染。
+         */
+        private val legacyCipherMigrated =
+            java.util.Collections.synchronizedSet(mutableSetOf<String>())
+
         private const val KEY_PUSHPLUS_ENABLED = "pushplus_enabled"
         private const val KEY_PUSHPLUS_TOKEN = "pushplus_token"
         private const val KEY_PUSHPLUS_TOPIC = "pushplus_topic"
@@ -913,28 +1035,96 @@ object SimSendMode {
 }
 
 /**
- * 基于 AndroidKeyStore AES-GCM 硬件加密的安全凭证加解密工具
+ * 凭据密文的版本前缀。
+ *
+ * 存在的理由：纯"Base64 可解码 + 长度"启发式无法区分**老版本遗留明文**与**真正密文**。
+ * 32 位十六进制 PushPlus token、22 位 Bark deviceKey、16 位 Gotify token 都满足该条件，
+ * 会被误判成密文；一旦 KeyStore 不可用就会被当成"密钥丢失"返回空串，
+ * 表现为"升级后某个通道静默消失"。
+ *
+ * 加密输出统一带上前缀后，判定退化为一次 startsWith，彻底消除启发式误伤。
+ * 存量无前缀的老密文仍由 [AndroidKeystoreCipher.decrypt] 兼容读取。
  */
-internal object ForwardingCipher {
+internal const val CREDENTIAL_CIPHER_PREFIX = "v1:"
+
+/**
+ * 凭据加解密抽象
+ *
+ * 存在的意义是让凭据读写路径可测：单元测试环境（JVM）没有 AndroidKeyStore，
+ * [AndroidKeystoreCipher] 会直接抛 `KeyStoreException`，导致所有凭据读写返回空串。
+ * 通过注入测试源集里的直通实现（见 `app/src/test/.../forwarding/PlaintextCipher.kt`）
+ * 即可在 JVM 上覆盖凭据相关逻辑。
+ */
+interface CredentialCipher {
+    /** 返回加密后的字符串；失败时返回空串（调用方据此判定失败，绝不落盘空串）。 */
+    fun encrypt(value: String): String
+
+    /** 返回解密后的明文；失败时返回空串（调用方据此判定失败，绝不把密文当明文）。 */
+    fun decrypt(value: String): String
+
+    /**
+     * 判断 [value] 是否为本实现产出的合法密文形态。
+     *
+     * 用于区分"解不开"的两种原因：
+     * - 不是合法密文形态 ⇒ 遗留明文（老版本未加密落盘的值），应作为明文返回并完成迁移；
+     * - 是合法密文形态但解不开 ⇒ 密钥丢失，绝不能外泄密文。
+     *
+     * 判定方向必须保守：宁可把明文误判成密文（损失一次配置读取），
+     * 也绝不把密文误判成明文（会导致明文落盘）。
+     */
+    fun looksLikeCiphertext(value: String): Boolean
+}
+
+/**
+ * 基于 AndroidKeyStore AES-GCM 硬件加密的安全凭证加解密工具（生产实现）
+ */
+internal object AndroidKeystoreCipher : CredentialCipher {
     private const val KEY_ALIAS = "multi_forwarding_credentials_key"
     private const val TRANSFORMATION = "AES/GCM/NoPadding"
+    private const val GCM_IV_LENGTH = 12
+    /** AES-GCM 认证标签长度（字节）。GCM 必然输出 Tag，因此它是识别密文的最短依据。 */
+    private const val GCM_TAG_LENGTH = 16
+    /**
+     * 本实现产出的密文最短长度 = IV(12 字节) + Tag(16 字节) = 28 字节。
+     * 只有升级前写入的老密文没有版本前缀，只能靠这条结构约束识别；
+     * 28 字节这条线同时把 32 位十六进制 PushPlus token(24B)、22 位 Bark key(16B)、
+     * 16 位 Gotify token(12B) 等遗留明文挡在"密文"之外。
+     */
+    private const val GCM_MIN_TOTAL_LENGTH = GCM_IV_LENGTH + GCM_TAG_LENGTH
 
-    fun encrypt(value: String): String = runCatching {
+    override fun encrypt(value: String): String = runCatching {
         val cipher = Cipher.getInstance(TRANSFORMATION)
         cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
         val encrypted = cipher.doFinal(value.toByteArray(StandardCharsets.UTF_8))
-        Base64.encodeToString(cipher.iv + encrypted, Base64.NO_WRAP)
+        CREDENTIAL_CIPHER_PREFIX + Base64.getEncoder().encodeToString(cipher.iv + encrypted)
     }.getOrDefault("")
 
-    fun decrypt(value: String): String = runCatching {
-        val bytes = Base64.decode(value, Base64.NO_WRAP)
-        if (bytes.size <= 12) return ""
-        val iv = bytes.copyOfRange(0, 12)
-        val encrypted = bytes.copyOfRange(12, bytes.size)
+    override fun decrypt(value: String): String = runCatching {
+        // 同时兼容两种存量格式：带版本前缀的新密文，以及升级前写入的无前缀老密文。
+        // 老密文必须继续可读，否则老用户升级后配置会永久丢失。
+        val bytes = decodeCipherBytes(value.removePrefix(CREDENTIAL_CIPHER_PREFIX))
+            ?: return@runCatching ""
+        val iv = bytes.copyOfRange(0, GCM_IV_LENGTH)
+        val encrypted = bytes.copyOfRange(GCM_IV_LENGTH, bytes.size)
         val cipher = Cipher.getInstance(TRANSFORMATION)
         cipher.init(Cipher.DECRYPT_MODE, getOrCreateKey(), GCMParameterSpec(128, iv))
         String(cipher.doFinal(encrypted), StandardCharsets.UTF_8)
     }.getOrDefault("")
+
+    /**
+     * 只有显式带 [CREDENTIAL_CIPHER_PREFIX] (v1:) 前缀的才是合法密文格式。
+     * 无前缀的一律视为老版本明文，彻底消除任何 Base64 长度启发式对钉钉(SEC)、企业微信(43位)等明文的误判清空！
+     */
+    override fun looksLikeCiphertext(value: String): Boolean {
+        return value.startsWith(CREDENTIAL_CIPHER_PREFIX)
+    }
+
+    /**
+     * 判定规则与 [decrypt] 完全一致，不另立规则，保证两处永不漂移。
+     */
+    private fun decodeCipherBytes(value: String): ByteArray? = runCatching {
+        Base64.getDecoder().decode(value)
+    }.getOrNull()?.takeIf { it.size >= GCM_MIN_TOTAL_LENGTH }
 
     private fun getOrCreateKey(): SecretKey {
         val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
@@ -954,3 +1144,8 @@ internal object ForwardingCipher {
         }
     }
 }
+
+/**
+ * 直通实现（PlaintextCipher）已移至单元测试源集 `app/src/test/.../forwarding/PlaintextCipher.kt`。
+ * 生产代码里不应存在"不加密"的实现，哪怕只是个对象声明。
+ */

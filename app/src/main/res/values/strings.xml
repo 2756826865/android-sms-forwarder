@@ -658,4 +658,9 @@
     <string name="enable_call_forwarding">启用未接来电转发</string>
     <string name="privacy_mask_settings_title">隐私数据脱敏</string>
     <string name="enable_privacy_mask">启用手机号/身份证/卡号自动掩码</string>
+    <string name="database_recovery_mode_title">本地数据库恢复模式</string>
+    <string name="database_recovery_mode_text">本地数据库升级失败，已进入恢复模式：本地会话/草稿/回收站可能为空，系统短信不受影响</string>
+    <string name="database_degraded_in_memory_title">严重：本地数据库不可用，已切换为内存模式</string>
+    <string name="database_degraded_in_memory_text">本地数据库无法读写，已切换为内存模式。本次运行期间的本地数据（草稿、回收站、会话缓存、发送记录等）不会保存，退出应用后即丢失。系统短信库不受影响，已收到的短信不会丢失，但请尽快修复存储空间或重新安装应用。</string>
+    <string name="database_recovery_action_known">知道了</string>
 </resources>

@@ -4,6 +4,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.8] - 2026-09-13
+
+### 🛡️ 安全性与凭据防丢失 (Security & Reliability)
+
+- **🔐 凭据存储彻底消除启发式误判清空 (`MultiForwardConfig.kt`)**：
+  - 彻底废除老版本基于 Base64 长度启发式判定密文机制，严格统一采用 `v1:` 版本前缀识别；
+  - 彻底解决老用户升级后，钉钉群机器人加签密钥 (`SEC...` 46位)、企业微信应用凭据 (`corpsecret` 43位)、SHA-256 密钥（64位）等明文被误判为密文解密失败而静默置空的严重缺陷；
+  - 新增凭据健康感知状态 (`CredentialHealth.kt`) 与全覆盖单元测试保障。
+- **🚫 远程发信号码白名单防绕过加固 (`RemoteCommandProcessor.kt` / `NumberMatcher.kt`)**：
+  - 新增标准 E.164 归一化双向匹配工具，支持国际区号 (`+86` / `0086` / 短划线 / 空格) 智能规范化处理；
+  - 彻底阻断因白名单配置格式与来信/指令来源号码格式不一致引发的鉴权绕过或鉴权误拒漏洞。
+
+### ⚡ 转发链路与稳定性加固 (Forwarding & Engine)
+
+- **🛑 未知号码拦截与规则过滤兜底防漏 (`IncomingSmsService.kt` / `SmsRecoveryWorker.kt`)**：
+  - 当短信被主链路拦截（如开启未知号码防骚扰拦截 `blockUnknownNumbers` 或命中黑名单规则）时，显式写入 `system` 拦截状态记录；
+  - 彻底防止后台重试补偿 Worker (`SmsRecoveryWorker`) 将主链路明确拦截的短信当作未转发消息重新捞起并误发。
+- **🎯 转发规则多实例精准匹配分流修复 (`IncomingSmsService.kt`)**：
+  - 修复极简/完整转发链路中多实例与渠道类型 `&&` 匹配导致的实例过滤失效，支持用户针对不同规则精准分流至指定通道实例。
+- **💾 数据库损坏降级保护与现场自愈 (`MessagesDatabase.kt` / `DatabaseHealth.kt`)**：
+  - 引入数据库健康检测与多层级降级容灾链（磁盘库 → 现场保留备份 → 空库重建 → 内存库兜底），防止因数据库文件损坏导致 App 陷入启动崩溃死循环；
+  - 增加数据库恢复状态通知引导与后台预热机制。
+- **🚀 冷启动主线程解耦与原子持久化校验 (`App.kt` / `RemoteSourceRepository.kt`)**：
+  - 将通道与远程控制数据源预热迁入 `Dispatchers.IO` 后台协程，消除启动时的主线程阻塞与卡顿；
+  - 远程源与通道删除操作增加原子持久化成功状态校验，确保内存与磁盘数据严格一致。
+
+### 🎨 界面与用户交互体验升级 (UX & Compose)
+
+- **⌨️ 输入法输入抖动根治 (`ChannelHubScreen.kt`)**：
+  - 在通道实例配置弹窗与所有关键输入界面接入 `Modifier.imePadding()`，消除软键盘呼出与按键输入时窗口反复重绘引发的剧烈上下抖动；
+  - 优化 Header 与 Webhook 模板输入框的键盘类型配置。
+- **📱 规则编辑器 25 变量精简重构 (`RuleEditorScreen.kt` / `RuleStudioScreen.kt`)**：
+  - 针对用户反馈“规则页面过长”痛点，将散落平铺的 25 个变量候选 Chips 重构为 **4 列紧凑网格** 排版；
+  - 采用简明清晰的中文直观标签（来源号码、来源姓名、短信内容、验证码、卡槽、电量、当前时间等），大幅缩减界面高度，提升配置效率。
+
+---
+
 ## [1.1.7] - 2026-09-09
 
 ### 🌟 核心新特性与重大升级 (Major Features)

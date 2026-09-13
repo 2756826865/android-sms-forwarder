@@ -4,6 +4,7 @@ package org.fossify.messages.remote.repository
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -11,10 +12,16 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import org.fossify.messages.forwarding.AndroidKeystoreCipher
+import org.fossify.messages.forwarding.CredentialCipher
 import org.fossify.messages.forwarding.MultiForwardConfig
 import org.fossify.messages.forwarding.repository.ChannelRepository
 import org.fossify.messages.messaging.SubscriptionResolver
+import org.fossify.messages.remote.NumberMatcher
 import org.fossify.messages.remote.RemoteSmsCommandConfig
+import org.fossify.messages.security.audit.SecurityAuditEventType
+import org.fossify.messages.security.audit.SecurityAuditManager
+import org.fossify.messages.security.crypto.CredentialHealth
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
@@ -65,7 +72,8 @@ data class RemoteSourceInstance(
     val lastErrorCode: Int = 0,
     val lastErrorMessage: String = "",
     val customCommandPrefix: String = "",
-    val whitelistEnabled: Boolean = false,
+    // 安全默认值：白名单默认开启。关闭白名单意味着任何人都可以用本机号码对外发短信。
+    val whitelistEnabled: Boolean = true,
     val authorizedUsers: Set<String> = emptySet(),
     val authorizedGroups: Set<String> = emptySet(),
     val requireMention: Boolean = false,
@@ -116,17 +124,36 @@ data class RemoteSourceInstance(
  */
 class RemoteSourceRepository internal constructor(
     context: Context? = null,
-    customPrefs: SharedPreferences? = null
+    customPrefs: SharedPreferences? = null,
+    customSmsCommandConfig: RemoteSmsCommandConfig? = null,
+    // 凭据加解密实现可注入：生产走 AndroidKeystoreCipher；
+    // 单元测试环境没有 AndroidKeyStore，只有注入直通实现才能覆盖
+    // "加密失败即整批弃写"之外的正常读写路径（否则所有保存都会失败）。
+    private val cipher: CredentialCipher = AndroidKeystoreCipher
 ) {
     private val appContext: Context? = context?.applicationContext
     private val prefs: SharedPreferences = customPrefs 
         ?: appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         ?: error("Context or customPrefs must be provided")
+    // 存量名单回填的数据源。声明必须在 init{} 之前，保证 loadFromPrefs() 能用到。
+    private val smsCommandConfig: RemoteSmsCommandConfig? = customSmsCommandConfig
+        ?: appContext?.let { RemoteSmsCommandConfig(it) }
 
     private val _sourcesFlow = MutableStateFlow<List<RemoteSourceInstance>>(emptyList())
     val sourcesFlow: StateFlow<List<RemoteSourceInstance>> = _sourcesFlow.asStateFlow()
 
+    /**
+     * 白名单由历史发信记录**自动生成**过的来源 id。
+     *
+     * 这些来源的名单不是用户亲手填的，可能混入 P0-1 修复前"任何人都能发"时期留下的陌生号码，
+     * 所以 UI 必须提示用户核对。只标记真正被回填过的来源，避免对所有来源产生噪音。
+     * 标记仅用于提示，不阻断用户编辑或删除名单。
+     */
+    private val _autoBackfilledIds = MutableStateFlow<Set<String>>(emptySet())
+    val autoBackfilledIds: StateFlow<Set<String>> = _autoBackfilledIds.asStateFlow()
+
     init {
+        _autoBackfilledIds.value = readAutoBackfilledIds()
         loadFromPrefs()
         // 升级后立即把旧版远程来源中的敏感字段重存为 Keystore 密文。
         if (_sourcesFlow.value.isNotEmpty()) {
@@ -137,19 +164,103 @@ class RemoteSourceRepository internal constructor(
     @Synchronized
     private fun loadFromPrefs() {
         val raw = prefs.getString(KEY_SOURCES, "[]").orEmpty()
-        val list = parseJson(raw)
+        val parsed = parseJson(raw)
+        val list = enforceWhitelistSecurityDefault(parsed)
         _sourcesFlow.value = list
         val storedCount = runCatching { JSONArray(raw).length() }.getOrDefault(list.size)
-        if (storedCount != list.size) {
-            // 清除已弃用或未知类型的持久化实例，避免旧凭据继续滞留或被误识别。
+        if (storedCount != list.size || list != parsed) {
+            // 清除已弃用或未知类型的持久化实例，避免旧凭据继续滞留或被误识别；
+            // 同时把白名单安全加固结果立即落库，避免重复计算。
             persist(list)
         }
     }
 
+    /**
+     * 存量名单自动回填（升级迁移）：把「白名单关闭且名单为空」的**短信来源**
+     * 用历史发件人记录补齐名单并开启白名单。
+     *
+     * 两个分支：
+     * - 能取到历史发件人 → `copy(whitelistEnabled = true, authorizedUsers = 历史号码)`：
+     *   既收敛了"任何人可发"的风险，又不会中断功能。
+     * - 取不到历史发件人（含非短信来源 —— 只有短信路径会落限流记录）→ **保持关闭、接受全部**，
+     *   与旧版行为一致，功能同样不中断，由设置页的橙色警告标签提示。
+     *
+     * 硬约束：**绝不允许出现"名单为空 + 白名单开启"的失效态**（那会被
+     * AUTHORIZED_USERS_REQUIRED 全部拒绝，用户必须手动补名单才能恢复）。
+     *
+     * 「白名单关闭但名单非空」的来源不做迁移 —— 那是用户在填写了名单的前提下显式选择
+     * "接受所有用户"，迁移会让其存量配置突然失效；这类来源仅在设置页以警告色提示。
+     *
+     * 该函数在 [loadFromPrefs] 与 [persist] 两处调用，等价于在 synchronized 内做
+     * read-modify-write；回填是一次性的（回填后名单非空，下次不再命中条件）。
+     *
+     * @return 加固后的实例列表；无变化时返回原列表。
+     */
+    private fun enforceWhitelistSecurityDefault(list: List<RemoteSourceInstance>): List<RemoteSourceInstance> {
+        if (list.none(::needsWhitelistBackfill)) return list
+        // 惰性读取：只有确实存在待回填来源时才去读 prefs，避免每次 persist 都白白读盘。
+        val knownRequesters = smsCommandConfig?.knownRequesters().orEmpty()
+        if (knownRequesters.isEmpty()) return list
+        val backfilledIds = linkedSetOf<String>()
+        val migrated = list.map { instance ->
+            if (needsWhitelistBackfill(instance)) {
+                backfilledIds.add(instance.id)
+                instance.copy(whitelistEnabled = true, authorizedUsers = knownRequesters)
+            } else {
+                instance
+            }
+        }
+        markAutoBackfilled(backfilledIds)
+        return migrated
+    }
+
+    /** 记录"名单由历史记录自动生成"的来源，供 UI 提示核对。 */
+    private fun markAutoBackfilled(ids: Set<String>) {
+        if (ids.isEmpty()) return
+        val merged = _autoBackfilledIds.value + ids
+        _autoBackfilledIds.value = merged
+        prefs.edit()
+            .putString(KEY_AUTO_BACKFILLED_IDS, JSONArray(merged.toList()).toString())
+            .apply()
+    }
+
+    private fun readAutoBackfilledIds(): Set<String> = runCatching {
+        parseStringSet(JSONArray(prefs.getString(KEY_AUTO_BACKFILLED_IDS, "[]").orEmpty()))
+    }.getOrDefault(emptySet())
+
+    /**
+     * 是否属于"关闭白名单且名单为空"、需要用历史发件人回填的状态。
+     * 仅限短信来源：历史发件人记录来自短信指令的限流表，回填到非短信来源（其名单是
+     * 用户 ID / 邮箱，不是号码）只会让该来源永远匹配不上，反而制造出失效态。
+     */
+    private fun needsWhitelistBackfill(instance: RemoteSourceInstance): Boolean =
+        !instance.whitelistEnabled &&
+            instance.authorizedUsers.isEmpty() &&
+            instance.type == RemoteSourceType.SMS
+
+    /**
+     * 白名单已启用但未配置任何授权用户的来源。
+     * 这些来源在运行时会被 [org.fossify.messages.remote.RemoteCommandProcessor] 以
+     * AUTHORIZED_USERS_REQUIRED 拒绝，UI 需要常驻提示引导用户补齐名单。
+     */
+    fun getSourcesMissingAuthorizedUsers(): List<RemoteSourceInstance> =
+        _sourcesFlow.value.filter { it.whitelistEnabled && it.authorizedUsers.isEmpty() }
+
+    /**
+     * 落盘全部来源。
+     *
+     * @return 是否成功落盘。**false 表示加密失败已整批弃写**：磁盘与内存态都保持原值。
+     *         绝不允许降级为"写明文"——那正是 P2 问题的形态：
+     *         用户看到保存成功，prefs 里却躺着明文 token。
+     *         与 `ChannelRepository.saveChannelInstances` 的"整批中止"语义保持一致。
+     */
     @Synchronized
-    private fun persist(list: List<RemoteSourceInstance>) {
+    private fun persist(list: List<RemoteSourceInstance>): Boolean {
+        val safeList = enforceWhitelistSecurityDefault(list)
         val array = JSONArray()
-        list.forEach { item ->
+        for (item in safeList) {
+            // 任一来源的敏感字段加密失败 ⇒ 整批中止，连"部分字段写明文"的混合态都不产生。
+            val encryptedConfig = encryptSensitiveConfig(item.configJson) ?: return false
             val obj = JSONObject().apply {
                 put("id", item.id)
                 put("name", item.name)
@@ -171,12 +282,14 @@ class RemoteSourceRepository internal constructor(
                 put("quietHoursEnd", item.quietHoursEnd)
                 put("hourlyLimit", item.hourlyLimit)
                 put("dailyLimit", item.dailyLimit)
-                put("configJson", encryptSensitiveConfig(item.configJson))
+                put("configJson", encryptedConfig)
             }
             array.put(obj)
         }
+        // 全部来源都加密成功后才统一落盘并更新内存态，磁盘与内存永远同构。
         prefs.edit().putString(KEY_SOURCES, array.toString()).apply()
-        _sourcesFlow.value = list
+        _sourcesFlow.value = safeList
+        return true
     }
 
     fun getAllSources(): List<RemoteSourceInstance> = _sourcesFlow.value
@@ -189,8 +302,10 @@ class RemoteSourceRepository internal constructor(
         _sourcesFlow.value.filter { it.type == type }
 
     fun saveSource(instance: RemoteSourceInstance) {
-        saveSourceLocked(instance)
-        if (instance.type == RemoteSourceType.WECOM) {
+        val persisted = saveSourceLocked(instance)
+        // 落盘失败（如加密失败）时不得联动建通道：来源根本没保存成功，
+        // 拿它的 botId/chatId 去建联动通道会留下一个指向不存在来源的孤儿通道。
+        if (persisted && instance.type == RemoteSourceType.WECOM) {
             appContext?.let { ctx ->
                 val botId = instance.optString("botId")
                 val chatId = instance.optString("chatId")
@@ -205,29 +320,42 @@ class RemoteSourceRepository internal constructor(
         syncRuntime()
     }
 
+    /**
+     * @return 是否成功落盘；false 表示加密失败已弃写，内存态与磁盘都保持原值。
+     */
     @Synchronized
-    private fun saveSourceLocked(instance: RemoteSourceInstance) {
+    private fun saveSourceLocked(instance: RemoteSourceInstance): Boolean {
         val current = _sourcesFlow.value.toMutableList()
         val index = current.indexOfFirst { it.id == instance.id }
-        val updatedInstance = if (!instance.hasValidCredentials() && instance.type != RemoteSourceType.SMS) {
-            instance.copy(connectionState = RemoteSourceConnectionState.CONFIG_REQUIRED)
+        // 短信来源的白名单条目落库前统一归一化，保证与运行时比较的两侧同构。
+        val securedInstance = if (instance.type == RemoteSourceType.SMS) {
+            instance.copy(authorizedUsers = NumberMatcher.normalizeWhitelist(instance.authorizedUsers))
         } else {
             instance
+        }
+        val updatedInstance = if (!securedInstance.hasValidCredentials() && securedInstance.type != RemoteSourceType.SMS) {
+            securedInstance.copy(connectionState = RemoteSourceConnectionState.CONFIG_REQUIRED)
+        } else {
+            securedInstance
         }
         if (index >= 0) {
             current[index] = updatedInstance
         } else {
             current.add(updatedInstance)
         }
-        persist(current)
+        return persist(current)
     }
 
     fun deleteSource(id: String) {
-        val deleted = synchronized(this) {
+        val (deleted, persisted) = synchronized(this) {
             val target = _sourcesFlow.value.firstOrNull { it.id == id }
             val updated = _sourcesFlow.value.filterNot { it.id == id }
-            persist(updated)
-            target
+            val ok = persist(updated)
+            target to ok
+        }
+        if (!persisted) {
+            Log.e(TAG, "deleteSource: 落盘失败，已中止下游联动删除，避免产生孤儿通道 (id=$id)")
+            return
         }
         if (deleted?.type == RemoteSourceType.WECOM) {
             appContext?.let { ctx ->
@@ -361,7 +489,7 @@ class RemoteSourceRepository internal constructor(
                             connectionState = if (smsConfig.enabled) RemoteSourceConnectionState.READY else RemoteSourceConnectionState.DISABLED,
                             customCommandPrefix = smsConfig.customPrefix,
                             whitelistEnabled = smsConfig.authorizedList().isNotEmpty(),
-                            authorizedUsers = smsConfig.authorizedList().toSet(),
+                            authorizedUsers = NumberMatcher.normalizeWhitelist(smsConfig.authorizedList()),
                             defaultSimMode = SubscriptionResolver.MODE_FOLLOW_RECEIVE
                         )
                     }
@@ -423,6 +551,7 @@ class RemoteSourceRepository internal constructor(
                             enabled = multiConfig.dingTalkRemoteControlEnabled,
                             connectionState = if (multiConfig.dingTalkRemoteControlEnabled) RemoteSourceConnectionState.CONNECTING else RemoteSourceConnectionState.DISABLED,
                             customCommandPrefix = multiConfig.dingTalkRemoteCustomPrefix(),
+                            whitelistEnabled = true,
                             defaultSimMode = multiConfig.dingTalkRemoteSendSimMode,
                             configJson = json.toString()
                         )
@@ -452,6 +581,7 @@ class RemoteSourceRepository internal constructor(
                             enabled = multiConfig.feishuRemoteControlEnabled,
                             connectionState = if (multiConfig.feishuRemoteControlEnabled) RemoteSourceConnectionState.CONNECTING else RemoteSourceConnectionState.DISABLED,
                             customCommandPrefix = multiConfig.feishuRemoteCustomPrefix(),
+                            whitelistEnabled = true,
                             defaultSimMode = multiConfig.feishuRemoteSendSimMode,
                             configJson = json.toString()
                         )
@@ -519,6 +649,7 @@ class RemoteSourceRepository internal constructor(
                             enabled = multiConfig.weComRemoteControlEnabled,
                             connectionState = if (multiConfig.weComRemoteControlEnabled) RemoteSourceConnectionState.CONNECTING else RemoteSourceConnectionState.DISABLED,
                             customCommandPrefix = multiConfig.weComRemoteCustomPrefix(),
+                            whitelistEnabled = true,
                             defaultSimMode = multiConfig.weComRemoteSendSimMode,
                             configJson = json.toString()
                         )
@@ -546,6 +677,7 @@ class RemoteSourceRepository internal constructor(
                             type = RemoteSourceType.WEBSOCKET,
                             enabled = multiConfig.websocketRemoteControlEnabled,
                             connectionState = if (multiConfig.websocketRemoteControlEnabled) RemoteSourceConnectionState.CONNECTING else RemoteSourceConnectionState.DISABLED,
+                            whitelistEnabled = true,
                             defaultSimMode = multiConfig.websocketRemoteSendSimMode,
                             configJson = json.toString()
                         )
@@ -600,7 +732,8 @@ class RemoteSourceRepository internal constructor(
         }
 
         if (importedCount > 0) {
-            persist(current)
+            // 落盘失败（如加密失败）则整体作废：既不更新内存态，也不谎报"已导入 N 个"。
+            if (!persist(current)) return 0
         }
         return importedCount
     }
@@ -668,7 +801,8 @@ class RemoteSourceRepository internal constructor(
         }
 
         if (updated != _sourcesFlow.value) {
-            persist(updated)
+            // 落盘失败则视为"本次同步未发生"：不更新内存态，也不去联动建通道。
+            if (!persist(updated)) return false
             val wecomSource = updated.firstOrNull { it.type == RemoteSourceType.WECOM }
             if (wecomSource != null && appContext != null) {
                 val botId = wecomSource.optString("botId")
@@ -760,53 +894,75 @@ class RemoteSourceRepository internal constructor(
 
     /**
      * 对 configJson 中的敏感字段（如 secret, relaySharedSecret, botToken, pass, token 等）
-     * 自动通过 AndroidKeyStore AES-GCM 硬件加密保护，杜绝明文写入 SharedPreferences
+     * 自动通过 AndroidKeyStore AES-GCM 硬件加密保护，杜绝明文写入 SharedPreferences。
+     *
+     * 失败语义（P2 修复）：**任一敏感字段加密失败即整体失败**，不再"该字段保持明文、其余照常"。
+     *
+     * @return 加密后的 configJson；**返回 null 表示加密失败**，
+     *         调用方必须整批弃写，绝不能把明文落盘。
      */
-    private fun encryptSensitiveConfig(rawConfig: String): String = runCatching {
+    private fun encryptSensitiveConfig(rawConfig: String): String? {
         if (rawConfig.isBlank() || rawConfig == "{}") return rawConfig
-        val json = JSONObject(rawConfig)
-        val sensitiveKeys = listOf(
-            "secret", "relaySharedSecret", "botToken", "clientSecret",
-            "appSecret", "pass", "token", "botId"
-        )
-        sensitiveKeys.forEach { key ->
-            if (json.has(key)) {
-                val value = json.optString(key)
-                if (value.isNotBlank() && !value.startsWith("ENC:")) {
-                    val encrypted = org.fossify.messages.forwarding.ForwardingCipher.encrypt(value)
-                    if (encrypted.isNotBlank()) {
-                        json.put(key, "ENC:$encrypted")
-                    }
-                }
-            }
+        val json = runCatching { JSONObject(rawConfig) }.getOrNull()
+        if (json == null) {
+            // 解析失败也不能原样写回：无法确认里面是否夹带明文凭据，按失败处理。
+            CredentialHealth.markEncryptFailed(KEY_SOURCES)
+            SecurityAuditManager.logEvent(
+                SecurityAuditEventType.SECRET_ENCRYPT_FAILED,
+                KEY_SOURCES,
+                "unparsable source config; aborted persistence instead of writing it as-is"
+            )
+            return null
         }
-        json.toString()
-    }.getOrDefault(rawConfig)
+        for (key in SENSITIVE_CONFIG_KEYS) {
+            if (!json.has(key)) continue
+            val value = json.optString(key)
+            if (value.isBlank() || value.startsWith(ENC_PREFIX)) continue
+            val encrypted = cipher.encrypt(value)
+            if (encrypted.isBlank()) {
+                // 加密失败绝不降级为明文：返回 null 让 persist 弃写整批，磁盘保留旧值。
+                CredentialHealth.markEncryptFailed(KEY_SOURCES)
+                SecurityAuditManager.logEvent(
+                    SecurityAuditEventType.SECRET_ENCRYPT_FAILED,
+                    KEY_SOURCES,
+                    "keystore unavailable; aborted persistence instead of writing plaintext"
+                )
+                return null
+            }
+            json.put(key, ENC_PREFIX + encrypted)
+        }
+        return json.toString()
+    }
 
     private fun decryptSensitiveConfig(rawConfig: String): String = runCatching {
-        if (rawConfig.isBlank() || rawConfig == "{}") return rawConfig
+        if (rawConfig.isBlank() || rawConfig == "{}") return@runCatching rawConfig
         val json = JSONObject(rawConfig)
-        val sensitiveKeys = listOf(
-            "secret", "relaySharedSecret", "botToken", "clientSecret",
-            "appSecret", "pass", "token", "botId"
-        )
-        sensitiveKeys.forEach { key ->
-            if (json.has(key)) {
-                val value = json.optString(key)
-                if (value.startsWith("ENC:")) {
-                    val cipherText = value.removePrefix("ENC:")
-                    val decrypted = org.fossify.messages.forwarding.ForwardingCipher.decrypt(cipherText)
-                    // 解密失败时保留 ENC 标记，防止下次持久化把密文本身再次加密。
-                    json.put(key, decrypted.ifBlank { value })
-                }
-            }
+        for (key in SENSITIVE_CONFIG_KEYS) {
+            if (!json.has(key)) continue
+            val value = json.optString(key)
+            if (!value.startsWith(ENC_PREFIX)) continue
+            val decrypted = cipher.decrypt(value.removePrefix(ENC_PREFIX))
+            // 解密失败时保留 ENC 标记，防止下次持久化把密文本身再次加密。
+            json.put(key, decrypted.ifBlank { value })
         }
         json.toString()
     }.getOrDefault(rawConfig)
 
     companion object {
+        private const val TAG = "RemoteSourceRepository"
         private const val PREFS_NAME = "remote_source_repository_prefs"
         private const val KEY_SOURCES = "remote_sources"
+        private const val KEY_AUTO_BACKFILLED_IDS = "auto_backfilled_whitelist_ids"
+
+        /** 已加密字段的前缀标记，加解密两侧共用同一常量，避免漂移。 */
+        private const val ENC_PREFIX = "ENC:"
+
+        /** 需要落盘前加密的敏感字段名，加密与解密两侧共用同一份清单。 */
+        private val SENSITIVE_CONFIG_KEYS = listOf(
+            "secret", "relaySharedSecret", "botToken", "clientSecret",
+            "appSecret", "pass", "token", "botId"
+        )
+
         private const val HOUR_MS = 60 * 60 * 1000L
         private const val DAY_MS = 24 * HOUR_MS
 

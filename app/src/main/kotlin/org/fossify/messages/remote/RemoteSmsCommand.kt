@@ -43,7 +43,13 @@ class RemoteSmsCommandConfig(
 
     var authorizedNumbers: String
         get() = prefs.getString(KEY_AUTHORIZED_NUMBERS, "").orEmpty()
-        set(value) = prefs.edit().putString(KEY_AUTHORIZED_NUMBERS, value.trim()).apply()
+        set(value) = prefs.edit().putString(
+            KEY_AUTHORIZED_NUMBERS,
+            value.lineSequence()
+                .map { line -> NumberMatcher.normalizeWhitelistEntry(line) }
+                .filter { it.isNotBlank() }
+                .joinToString("\n")
+        ).apply()
 
     var lastStatus: String
         get() = prefs.getString(KEY_LAST_STATUS, "").orEmpty()
@@ -54,7 +60,7 @@ class RemoteSmsCommandConfig(
         .map(String::trim)
         .filter(String::isNotBlank)
 
-    fun isAuthorized(sender: String): Boolean = authorizedList().any { numbersEquivalent(it, sender) }
+    fun isAuthorized(sender: String): Boolean = authorizedList().any { NumberMatcher.equivalent(it, sender) }
 
     fun claimFingerprint(fingerprint: String, now: Long = System.currentTimeMillis()): Boolean {
         synchronized(fingerprintLock) {
@@ -73,14 +79,14 @@ class RemoteSmsCommandConfig(
     }
 
     fun isRateLimited(sender: String, now: Long = System.currentTimeMillis()): Boolean {
-        val key = KEY_RATE_PREFIX + normalizeNumber(sender)
+        val key = KEY_RATE_PREFIX + NumberMatcher.normalize(sender)
         val values = prefs.getString(key, "[]").orEmpty()
         val recent = decodeLongArray(values).filter { now - it < RATE_WINDOW_MS }
         return recent.size >= RATE_LIMIT_COUNT
     }
 
     fun markExecution(sender: String, now: Long = System.currentTimeMillis()) {
-        val key = KEY_RATE_PREFIX + normalizeNumber(sender)
+        val key = KEY_RATE_PREFIX + NumberMatcher.normalize(sender)
         val recent = decodeLongArray(prefs.getString(key, "[]").orEmpty())
             .filter { now - it < RATE_WINDOW_MS } + now
         prefs.edit().putString(key, JSONArray(recent).toString()).apply()
@@ -128,6 +134,27 @@ class RemoteSmsCommandConfig(
     var customPrefix: String
         get() = prefs.getString(KEY_CUSTOM_PREFIX, "").orEmpty()
         set(value) = prefs.edit().putString(KEY_CUSTOM_PREFIX, value.trim()).apply()
+
+    /**
+     * 历史短信指令请求者号码集合（用于存量来源的名单自动回填）。
+     *
+     * 数据源是限流记录：[markExecution] 在每次成功执行的短信指令后，以
+     * `rate_<normalized>` 为 key 落一条记录，其中号码已由 [NumberMatcher.normalize] 处理，
+     * 因此可直接作为白名单条目使用，无需二次清洗。
+     *
+     * 注意：只有短信来源会产生该记录（[markExecution] 只在短信路径被调用），
+     * 钉钉/飞书/企微/WebSocket 来源取不到历史发件人。
+     *
+     * @return 归一化后的历史发件人号码集合；无任何记录或读取失败时返回空集。
+     */
+    fun knownRequesters(): Set<String> {
+        val keys = runCatching { prefs.all?.keys }.getOrNull() ?: return emptySet()
+        return keys
+            .filter { it.startsWith(KEY_RATE_PREFIX) }
+            .map { it.removePrefix(KEY_RATE_PREFIX) }
+            .filter { it.isNotBlank() }
+            .toSet()
+    }
 
     companion object {
         private const val PREFS_NAME = "remote_sms_command"
@@ -243,7 +270,7 @@ object RemoteSmsCommandProcessor {
             }
             .sortedByDescending { (_, prefix) -> prefix.length }
         val selectedSource = matchingSources.firstOrNull { (source, _) ->
-            source.whitelistEnabled && source.authorizedUsers.any { numbersEquivalent(it, sender) }
+            source.whitelistEnabled && source.authorizedUsers.any { NumberMatcher.equivalent(it, sender) }
         }?.first ?: matchingSources.firstOrNull { (source, _) -> !source.whitelistEnabled }?.first
             ?: matchingSources.firstOrNull()?.first
 
@@ -283,12 +310,6 @@ object RemoteSmsCommandProcessor {
             }
             is RemoteProcessResult.Ignored -> false
         }
-    }
-
-    private fun numbersEquivalent(a: String, b: String): Boolean {
-        val left = a.filter(Char::isDigit).takeLast(11)
-        val right = b.filter(Char::isDigit).takeLast(11)
-        return left.isNotEmpty() && (left == right || left.endsWith(right) || right.endsWith(left))
     }
 }
 
@@ -473,11 +494,3 @@ const val SOURCE_EMAIL = "邮箱远程指令"
 const val SOURCE_TELEGRAM = "Telegram远程指令"
 const val SOURCE_WEBSOCKET = "WebSocket远程指令"
 const val SOURCE_WECOM = "企业微信远程指令"
-
-private fun normalizeNumber(value: String): String = value.filter(Char::isDigit).takeLast(11)
-
-private fun numbersEquivalent(a: String, b: String): Boolean {
-    val left = normalizeNumber(a)
-    val right = normalizeNumber(b)
-    return left.isNotBlank() && (left == right || a.trim() == b.trim())
-}

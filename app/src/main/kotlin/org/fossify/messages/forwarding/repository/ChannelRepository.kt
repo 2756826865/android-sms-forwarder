@@ -11,6 +11,9 @@ import org.fossify.messages.forwarding.MultiForwardConfig
 import org.fossify.messages.remote.repository.RemoteSourceInstance
 import org.fossify.messages.remote.repository.RemoteSourceRepository
 import org.fossify.messages.remote.repository.RemoteSourceType
+import org.fossify.messages.security.audit.SecurityAuditEventType
+import org.fossify.messages.security.audit.SecurityAuditManager
+import org.fossify.messages.security.crypto.CredentialHealth
 import org.json.JSONObject
 import java.util.UUID
 
@@ -74,16 +77,20 @@ class ChannelRepository internal constructor(
         } else {
             current.add(instance)
         }
-        multiConfig.saveChannelInstances(current)
-        _instancesFlow.value = current
+        // 落盘失败则不改内存态：避免 UI 显示"已保存"而磁盘仍是旧值。
+        if (multiConfig.saveChannelInstances(current)) {
+            _instancesFlow.value = current
+        }
     }
 
     fun deleteInstance(id: String): Boolean = synchronized(lock) {
         val current = multiConfig.channelInstances().toMutableList()
         val removed = current.removeAll { it.id == id }
         if (removed) {
-            multiConfig.saveChannelInstances(current)
-            _instancesFlow.value = current
+            // 落盘失败则不改内存态：避免 UI 显示"已删除"而磁盘仍有该实例。
+            if (multiConfig.saveChannelInstances(current)) {
+                _instancesFlow.value = current
+            }
         }
         removed
     }
@@ -93,8 +100,10 @@ class ChannelRepository internal constructor(
         val index = current.indexOfFirst { it.id == id }
         if (index >= 0) {
             current[index] = current[index].copy(enabled = enabled)
-            multiConfig.saveChannelInstances(current)
-            _instancesFlow.value = current
+            // 落盘失败则不改内存态：避免 UI 开关回弹成已保存状态而磁盘仍是旧值。
+            if (multiConfig.saveChannelInstances(current)) {
+                _instancesFlow.value = current
+            }
         }
     }
 
@@ -109,6 +118,17 @@ class ChannelRepository internal constructor(
         chatId: String,
         sourceName: String = "企业微信智能机器人 (长连接)"
     ) = synchronized(lock) {
+        // P0-3 路径 B 守卫：若存在凭据加解密失败，说明 Keystore 不可信，
+        // 此时传入的 botId/chatId 可能是空串或密文，任何写入（包括"清空联动通道"）
+        // 都会不可逆地破坏用户既有配置，因此整个 sync 直接跳过、不写盘。
+        if (CredentialHealth.hasFailures()) {
+            SecurityAuditManager.logEvent(
+                SecurityAuditEventType.CREDENTIAL_SYNC_SKIPPED,
+                "linked_wecom_stream_$sourceInstanceId",
+                "credential cipher unavailable; skipped sync to avoid overwriting stored config"
+            )
+            return@synchronized
+        }
         val linkedChannelId = "linked_wecom_stream_$sourceInstanceId"
         val current = multiConfig.channelInstances().toMutableList()
         val existingIndex = current.indexOfFirst { it.id == linkedChannelId }
@@ -117,8 +137,10 @@ class ChannelRepository internal constructor(
             // 若配置被清空，则自动清理对应的联动通道实例
             if (existingIndex >= 0) {
                 current.removeAt(existingIndex)
-                multiConfig.saveChannelInstances(current)
-                _instancesFlow.value = current
+                // 落盘失败则不改内存态：避免 UI 显示"已清理"而磁盘仍有该联动通道。
+                if (multiConfig.saveChannelInstances(current)) {
+                    _instancesFlow.value = current
+                }
             }
             return@synchronized
         }
@@ -150,8 +172,10 @@ class ChannelRepository internal constructor(
                 )
             )
         }
-        multiConfig.saveChannelInstances(current)
-        _instancesFlow.value = current
+        // 落盘失败则不改内存态：避免 UI 显示"已联动"而磁盘仍是旧的 botId/chatId。
+        if (multiConfig.saveChannelInstances(current)) {
+            _instancesFlow.value = current
+        }
     }
 
     fun getReferencingRules(instanceId: String): List<ForwardingRule> {
@@ -167,6 +191,10 @@ class ChannelRepository internal constructor(
     // 兼容迁移：检测并幂等导入旧版配置
     // ========================================================
 
+    @Deprecated(
+        "init 已自动迁移，该判定不再成立：ChannelRepository 构造时即调用 importLegacyChannels()， " +
+            "此后 hasLegacyConfigToMigrate() 恒为 false。保留仅为兼容旧调用点，新代码请勿依赖。"
+    )
     fun hasLegacyConfigToMigrate(): Boolean {
         val detected = detectLegacyConfiguredChannels()
         if (detected.isEmpty()) return false
@@ -490,8 +518,14 @@ class ChannelRepository internal constructor(
             }
 
             if (importedCount > 0) {
-                multiConfig.saveChannelInstances(current)
-                _instancesFlow.value = current
+                // 落盘失败则不改内存态：避免 UI 显示"已导入"而磁盘并没有这些实例。
+                // 返回值同样要归零——调用方是按这个数提示"已导入 N 个通道"的，
+                // 返回 N 会让用户以为导入成功，而磁盘上一个都没写。
+                if (multiConfig.saveChannelInstances(current)) {
+                    _instancesFlow.value = current
+                } else {
+                    return@synchronized 0
+                }
             }
 
             importedCount

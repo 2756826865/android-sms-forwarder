@@ -79,7 +79,6 @@ import org.fossify.messages.forwarding.MultiForwardConfig
 import org.fossify.messages.messaging.scheduleMessage
 import org.fossify.messages.models.Message
 import org.fossify.messages.models.SIMCard
-import java.net.URLDecoder
 import java.util.Locale
 
 class NewConversationActivity : SimpleActivity() {
@@ -191,8 +190,10 @@ class NewConversationActivity : SimpleActivity() {
 
         if (result != null && (result.first.isNotEmpty() || result.second.isNotEmpty())) {
             val (body, recipients) = result
+            // 收件人解码已收敛到 SmsIntentParser（解析层返回已解码号码），这里不再解第二次——
+            // 两处各解一次会变成双重解码，号码里的 `%` 会被解坏。
             launchThreadActivity(
-                phoneNumber = URLDecoder.decode(recipients.replace("+", "%2b").trim()),
+                phoneNumber = recipients.trim(),
                 name = "",
                 body = body
             )

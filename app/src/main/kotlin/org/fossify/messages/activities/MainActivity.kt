@@ -277,6 +277,9 @@ class MainActivity : SimpleActivity() {
 
     override fun onResume() {
         super.onResume()
+        // 回前台补偿同步必须在 UI 模式分流之前执行：开发者版 UI 是默认模式 (config.useGatewayDeveloperUi 默认 true)，
+        // 若放在分流之后会因该分支的提前 return 而永不执行 (ISSUE-012 解锁后短信不同步的根因)。
+        SmsRecoveryWorker.enqueueForegroundResync(this)
         if (config.useGatewayDeveloperUi) {
             dashboardViewModel?.loadStats()
             messageCenterViewModel?.loadMessageHistory()
@@ -296,7 +299,6 @@ class MainActivity : SimpleActivity() {
             getSystemService(NotificationManager::class.java)
                 ?.cancel(DEFAULT_SMS_LOST_NOTIFICATION_ID)
         }
-        SmsRecoveryWorker.enqueueFullResync(this)
         updateMenuColors()
         selectBottomNavigation(0)
         applyHomeBottomNavigationPreference()

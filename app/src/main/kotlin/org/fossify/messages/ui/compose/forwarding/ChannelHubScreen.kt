@@ -14,10 +14,13 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -1189,7 +1192,10 @@ fun InstanceEditorDialog(
         },
         text = {
             Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .imePadding()
+                    .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 // 通道类型选择器 (仅新增时可选)
@@ -1481,12 +1487,19 @@ fun InstanceEditorDialog(
                             label = { Text("Content-Type") },
                             modifier = Modifier.fillMaxWidth()
                         )
-                        OutlinedTextField(value = f2, onValueChange = { f2 = it }, label = { Text("自定义 Headers（JSON 或每行 Key: Value）") }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(
+                            value = f2,
+                            onValueChange = { f2 = it },
+                            label = { Text("自定义 Headers（JSON 或每行 Key: Value）") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
+                            modifier = Modifier.fillMaxWidth()
+                        )
                         OutlinedTextField(
                             value = customWebhookBody,
                             onValueChange = { customWebhookBody = it },
                             label = { Text("请求体模板") },
                             supportingText = { Text("支持 [title] [msg] [from] [time] [sim]；GET 时作为查询参数模板") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
                             minLines = 5,
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -1497,10 +1510,28 @@ fun InstanceEditorDialog(
                     }
                     ForwardingChannels.NTFY -> {
                         OutlinedTextField(value = f1, onValueChange = { f1 = it }, label = { Text("ntfy 服务地址") }, modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(value = f2, onValueChange = { f2 = it }, label = { Text("Topic") }, modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(value = f3, onValueChange = { f3 = it }, label = { Text("访问 Token（选填）") }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(
+                            value = f2,
+                            onValueChange = { f2 = it },
+                            label = { Text("Topic") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = f3,
+                            onValueChange = { f3 = it },
+                            label = { Text("访问 Token（选填）") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
+                            modifier = Modifier.fillMaxWidth()
+                        )
                         OutlinedTextField(value = f4, onValueChange = { f4 = it }, label = { Text("优先级（min/low/default/high/max）") }, modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(value = f5, onValueChange = { f5 = it }, label = { Text("标签 Tags（选填，逗号分隔）") }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(
+                            value = f5,
+                            onValueChange = { f5 = it },
+                            label = { Text("标签 Tags（选填，逗号分隔）") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
+                            modifier = Modifier.fillMaxWidth()
+                        )
                         OutlinedTextField(value = f6, onValueChange = { f6 = it }, label = { Text("点击打开链接（选填）") }, modifier = Modifier.fillMaxWidth())
                     }
                     else -> {

@@ -2,6 +2,8 @@
 package org.fossify.messages.databases
 
 import android.content.Context
+import android.database.sqlite.SQLiteException
+import android.util.Log
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
@@ -9,6 +11,7 @@ import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import org.fossify.messages.helpers.Converters
+import org.fossify.messages.helpers.DatabaseHealth
 import org.fossify.messages.interfaces.AttachmentsDao
 import org.fossify.messages.interfaces.ConversationsDao
 import org.fossify.messages.interfaces.DraftsDao
@@ -35,6 +38,7 @@ import org.fossify.messages.models.SmsSendPartEntity
 import org.fossify.messages.models.RemoteCommandExecutionEntity
 import org.fossify.messages.models.OutboxTaskEntity
 import org.fossify.messages.models.RecoveryRecordEntity
+import java.io.File
 
 @Database(
     entities = [
@@ -81,39 +85,140 @@ abstract class MessagesDatabase : RoomDatabase() {
     abstract fun RecoveryRecordDao(): RecoveryRecordDao
 
     companion object {
+        private const val TAG = "MessagesDatabase"
+        private const val DB_NAME = "conversations.db"
+        private const val MAX_QUARANTINED_COPIES = 3
+
+        @Volatile
         private var db: MessagesDatabase? = null
 
-        fun getInstance(context: Context): MessagesDatabase {
-            if (db == null) {
-                synchronized(MessagesDatabase::class) {
-                    if (db == null) {
-                        db = Room.databaseBuilder(
-                            context = context.applicationContext,
-                            klass = MessagesDatabase::class.java,
-                            name = "conversations.db"
-                        )
-                            .fallbackToDestructiveMigration()
-                            .addMigrations(MIGRATION_1_2)
-                            .addMigrations(MIGRATION_2_3)
-                            .addMigrations(MIGRATION_3_4)
-                            .addMigrations(MIGRATION_4_5)
-                            .addMigrations(MIGRATION_5_6)
-                            .addMigrations(MIGRATION_6_7)
-                            .addMigrations(MIGRATION_7_8)
-                            .addMigrations(MIGRATION_8_9)
-                            .addMigrations(MIGRATION_9_10)
-                            .addMigrations(MIGRATION_10_11)
-                            .addMigrations(MIGRATION_11_12)
-                            .addMigrations(MIGRATION_12_13)
-                            .addMigrations(MIGRATION_13_14)
-                            .addMigrations(MIGRATION_14_15)
-                            .addMigrations(MIGRATION_15_16)
-                            .build()
-                    }
+        fun getInstance(context: Context): MessagesDatabase = db ?: synchronized(MessagesDatabase::class) {
+            db ?: openOrRecover(context.applicationContext).also { db = it }
+        }
+
+        /**
+         * 开库失败（迁移缺失 / 校验不通过 / 库文件损坏）时保留现场，再用全新空库启动。
+         *
+         * 绝不静默丢弃用户数据：原库与 -wal / -shm 一律rename为 `*.corrupt-<时间戳>` 留在原目录，
+         * 可事后导出排查；系统短信库不受影响，会话会从 Provider 重新同步回来。
+         */
+        private fun openOrRecover(context: Context): MessagesDatabase {
+            return try {
+                buildDatabase(context)
+            } catch (e: IllegalStateException) {
+                Log.e(TAG, "本地数据库迁移/校验失败，尝试保留现场后重建", e)
+                recoverFromFailure(context)
+            } catch (e: SQLiteException) {
+                Log.e(TAG, "本地数据库打开失败（疑似损坏），尝试保留现场后重建", e)
+                recoverFromFailure(context)
+            }
+        }
+
+        /**
+         * 开库失败后的降级链：保留现场 → 全新空库 → 内存库。
+         *
+         * 关键约束：**绝不对同一个必然失败的文件重复重建**。现场没移走时（磁盘写保护 /
+         * SELinux / 空间不足）再调一次 `buildDatabase()` 必然命中同样的错误，会让
+         *「可恢复」退化成「每次启动重复失败 + 一碰数据库就崩」。所以 quarantine 失败时
+         * 直接跳过重建；空库也建不起来时同理，退到内存库而不是抛异常。
+         */
+        private fun recoverFromFailure(context: Context): MessagesDatabase {
+            DatabaseHealth.markRecoveredFromFailure(context)
+            if (quarantineDatabaseFiles(context)) {
+                try {
+                    return buildDatabase(context)
+                } catch (e: Exception) {
+                    Log.e(TAG, "重建空库仍失败，降级为内存库", e)
+                }
+            } else {
+                Log.e(TAG, "无法移走损坏库，跳过重建直接降级为内存库")
+            }
+            // 内存库：本地写入进程退出即丢失，属于「虚假的成功反馈」，必须单独登记并明确告知用户
+            DatabaseHealth.markDegradedToInMemory(context)
+            return buildInMemoryDatabase(context)
+        }
+
+        private fun buildDatabase(context: Context): MessagesDatabase {
+            val database = Room.databaseBuilder(
+                context = context,
+                klass = MessagesDatabase::class.java,
+                name = DB_NAME
+            )
+                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_2_3)
+                .addMigrations(MIGRATION_3_4)
+                .addMigrations(MIGRATION_4_5)
+                .addMigrations(MIGRATION_5_6)
+                .addMigrations(MIGRATION_6_7)
+                .addMigrations(MIGRATION_7_8)
+                .addMigrations(MIGRATION_8_9)
+                .addMigrations(MIGRATION_9_10)
+                .addMigrations(MIGRATION_10_11)
+                .addMigrations(MIGRATION_11_12)
+                .addMigrations(MIGRATION_12_13)
+                .addMigrations(MIGRATION_13_14)
+                .addMigrations(MIGRATION_14_15)
+                .addMigrations(MIGRATION_15_16)
+                .build()
+            // Room 的迁移与 schema 校验发生在首次真正开库时，这里主动开一次，
+            // 把异常收敛到 openOrRecover() 的 try/catch 内；否则它会在后续任意一次 DAO
+            // 调用中才抛出，那时已无处兜底，只能崩溃。
+            database.openHelper.writableDatabase
+            return database
+        }
+
+        /**
+         * 磁盘完全不可用时的最后兜底：内存库。
+         *
+         * 应用可正常启动与展示（会话会从 Telephony Provider 重新灌回），
+         * 但进程退出后本地缓存丢失。比抛异常崩溃更可取。
+         */
+        private fun buildInMemoryDatabase(context: Context): MessagesDatabase {
+            val database = Room.inMemoryDatabaseBuilder(context, MessagesDatabase::class.java).build()
+            database.openHelper.writableDatabase
+            return database
+        }
+
+        /**
+         * 把损坏的库文件改名保留（**只改名，绝不删除**），为重建空库让出文件名。
+         *
+         * @return 现场是否已完整移走；false 表示重建空库必然再次失败，调用方应跳过重建。
+         */
+        private fun quarantineDatabaseFiles(context: Context): Boolean {
+            val dir = context.getDatabasePath(DB_NAME).parentFile ?: return false
+            val stamp = System.currentTimeMillis()
+            var allMoved = true
+            listOf(DB_NAME, "$DB_NAME-wal", "$DB_NAME-shm").forEach { name ->
+                val file = File(dir, name)
+                if (!file.exists()) return@forEach
+                val target = File(dir, "$name.corrupt-$stamp")
+                if (file.renameTo(target)) {
+                    Log.w(TAG, "已保留损坏现场：${target.name}")
+                } else {
+                    Log.w(TAG, "无法重命名 $name，重建空库必然再次失败")
+                    allMoved = false
                 }
             }
-            return db!!
+            pruneQuarantinedFiles(dir)
+            return allMoved
         }
+
+    /**
+     * 只保留最近 [MAX_QUARANTINED_COPIES] 份损坏现场，更早的删除，避免长期占用空间。
+     */
+    private fun pruneQuarantinedFiles(dir: File) {
+        val stale = (dir.listFiles() ?: return)
+            .filter { it.name.contains(".corrupt-") }
+            .sortedByDescending { it.lastModified() }
+            .drop(MAX_QUARANTINED_COPIES)
+        stale.forEach { file ->
+            if (file.delete()) {
+                Log.w(TAG, "已清理过期损坏现场：${file.name}")
+            } else {
+                Log.w(TAG, "无法清理过期损坏现场：${file.name}")
+            }
+        }
+    }
 
         private val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {

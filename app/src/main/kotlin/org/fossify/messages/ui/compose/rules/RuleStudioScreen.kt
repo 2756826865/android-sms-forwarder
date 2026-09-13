@@ -35,6 +35,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -141,22 +142,27 @@ fun RuleStudioScreen(
         }
     }
 
-    // 常用模板标签（全量扩展）
+    // 常用模板标签（4 列紧凑网格使用）
     val placeholderTags = listOf(
-        "{{FROM}}" to "发信号码",
-        "{{CONTACT_NAME}}" to "通讯录姓名",
-        "{{CODE}}" to "智能提取验证码 🔑",
-        "{{SMS}}" to "短信完整正文",
-        "{{RECEIVE_TIME}}" to "完整接收时间",
-        "{{DATE_YMD}}" to "仅日期",
-        "{{DATE_HMS}}" to "仅时间",
-        "{{SIM_SLOT}}" to "卡槽与运营商",
-        "{{RECEIVER_NUMBER}}" to "本机接收卡号",
-        "{{DEVICE_NAME}}" to "设备型号",
-        "{{BATTERY_INFO}}" to "电量与充电状态",
-        "{{NET_TYPE}}" to "网络类型(WiFi/5G)",
-        "{{IP_LIST}}" to "当前IP地址",
-        "{{APP_VERSION}}" to "客户端版本"
+        "{{FROM}}" to "来源号码",
+        "{{CONTACT_NAME}}" to "联系人",
+        "{{CODE}}" to "验证码",
+        "{{SMS}}" to "短信内容",
+        "{{RECEIVE_TIME}}" to "接收时间",
+        "{{DATE_YMD}}" to "日期",
+        "{{DATE_HMS}}" to "时间",
+        "{{CURRENT_TIME}}" to "当前时间",
+        "{{SIM_SLOT}}" to "卡槽备注",
+        "{{SIM_INDEX}}" to "卡槽序号",
+        "{{RECEIVER_NUMBER}}" to "本机号码",
+        "{{DEVICE_NAME}}" to "设备名称",
+        "{{DEVICE_BRAND}}" to "设备品牌",
+        "{{DEVICE_MODEL}}" to "设备型号",
+        "{{BATTERY_PCT}}" to "电池电量",
+        "{{BATTERY_INFO}}" to "完整电量",
+        "{{NET_TYPE}}" to "网络状态",
+        "{{IP_LIST}}" to "IP地址",
+        "{{APP_VERSION}}" to "应用版本"
     )
 
     Scaffold(
@@ -311,26 +317,46 @@ fun RuleStudioScreen(
 
                                 Spacer(modifier = Modifier.height(8.dp))
 
-                                FlowRow(
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                Column(
+                                    verticalArrangement = Arrangement.spacedBy(5.dp),
+                                    modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    placeholderTags.forEach { (tag, desc) ->
-                                        Surface(
-                                            shape = RoundedCornerShape(10.dp),
-                                            color = if (isDark) Color(0xFF1B3322) else BrandGreenSoft,
-                                            border = BorderStroke(1.dp, if (isDark) Color(0xFF2E5E3B) else Color(0xFFC7EBD0)),
-                                            modifier = Modifier.clickable {
-                                                customTemplateText += tag
-                                            }
+                                    placeholderTags.chunked(4).forEach { rowChips ->
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(5.dp)
                                         ) {
-                                            Text(
-                                                text = "+ $tag ($desc)",
-                                                fontSize = 11.5.sp,
-                                                fontWeight = FontWeight.Medium,
-                                                color = BrandGreen,
-                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
-                                            )
+                                            rowChips.forEach { (tag, desc) ->
+                                                Surface(
+                                                    shape = RoundedCornerShape(6.dp),
+                                                    color = if (isDark) Color(0xFF1B3322) else BrandGreenSoft,
+                                                    border = BorderStroke(0.5.dp, if (isDark) Color(0xFF2E5E3B) else Color(0xFFC7EBD0)),
+                                                    modifier = Modifier
+                                                        .weight(1f)
+                                                        .height(30.dp)
+                                                ) {
+                                                    TextButton(
+                                                        onClick = {
+                                                            customTemplateText += tag
+                                                        },
+                                                        contentPadding = PaddingValues(horizontal = 2.dp, vertical = 0.dp),
+                                                        modifier = Modifier.fillMaxSize()
+                                                    ) {
+                                                        Text(
+                                                            text = desc,
+                                                            fontSize = 11.sp,
+                                                            fontWeight = FontWeight.Medium,
+                                                            color = BrandGreen,
+                                                            maxLines = 1,
+                                                            softWrap = false,
+                                                            overflow = TextOverflow.Ellipsis
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                            repeat(4 - rowChips.size) {
+                                                Spacer(modifier = Modifier.weight(1f))
+                                            }
                                         }
                                     }
                                 }

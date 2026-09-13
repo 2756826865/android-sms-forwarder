@@ -5,8 +5,10 @@ import android.content.SharedPreferences
 import org.fossify.messages.forwarding.ForwardingChannelInstance
 import org.fossify.messages.forwarding.ForwardingChannels
 import org.fossify.messages.forwarding.MultiForwardConfig
+import org.fossify.messages.forwarding.PlaintextCipher
 import org.fossify.messages.forwarding.repository.ChannelRepository
 import org.fossify.messages.remote.repository.RemoteSourceInstance
+import org.fossify.messages.security.crypto.CredentialHealth
 import org.fossify.messages.remote.repository.RemoteSourceType
 import org.json.JSONObject
 import org.junit.After
@@ -22,7 +24,7 @@ import java.lang.reflect.Proxy
 class ChannelRepositoryTest {
     @Test
     fun weComLegacyIsLinkedOnStartupAndRefreshWithoutReenabling() {
-        val config = MultiForwardConfig(customPrefs = createFakeSharedPrefs())
+        val config = MultiForwardConfig(customPrefs = createFakeSharedPrefs(), cipher = PlaintextCipher)
         config.saveWeComRemoteControl("bot", "secret", "chat")
         val repo = ChannelRepository(multiConfig = config)
         val id = "linked_wecom_stream_legacy_remote_wecom"
@@ -39,7 +41,7 @@ class ChannelRepositoryTest {
 
     @Test
     fun weComSourcesWithSameChatRemainDistinctAndRemoteSettingsWin() {
-        val config = MultiForwardConfig(customPrefs = createFakeSharedPrefs())
+        val config = MultiForwardConfig(customPrefs = createFakeSharedPrefs(), cipher = PlaintextCipher)
         config.saveWeComRemoteControl("old-bot", "secret", "old-chat")
         val sources = listOf("legacy_remote_wecom", "custom-wecom").map { id ->
             RemoteSourceInstance(
@@ -58,7 +60,7 @@ class ChannelRepositoryTest {
 
     @Test
     fun weComRefreshFindsNewSourcesButDoesNotUseStaleLegacyTarget() {
-        val config = MultiForwardConfig(customPrefs = createFakeSharedPrefs())
+        val config = MultiForwardConfig(customPrefs = createFakeSharedPrefs(), cipher = PlaintextCipher)
         val source = RemoteSourceInstance(
             id = "legacy_remote_wecom", name = "机器人", type = RemoteSourceType.WECOM,
             configJson = JSONObject().put("botId", "bot").put("secret", "secret").put("chatId", "").toString()
@@ -76,6 +78,8 @@ class ChannelRepositoryTest {
     @After
     fun cleanup() {
         ChannelRepository.resetForTesting()
+        // CredentialHealth 是进程级单例，其他测试类若触发过加解密失败会污染本类的联动同步守卫。
+        CredentialHealth.clearAll()
     }
 
     private fun createFakeSharedPrefs(initialPrefs: Map<String, Any> = emptyMap()): SharedPreferences {
@@ -128,7 +132,7 @@ class ChannelRepositoryTest {
 
     private fun createFakeRepo(initialPrefs: Map<String, Any> = emptyMap()): Pair<ChannelRepository, MultiForwardConfig> {
         val prefs = createFakeSharedPrefs(initialPrefs)
-        val config = MultiForwardConfig(customPrefs = prefs)
+        val config = MultiForwardConfig(customPrefs = prefs, cipher = PlaintextCipher)
         val repo = ChannelRepository(multiConfig = config)
         return Pair(repo, config)
     }
@@ -247,11 +251,13 @@ class ChannelRepositoryTest {
         )
         val (repo, _) = createFakeRepo(prefs)
 
-        assertTrue(repo.hasLegacyConfigToMigrate())
+        // ChannelRepository.init 已无条件调用 importLegacyChannels()，构造完成即迁移完毕，
+        // 因此此处不再是 true（该断言自 3b0f3bd2 起与实现从未对齐）。
+        assertFalse(repo.hasLegacyConfigToMigrate())
 
-        // 第一次导入
+        // 手动首次导入：init 已导入过，幂等返回 0，实例总数仍为 2
         val firstCount = repo.importLegacyChannels()
-        assertEquals(2, firstCount)
+        assertEquals(0, firstCount)
         assertEquals(2, repo.getInstances().size)
         assertFalse("已全部导入后不应再提示迁移引导", repo.hasLegacyConfigToMigrate())
 
@@ -264,7 +270,7 @@ class ChannelRepositoryTest {
     @Test
     fun testDualEntryConsistency() {
         val sharedPrefs = createFakeSharedPrefs()
-        val multiConfig = MultiForwardConfig(customPrefs = sharedPrefs)
+        val multiConfig = MultiForwardConfig(customPrefs = sharedPrefs, cipher = PlaintextCipher)
 
         // 模拟经典版与开发版同时获取同一个共享 Repository 实例
         val sharedRepo = ChannelRepository(multiConfig = multiConfig)

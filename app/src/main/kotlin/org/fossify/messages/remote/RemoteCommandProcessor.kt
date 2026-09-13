@@ -118,13 +118,14 @@ object RemoteCommandProcessor {
             return RemoteProcessResult.Rejected(
                 commandId = null,
                 reason = "AUTHORIZED_USERS_REQUIRED",
-                detail = "未配置授权用户白名单，默认拒绝所有远程指令"
+                detail = "未配置授权用户白名单，默认拒绝所有远程发短信指令。" +
+                    "请在「远程发送 → 编辑来源 → 用户白名单」中填写至少一个授权号码后重试"
             )
         }
 
         val isAuthorized = !whitelistEnabled || effectiveAuthorizedUsers.any { auth ->
             if (isSmsSource) {
-                numbersEquivalent(auth, envelope.senderId)
+                NumberMatcher.equivalent(auth, envelope.senderId)
             } else {
                 auth.equals(envelope.senderId, ignoreCase = true)
             }
@@ -392,14 +393,6 @@ object RemoteCommandProcessor {
         RemoteSourceType.EMAIL -> SOURCE_EMAIL
         RemoteSourceType.TELEGRAM -> SOURCE_TELEGRAM
         RemoteSourceType.WEBSOCKET -> SOURCE_WEBSOCKET
-    }
-
-    private fun normalizeNumber(value: String): String = value.filter(Char::isDigit).takeLast(11)
-
-    private fun numbersEquivalent(a: String, b: String): Boolean {
-        val left = normalizeNumber(a)
-        val right = normalizeNumber(b)
-        return left.isNotEmpty() && (left == right || left.endsWith(right) || right.endsWith(left))
     }
 
     private fun sha256(value: String): String = MessageDigest.getInstance("SHA-256")

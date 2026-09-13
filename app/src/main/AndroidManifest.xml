@@ -561,6 +561,15 @@
         </receiver>
 
         <receiver
+            android:name=".receivers.DatabaseRecoveryDismissReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="org.fossify.messages.action.database_recovery_dismiss" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
             android:name=".receivers.DeleteSmsReceiver"
             android:enabled="true"
             android:exported="false">

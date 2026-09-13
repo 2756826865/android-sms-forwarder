@@ -26,6 +26,15 @@ interface MessagesDao {
     @Query("SELECT * FROM messages")
     fun getAll(): List<Message>
 
+    /**
+     * 只取 id 列的轻量判重查询，用于替代 [getAll] 的全表对象加载。
+     *
+     * [getAll] 会把每条短信的完整实体（body / participants / attachment）全部实例化，
+     * 在数万条的大库上会直接 OOM；补偿扫描只需要 id 做判重，这里只投影 id 一列。
+     */
+    @Query("SELECT id FROM messages")
+    fun getAllIds(): List<Long>
+
     @Query("SELECT messages.* FROM messages LEFT OUTER JOIN recycle_bin_messages ON messages.id = recycle_bin_messages.id WHERE recycle_bin_messages.id IS NOT NULL")
     fun getAllRecycleBinMessages(): List<Message>
 

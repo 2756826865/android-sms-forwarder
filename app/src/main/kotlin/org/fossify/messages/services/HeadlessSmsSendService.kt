@@ -2,8 +2,8 @@ package org.fossify.messages.services
 
 import android.app.Service
 import android.content.Intent
-import android.net.Uri
 import com.klinker.android.send_message.Settings
+import org.fossify.messages.helpers.SmsIntentParser
 import org.fossify.messages.messaging.sendMessageCompat
 
 import org.fossify.messages.messaging.SimResolutionRequest
@@ -19,30 +19,24 @@ class HeadlessSmsSendService : Service() {
                 return START_NOT_STICKY
             }
 
-            val dataString = intent.dataString
-            val rawNumber = when {
-                dataString != null -> Uri.decode(
-                    dataString
-                        .removePrefix("smsto:")
-                        .removePrefix("sms:")
-                        .removePrefix("mmsto:")
-                        .removePrefix("mms:")
-                        .trim()
-                )
-                else -> intent.getStringExtra("address") ?: intent.getStringExtra(Intent.EXTRA_PHONE_NUMBER) ?: ""
-            }
+            // 复用 SmsIntentParser，不再自己 `removePrefix("smsto:")/("sms:")/...` 裸剥前缀。
+            // 旧实现零结构解析：`smsto://10086/&body=x` 会把整串 `//10086/&body=x` 当成号码，
+            // 且完全不解码。现在与 NewConversationActivity 走同一套解析（含收件人解码），
+            // 全工程只有一处收件人解析/解码逻辑。
+            val (text, recipients) = SmsIntentParser.parseRespondViaMessage(intent)
+            val addresses = recipients.split(';')
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
 
-            val text = intent.getStringExtra(Intent.EXTRA_TEXT) ?: intent.getStringExtra("android.intent.extra.TEXT")
-            if (!text.isNullOrEmpty() && rawNumber.isNotBlank()) {
+            if (text.isNotEmpty() && addresses.isNotEmpty()) {
                 val simResult = SubscriptionResolver.resolve(
                     this,
                     SimResolutionRequest(
-                        targetAddress = rawNumber.ifBlank { null },
+                        targetAddress = addresses.first(),
                         allowFallback = true
                     )
                 )
                 val subId = if (simResult.isSuccessful) simResult.resolvedSubscriptionId else Settings.DEFAULT_SUBSCRIPTION_ID
-                val addresses = listOf(rawNumber)
                 sendMessageCompat(
                     text = text,
                     addresses = addresses,
