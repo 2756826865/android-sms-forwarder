@@ -4,18 +4,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.1.9] - Unreleased
+## [1.1.9] - 2026-09-17
 
-### 🚀 新增与增强 (Features & Enhancements)
-- **方糖 Server酱³ 原生接入**：新增 `serverchan3` 推送通道，支持通过 SendKey 自动识别提取 UID 并推送至 `https://<uid>.push.ft07.com/send/<sendkey>.send`，支持免后台厂商通道推送。
-- **自定义 Webhook `{receiver}` 变量**：支持 `{receiver}`、`[receiver]`、`{{receiver}}` 读取接收卡槽本机号码；并新增 `sim_slot`（纯卡槽标识，如 SIM1）与 `sim`（完整描述，如 SIM2 中国移动）区分，支持大小写不敏感与单双大括号/中括号。
-- **转发即标记为已读**：在通道设置中新增「转发成功后标记为已读」开关。转发到所有配置通道后，自动标记系统与应用内短信为已读并清除通知。
-- **延时后台转发任务**：在通道设置中提供延时任务配置（默认关闭，开启支持 1~60 秒平滑调节），智能兼容 WorkManager 避免异常。
-- **前台保活服务与通知隐藏**：在运维体检中增加「前台保活服务」启停开关，并提供「隐藏保活通知图标」一键跳转静音引导。
-- **通知转发自定义模板**：在通知转发设置中支持 `{{APP_NAME}}`、`{{TITLE}}`、`{{CONTENT}}`、`{{TIME}}`、`{{PACKAGE}}` 变量自定义模板与一键插入。
+### 🚀 新增通道与模板变量 (New Channels & Variables)
+- **🎈 方糖 Server酱³ 原生接入 (`ForwardingChannels.kt` / `MultiChannelForwardWorker.kt`)**：
+  - 新增 `serverchan3` 专用推送通道，注册于全局通道目录与测试器；
+  - 自动依据用户填写的 SendKey（如 `sctp123456t...`）提取 UID，直接对接官方网关 `https://<uid>.push.ft07.com/send/<sendkey>.send`；
+  - 支持免后台厂商通道推送（小米 MiPush、华为 Push Kit、OPPO、vivo、iOS、Google FCM 等），无常驻后台更省电。
+- **📥 自定义 Webhook 增加接收卡槽号码 `{receiver}` (`WebhookTemplateRenderer.kt`)**：
+  - 请求体与 URL 占位符支持 `{receiver}`、`[receiver]`、`{{receiver}}` 提取接收短信的本机号码（无卡号时优雅回退为卡槽别名）；
+  - 区分 `{sim_slot}`（纯卡槽标识，如 `SIM1`）与 `{sim}`（完整运营商描述，如 `SIM2 · 中国移动`）；
+  - 全面支持单双大括号与中括号、大小写不敏感，并兼容 `content -> msg`、`sender -> from` 等别名映射。
 
-### 📱 适配与体验优化 (Adaptive & UI Improvements)
-- **三键虚拟导航与全面屏自动适配**：启用 `WindowCompat.setDecorFitsSystemWindows(window, false)`，动态计算 `navigationBars` insets 抬升悬浮 Dock 底栏与页面列表底边距；为所有弹窗补齐 `navigationBarsPadding()`，确保虚拟导航键与全面屏手势下均无遮挡、贴底自然。
+### ⚙️ 高级转发与任务调度 (Advanced Forwarding & Scheduling)
+- **📖 转发即标记为已读 (`MultiForwardConfig.kt` / `MultiChannelForwardWorker.kt`)**：
+  - 在「通道」顶部「⚙️ 转发设置」中增加「转发成功后标记为已读」开关；
+  - 短信经由规则成功转发到所有配置通道后，自动更新系统短信 Provider（`read = 1`）与本地 Room 数据库，并同步清除系统状态栏通知。
+- **⏱️ 延时后台转发任务 (`MultiForwardConfig.kt` / `MultiChannelForwardWorker.kt`)**：
+  - 在通道高级设置中提供延时任务配置（关闭时隐藏，开启可调节 1~60 秒滑块，默认 5 秒）；
+  - 规避 WorkManager 同时调用 `.setExpedited()` 与 `.setInitialDelay()` 导致的系统级崩溃，实现平滑延时防瞬时风控。
+- **🛡️ 前台保活服务启停与隐藏通知引导 (`OperationsScreen.kt` / `SmsKeepAliveService.kt`)**：
+  - 在「运维诊断」的后台运行卡片中提供「前台保活服务」开关，停用时立即释放 Service 常驻，完全依赖 WorkManager 调度；
+  - 提供「隐藏保活通知图标」一键直达系统通知渠道（`sms_background_service`），支持用户在系统层设为静音/最小化隐藏图标。
+
+### 📱 界面与系统导航栏适配 (System Insets & Adaptive UI)
+- **📐 三键虚拟导航与全面屏自适应 (`MainActivity.kt` / `GatewayApp.kt`)**：
+  - 启用 `WindowCompat.setDecorFitsSystemWindows(window, false)` 与全透明 Scrim；
+  - 底部浮动胶囊 Dock 栏与一级/二级所有滚动页面（通道、控制台、会话、运维、规则、来电、电量、通知等）动态计算 `WindowInsets.navigationBars`；
+  - 全面屏手势导航下紧贴底边（0 冗余留白），三键虚拟导航下自动依据虚拟按键高度向上抬升，底栏内容不被遮挡；
+  - 全工程所有对话框（实例编辑、通道教程、转发设置、通道/应用选择器等）补齐 `Modifier.navigationBarsPadding()`，确保底部「确定/取消」按钮永不被虚拟导航栏遮挡。
+
+### 📝 通知转发自定义模板 (Notification Forwarding)
+- **🏷️ 自定义消息模板与快捷插值 (`NotificationForwardConfig.kt` / `EmbeddedFeatureSettings.kt`)**：
+  - 支持 `{{APP_NAME}}`、`{{TITLE}}`、`{{CONTENT}}`、`{{TIME}}`、`{{PACKAGE}}` 变量自定义通知正文排版；
+  - 提供一键点击插入变量胶囊与恢复默认模板功能，真实通知转发与模拟测试统一渲染。
 
 
 ## [1.1.8] - 2026-09-13
