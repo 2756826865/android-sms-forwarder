@@ -24,21 +24,22 @@ object ForwardingChannels {
     const val CHANNEL_GROUP = "channel_group"
     const val GOTIFY = "gotify"
     const val NTFY = "ntfy"
+    const val SERVERCHAN3 = "serverchan3"
 
     val networkChannels = setOf(
         PUSHPLUS, WECHAT_TEST, QQ, WECOM_APP, WECOM, WECOM_BOT, WECOM_STREAM,
         FEISHU_APP, FEISHU_BOT, FEISHU, DINGTALK, BARK, WEBSOCKET,
-        TELEGRAM, DISCORD, TENCENT_CLOUD, EMAIL, CUSTOM_WEBHOOK, GOTIFY, NTFY
+        TELEGRAM, DISCORD, TENCENT_CLOUD, EMAIL, CUSTOM_WEBHOOK, GOTIFY, NTFY, SERVERCHAN3
     )
 
     val allRuleChannels = listOf(
         PUSHPLUS, WECHAT_TEST, QQ, WECOM_APP, WECOM_BOT, WECOM_STREAM,
         FEISHU_APP, FEISHU_BOT, DINGTALK, BARK, WEBSOCKET,
-        TELEGRAM, DISCORD, TENCENT_CLOUD, EMAIL, SMS_DIRECT, CUSTOM_WEBHOOK, CHANNEL_GROUP, GOTIFY, NTFY
+        TELEGRAM, DISCORD, TENCENT_CLOUD, EMAIL, SMS_DIRECT, CUSTOM_WEBHOOK, CHANNEL_GROUP, GOTIFY, NTFY, SERVERCHAN3
     )
 
     val lowBatteryChannels = listOf(
-        PUSHPLUS, BARK, GOTIFY, NTFY, DINGTALK, FEISHU, WECOM, WECOM_BOT, WECOM_STREAM, EMAIL, SMS_DIRECT
+        PUSHPLUS, BARK, GOTIFY, NTFY, SERVERCHAN3, DINGTALK, FEISHU, WECOM, WECOM_BOT, WECOM_STREAM, EMAIL, SMS_DIRECT
     )
 
     fun displayName(channel: String): String = when (channel) {
@@ -62,6 +63,7 @@ object ForwardingChannels {
         CHANNEL_GROUP -> "群组聚合消息"
         GOTIFY -> "Gotify"
         NTFY -> "ntfy 推送"
+        SERVERCHAN3 -> "Server酱³"
         else -> channel
     }
 }

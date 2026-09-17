@@ -144,6 +144,13 @@ object ChannelRegistry {
             category = ChannelCategory.CLOUD
         ),
         ChannelDefinition(
+            id = ForwardingChannels.SERVERCHAN3,
+            name = "Server酱³",
+            description = "方糖 ServerChan3 原生推送，免费免后台依托主流手机厂商系统通道",
+            iconEmoji = "🎈",
+            category = ChannelCategory.CLOUD
+        ),
+        ChannelDefinition(
             id = ForwardingChannels.TENCENT_CLOUD,
             name = "腾讯云自定义告警",
             description = "云监控自定义事件上报接口",

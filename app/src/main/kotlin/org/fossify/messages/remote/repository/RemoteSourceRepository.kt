@@ -177,7 +177,7 @@ class RemoteSourceRepository internal constructor(
 
     /**
      * 存量名单自动回填（升级迁移）：把「白名单关闭且名单为空」的**短信来源**
-     * 用历史发件人记录补齐名单并开启白名单。
+     * 用历史发件人记录补充完整名单并开启白名单。
      *
      * 两个分支：
      * - 能取到历史发件人 → `copy(whitelistEnabled = true, authorizedUsers = 历史号码)`：
@@ -186,7 +186,7 @@ class RemoteSourceRepository internal constructor(
      *   与旧版行为一致，功能同样不中断，由设置页的橙色警告标签提示。
      *
      * 硬约束：**绝不允许出现"名单为空 + 白名单开启"的失效态**（那会被
-     * AUTHORIZED_USERS_REQUIRED 全部拒绝，用户必须手动补名单才能恢复）。
+     * AUTHORIZED_USERS_REQUIRED 全部拒绝，用户必须手动补充名单才能恢复）。
      *
      * 「白名单关闭但名单非空」的来源不做迁移 —— 那是用户在填写了名单的前提下显式选择
      * "接受所有用户"，迁移会让其存量配置突然失效；这类来源仅在设置页以警告色提示。
@@ -241,7 +241,7 @@ class RemoteSourceRepository internal constructor(
     /**
      * 白名单已启用但未配置任何授权用户的来源。
      * 这些来源在运行时会被 [org.fossify.messages.remote.RemoteCommandProcessor] 以
-     * AUTHORIZED_USERS_REQUIRED 拒绝，UI 需要常驻提示引导用户补齐名单。
+     * AUTHORIZED_USERS_REQUIRED 拒绝，UI 需要常驻提示引导用户补充完整名单。
      */
     fun getSourcesMissingAuthorizedUsers(): List<RemoteSourceInstance> =
         _sourcesFlow.value.filter { it.whitelistEnabled && it.authorizedUsers.isEmpty() }

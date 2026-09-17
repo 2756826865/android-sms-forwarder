@@ -200,6 +200,9 @@ class MainActivity : SimpleActivity() {
     // 模式 B：全功能 SMS Gateway 网关开发版 (Compose 5-Tab)
     // ========================================================
     private fun setupGatewayDeveloperUi() {
+        androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
+        clearHomeBottomSystemScrim()
+
         val dashboardRepo = DashboardDataRepository(applicationContext)
         val messageRepo = MessageCenterRepository(applicationContext)
 

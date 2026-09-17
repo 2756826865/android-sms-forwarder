@@ -40,6 +40,10 @@ import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 import javax.net.ssl.SSLSocket
 import javax.net.ssl.SSLSocketFactory
+import org.fossify.commons.extensions.notificationManager
+import org.fossify.messages.extensions.conversationsDB
+import org.fossify.messages.extensions.markThreadMessagesRead
+import org.fossify.messages.helpers.refreshConversations
 import org.fossify.messages.helpers.ShadowRepository
 import org.fossify.messages.models.ForwardingShadowAttempt
 
@@ -61,6 +65,7 @@ class MultiChannelForwardWorker(
         val body = inputData.getString(KEY_BODY).orEmpty()
         val receivedAt = inputData.getLong(KEY_RECEIVED_AT, System.currentTimeMillis())
         val subscriptionId = inputData.getInt(KEY_SUBSCRIPTION_ID, -1)
+        val threadId = inputData.getLong(KEY_THREAD_ID, 0L)
         val operationId = inputData.getString(KEY_OPERATION_ID)
 
         // Shadow observation: Worker started
@@ -287,6 +292,16 @@ class MultiChannelForwardWorker(
                             instance.optString("clickUrl"),
                             title,
                             content
+                        )
+                    }
+                    ForwardingChannels.SERVERCHAN3 -> {
+                        val sendKey = instance.optString("sendKey")
+                        check(sendKey.isNotBlank()) { "Server酱³ SendKey 未配置" }
+                        sendServerChan3(
+                            sendKey = sendKey,
+                            tags = instance.optString("tags"),
+                            title = title,
+                            content = content
                         )
                     }
                     ForwardingChannels.EMAIL -> {
@@ -596,6 +611,9 @@ class MultiChannelForwardWorker(
             failures.isEmpty() && successes.isNotEmpty() -> {
                 if (historyRecordId.isNotBlank()) {
                     history.markSuccess(historyRecordId, "发送成功：${successes.joinToString("、")}")
+                }
+                if (!isTest && config.markAsReadAfterForward && sender.isNotBlank()) {
+                    markSmsAsRead(applicationContext, threadId, sender)
                 }
                 Log.d(TAG, "result: success")
                 Result.success()
@@ -914,6 +932,37 @@ class MultiChannelForwardWorker(
         }
     }
 
+    private fun sendServerChan3(
+        sendKey: String,
+        tags: String,
+        title: String,
+        content: String
+    ) {
+        val trimmedKey = sendKey.trim()
+        val url = if (trimmedKey.startsWith("http://") || trimmedKey.startsWith("https://")) {
+            trimmedKey
+        } else {
+            val match = Regex("""^sctp(\d+)t""").find(trimmedKey)
+            val uid = match?.groupValues?.get(1)
+            if (uid != null) {
+                "https://$uid.push.ft07.com/send/$trimmedKey.send"
+            } else {
+                "https://push.ft07.com/send/$trimmedKey.send"
+            }
+        }
+        val payload = JSONObject()
+            .put("title", title)
+            .put("desp", content)
+        if (tags.isNotBlank()) {
+            payload.put("tags", tags.trim())
+        }
+        val res = postJson(url, payload)
+        val code = res.optInt("code", res.optInt("errno", -1))
+        check(code == 0 || code == 200 || res.optString("message").contains("success", ignoreCase = true)) {
+            res.optString("message", res.optString("errmsg", "Server酱³ 推送失败"))
+        }
+    }
+
     private fun getJson(url: String) = requestJson(url, "GET", null)
 
     private fun postJson(
@@ -1151,6 +1200,12 @@ class MultiChannelForwardWorker(
         val sim = if (subscriptionId >= 0) {
             ForwardingMessageFormatter.getSimDescription(applicationContext, MultiForwardConfig(applicationContext), subscriptionId)
         } else ""
+        val simSlot = if (subscriptionId >= 0) {
+            ForwardingMessageFormatter.getSimSlotName(applicationContext, MultiForwardConfig(applicationContext), subscriptionId)
+        } else ""
+        val receiver = if (subscriptionId >= 0) {
+            ForwardingMessageFormatter.getReceiverNumber(applicationContext, MultiForwardConfig(applicationContext), subscriptionId)
+        } else ""
         fun encoded(value: String): String = when {
             method == "GET" -> URLEncoder.encode(value, "UTF-8")
             contentType.contains("json", ignoreCase = true) -> JSONObject.quote(value).removeSurrounding("\"")
@@ -1161,7 +1216,9 @@ class MultiChannelForwardWorker(
             bodyTemplate.ifBlank { MultiForwardConfig.DEFAULT_CUSTOM_WEBHOOK_BODY },
             mapOf(
                 "title" to encoded(title), "msg" to encoded(content),
-                "from" to encoded(sender), "time" to encoded(time), "sim" to encoded(sim)
+                "from" to encoded(sender), "time" to encoded(time),
+                "sim" to encoded(sim), "sim_slot" to encoded(simSlot),
+                "receiver" to encoded(receiver)
             )
         )
         val requestUrl = if (method == "GET" && rendered.isNotBlank()) {
@@ -1233,12 +1290,33 @@ class MultiChannelForwardWorker(
         )
     }
 
+    private fun markSmsAsRead(context: Context, threadId: Long, sender: String) {
+        try {
+            var targetThreadId = threadId
+            if (targetThreadId <= 0L && sender.isNotBlank()) {
+                targetThreadId = runCatching {
+                    android.provider.Telephony.Threads.getOrCreateThreadId(context, sender)
+                }.getOrDefault(0L)
+            }
+            if (targetThreadId > 0L) {
+                context.notificationManager.cancel(targetThreadId.hashCode())
+                context.markThreadMessagesRead(targetThreadId)
+                context.conversationsDB.markRead(targetThreadId)
+                refreshConversations()
+                Log.d(TAG, "markSmsAsRead: thread $targetThreadId marked as read")
+            }
+        } catch (t: Throwable) {
+            Log.w(TAG, "Failed to mark SMS as read for sender $sender, threadId $threadId", t)
+        }
+    }
+
     companion object {
         private const val TAG = "MultiChannelForward"
         private const val KEY_SENDER = "sender"
         private const val KEY_BODY = "body"
         private const val KEY_RECEIVED_AT = "received_at"
         private const val KEY_SUBSCRIPTION_ID = "subscription_id"
+        private const val KEY_THREAD_ID = "thread_id"
         private const val KEY_TARGET_CHANNEL = "target_channel"
         private const val KEY_ALLOWED_CHANNELS = "allowed_channels"
         private const val KEY_IS_TEST = "is_test"
@@ -1327,7 +1405,8 @@ class MultiChannelForwardWorker(
             ruleId: String = "",
             actionId: String = "",
             bodyAlreadyRendered: Boolean = false,
-            visitedGroupIds: Set<String> = emptySet()
+            visitedGroupIds: Set<String> = emptySet(),
+            threadId: Long = 0L
         ) {
             val multiConfig = MultiForwardConfig(context)
             val requestedInstance = targetInstanceId.takeIf(String::isNotBlank)
@@ -1392,7 +1471,8 @@ class MultiChannelForwardWorker(
                         ruleId = ruleId,
                         actionId = actionId,
                         bodyAlreadyRendered = bodyAlreadyRendered,
-                        visitedGroupIds = visitedGroupIds + groupIdentity
+                        visitedGroupIds = visitedGroupIds + groupIdentity,
+                        threadId = threadId
                     )
                 }
                 return
@@ -1413,7 +1493,8 @@ class MultiChannelForwardWorker(
             )
             Log.d(TAG, "enqueueSingle: channel=$targetChannel, instance=$targetInstanceId, historyId=$historyRecordId, workId=$uniqueId")
             val safeBody = if (body.length > 4000) body.take(4000) + "…(内容过长已截断)" else body
-            val request = OneTimeWorkRequestBuilder<MultiChannelForwardWorker>()
+            val delaySeconds = if (!isTest) multiConfig.forwardingDelaySeconds else 0
+            val requestBuilder = OneTimeWorkRequestBuilder<MultiChannelForwardWorker>()
                 .setInputData(
                     workDataOf(
                         KEY_SENDER to sender,
@@ -1428,7 +1509,8 @@ class MultiChannelForwardWorker(
                         KEY_INSTANCE_ID to targetInstanceId,
                         KEY_RULE_ID to ruleId,
                         KEY_ACTION_ID to actionId,
-                        KEY_BODY_ALREADY_RENDERED to bodyAlreadyRendered
+                        KEY_BODY_ALREADY_RENDERED to bodyAlreadyRendered,
+                        KEY_THREAD_ID to threadId
                     )
                 )
                 .setConstraints(
@@ -1443,8 +1525,13 @@ class MultiChannelForwardWorker(
                         .build(),
                 )
                 .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 10, TimeUnit.SECONDS)
-                .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
-                .build()
+
+            if (delaySeconds > 0) {
+                requestBuilder.setInitialDelay(delaySeconds.toLong(), TimeUnit.SECONDS)
+            } else {
+                requestBuilder.setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+            }
+            val request = requestBuilder.build()
             runCatching {
                 WorkManager.getInstance(context)
                     .enqueueUniqueWork("multi-forward-$uniqueId-$effectiveChannel", ExistingWorkPolicy.KEEP, request)

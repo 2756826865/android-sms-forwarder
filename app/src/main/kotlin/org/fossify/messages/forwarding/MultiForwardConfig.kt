@@ -62,6 +62,15 @@ class MultiForwardConfig(
     var dingTalkRemoteControlEnabled by booleanPreference(KEY_DINGTALK_REMOTE_CONTROL_ENABLED)
     var enablePrivacyMask by booleanPreference(KEY_ENABLE_PRIVACY_MASK)
     var maskVerificationCode by booleanPreference(KEY_MASK_VERIFICATION_CODE)
+    var markAsReadAfterForward by booleanPreference(KEY_MARK_AS_READ_AFTER_FORWARD)
+
+    var forwardingDelaySeconds: Int
+        get() = prefs.getInt(KEY_FORWARDING_DELAY_SECONDS, 0).coerceIn(0, 60)
+        set(value) = prefs.edit().putInt(KEY_FORWARDING_DELAY_SECONDS, value.coerceIn(0, 60)).apply()
+
+    var keepAliveServiceEnabled: Boolean
+        get() = prefs.getBoolean(KEY_KEEP_ALIVE_SERVICE_ENABLED, true)
+        set(value) = prefs.edit().putBoolean(KEY_KEEP_ALIVE_SERVICE_ENABLED, value).apply()
 
     var dingTalkRemoteSendSimMode: Int
         get() = prefs.getInt(KEY_DINGTALK_REMOTE_SEND_SIM, SimSendMode.DEFAULT).let { mode ->
@@ -1013,6 +1022,9 @@ class MultiForwardConfig(
         private const val KEY_CHANNEL_INSTANCES = "channel_instances"
         private const val KEY_ENABLE_PRIVACY_MASK = "enable_privacy_mask"
         private const val KEY_MASK_VERIFICATION_CODE = "mask_verification_code"
+        private const val KEY_MARK_AS_READ_AFTER_FORWARD = "mark_as_read_after_forward"
+        private const val KEY_FORWARDING_DELAY_SECONDS = "forwarding_delay_seconds"
+        private const val KEY_KEEP_ALIVE_SERVICE_ENABLED = "keep_alive_service_enabled"
 
         const val CURRENT_DISCLAIMER_VERSION = 1
 

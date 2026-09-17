@@ -6,12 +6,17 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -142,7 +147,7 @@ fun AutoReplyEmbeddedScreen() {
                 }
             }
         }
-        item { Spacer(Modifier.height(100.dp)) }
+        item { Spacer(Modifier.height(WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 84.dp)) }
     }
 
     if (adding || editing != null) {
@@ -172,6 +177,7 @@ private fun AutoReplyRuleDialog(existing: AutoReplyRule?, onSave: (AutoReplyRule
     var delay by remember(existing?.id) { mutableStateOf((existing?.delaySeconds ?: 3).toString()) }
     var simScope by remember(existing?.id) { mutableStateOf(existing?.simScope ?: AutoReplyRule.SIM_SAME) }
     AlertDialog(
+        modifier = Modifier.navigationBarsPadding(),
         onDismissRequest = onDismiss,
         title = { Text(if (existing == null) "新建回复规则" else "编辑回复规则") },
         text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -309,7 +315,7 @@ fun MissedCallEmbeddedScreen() {
                 Text("模拟测试")
             }
         }
-        item { Spacer(Modifier.height(100.dp)) }
+        item { Spacer(Modifier.height(WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 84.dp)) }
     }
     if (choosingChannels) {
         var selected by remember(choosingChannels) {
@@ -319,6 +325,7 @@ fun MissedCallEmbeddedScreen() {
             )
         }
         AlertDialog(
+            modifier = Modifier.navigationBarsPadding(),
             onDismissRequest = { choosingChannels = false },
             title = { Text("选择来电提醒通道") },
             text = { LazyColumn {
@@ -409,7 +416,7 @@ fun LowBatteryEmbeddedScreen() {
             }
             OutlinedButton(onClick = { choosingChannels = true }, modifier = Modifier.fillMaxWidth()) { Text("选择通道实例") }
         } }
-        item { Spacer(Modifier.height(100.dp)) }
+        item { Spacer(Modifier.height(WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 84.dp)) }
     }
     if (choosingChannels) {
         var selected by remember(choosingChannels) {
@@ -419,6 +426,7 @@ fun LowBatteryEmbeddedScreen() {
             )
         }
         AlertDialog(
+            modifier = Modifier.navigationBarsPadding(),
             onDismissRequest = { choosingChannels = false },
             title = { Text("选择发送通道") },
             text = { LazyColumn {
@@ -499,7 +507,7 @@ fun AutofillEmbeddedScreen() {
                 }
             }
         }
-        item { Spacer(Modifier.height(100.dp)) }
+        item { Spacer(Modifier.height(WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 84.dp)) }
     }
 }
 
@@ -653,13 +661,14 @@ fun HeartbeatEmbeddedScreen() {
                 }
             }
         }
-        item { Spacer(Modifier.height(100.dp)) }
+        item { Spacer(Modifier.height(WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 84.dp)) }
     }
     if (choosingChannels) {
         var selected by remember(choosingChannels) {
             mutableStateOf(if (hasSelection) selectedIds else enabledInstances.map { it.id }.toSet())
         }
         AlertDialog(
+            modifier = Modifier.navigationBarsPadding(),
             onDismissRequest = { choosingChannels = false },
             title = { Text("选择心跳发送通道") },
             text = {
@@ -766,7 +775,7 @@ fun ClassicFeatureEntryScreen(
                 }
             }
         }
-        item { Spacer(Modifier.height(100.dp)) }
+        item { Spacer(Modifier.height(WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 84.dp)) }
     }
 }
 
@@ -800,6 +809,7 @@ fun NotificationForwardEmbeddedScreen() {
     var choosingChannels by remember { mutableStateOf(false) }
     var choosingPackages by remember { mutableStateOf(false) }
     var customPackageInput by remember { mutableStateOf("") }
+    var customTemplate by remember { mutableStateOf(cfg.customTemplate) }
 
     val dark = isSystemInDarkTheme()
 
@@ -923,6 +933,76 @@ fun NotificationForwardEmbeddedScreen() {
             }
         }
 
+        // 自定义消息模板卡片
+        item {
+            FeatureCard {
+                Text("📝 转发消息模板", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    "支持变量：{{APP_NAME}} {{TITLE}} {{CONTENT}} {{TIME}} {{PACKAGE}}",
+                    fontSize = 12.sp,
+                    color = if (dark) Color(0xFF9CA3AF) else TextSecondary
+                )
+                OutlinedTextField(
+                    value = customTemplate,
+                    onValueChange = {
+                        customTemplate = it
+                        cfg.customTemplate = it
+                    },
+                    label = { Text("通知消息模板") },
+                    minLines = 3,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    val variables = listOf(
+                        "{{APP_NAME}}" to "应用名",
+                        "{{TITLE}}" to "通知标题",
+                        "{{CONTENT}}" to "通知内容",
+                        "{{TIME}}" to "通知时间",
+                        "{{PACKAGE}}" to "应用包名"
+                    )
+                    variables.forEach { (tag, label) ->
+                        Surface(
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+                            color = if (dark) Color(0xFF22262B) else Color(0xFFF1F5F9),
+                            border = BorderStroke(1.dp, if (dark) Color(0xFF374151) else Color(0xFFE2E8F0)),
+                            modifier = Modifier.clickable {
+                                customTemplate += tag
+                                cfg.customTemplate = customTemplate
+                            }
+                        ) {
+                            Text(
+                                text = "+ $tag ($label)",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = BrandGreen,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+                    Surface(
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+                        color = if (dark) Color(0xFF22262B) else Color(0xFFF1F5F9),
+                        border = BorderStroke(1.dp, if (dark) Color(0xFF374151) else Color(0xFFE2E8F0)),
+                        modifier = Modifier.clickable {
+                            customTemplate = NotificationForwardConfig.DEFAULT_TEMPLATE
+                            cfg.customTemplate = customTemplate
+                        }
+                    ) {
+                        Text(
+                            text = "↺ 恢复默认模板",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = if (dark) Color(0xFF9CA3AF) else TextSecondary,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+                }
+            }
+        }
+
         // 模拟测试与操作
         item {
             FeatureCard {
@@ -949,7 +1029,7 @@ fun NotificationForwardEmbeddedScreen() {
             }
         }
 
-        item { Spacer(Modifier.height(100.dp)) }
+        item { Spacer(Modifier.height(WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 84.dp)) }
     }
 
     // 选择通道弹窗
@@ -961,6 +1041,7 @@ fun NotificationForwardEmbeddedScreen() {
             )
         }
         AlertDialog(
+            modifier = Modifier.navigationBarsPadding(),
             onDismissRequest = { choosingChannels = false },
             title = { Text("选择推送通道") },
             text = {
@@ -1027,6 +1108,7 @@ fun NotificationForwardEmbeddedScreen() {
     if (choosingPackages) {
         var tempPackages by remember(choosingPackages) { mutableStateOf(targetPackages) }
         AlertDialog(
+            modifier = Modifier.navigationBarsPadding(),
             onDismissRequest = { choosingPackages = false },
             title = { Text("选择监听目标应用") },
             text = {

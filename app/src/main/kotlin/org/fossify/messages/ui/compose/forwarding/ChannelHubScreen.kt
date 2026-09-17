@@ -15,11 +15,16 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.Slider
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -286,9 +291,15 @@ fun getChannelTutorial(channelId: String): String = when (channelId) {
     ForwardingChannels.CUSTOM_WEBHOOK -> """
         1. 填写 HTTP 地址，并选择 GET、POST 或 PUT
         2. 可设置 Content-Type、Headers 和请求体模板
-        3. 模板支持 [title]、[msg]、[from]、[time]、[sim]
+        3. 模板支持 [title]、[msg]、[from]、[time]、[sim]、[sim_slot]、[receiver]（支持大括号或中括号）
         4. GET 模式将模板作为查询参数；公网地址应使用 HTTPS
         5. 保存后先点击测试，接收端返回 HTTP 2xx 才算成功
+    """.trimIndent()
+    ForwardingChannels.SERVERCHAN3 -> """
+        1. 前往方糖 Server酱³ 官网 (ft07.com) 扫码登录并获取 SendKey（例如 sctp123456t...）
+        2. 手机安装 Server酱 客户端 App 并注册厂商通道（小米/华为/OPPO/vivo/iOS/FCM等）
+        3. 填入 SendKey 即可实现免后台厂商原生推送，省电且无需后台常驻
+        4. 可选配置消息标签 tags（半角逗号分隔，客户端内分类过滤）
     """.trimIndent()
     ForwardingChannels.CHANNEL_GROUP -> """
         自由勾选多个已配置的通道组合为一个群组。
@@ -375,6 +386,10 @@ fun getInstanceSummary(instance: ForwardingChannelInstance): String {
             val serverUrl = instance.optString("serverUrl")
             val topic = instance.optString("topic")
             if (topic.isNotBlank()) "${serverUrl.ifBlank { "https://ntfy.sh" }.take(20)} / $topic" else "未配置 Topic"
+        }
+        ForwardingChannels.SERVERCHAN3 -> {
+            val key = instance.optString("sendKey")
+            if (key.isNotBlank()) "SendKey: ${key.take(8)}***" else "未配置 SendKey"
         }
         else -> "已配置"
     }
@@ -464,6 +479,7 @@ fun ChannelHubScreen(
     var isAddingNew by remember { mutableStateOf(false) }
     var instanceToDelete by remember { mutableStateOf<ForwardingChannelInstance?>(null) }
     var showFullTutorialDialog by remember { mutableStateOf(false) }
+    var showForwardSettingsDialog by remember { mutableStateOf(false) }
 
     val allChannelItems = remember(instances) {
         val removedTypes = setOf(
@@ -525,6 +541,9 @@ fun ChannelHubScreen(
                         Text("通道管理", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = primaryTextColor)
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        HeaderPill("⚙️ 转发设置", GatewayBlue, if (isDark) Color(0xFF1E293B) else Color(0xFFEFF6FF)) {
+                            showForwardSettingsDialog = true
+                        }
                         HeaderPill("📖 教程", BrandGreen, if (isDark) Color(0xFF1B3322) else BrandGreenSoft) {
                             showFullTutorialDialog = true
                         }
@@ -828,10 +847,18 @@ fun ChannelHubScreen(
                         }
                     }
 
-                    item { Spacer(modifier = Modifier.height(100.dp)) }
+                    item {
+                        val bottomNavPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+                        Spacer(modifier = Modifier.height(bottomNavPadding + 84.dp))
+                    }
                 }
             }
         }
+    }
+
+    // 转发高级设置弹窗
+    if (showForwardSettingsDialog) {
+        ForwardSettingsDialog(onDismiss = { showForwardSettingsDialog = false })
     }
 
     // 新增通道实例弹窗
@@ -1016,6 +1043,7 @@ fun InstanceEditorDialog(
                 ForwardingChannels.CUSTOM_WEBHOOK -> existingInstance?.optString("url") ?: ""
                 ForwardingChannels.GOTIFY -> existingInstance?.optString("serverUrl") ?: ""
                 ForwardingChannels.NTFY -> existingInstance?.optString("serverUrl") ?: "https://ntfy.sh"
+                ForwardingChannels.SERVERCHAN3 -> existingInstance?.optString("sendKey") ?: ""
                 else -> ""
             }
         )
@@ -1038,6 +1066,7 @@ fun InstanceEditorDialog(
                 ForwardingChannels.CUSTOM_WEBHOOK -> existingInstance?.optString("headers") ?: ""
                 ForwardingChannels.GOTIFY -> existingInstance?.optString("token") ?: ""
                 ForwardingChannels.NTFY -> existingInstance?.optString("topic") ?: ""
+                ForwardingChannels.SERVERCHAN3 -> existingInstance?.optString("tags") ?: ""
                 else -> ""
             }
         )
@@ -1130,6 +1159,7 @@ fun InstanceEditorDialog(
             customWebhookMethod.uppercase() in setOf("GET", "POST", "PUT")
         ForwardingChannels.GOTIFY -> f1.isNotBlank() && f2.isNotBlank()
         ForwardingChannels.NTFY -> f1.isNotBlank() && f2.isNotBlank()
+        ForwardingChannels.SERVERCHAN3 -> f1.isNotBlank()
         else -> false
     }
 
@@ -1174,6 +1204,7 @@ fun InstanceEditorDialog(
             ForwardingChannels.GOTIFY -> configJson.put("serverUrl", f1).put("token", f2)
             ForwardingChannels.NTFY -> configJson.put("serverUrl", f1).put("topic", f2).put("token", f3)
                 .put("priority", f4).put("tags", f5).put("clickUrl", f6)
+            ForwardingChannels.SERVERCHAN3 -> configJson.put("sendKey", f1).put("tags", f2)
             else -> configJson.put("webhook", f1)
         }
         return ForwardingChannelInstance(
@@ -1186,6 +1217,7 @@ fun InstanceEditorDialog(
     }
 
     AlertDialog(
+        modifier = Modifier.navigationBarsPadding(),
         onDismissRequest = onDismiss,
         title = {
             Text(if (isEditing) "⚙️ 编辑通道实例" else "✨ 添加新通道实例")
@@ -1498,7 +1530,7 @@ fun InstanceEditorDialog(
                             value = customWebhookBody,
                             onValueChange = { customWebhookBody = it },
                             label = { Text("请求体模板") },
-                            supportingText = { Text("支持 [title] [msg] [from] [time] [sim]；GET 时作为查询参数模板") },
+                            supportingText = { Text("支持 {receiver} [receiver] {sim} [sim] {from} [from] {msg} [msg] {time} [time]；{receiver} 为接收卡槽本机号码") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
                             minLines = 5,
                             modifier = Modifier.fillMaxWidth()
@@ -1533,6 +1565,24 @@ fun InstanceEditorDialog(
                             modifier = Modifier.fillMaxWidth()
                         )
                         OutlinedTextField(value = f6, onValueChange = { f6 = it }, label = { Text("点击打开链接（选填）") }, modifier = Modifier.fillMaxWidth())
+                    }
+                    ForwardingChannels.SERVERCHAN3 -> {
+                        OutlinedTextField(
+                            value = f1,
+                            onValueChange = { f1 = it },
+                            label = { Text("SendKey (例如 sctp123456t...)") },
+                            placeholder = { Text("从方糖 Server酱³ 控制台获取") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = f2,
+                            onValueChange = { f2 = it },
+                            label = { Text("标签 Tags（选填，逗号分隔）") },
+                            placeholder = { Text("例如 验证码,重要通知") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
                     else -> {
                         OutlinedTextField(value = f1, onValueChange = { f1 = it }, label = { Text("Webhook 地址") }, modifier = Modifier.fillMaxWidth())
@@ -1619,7 +1669,8 @@ fun ChannelFullTutorialDialog(onDismiss: () -> Unit) {
             "ntfy" to "填写 ntfy 服务地址与 Topic，私有主题再填写访问 Token。不要使用容易猜到的公开 Topic 传输验证码。",
             "QQ / OneBot" to "Qmsg 模式填写 Key；OneBot 模式填写自建 HTTP 接口地址。",
             "邮件 / WebSocket" to "邮件填写 SMTP 服务器、账号、授权码和收件人；WebSocket 填写服务地址及可选 Token。",
-            "短信直发 / 自定义 Webhook" to "短信直发会产生运营商费用；Webhook 接收 JSON POST，可按需填写自定义 Headers。",
+            "短信直发 / 自定义 Webhook" to "短信直发会产生运营商费用；Webhook 接收 JSON POST，可按需填写自定义 Headers，支持 [receiver] 获取卡槽本机号码。",
+            "Server酱³" to "官网登录获取 SendKey；手机安装 Server酱 App 授权厂商通道后即可收到免后台推送，省电无常驻。",
             "通道组" to "把多个已配置实例组合后并发发送。不要把通道组互相循环引用。"
         ),
         "远程发送" to listOf(
@@ -1681,6 +1732,7 @@ fun ChannelFullTutorialDialog(onDismiss: () -> Unit) {
     var selectedPage by remember { mutableStateOf<String?>(null) }
 
     AlertDialog(
+        modifier = Modifier.navigationBarsPadding(),
         onDismissRequest = onDismiss,
         title = {
             Row(
@@ -1759,3 +1811,124 @@ private fun TutorialSection(title: String, items: List<Pair<String, String>>) {
         }
     }
 }
+
+@Composable
+fun ForwardSettingsDialog(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val config = remember { MultiForwardConfig(context) }
+    var markAsRead by remember { mutableStateOf(config.markAsReadAfterForward) }
+    var delayEnabled by remember { mutableStateOf(config.forwardingDelaySeconds > 0) }
+    var delaySeconds by remember { mutableStateOf(if (config.forwardingDelaySeconds > 0) config.forwardingDelaySeconds else 5) }
+
+    AlertDialog(
+        modifier = Modifier.navigationBarsPadding(),
+        onDismissRequest = onDismiss,
+        title = {
+            Text("⚙️ 转发高级设置", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // 1. 转发后标记为已读
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                        Text("转发成功后标记为已读", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                        Text(
+                            "短信成功转发到所有配置通道后，自动将系统及应用内的该条短信标为已读并消除通知",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = markAsRead,
+                        onCheckedChange = {
+                            markAsRead = it
+                            config.markAsReadAfterForward = it
+                        }
+                    )
+                }
+
+                // 2. 延时后台转发任务
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                            Text("延时后台转发任务", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                            Text(
+                                "开启后可在接收短信后延时指定秒数再执行转发（防瞬时风控或等待本地同步）",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = delayEnabled,
+                            onCheckedChange = { enabled ->
+                                delayEnabled = enabled
+                                if (!enabled) {
+                                    config.forwardingDelaySeconds = 0
+                                } else {
+                                    config.forwardingDelaySeconds = delaySeconds
+                                }
+                            }
+                        )
+                    }
+
+                    if (delayEnabled) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 4.dp, vertical = 4.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("延时时长", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("${delaySeconds} 秒", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = BrandGreen)
+                            }
+                            Slider(
+                                value = delaySeconds.toFloat(),
+                                onValueChange = {
+                                    val sec = it.toInt().coerceIn(1, 60)
+                                    delaySeconds = sec
+                                    config.forwardingDelaySeconds = sec
+                                },
+                                valueRange = 1f..60f,
+                                steps = 59,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Text(
+                                "支持 1~60 秒自由调节（默认 5 秒）",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onDismiss,
+                colors = ButtonDefaults.buttonColors(containerColor = BrandGreen)
+            ) {
+                Text("完成")
+            }
+        }
+    )
+}
+

@@ -35,4 +35,23 @@ class WebhookTemplateRendererTest {
             WebhookTemplateRenderer.render("{\"content\":\"[msg]\"}", mapOf("msg" to encoded))
         )
     }
+
+    @Test
+    fun receiverAndBracePlaceholdersAreReplacedCorrectly() {
+        val template = "{\"receiver\":\"{receiver}\",\"double\":\"{{RECEIVER}}\",\"from\":\"{from}\",\"sim\":\"{sim}\",\"slot\":\"{sim_slot}\",\"body\":\"[msg]\"}"
+        val rendered = WebhookTemplateRenderer.render(
+            template,
+            mapOf(
+                "receiver" to "13800138000",
+                "from" to "10086",
+                "sim" to "SIM2 · 中国移动",
+                "sim_slot" to "SIM2",
+                "msg" to "验证码是 1234"
+            )
+        )
+        assertEquals(
+            "{\"receiver\":\"13800138000\",\"double\":\"13800138000\",\"from\":\"10086\",\"sim\":\"SIM2 · 中国移动\",\"slot\":\"SIM2\",\"body\":\"验证码是 1234\"}",
+            rendered
+        )
+    }
 }

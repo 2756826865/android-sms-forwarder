@@ -20,6 +20,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
@@ -147,7 +151,12 @@ fun RuleEditorScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding),
-            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 110.dp),
+            contentPadding = PaddingValues(
+                start = 12.dp,
+                end = 12.dp,
+                top = 6.dp,
+                bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 24.dp
+            ),
             verticalArrangement = Arrangement.spacedBy(9.dp)
         ) {
             // ==========================================
@@ -496,7 +505,7 @@ fun RuleEditorScreen(
                                             }
                                         }
                                     }
-                                    // 补齐末行不满 4 个的空白占位
+                                    // 填充末行不满 4 个的空白占位
                                     repeat(4 - rowChips.size) {
                                         Spacer(modifier = Modifier.weight(1f))
                                     }
@@ -583,6 +592,7 @@ fun RuleEditorScreen(
 
     if (showExitConfirmDialog) {
         AlertDialog(
+            modifier = Modifier.navigationBarsPadding(),
             onDismissRequest = { showExitConfirmDialog = false },
             title = { Text("放弃未保存的修改？") },
             text = { Text("当前规则的更改尚未保存，退出后更改将丢失。") },

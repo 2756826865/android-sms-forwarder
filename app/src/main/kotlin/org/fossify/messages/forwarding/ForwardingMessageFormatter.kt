@@ -277,4 +277,30 @@ object ForwardingMessageFormatter {
         @Suppress("DEPRECATION")
         info?.number ?: ""
     }.getOrDefault("")
+
+    @SuppressLint("MissingPermission")
+    fun getSimSlotName(
+        context: Context,
+        config: MultiForwardConfig,
+        subscriptionId: Int,
+    ): String = runCatching {
+        val manager = context.getSystemService(SubscriptionManager::class.java)
+        var info = if (subscriptionId >= 0 && manager != null) {
+            runCatching { manager.getActiveSubscriptionInfo(subscriptionId) }.getOrNull()
+        } else null
+
+        if (info == null && manager != null) {
+            val list = runCatching { manager.activeSubscriptionInfoList }.getOrNull()
+            info = list?.firstOrNull { it.subscriptionId == subscriptionId }
+                ?: list?.firstOrNull { it.simSlotIndex == subscriptionId }
+                ?: (if (subscriptionId > 0) list?.firstOrNull { it.simSlotIndex == subscriptionId - 1 } else null)
+                ?: list?.firstOrNull()
+        }
+
+        if (info != null) {
+            "SIM${info.simSlotIndex + 1}"
+        } else {
+            if (subscriptionId == 1 || subscriptionId == 0) "SIM${subscriptionId + 1}" else if (subscriptionId > 1) "SIM$subscriptionId" else "SIM1"
+        }
+    }.getOrDefault(if (subscriptionId > 0) "SIM$subscriptionId" else "SIM1")
 }

@@ -21,6 +21,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -350,7 +353,10 @@ fun ConversationsScreen(
                         )
                     }
 
-                    item { Spacer(modifier = Modifier.height(110.dp)) }
+                    item {
+                        val bottomNavPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+                        Spacer(modifier = Modifier.height(bottomNavPadding + 84.dp))
+                    }
                 }
             }
         }

@@ -597,6 +597,34 @@ object ChannelTestSender {
                     )
                     "邮件测试消息已发送！"
                 }
+                ForwardingChannels.SERVERCHAN3 -> {
+                    val sendKey = instance.optString("sendKey").trim()
+                    require(sendKey.isNotBlank()) { "Server酱³ SendKey 不能为空，请先配置" }
+                    val tags = instance.optString("tags").trim()
+                    val url = if (sendKey.startsWith("http://") || sendKey.startsWith("https://")) {
+                        sendKey
+                    } else {
+                        val match = Regex("""^sctp(\d+)t""").find(sendKey)
+                        val uid = match?.groupValues?.get(1)
+                        if (uid != null) {
+                            "https://$uid.push.ft07.com/send/$sendKey.send"
+                        } else {
+                            "https://push.ft07.com/send/$sendKey.send"
+                        }
+                    }
+                    val payload = JSONObject()
+                        .put("title", title)
+                        .put("desp", content)
+                    if (tags.isNotBlank()) {
+                        payload.put("tags", tags)
+                    }
+                    val res = postJson(url, payload)
+                    val code = res.optInt("code", res.optInt("errno", -1))
+                    check(code == 0 || code == 200 || res.optString("message").contains("success", ignoreCase = true)) {
+                        res.optString("message", res.optString("errmsg", "Server酱³ 推送失败"))
+                    }
+                    "Server酱³ 消息推送成功！"
+                }
                 ForwardingChannels.SMS_DIRECT -> {
                     val phone = instance.optString("phone")
                     require(phone.isNotBlank()) { "短信直发目标号码不能为空，请先配置" }
@@ -725,7 +753,9 @@ object ChannelTestSender {
             template.ifBlank { MultiForwardConfig.DEFAULT_CUSTOM_WEBHOOK_BODY },
             mapOf(
                 "title" to encoded(title), "msg" to encoded(content),
-                "from" to encoded("10086"), "time" to encoded(time), "sim" to encoded("SIM 1")
+                "from" to encoded("10086"), "time" to encoded(time),
+                "sim" to encoded("SIM 1 · 中国移动"), "sim_slot" to encoded("SIM 1"),
+                "receiver" to encoded("13800138000")
             )
         )
         val requestUrl = if (method == "GET" && body.isNotBlank()) {

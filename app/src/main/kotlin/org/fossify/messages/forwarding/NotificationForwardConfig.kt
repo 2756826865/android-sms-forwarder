@@ -24,12 +24,19 @@ class NotificationForwardConfig(context: Context) {
         get() = prefs.getStringSet(KEY_TARGET_PACKAGES, DEFAULT_PACKAGES)?.toSet() ?: DEFAULT_PACKAGES
         set(value) = prefs.edit().putStringSet(KEY_TARGET_PACKAGES, value.toSet()).apply()
 
+    var customTemplate: String
+        get() = prefs.getString(KEY_CUSTOM_TEMPLATE, DEFAULT_TEMPLATE).orEmpty().ifBlank { DEFAULT_TEMPLATE }
+        set(value) = prefs.edit().putString(KEY_CUSTOM_TEMPLATE, value.trim()).apply()
+
     companion object {
         private const val PREFS_NAME = "notification_forward_config"
         private const val KEY_ENABLED = "notification_forward_enabled"
         private const val KEY_IGNORE_ONGOING = "notification_forward_ignore_ongoing"
         private const val KEY_CHANNEL_INSTANCE_IDS = "notification_forward_channel_instance_ids"
         private const val KEY_TARGET_PACKAGES = "notification_forward_target_packages"
+        private const val KEY_CUSTOM_TEMPLATE = "notification_forward_custom_template"
+
+        const val DEFAULT_TEMPLATE = "【{{APP_NAME}} 通知】\n{{TITLE}}\n{{CONTENT}}"
 
         // 默认预设的目标监听常用应用（微信、QQ、支付宝、钉钉、飞书、企业微信、云闪付、系统短信）
         val DEFAULT_PACKAGES = setOf(

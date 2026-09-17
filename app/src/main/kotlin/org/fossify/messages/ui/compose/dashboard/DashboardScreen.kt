@@ -22,6 +22,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -982,7 +986,10 @@ fun DashboardContent(
             }
         }
 
-        item { Spacer(modifier = Modifier.height(110.dp)) }
+        item {
+            val bottomNavPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+            Spacer(modifier = Modifier.height(bottomNavPadding + 84.dp))
+        }
     }
 
     selectedRecord?.let { record ->
@@ -1107,6 +1114,7 @@ private fun ForwardingRecordDetailDialog(
     }
 
     AlertDialog(
+        modifier = Modifier.navigationBarsPadding(),
         onDismissRequest = onDismiss,
         title = {
             Row(

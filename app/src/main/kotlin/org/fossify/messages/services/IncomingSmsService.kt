@@ -409,7 +409,8 @@ open class IncomingSmsService : Service() {
                             targetInstanceId = target.instanceId,
                             ruleId = target.ruleId,
                             actionId = target.actionId,
-                            bodyAlreadyRendered = true
+                            bodyAlreadyRendered = true,
+                            threadId = resolvedThreadId
                         )
                     }
                 } else {
@@ -424,7 +425,8 @@ open class IncomingSmsService : Service() {
                     receivedAt = receivedAt,
                     subscriptionId = subscriptionId,
                     uniqueId = uniqueId,
-                    operationId = operationId
+                    operationId = operationId,
+                    threadId = resolvedThreadId
                 )
             }
         }
@@ -740,6 +742,10 @@ open class IncomingSmsService : Service() {
                 SmsRecoveryWorker.markObserved(appContext, receivedAt)
                 Log.i(TAG, "minimal: SMS persisted id=$insertedMessageId action=${source.action}")
 
+                val resolvedMinimalThreadId = appContext.getSmsThreadId(insertedMessageId)
+                    .takeIf { it > 0L }
+                    ?: requestedThreadId
+
                 // 3. 本地 Room + 会话同步（不做联系人查询，姓名直接用号码兜底）
                 if (System.currentTimeMillis() - startedAt < MINIMAL_BUDGET_MS) {
                     runCatching {
@@ -749,9 +755,7 @@ open class IncomingSmsService : Service() {
                             body = body,
                             date = receivedAt,
                             messageId = insertedMessageId,
-                            threadId = appContext.getSmsThreadId(insertedMessageId)
-                                .takeIf { it > 0L }
-                                ?: requestedThreadId,
+                            threadId = resolvedMinimalThreadId,
                             subscriptionId = subscriptionId,
                             status = parts.last().status,
                         )
@@ -792,6 +796,7 @@ open class IncomingSmsService : Service() {
                         operationId = null,
                         // P1-B：降级期间也必须应用用户的渠道白名单，否则"屏蔽某渠道"会失效。
                         ruleDecision = evaluateCheapRules(appContext, address, body, subscriptionId),
+                        threadId = resolvedMinimalThreadId,
                     )
                 }
 
@@ -908,6 +913,7 @@ open class IncomingSmsService : Service() {
              * 以及 [ForwardingRuleDecision.allowedInstanceIds] 内的实例。
              */
             ruleDecision: ForwardingRuleDecision? = null,
+            threadId: Long = 0L,
         ) {
             val multiConfig = MultiForwardConfig(context)
             val pushPlusEnabled = PushPlusConfig(context).enabled
@@ -955,7 +961,8 @@ open class IncomingSmsService : Service() {
                     allowedChannels = setOf(instance.id),
                     isTest = false,
                     operationId = operationId,
-                    targetInstanceId = instance.id
+                    targetInstanceId = instance.id,
+                    threadId = threadId
                 )
             }
 
@@ -979,7 +986,8 @@ open class IncomingSmsService : Service() {
                     targetChannel = channel,
                     allowedChannels = setOf(channel),
                     isTest = false,
-                    operationId = operationId
+                    operationId = operationId,
+                    threadId = threadId
                 )
             }
         }

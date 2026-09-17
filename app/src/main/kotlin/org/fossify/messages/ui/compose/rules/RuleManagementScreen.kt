@@ -14,6 +14,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -195,10 +199,10 @@ fun RuleManagementScreen(
                     }
                 }
             } else {
-                // 规则列表：必须留足底部 120dp 间距，严防悬浮胶囊底栏遮挡
+                val bottomNavPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 120.dp),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = bottomNavPadding + 84.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     items(rules, key = { it.id }) { rule ->
@@ -231,6 +235,7 @@ fun RuleManagementScreen(
     // 删除二次确认 Dialog
     if (ruleToDelete != null) {
         AlertDialog(
+            modifier = Modifier.navigationBarsPadding(),
             onDismissRequest = { ruleToDelete = null },
             title = { Text("确认删除规则？") },
             text = { Text("删除后无法恢复，该规则关联的通道将不再接收此类过滤消息。") },

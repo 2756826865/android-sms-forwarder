@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.9] - Unreleased
+
+### 🚀 新增与增强 (Features & Enhancements)
+- **方糖 Server酱³ 原生接入**：新增 `serverchan3` 推送通道，支持通过 SendKey 自动识别提取 UID 并推送至 `https://<uid>.push.ft07.com/send/<sendkey>.send`，支持免后台厂商通道推送。
+- **自定义 Webhook `{receiver}` 变量**：支持 `{receiver}`、`[receiver]`、`{{receiver}}` 读取接收卡槽本机号码；并新增 `sim_slot`（纯卡槽标识，如 SIM1）与 `sim`（完整描述，如 SIM2 中国移动）区分，支持大小写不敏感与单双大括号/中括号。
+- **转发即标记为已读**：在通道设置中新增「转发成功后标记为已读」开关。转发到所有配置通道后，自动标记系统与应用内短信为已读并清除通知。
+- **延时后台转发任务**：在通道设置中提供延时任务配置（默认关闭，开启支持 1~60 秒平滑调节），智能兼容 WorkManager 避免异常。
+- **前台保活服务与通知隐藏**：在运维体检中增加「前台保活服务」启停开关，并提供「隐藏保活通知图标」一键跳转静音引导。
+- **通知转发自定义模板**：在通知转发设置中支持 `{{APP_NAME}}`、`{{TITLE}}`、`{{CONTENT}}`、`{{TIME}}`、`{{PACKAGE}}` 变量自定义模板与一键插入。
+
+### 📱 适配与体验优化 (Adaptive & UI Improvements)
+- **三键虚拟导航与全面屏自动适配**：启用 `WindowCompat.setDecorFitsSystemWindows(window, false)`，动态计算 `navigationBars` insets 抬升悬浮 Dock 底栏与页面列表底边距；为所有弹窗补齐 `navigationBarsPadding()`，确保虚拟导航键与全面屏手势下均无遮挡、贴底自然。
+
+
 ## [1.1.8] - 2026-09-13
 
 ### 🛡️ 安全性与凭据防丢失 (Security & Reliability)

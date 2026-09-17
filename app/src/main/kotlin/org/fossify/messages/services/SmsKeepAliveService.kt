@@ -82,6 +82,7 @@ class SmsKeepAliveService : Service() {
 
         fun ensureStarted(context: Context) {
             if (!DeviceCompatHelper.isDefaultSmsApp(context)) return
+            if (!org.fossify.messages.forwarding.MultiForwardConfig(context).keepAliveServiceEnabled) return
             runCatching {
                 ContextCompat.startForegroundService(
                     context.applicationContext,

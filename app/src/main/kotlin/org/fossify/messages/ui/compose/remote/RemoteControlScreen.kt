@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -478,7 +479,7 @@ private fun PermissionMiniChip(
 
 /**
  * 常驻安全横幅：升级后有来源处于「白名单已启用但未配置授权用户」状态，
- * 这类来源在运行时会拒绝所有远程发短信指令，必须引导用户补齐名单。
+ * 这类来源在运行时会拒绝所有远程发短信指令，必须引导用户补充名单。
  */
 @Composable
 private fun WhitelistMissingBanner(
@@ -927,6 +928,7 @@ private fun RemoteSourceEditDialog(
     val scrollState = rememberScrollState()
 
     AlertDialog(
+        modifier = Modifier.navigationBarsPadding(),
         onDismissRequest = onDismiss,
         title = {
             Text(if (initialSource != null) "编辑远程来源" else "添加远程来源", fontWeight = FontWeight.Bold)
@@ -1449,6 +1451,7 @@ private fun ReceiptSettingsDialog(
     var selectedChannels by remember { mutableStateOf(receiptConfig.channels) }
 
     AlertDialog(
+        modifier = Modifier.navigationBarsPadding(),
         onDismissRequest = onDismiss,
         title = { Text("发送回执", fontWeight = FontWeight.Bold) },
         text = {

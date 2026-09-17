@@ -14,6 +14,9 @@ import org.fossify.messages.forwarding.MultiChannelForwardWorker
 import org.fossify.messages.forwarding.MultiForwardConfig
 import org.fossify.messages.forwarding.NotificationForwardConfig
 import org.fossify.messages.forwarding.repository.ChannelRepository
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -72,14 +75,15 @@ class NotificationForwardListenerService : NotificationListenerService() {
         }
 
         val appName = getApplicationLabel(packageName)
-        val bodyBuilder = StringBuilder().apply {
-            appendLine("【$appName 通知】")
-            if (title.isNotBlank()) {
-                appendLine("发件/标题：$title")
-            }
-            append("内容：$text")
-        }
-        val forwardBody = bodyBuilder.toString()
+        val timeStr = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date(now))
+        val forwardBody = renderNotificationTemplate(
+            template = config.customTemplate,
+            appName = appName,
+            title = title,
+            content = text,
+            packageName = packageName,
+            time = timeStr
+        )
 
         // 6. 靶向分发至已启用的各通道实例
         dispatchToChannels(config, appName, forwardBody, now, sbn.id)
@@ -237,14 +241,46 @@ class NotificationForwardListenerService : NotificationListenerService() {
         }
 
         /**
+         * 解析并渲染通知自定义消息模板
+         */
+        fun renderNotificationTemplate(
+            template: String,
+            appName: String,
+            title: String,
+            content: String,
+            packageName: String,
+            time: String
+        ): String {
+            val placeholderRegex = Regex("(?i)(\\{\\{|\\[|\\{)(app_name|title|content|msg|package|time)(\\}\\}|\\]|\\})")
+            return placeholderRegex.replace(template) { match ->
+                when (match.groupValues[2].lowercase()) {
+                    "app_name" -> appName
+                    "title" -> title
+                    "content", "msg" -> content
+                    "package" -> packageName
+                    "time" -> time
+                    else -> match.value
+                }
+            }
+        }
+
+        /**
          * 发送一条模拟的通知转发测试消息
          */
         fun testForward(context: Context) {
             val appContext = context.applicationContext
             val config = NotificationForwardConfig(appContext)
             val now = System.currentTimeMillis()
+            val timeStr = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date(now))
             val dummySender = "微信"
-            val dummyBody = "【微信 通知】\n发件/标题：测试好友/群聊\n内容：这是一条来自短信转发器的模拟通知转发测试消息，用于验证通道配置与连通性。"
+            val dummyBody = renderNotificationTemplate(
+                template = config.customTemplate,
+                appName = dummySender,
+                title = "测试好友/群聊",
+                content = "这是一条来自短信转发器的模拟通知转发测试消息，用于验证通道配置与连通性。",
+                packageName = "com.tencent.mm",
+                time = timeStr
+            )
 
             val channelRepo = ChannelRepository.getInstance(appContext)
             val allEnabledInstances = channelRepo.getEnabledInstances().filterNot { it.id.startsWith("catalog:") }

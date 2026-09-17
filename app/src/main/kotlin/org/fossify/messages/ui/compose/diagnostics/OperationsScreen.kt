@@ -24,6 +24,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -37,6 +41,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -82,6 +87,8 @@ import org.fossify.messages.ui.diagnostics.model.DiagnosticsState
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import org.fossify.messages.forwarding.MultiForwardConfig
+import org.fossify.messages.services.SmsKeepAliveService
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -196,6 +203,9 @@ fun OperationsContent(
             true
         }
     }
+
+    val multiForwardConfig = remember { MultiForwardConfig(context) }
+    var keepAliveEnabled by remember { mutableStateOf(multiForwardConfig.keepAliveServiceEnabled) }
 
     LazyColumn(
         modifier = modifier,
@@ -362,6 +372,118 @@ fun OperationsContent(
                                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
                             ) {
                                 Text("直达设置", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = primaryTextColor, maxLines = 1, softWrap = false)
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // 前台常驻保活服务开关
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = if (isDark) Color(0xFF22262B) else Color(0xFFF8FAFC),
+                        border = BorderStroke(1.dp, if (isDark) Color(0xFF2D333B) else Color(0xFFEEF2F6)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                Text(
+                                    text = "🛡️ 前台保活服务",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 12.sp,
+                                    color = primaryTextColor,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = if (keepAliveEnabled) "已启用前台服务保持后台活跃" else "已停用（由 WorkManager 被动调度）",
+                                    fontSize = 11.sp,
+                                    color = if (keepAliveEnabled) BrandGreen else secondaryTextColor,
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
+                            }
+                            Switch(
+                                checked = keepAliveEnabled,
+                                onCheckedChange = { enabled ->
+                                    keepAliveEnabled = enabled
+                                    multiForwardConfig.keepAliveServiceEnabled = enabled
+                                    if (enabled) {
+                                        SmsKeepAliveService.ensureStarted(context)
+                                    } else {
+                                        context.stopService(Intent(context, SmsKeepAliveService::class.java))
+                                    }
+                                }
+                            )
+                        }
+                    }
+
+                    if (keepAliveEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // 隐藏常驻通知图标引导
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = if (isDark) Color(0xFF22262B) else Color(0xFFF8FAFC),
+                            border = BorderStroke(1.dp, if (isDark) Color(0xFF2D333B) else Color(0xFFEEF2F6)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(14.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                    Text(
+                                        text = "🔔 隐藏保活通知图标",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.sp,
+                                        color = primaryTextColor,
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = "可将渠道通知设为静音/最小化隐藏",
+                                        fontSize = 11.sp,
+                                        color = secondaryTextColor,
+                                        maxLines = 1,
+                                        softWrap = false
+                                    )
+                                }
+                                OutlinedButton(
+                                    onClick = {
+                                        try {
+                                            val intent = Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).apply {
+                                                putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                                                putExtra(Settings.EXTRA_CHANNEL_ID, "sms_background_service")
+                                            }
+                                            context.startActivity(intent)
+                                        } catch (_: Exception) {
+                                            try {
+                                                val appIntent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                                                    putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                                                }
+                                                context.startActivity(appIntent)
+                                            } catch (_: Exception) {
+                                                Toast.makeText(context, "请在系统通知管理中将「短信后台监听保活」渠道设为静音", Toast.LENGTH_LONG).show()
+                                            }
+                                        }
+                                    },
+                                    shape = RoundedCornerShape(12.dp),
+                                    border = BorderStroke(1.dp, if (isDark) DarkOutline else OutlineSoft),
+                                    modifier = Modifier.height(36.dp),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
+                                ) {
+                                    Text("去隐藏", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = primaryTextColor, maxLines = 1, softWrap = false)
+                                }
                             }
                         }
                     }
@@ -635,12 +757,16 @@ fun OperationsContent(
             }
         }
 
-        item { Spacer(modifier = Modifier.height(120.dp)) }
+        item {
+            val bottomNavPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+            Spacer(modifier = Modifier.height(bottomNavPadding + 84.dp))
+        }
     }
 
     // 明文体检报告弹窗
     if (showReportDialog) {
         AlertDialog(
+            modifier = Modifier.navigationBarsPadding(),
             onDismissRequest = { showReportDialog = false },
             title = {
                 Text("🔍 完整报告", fontWeight = FontWeight.Bold, fontSize = 16.sp)
