@@ -383,7 +383,27 @@ object ChannelTestSender {
                     if (type == "qmsg" || !target.startsWith("http")) {
                         postJson("https://qmsg.zendee.cn/send/$target", JSONObject().put("msg", text))
                     } else {
-                        postJson(target, JSONObject().put("message", text))
+                        val targetType = instance.optString("targetType").ifBlank { "private" }
+                        val targetId = instance.optString("targetId")
+                        require(targetId.isNotBlank()) { "OneBot 11 必须配置 user_id 或 group_id" }
+                        val isGroup = targetType == "group"
+                        val action = if (isGroup) "send_group_msg" else "send_private_msg"
+                        val idField = if (isGroup) "group_id" else "user_id"
+                        val baseUrl = target.trim().trimEnd('/')
+                            .removeSuffix("/send_private_msg")
+                            .removeSuffix("/send_group_msg")
+                        val payload = JSONObject()
+                            .put(idField, targetId.toLongOrNull() ?: targetId)
+                            .put("message", text)
+                            .put("auto_escape", false)
+                        val accessToken = instance.optString("accessToken")
+                        val headers = if (accessToken.isBlank()) emptyMap() else {
+                            mapOf("Authorization" to "Bearer ${accessToken.trim()}")
+                        }
+                        val response = postJson("$baseUrl/$action", payload, headers)
+                        check(response.optInt("retcode", 0) == 0 && response.optString("status", "ok") != "failed") {
+                            response.optString("message").ifBlank { response.optString("wording", "OneBot 11 发送失败") }
+                        }
                     }
                     "QQ 消息已成功推送！"
                 }

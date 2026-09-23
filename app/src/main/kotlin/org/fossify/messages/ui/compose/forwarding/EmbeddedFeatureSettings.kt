@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -70,6 +69,7 @@ import org.fossify.messages.ui.compose.theme.OutlineSoft
 import org.fossify.messages.ui.compose.theme.SurfaceCard
 import org.fossify.messages.ui.compose.theme.TextPrimary
 import org.fossify.messages.ui.compose.theme.TextSecondary
+import org.fossify.messages.ui.compose.navigation.LocalGatewayBottomPadding
 
 @Composable
 private fun FeatureCard(content: @Composable () -> Unit) {
@@ -147,7 +147,7 @@ fun AutoReplyEmbeddedScreen() {
                 }
             }
         }
-        item { Spacer(Modifier.height(WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 84.dp)) }
+        item { Spacer(Modifier.height(LocalGatewayBottomPadding.current)) }
     }
 
     if (adding || editing != null) {
@@ -315,7 +315,7 @@ fun MissedCallEmbeddedScreen() {
                 Text("模拟测试")
             }
         }
-        item { Spacer(Modifier.height(WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 84.dp)) }
+        item { Spacer(Modifier.height(LocalGatewayBottomPadding.current)) }
     }
     if (choosingChannels) {
         var selected by remember(choosingChannels) {
@@ -416,7 +416,7 @@ fun LowBatteryEmbeddedScreen() {
             }
             OutlinedButton(onClick = { choosingChannels = true }, modifier = Modifier.fillMaxWidth()) { Text("选择通道实例") }
         } }
-        item { Spacer(Modifier.height(WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 84.dp)) }
+        item { Spacer(Modifier.height(LocalGatewayBottomPadding.current)) }
     }
     if (choosingChannels) {
         var selected by remember(choosingChannels) {
@@ -507,7 +507,7 @@ fun AutofillEmbeddedScreen() {
                 }
             }
         }
-        item { Spacer(Modifier.height(WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 84.dp)) }
+        item { Spacer(Modifier.height(LocalGatewayBottomPadding.current)) }
     }
 }
 
@@ -661,7 +661,7 @@ fun HeartbeatEmbeddedScreen() {
                 }
             }
         }
-        item { Spacer(Modifier.height(WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 84.dp)) }
+        item { Spacer(Modifier.height(LocalGatewayBottomPadding.current)) }
     }
     if (choosingChannels) {
         var selected by remember(choosingChannels) {
@@ -775,7 +775,7 @@ fun ClassicFeatureEntryScreen(
                 }
             }
         }
-        item { Spacer(Modifier.height(WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 84.dp)) }
+        item { Spacer(Modifier.height(LocalGatewayBottomPadding.current)) }
     }
 }
 
@@ -1029,7 +1029,7 @@ fun NotificationForwardEmbeddedScreen() {
             }
         }
 
-        item { Spacer(Modifier.height(WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 84.dp)) }
+        item { Spacer(Modifier.height(LocalGatewayBottomPadding.current)) }
     }
 
     // 选择通道弹窗

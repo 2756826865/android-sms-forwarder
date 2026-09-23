@@ -4,6 +4,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-09-23
+
+### 🎨 底栏与 Insets 混合架构重构 (Hybrid Navigation & Edge-to-Edge Architecture)
+- **🌟 第三种混合适配架构落地 (`GatewayApp.kt` / 各子界面)**：
+  - **全屏穿透沉浸感**：根容器与页面容器解除外层强制 bottom padding 截断，列表卡片可流畅滑动至现代半透明悬浮胶囊 Dock 背后，呈现高质量层叠视觉效果；
+  - **统一依赖注入 (`LocalGatewayBottomPadding`)**：引入 `CompositionLocalProvider(LocalGatewayBottomPadding provides dynamicBottomPadding)`，子页面无需硬编码 `Spacer`，根据虚拟导航栏与手势条实时动态避让；
+  - **内嵌表单无缝联动 (`isInlineEditorOpen`)**：内嵌规则与通道配置展开时自动隐去悬浮 Dock，底部避让边距平滑收缩至 16.dp，收起后自动恢复；
+  - **系统 Insets 全面防御**：Compose 模式结合 `safeDrawing.only(Bottom)` 与悬浮边距；经典模式保持 `maxOf(nav, tappable, gestures)` 动态抬升，彻底解决小米、华为、OPPO、vivo、魅族等各种机型三键导航栏遮挡与全面屏黑边问题。
+
+### 🔌 通道与远程控制增强 (Channels & Remote Control)
+- **🤖 OneBot 11 (QQ) 协议鉴权与群/私聊分离 (`ChannelRegistry.kt` / `MultiChannelForwardWorker.kt` / `ChannelTestSender.kt`)**：
+  - 支持 `Bearer` Token 鉴权头注入；
+  - 支持根据目标 ID 格式智能分流或指定群聊（`/send_group_msg`）与私聊（`/send_private_msg`）；
+  - 支持实例配置自定义超时与目标字段 `targetId`。
+- **📧 网易 163 邮箱 RFC 2971 身份认证 (`EmailRemoteCommandPoller.kt` / `RemoteControlScreen.kt`)**：
+  - 在 IMAP 客户端握手阶段注入标准 RFC 2971 ID 声明参数（`name`, `version`, `vendor`, `support-email`），彻底消除网易 163 邮箱 `Unsafe Login` 拦截与授权码报错；
+  - 远程控制配置页新增网易 163 与 QQ 邮箱快捷预设 Chip。
+- **💬 自动回复闭环增强 (`AutoReplyProcessor.kt` / `SmsSendModels.kt`)**：
+  - 自动回复触发发送后，通过 `MessagingUtils` 完整记录写入系统短信 Provider 与应用会话，实现大盘与会话流统一。
+- **🏷️ 自定义双卡槽名称 (`ChannelHubScreen.kt`)**：
+  - 支持用户在通道中心为 SIM1 与 SIM2 自定义卡槽备注名称，转发模板与诊断展示均可自动显示用户自定义别名。
+- **📶 彻底修复短信对话窗口卡号选择消失缺陷 (`ThreadActivity.kt`)**：
+  - 解除卡号选择按钮对通讯录规范化号码的强行阻断依赖（彻底消除 `if (numbers.isEmpty()) return` 误杀）；
+  - 增加联系人号码、Intent 参数、会话存留号码与历史消息发件人的多重回退保障；
+  - 修复会话缓存复用（`canReuseLoadedThread`）及切后台返回前台（`onResume`）漏调初始化的问题，确保陌生人、验证码短号、服务号等任意会话下双卡切换图标 100% 保持可见与可切换。
+
+### 🛠️ 特权双引擎 (Root / Shizuku 免 Root 联动) 与厂商兼容
+- **🛡️ 落地特权运行双引擎架构 (`RootEnhancementManager.kt` / `ShizukuEnhancementManager.kt` / `ChannelHubScreen.kt`)**：
+  - **🚀 Root 一键强制修复**：支持在拥有 su 权限的设备上一键静默绑定 SMS Role、写入系统底层短信路由、放行 WRITE_SMS / RECEIVE_SMS / RUN_ANY_IN_BACKGROUND 并注入系统 Doze 电池白名单，附带全流程只读检测与状态回显；
+  - **⚡ Shizuku 免 Root 联动支持**：通过集成 Shizuku 官方 SDK（ADB 级进程 Binder 调用），普通用户仅需开启 Android 11+「无线调试」即可免 Root 享受一键静默授权默认短信与核心权限；
+  - **📊 双引擎态势感知面板**：在通道高级设置中实时展示 Root (uid=0) 与 Shizuku 客户端/服务状态，提供一键检测、授权申请、强制修复与底层只读诊断报告。
+- **📱 魅族 / Flyme / ColorOS 厂商白名单引导 (`DeviceCompatHelper.kt` / `DeviceCompatibilityActivity.kt`)**：
+  - 新增魅族与 Flyme 专用的后台运行、自启动和智能拦截绕过指引与一键跳转；
+  - 完善 ColorOS、华为等机型自启动与省电策略诊断。
+
 ## [1.1.9] - 2026-09-17
 
 ### 🚀 新增通道与模板变量 (New Channels & Variables)

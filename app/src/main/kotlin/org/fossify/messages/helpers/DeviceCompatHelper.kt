@@ -13,7 +13,7 @@ object DeviceCompatHelper {
 
     enum class DeviceBrand {
         HUAWEI, HONOR, XIAOMI, REDMI, POCO, OPPO, ONEPLUS, REALME,
-        VIVO, IQOO, SAMSUNG, PIXEL, OTHER
+        VIVO, IQOO, MEIZU, SAMSUNG, PIXEL, OTHER
     }
 
     data class BrandConfig(
@@ -192,6 +192,24 @@ object DeviceCompatHelper {
                 "允许后台高耗电"
             )
         ),
+        DeviceBrand.MEIZU to BrandConfig(
+            brand = DeviceBrand.MEIZU,
+            displayName = "魅族 / Flyme",
+            hasAutoStartManager = true,
+            hasBatteryOptimization = true,
+            needsAdbFix = true,
+            autoStartComponents = listOf(
+                ComponentName("com.meizu.safe", "com.meizu.safe.permission.SmartBGActivity"),
+                ComponentName("com.meizu.safe", "com.meizu.safe.security.HomeActivity")
+            ),
+            tips = listOf(
+                "先重新选择一次默认短信应用；仅授予权限不等于 SMS Role 和底层短信路由已生效",
+                "手机管家 → 权限管理/后台管理 → 短信转发 → 允许后台运行与自启动",
+                "电量管理中将短信转发设为不限制，并在最近任务中锁定",
+                "如果系统短信能看到而本应用完全看不到，请在开发版体检页检查 SMS Role、底层路由和 WRITE_SMS",
+                "验证码可能被 Flyme 智能短信或安全服务优先处理；普通 APK 无法强制抢回未下发的广播"
+            )
+        ),
         DeviceBrand.SAMSUNG to BrandConfig(
             brand = DeviceBrand.SAMSUNG,
             displayName = "三星",
@@ -233,6 +251,7 @@ object DeviceCompatHelper {
             manufacturer.contains("realme") || brand.contains("realme") -> DeviceBrand.REALME
             brand.contains("iqoo") || model.contains("iqoo") -> DeviceBrand.IQOO
             manufacturer.contains("vivo") || brand.contains("vivo") -> DeviceBrand.VIVO
+            manufacturer.contains("meizu") || brand.contains("meizu") -> DeviceBrand.MEIZU
             manufacturer.contains("samsung") || brand.contains("samsung") -> DeviceBrand.SAMSUNG
             manufacturer.contains("google") || brand.contains("google") || brand.contains("pixel") -> DeviceBrand.PIXEL
             else -> DeviceBrand.OTHER

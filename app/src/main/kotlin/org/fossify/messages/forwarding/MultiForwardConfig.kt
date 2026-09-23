@@ -63,6 +63,7 @@ class MultiForwardConfig(
     var enablePrivacyMask by booleanPreference(KEY_ENABLE_PRIVACY_MASK)
     var maskVerificationCode by booleanPreference(KEY_MASK_VERIFICATION_CODE)
     var markAsReadAfterForward by booleanPreference(KEY_MARK_AS_READ_AFTER_FORWARD)
+    var rootEnhancementEnabled by booleanPreference(KEY_ROOT_ENHANCEMENT_ENABLED)
 
     var forwardingDelaySeconds: Int
         get() = prefs.getInt(KEY_FORWARDING_DELAY_SECONDS, 0).coerceIn(0, 60)
@@ -1023,6 +1024,7 @@ class MultiForwardConfig(
         private const val KEY_ENABLE_PRIVACY_MASK = "enable_privacy_mask"
         private const val KEY_MASK_VERIFICATION_CODE = "mask_verification_code"
         private const val KEY_MARK_AS_READ_AFTER_FORWARD = "mark_as_read_after_forward"
+        private const val KEY_ROOT_ENHANCEMENT_ENABLED = "root_enhancement_enabled"
         private const val KEY_FORWARDING_DELAY_SECONDS = "forwarding_delay_seconds"
         private const val KEY_KEEP_ALIVE_SERVICE_ENABLED = "keep_alive_service_enabled"
 

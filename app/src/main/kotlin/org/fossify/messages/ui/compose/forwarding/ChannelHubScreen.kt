@@ -15,14 +15,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Slider
 import androidx.compose.ui.text.input.KeyboardType
@@ -42,6 +40,8 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -54,6 +54,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -79,7 +80,11 @@ import org.fossify.messages.remote.repository.RemoteSourceConnectionState
 import org.fossify.messages.remote.repository.RemoteSourceInstance
 import org.fossify.messages.remote.repository.RemoteSourceRepository
 import org.fossify.messages.remote.repository.RemoteSourceType
+import org.fossify.messages.security.root.RootEnhancementManager
+import org.fossify.messages.security.shizuku.ShizukuEnhancementManager
 import org.fossify.messages.ui.compose.rules.RuleStudioScreen
+import org.fossify.messages.ui.compose.navigation.GatewayDockContentPadding
+import org.fossify.messages.ui.compose.navigation.LocalGatewayBottomPadding
 import org.fossify.messages.ui.compose.components.StatusBadge
 import org.fossify.messages.ui.compose.theme.AppBackground
 import org.fossify.messages.ui.compose.theme.BrandGreen
@@ -124,7 +129,7 @@ val ALL_CHANNEL_TYPE_DEFINITIONS = listOf(
     ChannelTypeDefinition(ForwardingChannels.DINGTALK, "钉钉群机器人", "钉钉群自定义机器人 Webhook + 加签", "🤖", ChannelCategory.WORK),
     ChannelTypeDefinition(ForwardingChannels.FEISHU_BOT, "飞书群机器人", "飞书群自定义机器人 Webhook + 加签", "🕊️", ChannelCategory.WORK),
     ChannelTypeDefinition(ForwardingChannels.FEISHU_APP, "飞书自建应用", "飞书开放平台企业自建应用", "🏢", ChannelCategory.WORK),
-    ChannelTypeDefinition(ForwardingChannels.QQ, "QQ 消息 (Qmsg/OneBot)", "支持 Qmsg 酱或 OneBot 协议推送", "🐧", ChannelCategory.INSTANT),
+    ChannelTypeDefinition(ForwardingChannels.QQ, "QQ 消息 (Qmsg/OneBot/NapCat)", "支持 Qmsg 酱或 OneBot 11 / NapCat HTTP 推送", "🐧", ChannelCategory.INSTANT),
     ChannelTypeDefinition(ForwardingChannels.BARK, "Bark (iOS)", "苹果设备专属 APNs 极速低功耗推送", "🔔", ChannelCategory.INSTANT),
     ChannelTypeDefinition(ForwardingChannels.TELEGRAM, "Telegram 机器人", "Telegram Bot API 异步消息推送", "✈️", ChannelCategory.INSTANT),
     ChannelTypeDefinition(ForwardingChannels.DISCORD, "Discord 群机器人", "Discord Webhook 频道卡片推送", "🎮", ChannelCategory.INSTANT),
@@ -208,7 +213,10 @@ fun getChannelTutorial(channelId: String): String = when (channelId) {
         【Qmsg酱模式】:
         1. 访问 qmsg.zendee.cn 登录并添加 Qmsg 官方 QQ 机器人为好友
         2. 在后台复制您的 Qmsg Key 填入即可
-        【OneBot模式】: 填入自建的 go-cqhttp / NapCat HTTP Webhook 地址
+        【OneBot 11 / NapCat 模式】:
+        1. 在 NapCat 中开启 OneBot 11 HTTP 服务，填写服务地址（例如 http://设备IP:3000）
+        2. NapCat 配置了 Token 时必须填写 Access Token；未配置则留空
+        3. 选择私聊并填写 user_id（QQ号），或选择群聊并填写 group_id（群号）
     """.trimIndent()
     ForwardingChannels.WECOM, ForwardingChannels.WECOM_APP -> """
         1. 登录企业微信管理后台 (work.weixin.qq.com)
@@ -450,6 +458,7 @@ private fun ChannelNavChip(
 @Composable
 fun ChannelHubScreen(
     onBack: (() -> Unit)? = null,
+    onInlineEditorVisibilityChanged: (Boolean) -> Unit = {},
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -471,6 +480,18 @@ fun ChannelHubScreen(
     var selectedSection by remember { mutableStateOf("all") }
     var inlineRuleId by remember { mutableStateOf<String?>(null) }
     var isEditingInlineRule by remember { mutableStateOf(false) }
+
+    LaunchedEffect(isEditingInlineRule) {
+        onInlineEditorVisibilityChanged(isEditingInlineRule)
+    }
+    LaunchedEffect(selectedSection) {
+        if (selectedSection != "rules") {
+            isEditingInlineRule = false
+        }
+    }
+    DisposableEffect(Unit) {
+        onDispose { onInlineEditorVisibilityChanged(false) }
+    }
 
     var testingStates by remember { mutableStateOf(mapOf<String, Boolean>()) }
     var testResults by remember { mutableStateOf(mapOf<String, String>()) }
@@ -513,7 +534,8 @@ fun ChannelHubScreen(
     val secondaryTextColor = if (isDark) Color(0xFF9CA3AF) else TextSecondary
 
     Scaffold(
-        containerColor = pageBgColor
+        containerColor = pageBgColor,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { innerPadding ->
         Column(
             modifier = Modifier
@@ -847,10 +869,7 @@ fun ChannelHubScreen(
                         }
                     }
 
-                    item {
-                        val bottomNavPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-                        Spacer(modifier = Modifier.height(bottomNavPadding + 84.dp))
-                    }
+                    item { Spacer(modifier = Modifier.height(LocalGatewayBottomPadding.current)) }
                 }
             }
         }
@@ -1076,6 +1095,7 @@ fun InstanceEditorDialog(
         mutableStateOf(
             when (selectedType) {
                 ForwardingChannels.WECHAT_TEST -> existingInstance?.optString("templateId") ?: ""
+                ForwardingChannels.QQ -> existingInstance?.optString("accessToken") ?: ""
                 ForwardingChannels.WECOM, ForwardingChannels.WECOM_APP -> existingInstance?.optString("secret") ?: ""
                 ForwardingChannels.FEISHU_APP -> existingInstance?.optString("receiveId") ?: ""
                 ForwardingChannels.EMAIL -> existingInstance?.optString("password") ?: ""
@@ -1090,6 +1110,9 @@ fun InstanceEditorDialog(
         mutableStateOf(
             when (selectedType) {
                 ForwardingChannels.WECHAT_TEST -> existingInstance?.optString("openId") ?: ""
+                ForwardingChannels.QQ -> existingInstance?.optString("targetId")
+                    ?.ifBlank { existingInstance.optString("userId") }
+                    ?.ifBlank { existingInstance.optString("groupId") } ?: ""
                 ForwardingChannels.WECOM, ForwardingChannels.WECOM_APP -> existingInstance?.optString("toUser") ?: "@all"
                 ForwardingChannels.EMAIL -> existingInstance?.optString("recipients") ?: ""
                 ForwardingChannels.NTFY -> existingInstance?.optString("priority") ?: "default"
@@ -1112,6 +1135,13 @@ fun InstanceEditorDialog(
         )
     }
     var f7 by remember { mutableStateOf(existingInstance?.optString("authorizedGroups") ?: "") }
+    var qqTargetType by remember {
+        mutableStateOf(
+            existingInstance?.optString("targetType")?.ifBlank {
+                if (existingInstance.optString("groupId").isNotBlank()) "group" else "private"
+            } ?: "private"
+        )
+    }
     var customWebhookMethod by remember {
         mutableStateOf(existingInstance?.optString("method")?.ifBlank { "POST" } ?: "POST")
     }
@@ -1140,7 +1170,7 @@ fun InstanceEditorDialog(
     fun hasRequiredConfiguration(): Boolean = when (selectedType) {
         ForwardingChannels.PUSHPLUS -> f1.isNotBlank()
         ForwardingChannels.WECHAT_TEST -> listOf(f1, f2, f3, f4).all { it.isNotBlank() }
-        ForwardingChannels.QQ -> f1.isNotBlank()
+        ForwardingChannels.QQ -> f1.isNotBlank() && (f2 == "qmsg" || f4.isNotBlank())
         ForwardingChannels.WECOM, ForwardingChannels.WECOM_APP -> listOf(f1, f2, f3, f4).all { it.isNotBlank() }
         ForwardingChannels.WECOM_BOT -> f1.isNotBlank()
         ForwardingChannels.WECOM_STREAM -> weComSourceId.isNotBlank() && f1.isNotBlank()
@@ -1175,8 +1205,20 @@ fun InstanceEditorDialog(
                 // Only one provider target may remain after changing the QQ provider.
                 configJson.remove("qmsgKey")
                 configJson.remove("onebotUrl")
-                if (f2 == "qmsg" || !f1.startsWith("http")) configJson.put("qmsgKey", f1).put("type", "qmsg")
-                else configJson.put("onebotUrl", f1).put("type", "onebot")
+                configJson.remove("userId")
+                configJson.remove("groupId")
+                if (f2 == "qmsg") {
+                    configJson.put("qmsgKey", f1).put("type", "qmsg")
+                    configJson.remove("accessToken")
+                    configJson.remove("targetType")
+                    configJson.remove("targetId")
+                } else {
+                    configJson.put("onebotUrl", f1)
+                        .put("type", f2)
+                        .put("accessToken", f3)
+                        .put("targetType", qqTargetType)
+                        .put("targetId", f4)
+                }
             }
             ForwardingChannels.WECOM, ForwardingChannels.WECOM_APP -> configJson.put("corpId", f1).put("agentId", f2).put("secret", f3).put("toUser", f4)
             ForwardingChannels.WECOM_BOT -> configJson.put("webhook", f1)
@@ -1330,8 +1372,55 @@ fun InstanceEditorDialog(
                         OutlinedTextField(value = f4, onValueChange = { f4 = it }, label = { Text("openID (接收者微信号)") }, modifier = Modifier.fillMaxWidth())
                     }
                     ForwardingChannels.QQ -> {
-                        OutlinedTextField(value = f1, onValueChange = { f1 = it }, label = { Text("Qmsg Key 或 OneBot Webhook URL") }, modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(value = f2, onValueChange = { f2 = it }, label = { Text("协议类型 (qmsg / onebot)") }, modifier = Modifier.fillMaxWidth())
+                        Text("接入方式", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                            listOf("qmsg" to "Qmsg酱", "onebot" to "OneBot 11", "napcat" to "NapCat").forEach { (value, label) ->
+                                FilterChip(
+                                    selected = f2 == value,
+                                    onClick = { f2 = value; testFeedback = null },
+                                    label = { Text(label) },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
+                        if (f2 == "qmsg") {
+                            OutlinedTextField(value = f1, onValueChange = { f1 = it }, label = { Text("Qmsg Key") }, modifier = Modifier.fillMaxWidth())
+                        } else {
+                            OutlinedTextField(
+                                value = f1,
+                                onValueChange = { f1 = it },
+                                label = { Text("OneBot 11 HTTP 地址") },
+                                placeholder = { Text("http://192.168.1.10:3000") },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            OutlinedTextField(
+                                value = f3,
+                                onValueChange = { f3 = it },
+                                label = { Text("Access Token（未启用鉴权可留空）") },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Text("消息目标", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                                FilterChip(
+                                    selected = qqTargetType == "private",
+                                    onClick = { qqTargetType = "private" },
+                                    label = { Text("私聊（user_id）") },
+                                    modifier = Modifier.weight(1f)
+                                )
+                                FilterChip(
+                                    selected = qqTargetType == "group",
+                                    onClick = { qqTargetType = "group" },
+                                    label = { Text("群聊（group_id）") },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                            OutlinedTextField(
+                                value = f4,
+                                onValueChange = { f4 = it.filter(Char::isDigit) },
+                                label = { Text(if (qqTargetType == "group") "group_id（QQ群号）" else "user_id（QQ号）") },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
                     }
                     ForwardingChannels.WECOM, ForwardingChannels.WECOM_APP -> {
                         OutlinedTextField(value = f1, onValueChange = { f1 = it }, label = { Text("企业ID (corpid)") }, modifier = Modifier.fillMaxWidth())
@@ -1507,12 +1596,34 @@ fun InstanceEditorDialog(
                     }
                     ForwardingChannels.CUSTOM_WEBHOOK -> {
                         OutlinedTextField(value = f1, onValueChange = { f1 = it }, label = { Text("请求地址") }, modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(
-                            value = customWebhookMethod,
-                            onValueChange = { customWebhookMethod = it.uppercase() },
-                            label = { Text("请求方式（GET / POST / PUT）") },
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text("接口转发方式", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                listOf("GET", "POST", "PUT").forEach { method ->
+                                    FilterChip(
+                                        selected = customWebhookMethod.equals(method, ignoreCase = true),
+                                        onClick = { customWebhookMethod = method },
+                                        label = { Text(method) },
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
+                            }
+                            Text(
+                                if (customWebhookMethod.equals("GET", ignoreCase = true)) {
+                                    "GET：请求体模板会编码后追加到 URL 查询参数"
+                                } else {
+                                    "${customWebhookMethod.uppercase()}：按下方 Content-Type 发送请求体"
+                                },
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                         OutlinedTextField(
                             value = customWebhookContentType,
                             onValueChange = { customWebhookContentType = it },
@@ -1667,9 +1778,9 @@ fun ChannelFullTutorialDialog(onDismiss: () -> Unit) {
             "Telegram / Discord" to "Telegram 通过 BotFather 获取 Token 和 Chat ID；Discord 从频道 Webhooks 中复制地址。",
             "Gotify" to "填写 Gotify 服务地址和应用 Token。公网服务使用 HTTPS，局域网可使用 HTTP。",
             "ntfy" to "填写 ntfy 服务地址与 Topic，私有主题再填写访问 Token。不要使用容易猜到的公开 Topic 传输验证码。",
-            "QQ / OneBot" to "Qmsg 模式填写 Key；OneBot 模式填写自建 HTTP 接口地址。",
+            "QQ / OneBot / NapCat" to "Qmsg 模式填写 Key；OneBot 11 / NapCat 填写 HTTP 地址、Access Token 和 user_id 或 group_id。",
             "邮件 / WebSocket" to "邮件填写 SMTP 服务器、账号、授权码和收件人；WebSocket 填写服务地址及可选 Token。",
-            "短信直发 / 自定义 Webhook" to "短信直发会产生运营商费用；Webhook 接收 JSON POST，可按需填写自定义 Headers，支持 [receiver] 获取卡槽本机号码。",
+            "短信直发 / 自定义 Webhook" to "短信直发会产生运营商费用；Webhook 支持 GET、POST、PUT，可配置 Content-Type、Headers 与请求体模板，并使用 [receiver] 获取卡槽本机号码。",
             "Server酱³" to "官网登录获取 SendKey；手机安装 Server酱 App 授权厂商通道后即可收到免后台推送，省电无常驻。",
             "通道组" to "把多个已配置实例组合后并发发送。不要把通道组互相循环引用。"
         ),
@@ -1815,8 +1926,16 @@ private fun TutorialSection(title: String, items: List<Pair<String, String>>) {
 @Composable
 fun ForwardSettingsDialog(onDismiss: () -> Unit) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val config = remember { MultiForwardConfig(context) }
     var markAsRead by remember { mutableStateOf(config.markAsReadAfterForward) }
+    var simOneLabel by remember { mutableStateOf(config.simOneLabel) }
+    var simTwoLabel by remember { mutableStateOf(config.simTwoLabel) }
+    var rootEnhancementEnabled by remember { mutableStateOf(config.rootEnhancementEnabled) }
+    var rootCheckRunning by remember { mutableStateOf(false) }
+    var rootStatusText by remember { mutableStateOf("尚未检测 Root") }
+    var shizukuStatusText by remember { mutableStateOf(ShizukuEnhancementManager.checkStatus(context).detail) }
+    var rootDiagnosticText by remember { mutableStateOf("") }
     var delayEnabled by remember { mutableStateOf(config.forwardingDelaySeconds > 0) }
     var delaySeconds by remember { mutableStateOf(if (config.forwardingDelaySeconds > 0) config.forwardingDelaySeconds else 5) }
 
@@ -1856,7 +1975,213 @@ fun ForwardSettingsDialog(onDismiss: () -> Unit) {
                     )
                 }
 
-                // 2. 延时后台转发任务
+                // 2. 双卡显示名称（复用经典版配置，仅影响显示，不改变发送卡解析）
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("双卡显示名称", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                    Text(
+                        "用于转发内容、卡槽选择和状态显示；留空时跟随系统 SIM 与运营商名称",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OutlinedTextField(
+                        value = simOneLabel,
+                        onValueChange = { simOneLabel = it.take(24) },
+                        label = { Text("卡一名称") },
+                        placeholder = { Text("例如：工作主卡") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = simTwoLabel,
+                        onValueChange = { simTwoLabel = it.take(24) },
+                        label = { Text("卡二名称") },
+                        placeholder = { Text("例如：生活副卡") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                // 3. Root 增强模式（开发版实验总开关；当前不执行任何 su 命令）
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                            Text("Root 增强模式（实验）", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                            Text(
+                                "开发版能力总开关，默认关闭。开启仅保存授权意向，当前版本不会自动执行 Root 命令或修改系统。",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = rootEnhancementEnabled,
+                            onCheckedChange = {
+                                rootEnhancementEnabled = it
+                                config.rootEnhancementEnabled = it
+                            }
+                        )
+                    }
+
+                    if (rootEnhancementEnabled) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.55f),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text("🛡️ 特权增强双引擎 (Root / Shizuku 免 Root)", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                Text(
+                                    "用于强制绑定默认短信角色、放行 WRITE_SMS / RECEIVE_SMS 及注入电池白名单。支持 Root 或 Shizuku(免Root无线调试)。",
+                                    fontSize = 11.5.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+
+                                // === 引擎 A: Root 模式 ===
+                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                                Text("【Root 引擎 (uid=0)】", fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                                Text(rootStatusText, fontSize = 11.sp, color = MaterialTheme.colorScheme.onTertiaryContainer)
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    OutlinedButton(
+                                        enabled = !rootCheckRunning,
+                                        onClick = {
+                                            rootCheckRunning = true
+                                            scope.launch {
+                                                val status = RootEnhancementManager.checkRoot()
+                                                rootStatusText = status.detail
+                                                rootCheckRunning = false
+                                            }
+                                        },
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                        modifier = Modifier.height(30.dp)
+                                    ) {
+                                        Text(if (rootCheckRunning) "检测…" else "检测 Root", fontSize = 11.sp)
+                                    }
+                                    OutlinedButton(
+                                        enabled = !rootCheckRunning,
+                                        onClick = {
+                                            rootCheckRunning = true
+                                            scope.launch {
+                                                val report = RootEnhancementManager.collectReadOnlyDiagnostics(context)
+                                                rootStatusText = report.rootStatus.detail
+                                                rootDiagnosticText = "--- Root 底层只读诊断 ---\n" + report.lines.joinToString("\n")
+                                                rootCheckRunning = false
+                                            }
+                                        },
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                        modifier = Modifier.height(30.dp)
+                                    ) {
+                                        Text("只读诊断", fontSize = 11.sp)
+                                    }
+                                    Button(
+                                        enabled = !rootCheckRunning,
+                                        onClick = {
+                                            rootCheckRunning = true
+                                            scope.launch {
+                                                val fixResult = RootEnhancementManager.applyRootFix(context)
+                                                val report = RootEnhancementManager.collectReadOnlyDiagnostics(context)
+                                                rootStatusText = "Root 修复完成 (${fixResult.successCount}/${fixResult.totalCount})"
+                                                val fixLog = fixResult.details.joinToString("\n") { (k, v) -> if (v) "✓ $k: 成功" else "✗ $k: 失败" }
+                                                rootDiagnosticText = "--- 🚀 Root 一键修复结果 ---\n" + fixLog + "\n\n--- 修复后底层实时状态 ---\n" + report.lines.joinToString("\n")
+                                                rootCheckRunning = false
+                                            }
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = BrandGreen),
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                        modifier = Modifier.height(30.dp)
+                                    ) {
+                                        Text("🚀 Root 强制修复", fontSize = 11.sp)
+                                    }
+                                }
+
+                                // === 引擎 B: Shizuku 免 Root 模式 ===
+                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                                Text("【Shizuku 引擎 (免 Root · ADB 级)】", fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                                Text(shizukuStatusText, fontSize = 11.sp, color = MaterialTheme.colorScheme.onTertiaryContainer)
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    OutlinedButton(
+                                        enabled = !rootCheckRunning,
+                                        onClick = {
+                                            val status = ShizukuEnhancementManager.checkStatus(context)
+                                            shizukuStatusText = status.detail
+                                        },
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                        modifier = Modifier.height(30.dp)
+                                    ) {
+                                        Text("检查状态", fontSize = 11.sp)
+                                    }
+                                    OutlinedButton(
+                                        enabled = !rootCheckRunning,
+                                        onClick = {
+                                            ShizukuEnhancementManager.requestPermission()
+                                            val status = ShizukuEnhancementManager.checkStatus(context)
+                                            shizukuStatusText = status.detail
+                                        },
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                        modifier = Modifier.height(30.dp)
+                                    ) {
+                                        Text("申请授权", fontSize = 11.sp)
+                                    }
+                                    Button(
+                                        enabled = !rootCheckRunning,
+                                        onClick = {
+                                            rootCheckRunning = true
+                                            scope.launch {
+                                                val status = ShizukuEnhancementManager.checkStatus(context)
+                                                if (status.state != ShizukuEnhancementManager.ShizukuState.READY) {
+                                                    shizukuStatusText = status.detail
+                                                    rootDiagnosticText = "Shizuku 尚未就绪，请先启动无线调试并授权本应用。"
+                                                    rootCheckRunning = false
+                                                    return@launch
+                                                }
+                                                val fixResult = ShizukuEnhancementManager.applyShizukuFix(context)
+                                                val report = ShizukuEnhancementManager.collectShizukuDiagnostics(context)
+                                                shizukuStatusText = "Shizuku 修复完成 (${fixResult.successCount}/${fixResult.totalCount})"
+                                                val fixLog = fixResult.details.joinToString("\n") { (k, v) -> if (v) "✓ $k: 成功" else "✗ $k: 失败" }
+                                                rootDiagnosticText = "--- ⚡ Shizuku 一键修复结果 ---\n" + fixLog + "\n\n--- 修复后底层状态 ---\n" + report.lines.joinToString("\n")
+                                                rootCheckRunning = false
+                                            }
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                        modifier = Modifier.height(30.dp)
+                                    ) {
+                                        Text("⚡ Shizuku 强制修复", fontSize = 11.sp)
+                                    }
+                                }
+
+                                if (rootDiagnosticText.isNotBlank()) {
+                                    Surface(
+                                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(
+                                            rootDiagnosticText,
+                                            fontSize = 10.sp,
+                                            lineHeight = 14.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(8.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 4. 延时后台转发任务
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -1923,7 +2248,11 @@ fun ForwardSettingsDialog(onDismiss: () -> Unit) {
         },
         confirmButton = {
             Button(
-                onClick = onDismiss,
+                onClick = {
+                    config.simOneLabel = simOneLabel
+                    config.simTwoLabel = simTwoLabel
+                    onDismiss()
+                },
                 colors = ButtonDefaults.buttonColors(containerColor = BrandGreen)
             ) {
                 Text("完成")
@@ -1931,4 +2260,3 @@ fun ForwardSettingsDialog(onDismiss: () -> Unit) {
         }
     )
 }
-

@@ -21,9 +21,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -333,10 +330,14 @@ fun ConversationsScreen(
                         )
                     }
                 }
-            } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                    contentPadding = PaddingValues(
+                        start = 16.dp,
+                        end = 16.dp,
+                        top = 4.dp,
+                        bottom = org.fossify.messages.ui.compose.navigation.LocalGatewayBottomPadding.current
+                    ),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     items(filteredConversations, key = { it.threadId }) { conv ->
@@ -354,8 +355,7 @@ fun ConversationsScreen(
                     }
 
                     item {
-                        val bottomNavPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-                        Spacer(modifier = Modifier.height(bottomNavPadding + 84.dp))
+                        Spacer(modifier = Modifier.height(16.dp))
                     }
                 }
             }

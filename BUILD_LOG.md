@@ -14,19 +14,23 @@
 
 ---
 
-## 🚀 最新构建记录 (2026-09-03)
+## 🚀 最新构建记录 (2026-09-23 · v1.2.0)
 
-### 1. 全量工程清理与编译 (Clean Build)
-* **执行命令**：`gradlew.bat clean assembleCoreDebug`
-* **构建耗时**：1 分 55 秒
-* **执行状态**：✅ **`BUILD SUCCESSFUL`** (36/36 Actionable Tasks Executed)
+### 1. 全量工程编译与构建验证 (Clean Build)
+* **执行命令**：`gradlew.bat compileCoreDebugKotlin`
+* **构建耗时**：1 分 19 秒
+* **执行状态**：✅ **`BUILD SUCCESSFUL`** (14 Actionable Tasks Passed)
 * **核心编译链路验证**：
   * `kspCoreDebugKotlin`：通过
   * `compileCoreDebugKotlin`：通过 (0 错误，0 致命告警)
-  * `compileCoreDebugJavaWithJavac`：通过
-  * `dataBindingGenBaseClassesCoreDebug`：通过 (XML ID 绑定完整)
-  * `mergeCoreDebugResources`：通过 (资源引用无缺失)
-  * `packageCoreDebug`：通过 (APK 打包生成成功)
+  * 特权双引擎 (`RootEnhancementManager.kt` / `ShizukuEnhancementManager.kt`)：编译通过
+  * 混合底栏与 Insets 避让架构 (`GatewayApp.kt`)：编译通过
+  * 对话卡号状态选择恢复 (`ThreadActivity.kt`)：编译通过
+  * OneBot 11 与网易邮箱 RFC 2971 适配：编译通过
+
+### 2. 存量历史构建 (2026-09-03)
+* **执行命令**：`gradlew.bat clean assembleCoreDebug`
+* **执行状态**：✅ **`BUILD SUCCESSFUL`**
 
 ### 2. 单元测试与代码质量 (Unit Tests)
 * **执行命令**：`gradlew.bat testCoreDebugUnitTest`

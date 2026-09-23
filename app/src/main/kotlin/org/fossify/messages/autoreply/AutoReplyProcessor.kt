@@ -3,6 +3,11 @@ package org.fossify.messages.autoreply
 import android.content.Context
 import android.telephony.SmsManager
 import android.util.Log
+import org.fossify.messages.extensions.config
+import org.fossify.messages.messaging.MessagingUtils
+import org.fossify.messages.messaging.SimResolutionRequest
+import org.fossify.messages.messaging.SubscriptionResolver
+import org.fossify.messages.models.SmsSendTriggerType
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
@@ -134,11 +139,23 @@ object AutoReplyProcessor {
     }
 
     private fun resolveSubscriptionId(context: Context, simScope: String, incomingSubId: Int): Int {
-        return when (simScope) {
-            AutoReplyRule.SIM_SAME -> incomingSubId
-            AutoReplyRule.SIM_1 -> 1
-            AutoReplyRule.SIM_2 -> 2
-            else -> if (incomingSubId > 0) incomingSubId else SmsManager.getDefaultSmsSubscriptionId()
+        val configuredMode = when (simScope) {
+            AutoReplyRule.SIM_SAME -> SubscriptionResolver.MODE_FOLLOW_RECEIVE
+            AutoReplyRule.SIM_1 -> SubscriptionResolver.MODE_SIM1
+            AutoReplyRule.SIM_2 -> SubscriptionResolver.MODE_SIM2
+            else -> SubscriptionResolver.MODE_DEFAULT
+        }
+        val result = SubscriptionResolver.resolve(
+            context,
+            SimResolutionRequest(
+                targetAddress = null,
+                receivedSubId = incomingSubId,
+                configuredMode = configuredMode,
+                allowFallback = true
+            )
+        )
+        return if (result.isSuccessful) result.resolvedSubscriptionId else {
+            if (incomingSubId >= 0) incomingSubId else SmsManager.getDefaultSmsSubscriptionId()
         }
     }
 
@@ -150,25 +167,19 @@ object AutoReplyProcessor {
         }
 
         try {
-            val smsManager = if (subId > 0 && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-                context.getSystemService(SmsManager::class.java).createForSubscriptionId(subId)
-            } else if (subId > 0) {
-                @Suppress("DEPRECATION")
-                SmsManager.getSmsManagerForSubscriptionId(subId)
-            } else {
-                @Suppress("DEPRECATION")
-                SmsManager.getDefault()
-            }
-
-            val parts = smsManager.divideMessage(text)
-            if (parts.size > 1) {
-                smsManager.sendMultipartTextMessage(destination, null, parts, null, null)
-            } else {
-                smsManager.sendTextMessage(destination, null, text, null, null)
-            }
+            // 统一走应用发送链：先写系统短信 Provider 和本地 DB，再创建发送观测记录，
+            // 最后由 SmsSender 提交。避免自动回复发送成功却不显示在会话和运行大盘。
+            MessagingUtils(context).sendSmsMessage(
+                text = text,
+                addresses = setOf(destination),
+                subId = subId,
+                requireDeliveryReport = context.config.enableDeliveryReports,
+                triggerType = SmsSendTriggerType.AUTO_REPLY
+            )
             Log.i(TAG, "Successfully sent auto-reply SMS to $destination (subId=$subId)")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to send auto-reply SMS to $destination", e)
+            throw e
         }
     }
 

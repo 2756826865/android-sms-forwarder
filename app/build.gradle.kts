@@ -160,6 +160,8 @@ detekt {
 dependencies {
     implementation(libs.fossify.commons)
     implementation(libs.xx.permissions)
+    implementation(libs.shizuku.api)
+    implementation(libs.shizuku.provider)
     implementation(libs.eventbus)
     implementation(libs.indicator.fast.scroll)
     implementation(libs.mmslib)

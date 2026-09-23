@@ -14,9 +14,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -94,7 +91,7 @@ fun RuleManagementScreen(
                     containerColor = BrandGreen,
                     contentColor = Color.White,
                     shape = CircleShape,
-                    modifier = Modifier.padding(bottom = 76.dp) // 预留底部浮动导航栏避让
+                    modifier = Modifier.padding(bottom = org.fossify.messages.ui.compose.navigation.LocalGatewayBottomPadding.current) // 预留底部浮动导航栏动态避让
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.ic_plus),
@@ -162,7 +159,12 @@ fun RuleManagementScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(start = 24.dp, top = 32.dp, end = 24.dp, bottom = 120.dp),
+                        .padding(
+                            start = 24.dp,
+                            top = 32.dp,
+                            end = 24.dp,
+                            bottom = org.fossify.messages.ui.compose.navigation.LocalGatewayBottomPadding.current + 24.dp
+                        ),
                     contentAlignment = Alignment.TopCenter
                 ) {
                     Column(
@@ -199,10 +201,14 @@ fun RuleManagementScreen(
                     }
                 }
             } else {
-                val bottomNavPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = bottomNavPadding + 84.dp),
+                    contentPadding = PaddingValues(
+                        start = 16.dp,
+                        end = 16.dp,
+                        top = 8.dp,
+                        bottom = org.fossify.messages.ui.compose.navigation.LocalGatewayBottomPadding.current
+                    ),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     items(rules, key = { it.id }) { rule ->

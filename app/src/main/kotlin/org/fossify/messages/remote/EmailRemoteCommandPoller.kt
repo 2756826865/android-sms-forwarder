@@ -2,6 +2,7 @@ package org.fossify.messages.remote
 
 import android.content.Context
 import android.util.Log
+import org.fossify.messages.BuildConfig
 import org.fossify.messages.forwarding.MultiForwardConfig
 import org.fossify.messages.remote.repository.RemoteSourceConnectionState
 import org.fossify.messages.remote.repository.RemoteSourceRepository
@@ -138,6 +139,25 @@ class EmailRemoteCommandPoller(
                     onStatus(err)
                     repo.updateConnectionState(instance.id, RemoteSourceConnectionState.ERROR, errorMessage = err)
                     return 0
+                }
+
+                // 网易 163/126/yeah 的 IMAP 服务要求认证后主动发送 RFC 2971 ID，
+                // 否则后续 SELECT 可能返回 "Unsafe Login"。其他邮箱若不支持 ID，
+                // 通常返回 BAD；该能力声明不应阻断标准 IMAP 流程。
+                val idResp = send(
+                    "ID (\"name\" \"SMS Forwarder\" \"version\" \"${BuildConfig.VERSION_NAME}\" " +
+                        "\"vendor\" \"Fossify\" \"support-email\" \"noreply@localhost\")"
+                )
+                if (host.endsWith(".163.com", ignoreCase = true) ||
+                    host.endsWith(".126.com", ignoreCase = true) ||
+                    host.endsWith(".yeah.net", ignoreCase = true)
+                ) {
+                    val idAccepted = idResp.any { it.matches(Regex("A\\d{4} OK.*", RegexOption.IGNORE_CASE)) }
+                    if (!idAccepted) {
+                        val err = "网易 IMAP ID 身份声明失败：${idResp.lastOrNull()}"
+                        config.appendEmailRemoteLog(err)
+                        onStatus(err)
+                    }
                 }
 
                 // 标记连接在线就绪

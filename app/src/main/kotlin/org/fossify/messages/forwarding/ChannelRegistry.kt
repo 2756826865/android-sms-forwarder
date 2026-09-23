@@ -96,8 +96,8 @@ object ChannelRegistry {
         ),
         ChannelDefinition(
             id = ForwardingChannels.QQ,
-            name = "QQ 消息 (Qmsg/OneBot)",
-            description = "支持 Qmsg 酱或自建 OneBot/NapCat 协议端",
+            name = "QQ 消息 (Qmsg/OneBot/NapCat)",
+            description = "支持 Qmsg 酱或自建 OneBot 11 / NapCat HTTP 服务",
             iconEmoji = "🐧",
             category = ChannelCategory.INSTANT
         ),

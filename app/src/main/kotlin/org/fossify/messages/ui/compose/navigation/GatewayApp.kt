@@ -14,7 +14,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -51,6 +55,14 @@ enum class GatewayTab(val title: String, val emoji: String) {
     OPERATIONS("运维", "🛠️")
 }
 
+/** Space reserved by gateway pages for the floating dock itself (system navigation inset excluded). */
+val GatewayDockContentPadding = 96.dp
+
+/** Extra lift applied to page FABs so they stay above the floating dock. */
+val GatewayDockFabPadding = 84.dp
+
+val LocalGatewayBottomPadding = androidx.compose.runtime.compositionLocalOf<androidx.compose.ui.unit.Dp> { 96.dp }
+
 @Composable
 fun GatewayApp(
     dashboardViewModel: DashboardViewModel,
@@ -63,62 +75,79 @@ fun GatewayApp(
     var selectedTab by remember { mutableStateOf(GatewayTab.MESSAGES) }
     var editingRuleId by remember { mutableStateOf<String?>(null) }
     var isEditingRule by remember { mutableStateOf(false) }
+    var isInlineEditorOpen by remember { mutableStateOf(false) }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-    ) {
-        // 主体内容页面
-        Box(modifier = Modifier.fillMaxSize()) {
-            when (selectedTab) {
-                GatewayTab.MESSAGES -> ConversationsScreen(
-                    conversationsViewModel = conversationsViewModel,
-                    onRequestDefaultSms = onRequestDefaultSmsRole,
-                    onSwitchToClassic = onSwitchToClassic
-                )
-                GatewayTab.DASHBOARD -> DashboardScreen(
-                    viewModel = dashboardViewModel,
-                    onRequestDefaultSms = onRequestDefaultSmsRole,
-                    onNavigateToOperations = { selectedTab = GatewayTab.OPERATIONS },
-                    onSwitchToClassic = onSwitchToClassic
-                )
-                GatewayTab.CHANNELS -> ChannelHubScreen()
-                GatewayTab.RULES -> {
-                    if (isEditingRule) {
-                        org.fossify.messages.ui.compose.rules.RuleEditorScreen(
-                            ruleId = editingRuleId,
-                            onNavigateBack = { isEditingRule = false }
-                        )
-                    } else {
-                        org.fossify.messages.ui.compose.rules.RuleManagementScreen(
-                            // 规则已经是独立底部标签，不再显示容易挤压标题的“返回通道”。
-                            onNavigateBack = null,
-                            onNavigateToEditor = { id ->
-                                editingRuleId = id
-                                isEditingRule = true
-                            }
-                        )
-                    }
-                }
-                GatewayTab.OPERATIONS -> OperationsScreen(viewModel = diagnosticsViewModel)
-            }
-        }
+    val safeBottom = WindowInsets.safeDrawing
+        .only(WindowInsetsSides.Bottom)
+        .asPaddingValues()
+        .calculateBottomPadding()
 
-        // 悬浮白色大圆角底部导航栏 (Modern Floating Capsule Dock)
-        val isDark = androidx.compose.foundation.isSystemInDarkTheme()
-        if (!isEditingRule) {
-            Surface(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .padding(horizontal = 18.dp, vertical = 12.dp)
-                .navigationBarsPadding(),
-            shape = RoundedCornerShape(34.dp),
-            color = if (isDark) org.fossify.messages.ui.compose.theme.DarkSurface else Color.White,
-            shadowElevation = 10.dp,
-            border = BorderStroke(1.dp, if (isDark) org.fossify.messages.ui.compose.theme.DarkOutline else org.fossify.messages.ui.compose.theme.OutlineSoft)
+    val isDockVisible = !isEditingRule && !isInlineEditorOpen
+    val dynamicBottomPadding = if (isDockVisible) safeBottom + 86.dp else safeBottom + 16.dp
+
+    androidx.compose.runtime.CompositionLocalProvider(LocalGatewayBottomPadding provides dynamicBottomPadding) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
         ) {
+            // 主体内容页面：全屏沉浸穿透滚动，子页面通过 LocalGatewayBottomPadding 动态预留避让空间
+            Box(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                when (selectedTab) {
+                    GatewayTab.MESSAGES -> ConversationsScreen(
+                        conversationsViewModel = conversationsViewModel,
+                        onRequestDefaultSms = onRequestDefaultSmsRole,
+                        onSwitchToClassic = onSwitchToClassic
+                    )
+                    GatewayTab.DASHBOARD -> DashboardScreen(
+                        viewModel = dashboardViewModel,
+                        onRequestDefaultSms = onRequestDefaultSmsRole,
+                        onNavigateToOperations = { selectedTab = GatewayTab.OPERATIONS },
+                        onSwitchToClassic = onSwitchToClassic
+                    )
+                    GatewayTab.CHANNELS -> ChannelHubScreen(
+                        onInlineEditorVisibilityChanged = { isInlineEditorOpen = it }
+                    )
+                    GatewayTab.RULES -> {
+                        if (isEditingRule) {
+                            org.fossify.messages.ui.compose.rules.RuleEditorScreen(
+                                ruleId = editingRuleId,
+                                onNavigateBack = { isEditingRule = false }
+                            )
+                        } else {
+                            org.fossify.messages.ui.compose.rules.RuleManagementScreen(
+                                // 规则已经是独立底部标签，不再显示容易挤压标题的“返回通道”。
+                                onNavigateBack = null,
+                                onNavigateToEditor = { id ->
+                                    editingRuleId = id
+                                    isEditingRule = true
+                                }
+                            )
+                        }
+                    }
+                    GatewayTab.OPERATIONS -> OperationsScreen(viewModel = diagnosticsViewModel)
+                }
+            }
+
+            // 悬浮白色大圆角底部导航栏 (Modern Floating Capsule Dock)
+            val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+            if (isDockVisible) {
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .padding(
+                            start = 18.dp,
+                            end = 18.dp,
+                            bottom = safeBottom + 12.dp
+                        ),
+                    shape = RoundedCornerShape(34.dp),
+                    color = if (isDark) org.fossify.messages.ui.compose.theme.DarkSurface else Color.White,
+                    shadowElevation = 10.dp,
+                    border = BorderStroke(1.dp, if (isDark) org.fossify.messages.ui.compose.theme.DarkOutline else org.fossify.messages.ui.compose.theme.OutlineSoft)
+                ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -179,6 +208,7 @@ fun GatewayApp(
                 }
             }
         }
-        }
     }
+}
+}
 }

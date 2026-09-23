@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -87,6 +88,8 @@ import org.fossify.messages.ui.compose.theme.OutlineSoft
 import org.fossify.messages.ui.compose.theme.SurfaceCard
 import org.fossify.messages.ui.compose.theme.TextPrimary
 import org.fossify.messages.ui.compose.theme.TextSecondary
+import org.fossify.messages.ui.compose.navigation.GatewayDockContentPadding
+import org.fossify.messages.ui.compose.navigation.LocalGatewayBottomPadding
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -117,6 +120,7 @@ fun RemoteControlScreen(
 
     Scaffold(
         containerColor = bgColor,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             if (onBack != null) Surface(
                 color = cardColor,
@@ -155,7 +159,7 @@ fun RemoteControlScreen(
                 .padding(innerPadding)
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
-            contentPadding = PaddingValues(top = 16.dp, bottom = 120.dp)
+            contentPadding = PaddingValues(top = 16.dp, bottom = LocalGatewayBottomPadding.current)
         ) {
             if (missingAuthSources.isNotEmpty()) {
                 item(key = "whitelist_missing_banner") {
@@ -1149,6 +1153,41 @@ private fun RemoteSourceEditDialog(
                         )
                     }
                     RemoteSourceType.EMAIL -> {
+                        Surface(
+                            color = GatewayBlue.copy(alpha = 0.08f),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text("163 邮箱配置", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = GatewayBlue)
+                                Text(
+                                    "先在网易邮箱网页端开启 IMAP/SMTP 服务并生成客户端授权码。这里填写完整邮箱账号和授权码，不是网页登录密码。推荐 imap.163.com、993、SSL/TLS。远程指令写在新邮件主题中，例如：/发信 10086 测试。发件邮箱必须与下方用户白名单完全一致。",
+                                    fontSize = 11.sp,
+                                    lineHeight = 16.sp,
+                                    color = TextSecondary
+                                )
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    FilterChip(
+                                        selected = param1.equals("imap.163.com", ignoreCase = true),
+                                        onClick = {
+                                            param1 = "imap.163.com"
+                                            emailPortText = "993"
+                                            emailSsl = true
+                                        },
+                                        label = { Text("163 预设") }
+                                    )
+                                    FilterChip(
+                                        selected = param1.equals("imap.qq.com", ignoreCase = true),
+                                        onClick = {
+                                            param1 = "imap.qq.com"
+                                            emailPortText = "993"
+                                            emailSsl = true
+                                        },
+                                        label = { Text("QQ 邮箱预设") }
+                                    )
+                                }
+                            }
+                        }
                         OutlinedTextField(
                             value = param1,
                             onValueChange = { param1 = it },

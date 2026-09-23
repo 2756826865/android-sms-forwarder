@@ -420,7 +420,11 @@
     <string name="compatibility_brand_xiaomi_title">小米 / Redmi 专属建议</string>
     <string name="compatibility_brand_xiaomi_advice">允许自启动，省电策略设为无限制，并允许后台弹出界面与锁屏通知。息屏收不到短信时，到本页确认 SMS Role 与 WRITE_SMS 为正常；若 WRITE_SMS 未允许，可展开高级诊断复制 ADB 命令修复。HyperOS 更新后建议重新确认以上项。</string>
     <string name="compatibility_brand_huawei_title">华为 / 荣耀专属建议</string>
-    <string name="compatibility_brand_huawei_advice">在应用启动管理中改为手动管理，并允许自启动、关联启动和后台活动。若 SMS Role、底层路由与 WRITE_SMS 不同步，请展开高级诊断使用 ADB 修复。</string>
+    <string name="compatibility_brand_huawei_advice">Pura 70 等新系统不一定再显示旧版“允许后台运行”入口。优先进入设置 → 应用和服务 → 应用启动管理，找到本应用后关闭自动管理，并允许自启动、关联启动和后台活动；也可从手机管家 → 应用启动管理进入。若入口被系统版本移除，请进入应用详情，把电池策略设为不限制，并在最近任务中锁定应用。若 SMS Role、底层路由与 WRITE_SMS 不同步，请展开高级诊断处理。</string>
+    <string name="compatibility_brand_coloros_title">ColorOS（OPPO / 一加 / realme）短信发送确认</string>
+    <string name="compatibility_brand_coloros_advice">若每次通过短信直发、批量发送或远程指令发送短信都出现系统确认弹窗，请先将本应用设为默认短信应用，并在权限管理中把“发送短信”设为始终允许；如系统提供“验证码短信保护”，请按实际需要关闭。随后进入开发者选项，尝试开启“禁止权限监控”；仍然弹窗时，可再开启“停止限制子进程”。不同 ColorOS 版本的名称和位置可能不同，新版本可能已经移除这些开关。应用无法自行修改这些系统安全选项，也不能保证所有机型都取消确认。为保证后台接收与转发，还应允许自启动、关联启动/后台活动，关闭电池优化，并在最近任务中锁定应用。</string>
+    <string name="compatibility_brand_meizu_title">魅族 / Flyme 短信接收建议</string>
+    <string name="compatibility_brand_meizu_advice">若系统短信应用能收到验证码，但本应用列表完全没有该短信，问题发生在转发之前，通常是 SMS Role、底层默认短信路由或 Flyme 后台策略未真正生效。请重新选择一次默认短信应用，并在手机管家中允许短信、电话、自启动和后台运行，将电量策略设为不限制并锁定最近任务。随后返回本页检查默认短信角色、底层短信路由和 WRITE_SMS 是否一致。仅显示“权限已允许”不能证明短信广播已交给本应用；验证码也可能被 Flyme 智能短信或安全服务优先处理。</string>
     <string name="low_battery_reminder">电量提醒</string>
     <string name="low_battery_enable_title">开启提醒</string>
     <string name="low_battery_reminder_summary">电量低于阈值时通过转发渠道发送提醒</string>

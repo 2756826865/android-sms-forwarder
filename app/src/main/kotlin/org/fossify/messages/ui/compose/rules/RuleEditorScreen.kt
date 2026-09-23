@@ -20,9 +20,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -155,7 +152,7 @@ fun RuleEditorScreen(
                 start = 12.dp,
                 end = 12.dp,
                 top = 6.dp,
-                bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 24.dp
+                bottom = org.fossify.messages.ui.compose.navigation.LocalGatewayBottomPadding.current
             ),
             verticalArrangement = Arrangement.spacedBy(9.dp)
         ) {

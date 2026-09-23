@@ -37,9 +37,13 @@ app-build-kotlinJVMTarget = "17"
 #Helpers
 ez-vcard = "0.12.2"
 xxPermissions = "28.3"
+shizuku = "13.1.5"
 [libraries]
 #Permissions
 xx-permissions = { module = "com.github.getActivity:XXPermissions", version.ref = "xxPermissions" }
+#Shizuku
+shizuku-api = { module = "dev.rikka.shizuku:api", version.ref = "shizuku" }
+shizuku-provider = { module = "dev.rikka.shizuku:provider", version.ref = "shizuku" }
 #AndroidX
 androidx-constraintlayout = { module = "androidx.constraintlayout:constraintlayout", version.ref = "androidx-constraintlayout" }
 androidx-lifecycle-process = { module = "androidx.lifecycle:lifecycle-process", version.ref = "androidx-lifecycleprocess" }

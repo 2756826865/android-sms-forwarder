@@ -364,6 +364,7 @@ class ThreadActivity : SimpleActivity() {
         binding.messageHolder.root.setBackgroundColor(threadBg)
         binding.shortCodeHolder.root.setBackgroundColor(threadBg)
         applyComposerColors()
+        setupSIMSelector()
     }
 
     override fun onPause() {
@@ -570,7 +571,10 @@ class ThreadActivity : SimpleActivity() {
             try {
                 if (canReuseLoadedThread(providerParticipantsChanged, cachedMessagesCode, hasParticipantWithoutName)) {
                     setupAdapter()
-                    runOnUiThread { callback() }
+                    runOnUiThread {
+                        setupSIMSelector()
+                        callback()
+                    }
                     return@ensureBackgroundThread
                 }
             } catch (ignored: Exception) {
@@ -1197,78 +1201,101 @@ class ThreadActivity : SimpleActivity() {
 
     @SuppressLint("MissingPermission")
     private fun setupSIMSelector() {
-        val availableSIMs = subscriptionManagerCompat().activeSubscriptionInfoList ?: return
+        val availableSIMs = runCatching { subscriptionManagerCompat().activeSubscriptionInfoList.orEmpty() }
+            .getOrDefault(emptyList())
         val simDisplayConfig = MultiForwardConfig(applicationContext)
         availableSIMCards.clear()
-        if (availableSIMs.isNotEmpty()) {
-            availableSIMs.forEachIndexed { index, subscriptionInfo ->
-                val slotIndex = subscriptionInfo.simSlotIndex.takeIf { it >= 0 } ?: index
-                val systemLabel = subscriptionInfo.carrierName?.toString()
-                    ?.takeIf(String::isNotBlank)
-                    ?: subscriptionInfo.displayName?.toString().orEmpty()
-                val simCard = SIMCard(
-                    id = slotIndex + 1,
-                    subscriptionId = subscriptionInfo.subscriptionId,
-                    label = simDisplayConfig.customSimLabel(slotIndex).ifBlank { systemLabel },
-                    phoneNumber = simDisplayConfig.customSimNumber(slotIndex)
-                        .ifBlank { subscriptionInfo.number.orEmpty() },
-                )
-                availableSIMCards.add(simCard)
-            }
 
-            val numbers = ArrayList<String>()
-            participants.forEach { contact ->
-                contact.phoneNumbers.forEach {
+        if (availableSIMs.isEmpty()) {
+            binding.messageHolder.threadSelectSimIcon.beGone()
+            binding.messageHolder.threadSelectSimNumber.beGone()
+            return
+        }
+
+        availableSIMs.forEachIndexed { index, subscriptionInfo ->
+            val slotIndex = subscriptionInfo.simSlotIndex.takeIf { it >= 0 } ?: index
+            val systemLabel = subscriptionInfo.carrierName?.toString()
+                ?.takeIf(String::isNotBlank)
+                ?: subscriptionInfo.displayName?.toString().orEmpty()
+            val simCard = SIMCard(
+                id = slotIndex + 1,
+                subscriptionId = subscriptionInfo.subscriptionId,
+                label = simDisplayConfig.customSimLabel(slotIndex).ifBlank { systemLabel },
+                phoneNumber = simDisplayConfig.customSimNumber(slotIndex)
+                    .ifBlank { subscriptionInfo.number.orEmpty() },
+            )
+            availableSIMCards.add(simCard)
+        }
+
+        // 安全收集当前会话的可能号码（多重回退，不因陌生号码/未保存联系人而中断）
+        val numbers = ArrayList<String>()
+        participants.forEach { contact ->
+            contact.phoneNumbers.forEach {
+                if (it.normalizedNumber.isNotBlank()) {
                     numbers.add(it.normalizedNumber)
                 }
             }
-
-            if (numbers.isEmpty()) {
-                return
+            if (contact.name.isNotBlank() && contact.name.any(Char::isDigit)) {
+                numbers.add(contact.name.trim())
             }
+        }
+        if (numbers.isEmpty()) {
+            intent.getStringExtra(THREAD_NUMBER)?.takeIf(String::isNotBlank)?.let { numbers.add(it) }
+        }
+        if (numbers.isEmpty()) {
+            conversation?.phoneNumber?.takeIf(String::isNotBlank)?.let { numbers.add(it) }
+        }
+        if (numbers.isEmpty()) {
+            messages.lastOrNull { it.senderPhoneNumber.isNotBlank() }?.let { numbers.add(it.senderPhoneNumber) }
+        }
 
-            currentSIMCardIndex = getProperSimIndex(availableSIMs, numbers)
-            binding.messageHolder.threadSelectSimIcon.beVisible()
-            binding.messageHolder.threadSelectSimNumber.beVisible()
+        // 计算当前适用的 SIM 卡索引（即使 numbers 为空也安全回退，绝不提前 return）
+        currentSIMCardIndex = getProperSimIndex(availableSIMs, numbers)
+            .coerceIn(0, (availableSIMCards.size - 1).coerceAtLeast(0))
 
-            if (availableSIMCards.isNotEmpty()) {
-                val showSelector = {
-                    SimSelectionPopup(
-                        context = this,
-                        cards = availableSIMCards,
-                        selectedIndex = currentSIMCardIndex,
-                    ) { selectedIndex ->
-                        currentSIMCardIndex = selectedIndex
-                        val currentSIMCard = availableSIMCards[selectedIndex]
-                        binding.messageHolder.threadSelectSimNumber.text = currentSIMCard.id.toString()
-                        numbers.forEach {
-                            config.saveUseSIMIdAtNumber(it, currentSIMCard.subscriptionId)
-                        }
-                    }.show(binding.messageHolder.threadTypeMessage)
+        // 只要有卡可用，卡号选择器图标和数字就必须 100% 保持可见与可点击
+        binding.messageHolder.threadSelectSimIcon.beVisible()
+        binding.messageHolder.threadSelectSimNumber.beVisible()
+
+        val showSelector = {
+            SimSelectionPopup(
+                context = this,
+                cards = availableSIMCards,
+                selectedIndex = currentSIMCardIndex,
+            ) { selectedIndex ->
+                currentSIMCardIndex = selectedIndex
+                val currentSIMCard = availableSIMCards[selectedIndex]
+                binding.messageHolder.threadSelectSimNumber.text = currentSIMCard.id.toString()
+                numbers.forEach {
+                    config.saveUseSIMIdAtNumber(it, currentSIMCard.subscriptionId)
                 }
-                binding.messageHolder.threadSelectSimIcon.setOnClickListener { showSelector() }
-                binding.messageHolder.threadSelectSimNumber.setOnClickListener { showSelector() }
-            }
+            }.show(binding.messageHolder.threadTypeMessage)
+        }
+        binding.messageHolder.threadSelectSimIcon.setOnClickListener { showSelector() }
+        binding.messageHolder.threadSelectSimNumber.setOnClickListener { showSelector() }
 
-            binding.messageHolder.threadSelectSimNumber.setTextColor(Color.WHITE)
-            try {
-                @SuppressLint("SetTextI18n")
-                binding.messageHolder.threadSelectSimNumber.text =
-                    (availableSIMCards[currentSIMCardIndex].id).toString()
-            } catch (e: Exception) {
-                showErrorToast(e)
-            }
+        binding.messageHolder.threadSelectSimNumber.setTextColor(Color.WHITE)
+        try {
+            @SuppressLint("SetTextI18n")
+            val currentCard = availableSIMCards.getOrNull(currentSIMCardIndex) ?: availableSIMCards.first()
+            binding.messageHolder.threadSelectSimNumber.text = currentCard.id.toString()
+        } catch (e: Exception) {
+            showErrorToast(e)
         }
     }
 
     @SuppressLint("MissingPermission")
     private fun getProperSimIndex(
-        availableSIMs: MutableList<SubscriptionInfo>,
+        availableSIMs: List<SubscriptionInfo>,
         numbers: List<String>,
     ): Int {
-        val userPreferredSimId = config.getUseSIMIdAtNumber(numbers.first())
-        val userPreferredSimIdx =
+        val targetNumber = numbers.firstOrNull()
+        val userPreferredSimIdx = if (!targetNumber.isNullOrBlank()) {
+            val userPreferredSimId = config.getUseSIMIdAtNumber(targetNumber)
             availableSIMs.indexOfFirstOrNull { it.subscriptionId == userPreferredSimId }
+        } else {
+            null
+        }
 
         val lastMessage = messages.lastOrNull()
         val senderPreferredSimIdx = if (lastMessage?.isReceivedMessage() == true) {

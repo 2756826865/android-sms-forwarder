@@ -16,3 +16,7 @@ fastlane/report.xml
 logcat*.txt
 *.log
 *.py
+.workbuddy-ai/
+*.rar
+*.zip
+outputs/

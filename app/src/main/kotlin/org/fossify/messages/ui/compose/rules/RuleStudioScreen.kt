@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -31,6 +32,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -69,6 +71,8 @@ import org.fossify.messages.ui.compose.theme.SurfaceCard
 import org.fossify.messages.ui.compose.theme.TextPrimary
 import org.fossify.messages.ui.compose.theme.TextSecondary
 import org.fossify.messages.ui.compose.theme.TextTertiary
+import org.fossify.messages.ui.compose.navigation.GatewayDockContentPadding
+import org.fossify.messages.ui.compose.navigation.LocalGatewayBottomPadding
 
 enum class TemplatePreset(val mode: Int, val label: String, val emoji: String) {
     COMPACT(MultiForwardConfig.TEMPLATE_COMPACT, "紧凑模式", "📱"),
@@ -166,7 +170,12 @@ fun RuleStudioScreen(
     )
 
     Scaffold(
-        containerColor = pageBgColor
+        containerColor = pageBgColor,
+        contentWindowInsets = if (embeddedTemplateOnly) {
+            WindowInsets(0, 0, 0, 0)
+        } else {
+            ScaffoldDefaults.contentWindowInsets
+        }
     ) { innerPadding ->
         Column(
             modifier = Modifier
@@ -832,7 +841,13 @@ fun RuleStudioScreen(
 
                 }
 
-                item { Spacer(modifier = Modifier.height(120.dp)) }
+                item {
+                    Spacer(
+                        modifier = Modifier.height(
+                            if (embeddedTemplateOnly) LocalGatewayBottomPadding.current else 24.dp
+                        )
+                    )
+                }
             }
         }
     }

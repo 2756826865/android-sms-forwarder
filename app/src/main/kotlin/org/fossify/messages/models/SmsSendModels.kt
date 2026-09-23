@@ -20,6 +20,7 @@ enum class SmsSendTriggerType {
     REMOTE_EMAIL_COMMAND,
     REMOTE_TELEGRAM_COMMAND,
     REMOTE_WEBSOCKET_COMMAND,
+    AUTO_REPLY,
     UI,
     RECOVERY,
     /** Used when the send chain is instrumented but the caller's trigger is unknown (legacy code paths). */

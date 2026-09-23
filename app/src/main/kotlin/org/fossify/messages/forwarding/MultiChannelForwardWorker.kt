@@ -323,7 +323,12 @@ class MultiChannelForwardWorker(
                         val target = if (qmsgKey.isNotBlank()) qmsgKey else onebotUrl
                         val type = if (qmsgKey.isNotBlank()) "qmsg" else "onebot"
                         check(target.isNotBlank()) { "QQ 机器人未配置 Key 或 Webhook" }
-                        sendQq(target, type, title, content)
+                        sendQq(
+                            target, type, title, content,
+                            instance.optString("accessToken"),
+                            instance.optString("targetType").ifBlank { "private" },
+                            instance.optString("targetId")
+                        )
                     }
                     ForwardingChannels.SMS_DIRECT -> {
                         val phone = instance.optString("phone")
@@ -575,7 +580,12 @@ class MultiChannelForwardWorker(
                         val onebotUrl = instance.optString("onebotUrl")
                         val target = qmsgKey.ifBlank { onebotUrl }
                         check(target.isNotBlank()) { "QQ 机器人未配置 Key 或 Webhook" }
-                        sendQq(target, if (qmsgKey.isNotBlank()) "qmsg" else "onebot", title, content)
+                        sendQq(
+                            target, if (qmsgKey.isNotBlank()) "qmsg" else instance.optString("type").ifBlank { "onebot" }, title, content,
+                            instance.optString("accessToken"),
+                            instance.optString("targetType").ifBlank { "private" },
+                            instance.optString("targetId")
+                        )
                     }
                     ForwardingChannels.SMS_DIRECT -> sendSmsDirect(
                         instance.optString("phone"), content, subscriptionId, isTest
@@ -1063,14 +1073,39 @@ class MultiChannelForwardWorker(
         check(sendRes.optInt("errcode", -1) == 0) { sendRes.optString("errmsg", "微信测试号模板消息发送失败") }
     }
 
-    private fun sendQq(webhookOrKey: String, type: String, title: String, content: String) {
+    private fun sendQq(
+        webhookOrKey: String,
+        type: String,
+        title: String,
+        content: String,
+        accessToken: String = "",
+        targetType: String = "private",
+        targetId: String = ""
+    ) {
         require(webhookOrKey.isNotBlank()) { "QQ 消息配置不能为空" }
         val text = "【$title】\n$content"
         if (type == "qmsg" || !webhookOrKey.startsWith("http")) {
             val url = "https://qmsg.zendee.cn/send/$webhookOrKey"
             postJson(url, JSONObject().put("msg", text))
         } else {
-            postJson(webhookOrKey, JSONObject().put("message", text))
+            require(targetId.isNotBlank()) { "OneBot 11 必须配置 user_id 或 group_id" }
+            val isGroup = targetType == "group"
+            val action = if (isGroup) "send_group_msg" else "send_private_msg"
+            val idField = if (isGroup) "group_id" else "user_id"
+            val baseUrl = webhookOrKey.trim().trimEnd('/')
+                .removeSuffix("/send_private_msg")
+                .removeSuffix("/send_group_msg")
+            val payload = JSONObject()
+                .put(idField, targetId.toLongOrNull() ?: targetId)
+                .put("message", text)
+                .put("auto_escape", false)
+            val headers = if (accessToken.isBlank()) emptyMap() else {
+                mapOf("Authorization" to "Bearer ${accessToken.trim()}")
+            }
+            val response = postJson("$baseUrl/$action", payload, headers)
+            check(response.optInt("retcode", 0) == 0 && response.optString("status", "ok") != "failed") {
+                response.optString("message").ifBlank { response.optString("wording", "OneBot 11 发送失败") }
+            }
         }
     }
 

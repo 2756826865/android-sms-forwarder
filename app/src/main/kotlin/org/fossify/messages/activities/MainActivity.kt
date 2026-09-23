@@ -506,16 +506,20 @@ class MainActivity : SimpleActivity() {
         val dockBaseMargin = resources.getDimensionPixelSize(R.dimen.home_bottom_nav_bottom_margin)
         val fabBaseMargin = resources.getDimensionPixelSize(R.dimen.home_fab_bottom_margin)
         ViewCompat.setOnApplyWindowInsetsListener(binding.mainCoordinator) { _, insets ->
-            val navigationBottom = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
+            val nav = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
+            val tappable = insets.getInsets(WindowInsetsCompat.Type.tappableElement()).bottom
+            val gestures = insets.getInsets(WindowInsetsCompat.Type.systemGestures()).bottom
+            val safeBottom = maxOf(nav, tappable, gestures)
+
             (binding.homeBottomNavigation.layoutParams as? ViewGroup.MarginLayoutParams)?.let { params ->
-                if (params.bottomMargin != dockBaseMargin + navigationBottom) {
-                    params.bottomMargin = dockBaseMargin + navigationBottom
+                if (params.bottomMargin != dockBaseMargin + safeBottom) {
+                    params.bottomMargin = dockBaseMargin + safeBottom
                     binding.homeBottomNavigation.layoutParams = params
                 }
             }
             (binding.conversationsFab.layoutParams as? ViewGroup.MarginLayoutParams)?.let { params ->
-                if (params.bottomMargin != fabBaseMargin + navigationBottom) {
-                    params.bottomMargin = fabBaseMargin + navigationBottom
+                if (params.bottomMargin != fabBaseMargin + safeBottom) {
+                    params.bottomMargin = fabBaseMargin + safeBottom
                     binding.conversationsFab.layoutParams = params
                 }
             }

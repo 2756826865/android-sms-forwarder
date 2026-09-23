@@ -483,6 +483,12 @@ class DeviceCompatibilityActivity : SimpleActivity() {
                 brand == org.fossify.messages.helpers.DeviceCompatHelper.DeviceBrand.REDMI ||
                 brand == org.fossify.messages.helpers.DeviceCompatHelper.DeviceBrand.POCO ->
                 R.string.compatibility_brand_xiaomi_title to R.string.compatibility_brand_xiaomi_advice
+            brand == org.fossify.messages.helpers.DeviceCompatHelper.DeviceBrand.OPPO ||
+                brand == org.fossify.messages.helpers.DeviceCompatHelper.DeviceBrand.ONEPLUS ||
+                brand == org.fossify.messages.helpers.DeviceCompatHelper.DeviceBrand.REALME ->
+                R.string.compatibility_brand_coloros_title to R.string.compatibility_brand_coloros_advice
+            brand == org.fossify.messages.helpers.DeviceCompatHelper.DeviceBrand.MEIZU ->
+                R.string.compatibility_brand_meizu_title to R.string.compatibility_brand_meizu_advice
             else -> R.string.compatibility_brand_other_title to R.string.compatibility_brand_other_advice
         }
         binding.compatibilityBrandTitle.setText(title)
