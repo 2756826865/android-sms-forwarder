@@ -81,6 +81,7 @@ class RuleEditorViewModel(
                 availableInstances = instances
             )
         }
+        runLiveTest()
     }
 
     fun updateName(name: String) {
@@ -89,6 +90,7 @@ class RuleEditorViewModel(
 
     fun updateEnabled(enabled: Boolean) {
         _uiState.update { it.copy(enabled = enabled) }
+        runLiveTest()
     }
 
     fun updatePriority(priority: Int) {
@@ -240,13 +242,40 @@ class RuleEditorViewModel(
             }
         )
 
-        val summary = if (decision.targets.isNotEmpty()) {
-            val names = decision.targets.map { t ->
-                state.availableInstances.firstOrNull { it.id == t.instanceId }?.name ?: t.channelType
-            }.joinToString("、")
-            "✅ 匹配成功！命中 ${decision.targets.size} 个通道实例：$names"
-        } else {
-            "❌ 未命中：${decision.reason}"
+        val activeConditions = draftRule.conditions.filter { it.enabled }
+        val selectedInstances = draftRule.actions.mapNotNull { action ->
+            state.availableInstances.firstOrNull { it.id == action.targetInstanceId }
+        }
+        val missingActionCount = draftRule.actions.count { action ->
+            state.availableInstances.none { it.id == action.targetInstanceId }
+        }
+        val enabledInstances = selectedInstances.filter { it.enabled }
+
+        val summary = when {
+            activeConditions.isEmpty() ->
+                "⚠️ 尚未添加启用的匹配条件"
+
+            decision.matchedRules.isEmpty() ->
+                "❌ 条件未命中：${decision.reason}"
+
+            draftRule.actions.isEmpty() ->
+                "⚠️ 条件已命中，但尚未指定转发通道"
+
+            missingActionCount > 0 && enabledInstances.isEmpty() ->
+                "⚠️ 条件已命中，但所选通道实例已不存在"
+
+            enabledInstances.isEmpty() ->
+                "⚠️ 条件已命中，但所选通道实例均已停用"
+
+            else -> {
+                val names = enabledInstances.map { it.name.ifBlank { it.channelType } }.distinct().joinToString("、")
+                val unavailableCount = draftRule.actions.size - enabledInstances.size
+                if (unavailableCount > 0) {
+                    "✅ 条件已命中，将转发至：$names；另有 $unavailableCount 个目标不可用"
+                } else {
+                    "✅ 条件已命中，将转发至：$names"
+                }
+            }
         }
 
         val rendered = decision.targets.firstOrNull()?.renderedContent ?: engine.applyRegexReplacements(state.testBody, draftRule.regexReplacements)
