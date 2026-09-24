@@ -330,6 +330,7 @@ fun ConversationsScreen(
                         )
                     }
                 }
+            } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(
