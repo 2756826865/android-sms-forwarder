@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 修复开发版在存在短信会话时反而不渲染列表的条件分支错误。
 - 补齐开发版首次启动的短信权限初始化，并在收到短信或会话刷新事件时更新 Compose 列表。
 - 修正签名 APK 工作流的 JDK 版本，并允许热修复构建覆盖已有 `v1.2.0` Release 附件。
+- 修复规则实时测试将“条件命中但没有可用通道”误报为“未命中”的问题，匹配状态与投递状态现在分别诊断。
+- 新增规则测试 SIM1、SIM2 与未知卡槽选择，并明确提示未配置条件、未选择目标、目标被删除或停用等状态。
+- 将未成功投递时的正文区域改为“规则处理后的正文预览”，避免误认为消息已经发往通道。
 
 ### 🎨 底栏与 Insets 混合架构重构 (Hybrid Navigation & Edge-to-Edge Architecture)
 - **🌟 第三种混合适配架构落地 (`GatewayApp.kt` / 各子界面)**：
