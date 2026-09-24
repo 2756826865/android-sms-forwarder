@@ -126,7 +126,11 @@ class MainActivity : SimpleActivity() {
     private val receiveSmsPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
-        if (!granted) toast(R.string.receive_sms_permission_required)
+        if (!granted) {
+            toast(R.string.receive_sms_permission_required)
+        } else if (config.useGatewayDeveloperUi) {
+            conversationsViewModel?.refresh(isInitial = false)
+        }
     }
     private val makeDefaultSmsAppLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -136,7 +140,7 @@ class MainActivity : SimpleActivity() {
     private val legacyDefaultSmsAppLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) {
-        askPermissions()
+        if (config.useGatewayDeveloperUi) ensureGatewaySmsPermissions() else askPermissions()
     }
 
     @SuppressLint("InlinedApi")
@@ -229,6 +233,32 @@ class MainActivity : SimpleActivity() {
                     }
                 )
             }
+        }
+
+        registerConversationEvents()
+        ensureGatewaySmsPermissions()
+    }
+
+    /**
+     * The gateway UI returns from onCreate before the classic initialization path. Request only
+     * the permissions shared by both UIs and refresh Compose state without touching classic views.
+     */
+    private fun ensureGatewaySmsPermissions() {
+        handlePermission(PERMISSION_READ_SMS) { hasReadSms ->
+            if (hasReadSms) {
+                ensureReceiveSmsPermission()
+                conversationsViewModel?.refresh(isInitial = false)
+            }
+        }
+    }
+
+    private fun registerConversationEvents() {
+        try {
+            bus = EventBus.getDefault()
+            if (bus?.isRegistered(eventSubscriber) == false) {
+                bus?.register(eventSubscriber)
+            }
+        } catch (_: Throwable) {
         }
     }
 
@@ -561,14 +591,14 @@ class MainActivity : SimpleActivity() {
 
     private fun handleDefaultSmsRoleResult(resultCode: Int) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            binding.root.postDelayed({
+            window.decorView.postDelayed({
                 if (!isSmsChainReady() && launchLegacyDefaultSmsRequest()) {
                     return@postDelayed
                 }
-                askPermissions()
+                if (config.useGatewayDeveloperUi) ensureGatewaySmsPermissions() else askPermissions()
             }, ROLE_STATE_SETTLE_DELAY_MS)
         } else {
-            askPermissions()
+            if (config.useGatewayDeveloperUi) ensureGatewaySmsPermissions() else askPermissions()
         }
     }
 
@@ -592,13 +622,7 @@ class MainActivity : SimpleActivity() {
                 ensureReceiveSmsPermission()
             }
             initMessenger()
-            try {
-                bus = EventBus.getDefault()
-                if (bus?.isRegistered(eventSubscriber) == false) {
-                    bus?.register(eventSubscriber)
-                }
-            } catch (_: Throwable) {
-            }
+            registerConversationEvents()
         }
     }
 
@@ -1084,8 +1108,17 @@ class MainActivity : SimpleActivity() {
     private val eventSubscriber = object {
         @Subscribe(threadMode = ThreadMode.MAIN)
         fun refreshConversations(@Suppress("unused") event: Events.RefreshConversations) {
-            if (!config.useGatewayDeveloperUi) {
+            if (config.useGatewayDeveloperUi) {
+                conversationsViewModel?.refresh(isInitial = false)
+            } else {
                 initMessenger()
+            }
+        }
+
+        @Subscribe(threadMode = ThreadMode.MAIN)
+        fun refreshMessages(@Suppress("unused") event: Events.RefreshMessages) {
+            if (config.useGatewayDeveloperUi) {
+                conversationsViewModel?.refresh(isInitial = false)
             }
         }
     }
