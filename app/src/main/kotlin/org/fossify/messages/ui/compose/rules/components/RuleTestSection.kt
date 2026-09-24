@@ -14,6 +14,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -88,6 +89,43 @@ fun RuleTestSection(
             )
         )
 
+        Spacer(modifier = Modifier.height(10.dp))
+
+        Text(
+            text = "测试接收卡槽",
+            fontSize = 12.sp,
+            color = secondaryText
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            listOf(
+                0 to "SIM 1",
+                1 to "SIM 2",
+                null to "未知"
+            ).forEach { (slot, label) ->
+                val selected = simSlot == slot
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = if (selected) MaterialTheme.colorScheme.primary else borderColor,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    TextButton(
+                        onClick = { onUpdate(sender, body, slot) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = label,
+                            fontSize = 12.sp,
+                            color = if (selected) Color.White else primaryText
+                        )
+                    }
+                }
+            }
+        }
+
         Spacer(modifier = Modifier.height(12.dp))
 
         // 匹配诊断状态卡
@@ -117,7 +155,7 @@ fun RuleTestSection(
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     Text(
-                        text = "最终投递给通道实例的正文：",
+                        text = "规则处理后的正文预览：",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = GatewayBlue
