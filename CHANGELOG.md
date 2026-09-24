@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.2.0] - 2026-09-23
 
+### 🛠️ Hotfix
+- 修复开发版在存在短信会话时反而不渲染列表的条件分支错误。
+- 补齐开发版首次启动的短信权限初始化，并在收到短信或会话刷新事件时更新 Compose 列表。
+- 修正签名 APK 工作流的 JDK 版本，并允许热修复构建覆盖已有 `v1.2.0` Release 附件。
+
 ### 🎨 底栏与 Insets 混合架构重构 (Hybrid Navigation & Edge-to-Edge Architecture)
 - **🌟 第三种混合适配架构落地 (`GatewayApp.kt` / 各子界面)**：
   - **全屏穿透沉浸感**：根容器与页面容器解除外层强制 bottom padding 截断，列表卡片可流畅滑动至现代半透明悬浮胶囊 Dock 背后，呈现高质量层叠视觉效果；
@@ -728,4 +733,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [1.1.0]: https://github.com/FossifyOrg/Messages/compare/1.0.1...1.1.0
 [1.0.1]: https://github.com/FossifyOrg/Messages/compare/1.0.0...1.0.1
 [1.0.0]: https://github.com/FossifyOrg/Messages/releases/tag/1.0.0
-
