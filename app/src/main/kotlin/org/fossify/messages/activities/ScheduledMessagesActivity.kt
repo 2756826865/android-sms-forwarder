@@ -9,6 +9,7 @@ import android.view.View
 import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
 import org.fossify.commons.extensions.getTimeFormat
+import org.fossify.commons.extensions.showErrorToast
 import org.fossify.commons.extensions.viewBinding
 import org.fossify.commons.helpers.NavigationIcon
 import org.fossify.commons.helpers.ensureBackgroundThread
@@ -132,14 +133,22 @@ class ScheduledMessagesActivity : SimpleActivity() {
 
     private fun sendNow(message: Message) {
         ensureBackgroundThread {
-            sendMessageCompat(
-                text = message.body,
-                addresses = message.participants.getAddresses(),
-                subId = message.subscriptionId,
-                attachments = emptyList(),
-                triggerType = org.fossify.messages.models.SmsSendTriggerType.SCHEDULED_SEND_NOW
-            )
-            removeScheduledMessage(message)
+            runCatching {
+                sendMessageCompat(
+                    text = message.body,
+                    addresses = message.participants.getAddresses(),
+                    subId = message.subscriptionId,
+                    attachments = emptyList(),
+                    propagateErrors = true,
+                    triggerType = org.fossify.messages.models.SmsSendTriggerType.SCHEDULED_SEND_NOW
+                )
+            }.onSuccess {
+                removeScheduledMessage(message)
+            }.onFailure { error ->
+                runOnUiThread {
+                    showErrorToast(error.localizedMessage ?: getString(org.fossify.commons.R.string.unknown_error_occurred))
+                }
+            }
             runOnUiThread { loadMessages() }
         }
     }
@@ -160,11 +169,9 @@ class ScheduledMessagesActivity : SimpleActivity() {
 
     private fun removeScheduledMessage(message: Message) {
         cancelScheduleSendPendingIntent(message.id)
-        ensureBackgroundThread {
-            deleteScheduledMessage(message.id)
-            if (messagesDB.getNonRecycledThreadMessages(message.threadId).isEmpty()) {
-                conversationsDB.deleteThreadId(message.threadId)
-            }
+        deleteScheduledMessage(message.id)
+        if (messagesDB.getNonRecycledThreadMessages(message.threadId).isEmpty()) {
+            conversationsDB.deleteThreadId(message.threadId)
         }
     }
 }

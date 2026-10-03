@@ -3,8 +3,6 @@ package org.fossify.messages.receivers
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.os.Handler
-import android.os.Looper
 import android.os.PowerManager
 import org.fossify.commons.extensions.showErrorToast
 import org.fossify.commons.helpers.ensureBackgroundThread
@@ -58,17 +56,16 @@ class ScheduledMessageReceiver : BroadcastReceiver() {
         val attachments = message.attachment?.attachments ?: emptyList()
 
         try {
-            Handler(Looper.getMainLooper()).post {
-                context.sendMessageCompat(
-                    text = message.body,
-                    addresses = addresses,
-                    subId = message.subscriptionId,
-                    attachments = attachments,
-                    triggerType = org.fossify.messages.models.SmsSendTriggerType.SCHEDULED_ALARM
-                )
-            }
+            context.sendMessageCompat(
+                text = message.body,
+                addresses = addresses,
+                subId = message.subscriptionId,
+                attachments = attachments,
+                propagateErrors = true,
+                triggerType = org.fossify.messages.models.SmsSendTriggerType.SCHEDULED_ALARM
+            )
 
-            // delete temporary conversation and message as it's already persisted to the telephony db now
+            // Keep the schedule if submission throws; it may still need manual review.
             context.deleteScheduledMessage(messageId)
             context.conversationsDB.deleteThreadId(messageId)
             refreshMessages()

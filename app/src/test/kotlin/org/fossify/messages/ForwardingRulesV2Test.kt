@@ -19,6 +19,28 @@ import java.util.Calendar
 class ForwardingRulesV2Test {
 
     @Test
+    fun diagnosticExplainsInvalidRegexWithoutLeakingContent() {
+        val rule = ForwardingRule(name = "test", enabled = true, conditions = listOf(
+            ForwardingRuleCondition(field = RuleTargetField.BODY, operator = RuleOperator.REGEX, value = "[")
+        ))
+        val decision = ForwardingRuleEngine(listOf(rule)).evaluate("private-number", "secret-body", -1, emptySet())
+        assertTrue(decision.diagnostics.any { it.contains("正则表达式无效") })
+        assertFalse(decision.diagnostics.joinToString().contains("secret-body"))
+        assertFalse(decision.diagnostics.joinToString().contains("private-number"))
+    }
+
+    @Test
+    fun diagnosticExplainsEachConditionInAllRelation() {
+        val rule = ForwardingRule(name = "test", enabled = true, conditions = listOf(
+            ForwardingRuleCondition(field = RuleTargetField.SENDER, operator = RuleOperator.EQUALS, value = "10086"),
+            ForwardingRuleCondition(field = RuleTargetField.BODY, operator = RuleOperator.CONTAINS, value = "验证码")
+        ))
+        val detail = ForwardingRuleEngine(listOf(rule)).explainConditions(rule, "10086", "普通通知")
+        assertTrue(detail.any { it.contains("条件 1") && it.endsWith("满足") })
+        assertTrue(detail.any { it.contains("条件 2") && it.endsWith("不满足") })
+    }
+
+    @Test
     fun testNewRuleDefaults() {
         val rule = ForwardingRule(name = "测试默认值")
         assertFalse(rule.enabled)

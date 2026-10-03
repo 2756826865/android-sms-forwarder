@@ -29,7 +29,7 @@ class AutoReplyConfig(context: Context) {
         "已启用 · ${rules.count { it.enabled }} 条生效规则 · 每日上限 $dailyLimit 条"
     }
 
-    private fun encodeRules(rules: List<AutoReplyRule>): String = JSONArray().apply {
+    fun encodeRules(rules: List<AutoReplyRule>): String = JSONArray().apply {
         rules.forEach { rule ->
             put(
                 JSONObject()
@@ -49,7 +49,7 @@ class AutoReplyConfig(context: Context) {
         }
     }.toString()
 
-    private fun decodeRules(value: String): List<AutoReplyRule> = runCatching {
+    fun decodeRules(value: String): List<AutoReplyRule> = runCatching {
         if (value.isBlank()) return@runCatching emptyList()
         val array = JSONArray(value)
         buildList {

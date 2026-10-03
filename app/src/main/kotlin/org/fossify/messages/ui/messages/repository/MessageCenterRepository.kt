@@ -19,7 +19,7 @@ class MessageCenterRepository(private val context: Context) {
 
         operations.map { op ->
             val parts = smsDao.getPartsByOperationId(op.sendOperationId)
-            val partsDelivered = parts.count { it.deliveredState == "DELIVERED" || it.deliveredResultCode == 0 }
+            val partsDelivered = parts.count { it.deliveredState == "DELIVERED" }
             MessageHistoryItem(
                 operationId = op.sendOperationId,
                 triggerType = op.triggerType,

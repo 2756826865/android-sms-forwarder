@@ -789,6 +789,26 @@ private fun RemoteSourceCard(
                     color = TextSecondary
                 )
             }
+            if (source.type == RemoteSourceType.FEISHU && source.lastConnectedAt > 0L) {
+                Spacer(modifier = Modifier.height(6.dp))
+                val connectedAt = SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault())
+                    .format(Date(source.lastConnectedAt))
+                Text(
+                    text = "最近连接成功: $connectedAt",
+                    fontSize = 11.sp,
+                    color = TextSecondary
+                )
+            }
+            if (source.type == RemoteSourceType.FEISHU &&
+                source.connectionState == RemoteSourceConnectionState.ERROR && source.lastErrorMessage.isNotBlank()
+            ) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = source.lastErrorMessage.take(120),
+                    fontSize = 11.sp,
+                    color = GatewayOrange
+                )
+            }
 
             Spacer(modifier = Modifier.height(10.dp))
 

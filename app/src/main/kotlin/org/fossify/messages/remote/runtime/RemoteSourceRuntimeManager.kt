@@ -20,6 +20,7 @@ import org.fossify.messages.services.FeishuRemoteControlService
 import org.fossify.messages.services.TelegramRemoteControlService
 import org.fossify.messages.services.WebSocketRemoteControlService
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * 远程指令来源唯一运行时管理器
@@ -126,7 +127,7 @@ class RemoteSourceRuntimeManager private constructor(private val appContext: Con
      * 4. 联动前台守护服务状态。
      */
     @Synchronized
-    fun sync() {
+    fun sync(startForegroundServices: Boolean = true) {
         val repo = RemoteSourceRepository.getInstance(appContext)
         val enabledSources = repo.getEnabledSources()
         val runnableSources = enabledSources.filter { it.hasValidCredentials() }
@@ -161,7 +162,7 @@ class RemoteSourceRuntimeManager private constructor(private val appContext: Con
         }
 
         // 3. 联动前台守护服务状态 (仅依据 Repository 事实源)
-        syncForegroundServices(runnableSources)
+        if (startForegroundServices) syncForegroundServices(runnableSources)
     }
 
     /**
@@ -241,6 +242,8 @@ class RemoteSourceRuntimeManager private constructor(private val appContext: Con
                             MultiForwardConfig(appContext).appendDingTalkRemoteLog("[${instance.name}] $status")
                             if (status.contains("连接成功") || status.contains("已连接") || status.contains("就绪")) {
                                 repo.updateConnectionState(instance.id, RemoteSourceConnectionState.READY)
+                            } else if (status.contains("正在连接") || status.contains("已断开")) {
+                                repo.updateConnectionState(instance.id, RemoteSourceConnectionState.CONNECTING)
                             } else if (status.contains("失败") || status.contains("异常") || status.contains("终止")) {
                                 repo.updateConnectionState(instance.id, RemoteSourceConnectionState.ERROR, errorMessage = status)
                             }
@@ -277,7 +280,7 @@ class RemoteSourceRuntimeManager private constructor(private val appContext: Con
                                     "receiptTarget" to if (cmd.chatId.isNotBlank()) {
                                         "chat_id:${cmd.chatId}"
                                     } else {
-                                        "open_id:${cmd.senderId}"
+                                        "${cmd.senderIdType}:${cmd.senderId}"
                                     }
                                 )
                             )
@@ -289,6 +292,8 @@ class RemoteSourceRuntimeManager private constructor(private val appContext: Con
                             MultiForwardConfig(appContext).appendFeishuRemoteLog("[${instance.name}] $status")
                             if (status.contains("已就绪") || status.contains("已连接")) {
                                 repo.updateConnectionState(instance.id, RemoteSourceConnectionState.READY)
+                            } else if (status.contains("正在连接") || status.contains("正在重连")) {
+                                repo.updateConnectionState(instance.id, RemoteSourceConnectionState.CONNECTING)
                             } else if (status.contains("失败") || status.contains("异常")) {
                                 repo.updateConnectionState(instance.id, RemoteSourceConnectionState.ERROR, errorMessage = status)
                             }
@@ -473,6 +478,22 @@ class RemoteSourceRuntimeManager private constructor(private val appContext: Con
 
     companion object {
         private const val TAG = "RemoteSourceRuntime"
+        private val restoringAfterServiceRestart = AtomicBoolean(false)
+
+        /** A sticky foreground service may return in a new process before any Activity starts. */
+        fun restoreAfterServiceRestart(context: Context) {
+            if (!restoringAfterServiceRestart.compareAndSet(false, true)) return
+            val appContext = context.applicationContext
+            Thread {
+                try {
+                    getInstance(appContext).sync(startForegroundServices = false)
+                } catch (error: Exception) {
+                    Log.e(TAG, "Remote source restore failed", error)
+                } finally {
+                    restoringAfterServiceRestart.set(false)
+                }
+            }.apply { name = "remote-source-restore"; start() }
+        }
 
         @Volatile
         private var INSTANCE: RemoteSourceRuntimeManager? = null

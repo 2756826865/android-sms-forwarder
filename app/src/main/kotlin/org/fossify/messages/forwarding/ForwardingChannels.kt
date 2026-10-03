@@ -3,6 +3,7 @@ package org.fossify.messages.forwarding
 object ForwardingChannels {
     const val ALL = "all"
     const val PUSHPLUS = "pushplus"
+    const val WXPUSHER = "wxpusher"
     const val WECHAT_TEST = "wechat_test"
     const val QQ = "qq"
     const val WECOM_APP = "wecom_app"
@@ -27,23 +28,24 @@ object ForwardingChannels {
     const val SERVERCHAN3 = "serverchan3"
 
     val networkChannels = setOf(
-        PUSHPLUS, WECHAT_TEST, QQ, WECOM_APP, WECOM, WECOM_BOT, WECOM_STREAM,
+        PUSHPLUS, WXPUSHER, WECHAT_TEST, QQ, WECOM_APP, WECOM, WECOM_BOT, WECOM_STREAM,
         FEISHU_APP, FEISHU_BOT, FEISHU, DINGTALK, BARK, WEBSOCKET,
         TELEGRAM, DISCORD, TENCENT_CLOUD, EMAIL, CUSTOM_WEBHOOK, GOTIFY, NTFY, SERVERCHAN3
     )
 
     val allRuleChannels = listOf(
-        PUSHPLUS, WECHAT_TEST, QQ, WECOM_APP, WECOM_BOT, WECOM_STREAM,
+        PUSHPLUS, WXPUSHER, WECHAT_TEST, QQ, WECOM_APP, WECOM_BOT, WECOM_STREAM,
         FEISHU_APP, FEISHU_BOT, DINGTALK, BARK, WEBSOCKET,
         TELEGRAM, DISCORD, TENCENT_CLOUD, EMAIL, SMS_DIRECT, CUSTOM_WEBHOOK, CHANNEL_GROUP, GOTIFY, NTFY, SERVERCHAN3
     )
 
     val lowBatteryChannels = listOf(
-        PUSHPLUS, BARK, GOTIFY, NTFY, SERVERCHAN3, DINGTALK, FEISHU, WECOM, WECOM_BOT, WECOM_STREAM, EMAIL, SMS_DIRECT
+        PUSHPLUS, WXPUSHER, BARK, GOTIFY, NTFY, SERVERCHAN3, DINGTALK, FEISHU, WECOM, WECOM_BOT, WECOM_STREAM, EMAIL, SMS_DIRECT
     )
 
     fun displayName(channel: String): String = when (channel) {
         PUSHPLUS -> "PushPlus 微信推送"
+        WXPUSHER -> "WxPusher 消息推送"
         WECHAT_TEST -> "微信测试号"
         QQ -> "QQ 消息 (Qmsg/OneBot)"
         WECOM, WECOM_APP -> "企业微信应用号"

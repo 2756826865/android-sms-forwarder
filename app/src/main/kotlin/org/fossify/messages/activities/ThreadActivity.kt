@@ -231,6 +231,7 @@ class ThreadActivity : SimpleActivity() {
 
     private var isScheduledMessage: Boolean = false
     private var isGroupMessageConfirmationVisible = false
+    private var sendInProgress = false
     private var messageToResend: Long? = null
     private var scheduledMessage: Message? = null
     private lateinit var scheduledDateTime: DateTime
@@ -264,8 +265,11 @@ class ThreadActivity : SimpleActivity() {
         findViewById<View>(android.R.id.content)?.setBackgroundColor(threadBg)
         setupOptionsMenu()
         refreshMenuItems()
-        setupEdgeToEdge(padTopSystem = listOf(binding.threadAppbar))
-        setupComposerInsets()
+        setupEdgeToEdge(
+            padTopSystem = listOf(binding.threadAppbar),
+        )
+        setupThreadBottomInsets()
+        setupComposerPositionShortcut()
         setupMessagingEdgeToEdge()
         setupMaterialScrollListener(null, binding.threadAppbar)
 
@@ -1740,14 +1744,15 @@ class ThreadActivity : SimpleActivity() {
 
     private fun checkSendMessageAvailability() {
         binding.messageHolder.apply {
-            if (threadTypeMessage.text!!.isNotEmpty() || (getAttachmentSelections().isNotEmpty() && !getAttachmentSelections().any { it.isPending })) {
+            if (!sendInProgress && (threadTypeMessage.text!!.isNotEmpty() ||
+                    (getAttachmentSelections().isNotEmpty() && !getAttachmentSelections().any { it.isPending }))) {
                 threadSendMessage.isEnabled = true
                 threadSendMessage.isClickable = true
                 threadSendMessage.alpha = 1f
             } else {
                 threadSendMessage.isEnabled = false
                 threadSendMessage.isClickable = false
-                threadSendMessage.alpha = 1f
+                threadSendMessage.alpha = 0.5f
             }
             updateSendButtonDrawable()
         }
@@ -1845,42 +1850,72 @@ class ThreadActivity : SimpleActivity() {
     }
 
     private fun sendNormalMessage(text: String, subscriptionId: Int) {
+        if (sendInProgress) return
         val addresses = participants.getAddresses()
         val attachments = buildMessageAttachments()
+        val draftText = binding.messageHolder.threadTypeMessage.value
+        val draftAttachments = getAttachmentSelections().toList()
+        val resendMessageId = messageToResend
 
         try {
             refreshedSinceSent = false
+            sendInProgress = true
+            checkSendMessageAvailability()
             ensureBackgroundThread {
-                // 1. 在后台线程执行发送，避免 Room 主线程访问异常
-                sendMessageCompat(
-                    text = text,
-                    addresses = addresses,
-                    subId = subscriptionId,
-                    attachments = attachments,
-                    messageId = messageToResend,
-                    triggerType = org.fossify.messages.models.SmsSendTriggerType.THREAD
-                )
-                
-                val number = addresses.firstOrNull()
-                val synced = syncThreadToLocal(threadId, address = number)
-                val localMsgs = messagesDB.getThreadMessages(threadId)
-                
-                // 以 ID 为准去重合并，LocalDB 的记录具有更高优先级（保留 pending 状态）
-                val byId = (localMsgs + synced).associateBy { it.id }.toMutableMap()
-                messages = byId.values.toList().toSortedMessages()
-                
-                val newItems = getThreadItems()
+                try {
+                    sendMessageCompat(
+                        text = text,
+                        addresses = addresses,
+                        subId = subscriptionId,
+                        attachments = attachments,
+                        messageId = resendMessageId,
+                        propagateErrors = true,
+                        triggerType = org.fossify.messages.models.SmsSendTriggerType.THREAD
+                    )
+                } catch (e: Exception) {
+                    runOnUiThread {
+                        sendInProgress = false
+                        checkSendMessageAvailability()
+                        showErrorToast(e)
+                    }
+                    return@ensureBackgroundThread
+                }
+
                 runOnUiThread {
-                    threadItems = newItems
-                    getOrCreateThreadAdapter().updateMessages(newItems, newItems.lastIndex)
-                    if (!refreshedSinceSent) {
-                        refreshMessages()
+                    sendInProgress = false
+                    if (binding.messageHolder.threadTypeMessage.value == draftText &&
+                        getAttachmentSelections() == draftAttachments
+                    ) {
+                        clearCurrentMessage()
+                    } else {
+                        checkSendMessageAvailability()
                     }
                 }
-                refreshConversations()
+                try {
+                    val number = addresses.firstOrNull()
+                    val synced = syncThreadToLocal(threadId, address = number)
+                    val localMsgs = messagesDB.getThreadMessages(threadId)
+
+                    // Prefer the local pending record when the same provider ID is present.
+                    val byId = (localMsgs + synced).associateBy { it.id }.toMutableMap()
+                    messages = byId.values.toList().toSortedMessages()
+
+                    val newItems = getThreadItems()
+                    runOnUiThread {
+                        threadItems = newItems
+                        getOrCreateThreadAdapter().updateMessages(newItems, newItems.lastIndex)
+                        if (!refreshedSinceSent) {
+                            refreshMessages()
+                        }
+                    }
+                    refreshConversations()
+                } catch (e: Exception) {
+                    android.util.Log.w("ThreadActivity", "SMS submitted; local refresh failed: ${e.javaClass.simpleName}")
+                }
             }
-            clearCurrentMessage()
         } catch (e: Exception) {
+            sendInProgress = false
+            checkSendMessageAvailability()
             showErrorToast(e)
         }
     }
@@ -2364,39 +2399,100 @@ class ThreadActivity : SimpleActivity() {
 
     private fun getBottomBarColor() = Color.TRANSPARENT
 
-    private fun setupComposerInsets() {
-        val messageHolder = binding.messageHolder.root
-        val messageStart = messageHolder.paddingStart
-        val messageTop = messageHolder.paddingTop
-        val messageEnd = messageHolder.paddingEnd
-        val messageBottom = messageHolder.paddingBottom
-        val shortCodeHolder = binding.shortCodeHolder.root
-        val shortStart = shortCodeHolder.paddingStart
-        val shortTop = shortCodeHolder.paddingTop
-        val shortEnd = shortCodeHolder.paddingEnd
-        val shortBottom = shortCodeHolder.paddingBottom
+    /**
+     * Keep the composer above both the IME and OEM navigation areas.
+     *
+     * Some three-button navigation implementations expose the usable bottom inset through
+     * tappable/system-gesture insets while reporting a zero navigation-bar inset.  Padding the
+     * thread container also keeps the message list, short-code warning and composer constrained
+     * to the same usable area instead of moving only the text field.
+     */
+    private var composerOffsetDp = 0
+    private var composerPositionDialog: androidx.appcompat.app.AlertDialog? = null
 
-        ViewCompat.setOnApplyWindowInsetsListener(messageHolder) { view, insets ->
-            val imeBottom = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
-            val systemBottom = insets.getInsets(WindowInsetsCompat.Type.systemBars()).bottom
-            val keyboardExtra = if (insets.isVisible(WindowInsetsCompat.Type.ime())) {
-                (imeBottom - systemBottom).coerceAtLeast(0)
-            } else {
-                0
+    private fun setupComposerPositionShortcut() {
+        val prefs = getSharedPreferences("thread_layout", MODE_PRIVATE)
+        composerOffsetDp = prefs.getInt("composer_offset_dp", 0).coerceIn(0, 160)
+        var taps = 0
+        var lastTap = 0L
+        val listener = View.OnClickListener {
+            val now = android.os.SystemClock.elapsedRealtime()
+            taps = if (now - lastTap <= 1500L) taps + 1 else 1
+            lastTap = now
+            if (taps >= 5) {
+                taps = 0
+                showComposerPositionDialog()
             }
-            view.setPaddingRelative(
-                messageStart,
-                messageTop,
-                messageEnd,
-                messageBottom + keyboardExtra,
-            )
-            insets
         }
+        binding.threadTitleText.setOnClickListener(listener)
+        binding.threadSubtitleText.setOnClickListener(listener)
+        ViewCompat.requestApplyInsets(binding.threadCoordinator)
+    }
 
-        ViewCompat.setOnApplyWindowInsetsListener(shortCodeHolder) { view, insets ->
-            view.setPaddingRelative(shortStart, shortTop, shortEnd, shortBottom)
+    private fun showComposerPositionDialog() {
+        if (composerPositionDialog?.isShowing == true) return
+        val original = composerOffsetDp
+        var saved = false
+        val density = resources.displayMetrics.density
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            val padding = (20 * density).toInt()
+            setPadding(padding, padding, padding, padding)
+        }
+        val label = android.widget.TextView(this)
+        layout.addView(label)
+        fun update() {
+            label.text = "额外上移：${composerOffsetDp} dp\n对所有短信会话生效；下移最多恢复到自动避让位置。"
+            ViewCompat.requestApplyInsets(binding.threadCoordinator)
+        }
+        listOf("上移 +4 dp" to 4, "下移 −4 dp" to -4, "恢复默认" to 0).forEach { (title, step) ->
+            layout.addView(android.widget.Button(this).apply {
+                text = title
+                setOnClickListener {
+                    composerOffsetDp = if (step == 0) 0 else (composerOffsetDp + step).coerceIn(0, 160)
+                    update()
+                }
+            })
+        }
+        update()
+        val dialog = androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("输入栏位置调整")
+            .setView(layout)
+            .setPositiveButton("保存") { _, _ ->
+                saved = true
+                getSharedPreferences("thread_layout", MODE_PRIVATE).edit()
+                    .putInt("composer_offset_dp", composerOffsetDp).apply()
+            }
+            .setNegativeButton("取消", null)
+            .create()
+        composerPositionDialog = dialog
+        dialog.setOnDismissListener {
+            if (!saved) composerOffsetDp = original
+            ViewCompat.requestApplyInsets(binding.threadCoordinator)
+            composerPositionDialog = null
+        }
+        dialog.show()
+    }
+
+    private fun setupThreadBottomInsets() {
+        val start = binding.threadHolder.paddingStart
+        val top = binding.threadHolder.paddingTop
+        val end = binding.threadHolder.paddingEnd
+        val bottom = binding.threadHolder.paddingBottom
+
+        ViewCompat.setOnApplyWindowInsetsListener(binding.threadCoordinator) { _, insets ->
+            val imeVisible = insets.isVisible(WindowInsetsCompat.Type.ime())
+            val resolvedBottom = resolveThreadBottomInset(
+                navigationBottom = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom,
+                tappableBottom = insets.getInsets(WindowInsetsCompat.Type.tappableElement()).bottom,
+                gestureBottom = insets.getInsets(WindowInsetsCompat.Type.systemGestures()).bottom,
+                imeBottom = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom,
+                imeVisible = imeVisible,
+            )
+            binding.threadHolder.setPaddingRelative(start, top, end, bottom + resolvedBottom + (composerOffsetDp * resources.displayMetrics.density).toInt())
             insets
         }
+        ViewCompat.requestApplyInsets(binding.threadCoordinator)
     }
 
     fun setupMessagingEdgeToEdge() {

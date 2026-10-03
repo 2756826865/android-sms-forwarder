@@ -80,6 +80,7 @@ class App : FossifyApp() {
         }
         RecoveryWorker.schedule(this)
         SmsRecoveryWorker.schedule(this)
+        org.fossify.messages.security.root.RootMaintenanceWorker.sync(this)
         LowBatteryCheckWorker.sync(this)
         HeartbeatWorker.sync(this)
         org.fossify.messages.helpers.ShadowCleanupWorker.schedule(this)

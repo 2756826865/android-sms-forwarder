@@ -8,6 +8,7 @@ import org.fossify.messages.forwarding.ForwardingHistoryRecord
  */
 data class DashboardStats(
     // 1. 短信概览卡片
+    val todayReceivedCount: Int = 0,
     val todaySentCount: Int = 0,
     val todaySuccessCount: Int = 0,
     val todayFailedSendCount: Int = 0,

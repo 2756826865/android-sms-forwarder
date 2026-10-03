@@ -161,31 +161,21 @@ fun Context.getMessages(
 
     messages.addAll(getMMS(threadId, sortOrder, dateFrom))
 
-    // 始终合并 LocalDB 记录，防止系统 Provider 暂时性数据缺失导致的 UI 气泡消失
+    // Cached messages provide a fallback, while current provider values remain authoritative.
     val localMessages = try {
-        messagesDB.getThreadMessages(threadId)
+        messagesDB.getNonRecycledThreadMessages(threadId)
     } catch (_: Exception) {
         emptyList()
     }
-    
-    // 以 ID 为准合并，如果 Provider 还没有数据，则保留 LocalDB 里的
-    val allMessagesById = (messages + localMessages).associateBy { it.id }.values.toMutableList()
-    
-    if (includeScheduledMessages) {
-        try {
-            val scheduledMessages = messagesDB.getScheduledThreadMessages(threadId)
-            allMessagesById.addAll(scheduledMessages)
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
-
-    val finalMessages = allMessagesById
-        .filter { it.participants.isNotEmpty() }
+    val finalMessages = ArrayList(org.fossify.messages.helpers.mergeThreadMessageSources(
+        provider = messages,
+        cached = localMessages,
+        dateBefore = dateFrom,
+        includeScheduled = includeScheduledMessages
+    ).filter { it.participants.isNotEmpty() }
         .filterNot { it.isScheduled && it.millis() < System.currentTimeMillis() }
         .sortedWith(compareBy<Message> { it.date }.thenBy { it.id })
-        .takeLast(limit)
-        .toMutableList() as ArrayList<Message>
+        .takeLast(limit))
 
     return finalMessages
 }
@@ -1343,7 +1333,7 @@ fun Context.syncThreadToLocal(threadId: Long, address: String? = null, loadAll: 
         messagesDB.insertMessages(*batch.toTypedArray())
     }
 
-    val localMessages = messagesDB.getThreadMessages(threadId)
+    val localMessages = messagesDB.getNonRecycledThreadMessages(threadId)
     val providerConversation = getConversations(threadId).firstOrNull()
     val conversation = providerConversation ?: localMessages.filterNot { it.isScheduled }
         .maxByOrNull { it.date }

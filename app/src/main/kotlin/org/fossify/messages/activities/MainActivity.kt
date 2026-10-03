@@ -729,11 +729,26 @@ class MainActivity : SimpleActivity() {
             }
 
             val needsFullHistorySync = !config.fullHistorySyncedV2
-            conversations.distinctBy { it.threadId }.forEach { conversation ->
-                syncThreadToLocal(conversation.threadId, loadAll = needsFullHistorySync)
-            }
-            if (needsFullHistorySync) {
-                config.fullHistorySyncedV2 = true
+            val threadsToSync = conversations.distinctBy { it.threadId }
+            var completed = 0
+            var failed = 0
+            org.fossify.messages.helpers.SmsSyncProgress.update(
+                org.fossify.messages.helpers.SmsSyncProgress.State(true, 0, threadsToSync.size, 0))
+            try {
+                threadsToSync.forEach { conversation ->
+                    try {
+                        syncThreadToLocal(conversation.threadId, loadAll = needsFullHistorySync)
+                    } catch (e: java.util.concurrent.CancellationException) {
+                        throw e
+                    } catch (_: Exception) { failed++ }
+                    completed++
+                    org.fossify.messages.helpers.SmsSyncProgress.update(
+                        org.fossify.messages.helpers.SmsSyncProgress.State(true, completed, threadsToSync.size, failed))
+                }
+                if (needsFullHistorySync && failed == 0) config.fullHistorySyncedV2 = true
+            } finally {
+                org.fossify.messages.helpers.SmsSyncProgress.update(
+                    org.fossify.messages.helpers.SmsSyncProgress.State(false, completed, threadsToSync.size, failed))
             }
 
             messagesDB.getAll()
@@ -750,6 +765,7 @@ class MainActivity : SimpleActivity() {
             val allConversations = ArrayList(conversationsDB.getAllRegular())
             runOnUiThread {
                 setupConversations(allConversations)
+                dashboardViewModel?.refreshAfterChange()
             }
         }
     }
@@ -1110,6 +1126,7 @@ class MainActivity : SimpleActivity() {
         fun refreshConversations(@Suppress("unused") event: Events.RefreshConversations) {
             if (config.useGatewayDeveloperUi) {
                 conversationsViewModel?.refresh(isInitial = false)
+                dashboardViewModel?.refreshAfterChange()
             } else {
                 initMessenger()
             }
@@ -1119,6 +1136,22 @@ class MainActivity : SimpleActivity() {
         fun refreshMessages(@Suppress("unused") event: Events.RefreshMessages) {
             if (config.useGatewayDeveloperUi) {
                 conversationsViewModel?.refresh(isInitial = false)
+                dashboardViewModel?.refreshAfterChange()
+            }
+        }
+
+        @Subscribe(threadMode = ThreadMode.MAIN)
+        fun refreshDashboard(@Suppress("unused") event: Events.RefreshDashboard) {
+            if (config.useGatewayDeveloperUi) {
+                dashboardViewModel?.refreshAfterChange()
+            }
+        }
+
+        @Subscribe(threadMode = ThreadMode.MAIN)
+        fun refreshSendHistory(@Suppress("unused") event: Events.RefreshSendHistory) {
+            if (config.useGatewayDeveloperUi) {
+                dashboardViewModel?.refreshAfterChange()
+                messageCenterViewModel?.refreshAfterChange()
             }
         }
     }

@@ -944,7 +944,7 @@ open class IncomingSmsService : Service() {
                 Log.i(
                     TAG,
                     "forwarding: rule subset blocked ${enabledInstances.size - allowedInstances.size} " +
-                        "of ${enabledInstances.size} instance(s) for $address",
+                    "of ${enabledInstances.size} instance(s)",
                 )
             }
 

@@ -31,6 +31,45 @@ private object FailingCipher : CredentialCipher {
 
 class RemoteSourceRepositoryTest {
 
+    @Test
+    fun portableBackupPreservesIdentityAuthorizationAndResetsRuntimeState() {
+        val source = RemoteSourceInstance(
+            id = "portable-feishu", name = "飞书", type = RemoteSourceType.FEISHU,
+            connectionState = RemoteSourceConnectionState.READY,
+            lastConnectedAt = 123L, authorizedUsers = setOf("allowed-user"),
+            configJson = JSONObject().put("appId", "app").put("appSecret", "secret").toString()
+        )
+        val origin = RemoteSourceRepository(customPrefs = createFakeSharedPrefs(), cipher = PlaintextCipher)
+        assertTrue(origin.restoreBackup(listOf(source)))
+        val exported = origin.exportBackup()
+        assertFalse(exported.getJSONObject(0).has("lastConnectedAt"))
+        val target = RemoteSourceRepository(customPrefs = createFakeSharedPrefs(), cipher = PlaintextCipher)
+        assertTrue(target.restoreBackup(target.parseBackup(exported)))
+        val restored = target.getSourceById(source.id)!!
+        assertEquals(source.authorizedUsers, restored.authorizedUsers)
+        assertEquals("secret", restored.optString("appSecret"))
+        assertEquals(0L, restored.lastConnectedAt)
+        assertEquals(RemoteSourceConnectionState.CONFIG_REQUIRED, restored.connectionState)
+    }
+
+    @Test
+    fun restoreFailureKeepsExistingSources() {
+        val target = RemoteSourceRepository(customPrefs = createFakeSharedPrefs(), cipher = FailingCipher)
+        assertFalse(target.restoreBackup(listOf(RemoteSourceInstance(
+            id = "failed", name = "TG", type = RemoteSourceType.TELEGRAM,
+            configJson = JSONObject().put("botToken", "secret").toString()
+        ))))
+        assertTrue(target.getAllSources().isEmpty())
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun portableBackupRejectsDeviceBoundCiphertext() {
+        val target = RemoteSourceRepository(customPrefs = createFakeSharedPrefs(), cipher = PlaintextCipher)
+        target.parseBackup(org.json.JSONArray().put(JSONObject()
+            .put("id", "bad").put("type", "TELEGRAM")
+            .put("configJson", JSONObject().put("botToken", "ENC:unavailable").toString())))
+    }
+
     @Before
     @After
     fun cleanup() {

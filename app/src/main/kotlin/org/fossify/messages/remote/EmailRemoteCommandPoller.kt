@@ -133,7 +133,7 @@ class EmailRemoteCommandPoller(
                 }
 
                 val loginResp = send("LOGIN ${quoteImap(user)} ${quoteImap(pass)}")
-                if (loginResp.none { it.contains("OK") }) {
+                if (!isTaggedOk(loginResp)) {
                     val err = "IMAP 登录失败：${loginResp.lastOrNull()}"
                     config.appendEmailRemoteLog(err)
                     onStatus(err)
@@ -152,7 +152,7 @@ class EmailRemoteCommandPoller(
                     host.endsWith(".126.com", ignoreCase = true) ||
                     host.endsWith(".yeah.net", ignoreCase = true)
                 ) {
-                    val idAccepted = idResp.any { it.matches(Regex("A\\d{4} OK.*", RegexOption.IGNORE_CASE)) }
+                    val idAccepted = isTaggedOk(idResp)
                     if (!idAccepted) {
                         val err = "网易 IMAP ID 身份声明失败：${idResp.lastOrNull()}"
                         config.appendEmailRemoteLog(err)
@@ -160,16 +160,16 @@ class EmailRemoteCommandPoller(
                     }
                 }
 
-                // 标记连接在线就绪
+                val selectResp = send("SELECT INBOX")
+                check(isTaggedOk(selectResp)) { "IMAP SELECT INBOX 失败：${selectResp.lastOrNull()}" }
                 repo.updateConnectionState(instance.id, RemoteSourceConnectionState.READY)
                 onStatus("IMAP 连接就绪，正在检查收件箱…")
-
-                val selectResp = send("SELECT INBOX")
                 val uidValidity = selectResp.asSequence()
                     .mapNotNull { UID_VALIDITY_REGEX.find(it)?.groupValues?.getOrNull(1) }
                     .firstOrNull()
                     .orEmpty()
                 val searchResp = send("UID SEARCH UNSEEN")
+                check(isTaggedOk(searchResp)) { "IMAP UID SEARCH 失败：${searchResp.lastOrNull()}" }
                 val unseenLine = searchResp.firstOrNull { it.startsWith("* SEARCH") }.orEmpty()
                 val messageUids = unseenLine.removePrefix("* SEARCH").trim().split("\\s+".toRegex()).filter(String::isNotBlank)
 
@@ -180,6 +180,7 @@ class EmailRemoteCommandPoller(
                     if (wasNonCommandChecked(checkedKey)) continue
 
                     val fetchLines = send("UID FETCH $uid (BODY.PEEK[HEADER.FIELDS (FROM SUBJECT MESSAGE-ID)] BODY.PEEK[TEXT])")
+                    check(isTaggedOk(fetchLines)) { "IMAP UID FETCH 失败：${fetchLines.lastOrNull()}" }
                     val headerText = fetchLines.joinToString("\n")
 
                     val rawFrom = extractHeader(headerText, "From")
@@ -190,7 +191,7 @@ class EmailRemoteCommandPoller(
                     val decodedSubject = decodeMimeHeader(rawSubject)
                     val messageId = extractHeader(headerText, "Message-ID").ifBlank { "email-$uidValidity-$uid" }
 
-                    if (instance.whitelistEnabled && authorizedSenders.isNotEmpty()) {
+                    if (instance.whitelistEnabled) {
                         val isAuthorized = authorizedSenders.any { auth ->
                             val cleanAuth = auth.trim().lowercase()
                             senderEmail.isNotBlank() && senderEmail == cleanAuth
@@ -262,6 +263,9 @@ class EmailRemoteCommandPoller(
         val pattern = "(?i)^$name:\\s*(.+)$".toRegex(RegexOption.MULTILINE)
         return pattern.find(text)?.groupValues?.getOrNull(1)?.trim().orEmpty()
     }
+
+    private fun isTaggedOk(lines: List<String>): Boolean =
+        lines.lastOrNull()?.matches(Regex("A\\d{4} OK(?:\\s|$).*", RegexOption.IGNORE_CASE)) == true
 
     private fun extractEmailAddress(raw: String): String {
         val bracketMatch = "<([^>]+)>".toRegex().find(raw)

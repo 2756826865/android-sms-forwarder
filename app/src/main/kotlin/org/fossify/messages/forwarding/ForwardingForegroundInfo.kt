@@ -11,7 +11,7 @@ import org.fossify.messages.R
 
 object ForwardingForegroundInfo {
     private const val CHANNEL_ID = "forwarding_delivery"
-    private const val NOTIFICATION_ID = 19084
+    private const val NOTIFICATION_ID = 19089
 
     fun create(context: Context): ForegroundInfo {
         val manager = context.getSystemService(NotificationManager::class.java)

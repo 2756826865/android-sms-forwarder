@@ -4,6 +4,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.app.NotificationManager
 import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
@@ -203,6 +204,7 @@ fun OperationsContent(
 
     val multiForwardConfig = remember { MultiForwardConfig(context) }
     var keepAliveEnabled by remember { mutableStateOf(multiForwardConfig.keepAliveServiceEnabled) }
+    var showServiceNotificationChannels by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier = modifier,
@@ -214,6 +216,7 @@ fun OperationsContent(
         ),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        item { SmsChainDiagnosticsCard() }
         // 1. 厂商保活与白名单一键直达向导 (OEM Whitelist Wizard)
         item {
             Surface(
@@ -416,6 +419,7 @@ fun OperationsContent(
                                 onCheckedChange = { enabled ->
                                     keepAliveEnabled = enabled
                                     multiForwardConfig.keepAliveServiceEnabled = enabled
+                                    if (!enabled) org.fossify.messages.security.root.RootWatchdog.stop(context)
                                     if (enabled) {
                                         SmsKeepAliveService.ensureStarted(context)
                                     } else {
@@ -426,65 +430,64 @@ fun OperationsContent(
                         }
                     }
 
-                    if (keepAliveEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                         Spacer(modifier = Modifier.height(10.dp))
 
-                        // 隐藏常驻通知图标引导
+                        // Only service channels are listed here; incoming SMS notifications stay enabled.
                         Surface(
                             shape = RoundedCornerShape(16.dp),
                             color = if (isDark) Color(0xFF22262B) else Color(0xFFF8FAFC),
                             border = BorderStroke(1.dp, if (isDark) Color(0xFF2D333B) else Color(0xFFEEF2F6)),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Row(
-                                modifier = Modifier.padding(14.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
-                                    Text(
-                                        text = "🔔 隐藏保活通知图标",
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 12.sp,
-                                        color = primaryTextColor,
-                                        maxLines = 1,
-                                        softWrap = false,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text(
-                                        text = "可将渠道通知设为静音/最小化隐藏",
-                                        fontSize = 11.sp,
-                                        color = secondaryTextColor,
-                                        maxLines = 1,
-                                        softWrap = false
-                                    )
+                            Column(modifier = Modifier.padding(14.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                        Text(
+                                            text = "🔔 服务运行通知",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 12.sp,
+                                            color = primaryTextColor,
+                                            maxLines = 1,
+                                            softWrap = false,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(
+                                            text = "按服务设置常驻提示，保留新短信和验证码通知",
+                                            fontSize = 11.sp,
+                                            color = secondaryTextColor,
+                                            maxLines = 2
+                                        )
+                                    }
+                                    TextButton(onClick = { showServiceNotificationChannels = !showServiceNotificationChannels }) {
+                                        Text(if (showServiceNotificationChannels) "收起" else "分别设置")
+                                    }
                                 }
-                                OutlinedButton(
-                                    onClick = {
-                                        try {
-                                            val intent = Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).apply {
-                                                putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-                                                putExtra(Settings.EXTRA_CHANNEL_ID, "sms_background_service")
-                                            }
-                                            context.startActivity(intent)
-                                        } catch (_: Exception) {
-                                            try {
-                                                val appIntent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                                                    putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-                                                }
-                                                context.startActivity(appIntent)
-                                            } catch (_: Exception) {
-                                                Toast.makeText(context, "请在系统通知管理中将「短信后台监听保活」渠道设为静音", Toast.LENGTH_LONG).show()
+                                if (showServiceNotificationChannels) {
+                                    Text(
+                                        "只选择下面的运行服务渠道；不要关闭应用通知总开关或‘收到的短信’渠道。系统可能仍在运行中应用列表显示前台服务。",
+                                        fontSize = 11.sp,
+                                        color = secondaryTextColor
+                                    )
+                                    listOf(
+                                        "短信后台服务" to "sms_background_service",
+                                        "短信接收处理中" to "incoming_sms_processing",
+                                        "转发任务运行中" to "forwarding_delivery",
+                                        "钉钉远程来源" to "dingtalk_remote_control",
+                                        "企业微信远程来源" to "wecom_remote_control",
+                                        "飞书远程来源" to "feishu_remote_control",
+                                        "Telegram 远程来源" to "tg_remote_control",
+                                        "WebSocket 远程来源" to "ws_remote_control",
+                                        "邮箱远程来源" to "email_remote_control"
+                                    ).forEach { (label, channelId) ->
+                                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                                            Text(label, modifier = Modifier.weight(1f), fontSize = 12.sp, color = primaryTextColor)
+                                            TextButton(onClick = { openServiceNotificationChannel(context, channelId) }) {
+                                                Text("设置")
                                             }
                                         }
-                                    },
-                                    shape = RoundedCornerShape(12.dp),
-                                    border = BorderStroke(1.dp, if (isDark) DarkOutline else OutlineSoft),
-                                    modifier = Modifier.height(36.dp),
-                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
-                                ) {
-                                    Text("去隐藏", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = primaryTextColor, maxLines = 1, softWrap = false)
+                                    }
                                 }
                             }
                         }
@@ -802,5 +805,21 @@ fun OperationsContent(
                 }
             }
         )
+    }
+}
+
+private fun openServiceNotificationChannel(context: Context, channelId: String) {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+    val manager = context.getSystemService(NotificationManager::class.java)
+    if (manager.getNotificationChannel(channelId) == null) {
+        Toast.makeText(context, "该服务尚未运行，系统通知渠道还未创建", Toast.LENGTH_SHORT).show()
+        return
+    }
+    val intent = Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).apply {
+        putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+        putExtra(Settings.EXTRA_CHANNEL_ID, channelId)
+    }
+    runCatching { context.startActivity(intent) }.onFailure {
+        Toast.makeText(context, "无法打开该服务的通知渠道设置", Toast.LENGTH_SHORT).show()
     }
 }

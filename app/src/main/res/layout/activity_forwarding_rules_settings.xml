@@ -305,6 +305,21 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
+                android:hint="@string/forwarding_rules_test_sender">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/rules_test_sender"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="text"
+                    android:singleLine="true"
+                    android:textColor="@color/miui_primary_text" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
                 android:hint="@string/forwarding_rules_test_body"
                 app:helperText="@string/forwarding_rules_test_body_helper"
                 app:helperTextTextColor="@color/miui_secondary_text">

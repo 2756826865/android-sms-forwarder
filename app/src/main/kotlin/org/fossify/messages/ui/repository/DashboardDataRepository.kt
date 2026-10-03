@@ -27,6 +27,9 @@ class DashboardDataRepository(private val context: Context) {
             set(Calendar.MILLISECOND, 0)
         }
         val startOfDay = calendar.timeInMillis
+        calendar.add(Calendar.DAY_OF_MONTH, 1)
+        val endOfDay = calendar.timeInMillis
+        val receivedCount = db.MessagesDao().getReceivedSmsCountBetween(startOfDay / 1000, endOfDay / 1000)
 
         // 1. 短信概览
         val sentCount = runCatching { db.SmsSendDao().getCountSince(startOfDay) }.getOrDefault(0)
@@ -34,10 +37,16 @@ class DashboardDataRepository(private val context: Context) {
         val failedSendCount = runCatching { db.SmsSendDao().getFailedCountSince(startOfDay) }.getOrDefault(0)
         val unknownSendCount = runCatching { db.SmsSendDao().getUnknownCountSince(startOfDay) }.getOrDefault(0)
 
-        // 2. 转发概览
-        val forwardSuccessCount = runCatching { db.ShadowDaos().getDeliveredCountSince(startOfDay) }.getOrDefault(0)
-        val forwardFailedCount = runCatching { db.ShadowDaos().getFailedCountSince(startOfDay) }.getOrDefault(0)
-        val forwardPendingCount = runCatching { db.ShadowDaos().getPendingCountSince(startOfDay) }.getOrDefault(0)
+        // Use the same actual lifecycle records as the history list. Shadow observation
+        // may be disabled or incomplete and must not be presented as business totals.
+        val allHistoryRecords = ForwardingHistoryStore(context).records()
+        val todayHistory = allHistoryRecords.filter { !it.isTest && it.receivedAt >= startOfDay && it.receivedAt < endOfDay }
+        val forwardSuccessCount = todayHistory.count { it.status == ForwardingHistoryStore.STATUS_SUCCESS }
+        val forwardFailedCount = todayHistory.count { it.status == ForwardingHistoryStore.STATUS_FAILED }
+        val forwardPendingCount = todayHistory.count { it.status in setOf(
+            ForwardingHistoryStore.STATUS_QUEUED, ForwardingHistoryStore.STATUS_RUNNING,
+            ForwardingHistoryStore.STATUS_RETRY, ForwardingHistoryStore.STATUS_WAITING_NETWORK
+        ) }
 
         // 3. Outbox 健康
         val pendingOutboxCount = runCatching { db.OutboxTaskDao().getPendingTaskCount() }.getOrDefault(0)
@@ -63,10 +72,11 @@ class DashboardDataRepository(private val context: Context) {
 
         // 6. 发送与转发流水记录 (最新 30 条)
         val historyRecords = runCatching {
-            ForwardingHistoryStore(context).records().take(30)
+            allHistoryRecords.take(30)
         }.getOrDefault(emptyList())
 
         DashboardStats(
+            todayReceivedCount = receivedCount,
             todaySentCount = sentCount,
             todaySuccessCount = successSendCount,
             todayFailedSendCount = failedSendCount,
@@ -77,7 +87,7 @@ class DashboardDataRepository(private val context: Context) {
             pendingOutboxCount = pendingOutboxCount,
             retryOutboxCount = retryOutboxCount,
             failedOutboxCount = failedOutboxCount,
-            totalRecoveryEvents = recoveryRecords.size,
+            totalRecoveryEvents = db.RecoveryRecordDao().getTotalCount(),
             todayRecoveryCount = todayRecoveryCount,
             lastRecoveryTime = latestRecovery?.scanTime,
             lastRecoveryAction = latestRecovery?.actionTaken,

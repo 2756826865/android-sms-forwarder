@@ -14,8 +14,6 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
-import java.io.BufferedReader
-import java.io.BufferedWriter
 import java.nio.charset.StandardCharsets
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -26,11 +24,14 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
-import javax.net.ssl.SSLSocket
-import javax.net.ssl.SSLSocketFactory
 
 object ChannelTestSender {
-    suspend fun sendTest(context: Context, channelId: String): Result<String> = withContext(Dispatchers.IO) {
+    suspend fun sendTest(context: Context, channelId: String, ancestors: Set<String> = emptySet()): Result<String> = withContext(Dispatchers.IO) {
+        val node = "legacy:$channelId"
+        if (node in ancestors || ancestors.size >= 16) {
+            return@withContext Result.failure(IllegalArgumentException("通道组存在循环引用或嵌套过深"))
+        }
+        val path = ancestors + node
         val config = MultiForwardConfig(context)
         val history = ForwardingHistoryStore(context)
         val now = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
@@ -52,16 +53,10 @@ object ChannelTestSender {
                 ForwardingChannels.PUSHPLUS -> {
                     val token = config.pushPlusToken()
                     require(token.isNotBlank()) { "PushPlus Token 不能为空，请先配置" }
-                    val payload = JSONObject()
-                        .put("token", token)
-                        .put("title", title)
-                        .put("content", content.replace("\n", "<br/>"))
-                        .put("template", "html")
                     val topic = config.pushPlusTopic()
-                    if (topic.isNotBlank()) payload.put("topic", topic)
-                    val res = postJson("https://www.pushplus.plus/send", payload)
-                    check(res.optInt("code", -1) == 200) { res.optString("msg", "PushPlus 响应错误") }
-                    "PushPlus 微信推送成功！"
+                    val res = postJson("https://www.pushplus.plus/send", PushPlusPayload.create(token, topic, title, content))
+                    PushPlusPayload.requireAccepted(res)
+                    "PushPlus 接口已受理（最终送达以接收端为准）"
                 }
                 ForwardingChannels.WECHAT_TEST -> {
                     val appId = config.wechatTestAppId()
@@ -94,11 +89,11 @@ object ChannelTestSender {
                     require(target.isNotBlank()) { "QQ 消息配置不能为空，请先配置" }
                     val text = "$title\n$content"
                     if (type == "qmsg" || !target.startsWith("http")) {
-                        postJson("https://qmsg.zendee.cn/send/$target", JSONObject().put("msg", text))
+                        QmsgSender.send(target, text)
                     } else {
                         postJson(target, JSONObject().put("message", text))
                     }
-                    "QQ 消息已成功推送！"
+                    if (type == "qmsg") "Qmsg 已受理（可凭消息 ID 查询最终回执）" else "QQ 消息已成功推送！"
                 }
                 ForwardingChannels.WECOM, ForwardingChannels.WECOM_APP -> {
                     val corpId = config.weComCorpId()
@@ -201,10 +196,10 @@ object ChannelTestSender {
                     val key = config.barkDeviceKey().trim()
                     require(key.isNotBlank()) { "Bark DeviceKey 不能为空，请先配置" }
                     ForwardingUrlPolicy.requireAllowed(server.trim().trimEnd('/'), config.barkAllowHttp)
-                    val url = "$server/${URLEncoder.encode(key, "UTF-8")}/${URLEncoder.encode(title, "UTF-8")}/${URLEncoder.encode(content, "UTF-8")}"
-                    val res = getJson(url)
+                    val url = "$server/${URLEncoder.encode(key, "UTF-8")}"
+                    val res = postJson(url, JSONObject().put("title", title).put("body", content))
                     check(res.optInt("code", -1) == 200) { res.optString("message", "Bark 请求失败") }
-                    "Bark 消息已推送至苹果 APNs！"
+                    "Bark 服务端已受理（设备通知待确认）"
                 }
                 ForwardingChannels.TELEGRAM -> {
                     val token = config.telegramBotToken()
@@ -259,14 +254,15 @@ object ChannelTestSender {
                     val members = config.channelGroupMembers()
                     require(members.isNotEmpty()) { "群组中尚未添加任何通道成员，请先点击「⚙️ 配置」选择成员" }
                     val results = mutableListOf<String>()
-                    members.forEach { memberId ->
-                        val subRes = sendTest(context, memberId)
+                    members.distinct().forEach { memberId ->
+                        val subRes = sendTest(context, memberId, path)
                         if (subRes.isSuccess) {
                             results.add("✅ ${ForwardingChannels.displayName(memberId)}")
                         } else {
                             results.add("❌ ${ForwardingChannels.displayName(memberId)}: ${subRes.exceptionOrNull()?.message}")
                         }
                     }
+                    check(results.none { it.startsWith("❌") }) { "群组测试未全部成功:\n" + results.joinToString("\n") }
                     "群组分发完成:\n" + results.joinToString("\n")
                 }
                 ForwardingChannels.EMAIL -> {
@@ -303,7 +299,7 @@ object ChannelTestSender {
                         title,
                         content
                     )
-                    "WebSocket 测试消息已发送！"
+                    "WebSocket 消息已加入发送队列（服务端接收待确认）"
                 }
                 else -> error("该通道请在多实例通道管理中配置并测试：$channelId")
             }
@@ -316,7 +312,12 @@ object ChannelTestSender {
         res
     }
 
-    suspend fun sendTestInstance(context: Context, instance: ForwardingChannelInstance): Result<String> = withContext(Dispatchers.IO) {
+    suspend fun sendTestInstance(context: Context, instance: ForwardingChannelInstance, ancestors: Set<String> = emptySet()): Result<String> = withContext(Dispatchers.IO) {
+        val node = "instance:${instance.id}"
+        if (node in ancestors || ancestors.size >= 16) {
+            return@withContext Result.failure(IllegalArgumentException("通道组存在循环引用或嵌套过深"))
+        }
+        val path = ancestors + node
         val history = ForwardingHistoryStore(context)
         val now = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
         val title = "【SMS Forwarder 测试通知】"
@@ -337,16 +338,10 @@ object ChannelTestSender {
                 ForwardingChannels.PUSHPLUS -> {
                     val token = instance.optString("token")
                     require(token.isNotBlank()) { "PushPlus Token 不能为空，请先配置" }
-                    val payload = JSONObject()
-                        .put("token", token)
-                        .put("title", title)
-                        .put("content", content.replace("\n", "<br/>"))
-                        .put("template", "html")
                     val topic = instance.optString("topic")
-                    if (topic.isNotBlank()) payload.put("topic", topic)
-                    val res = postJson("https://www.pushplus.plus/send", payload)
-                    check(res.optInt("code", -1) == 200) { res.optString("msg", "PushPlus 响应错误") }
-                    "PushPlus 微信推送成功！"
+                    val res = postJson("https://www.pushplus.plus/send", PushPlusPayload.create(token, topic, title, content))
+                    PushPlusPayload.requireAccepted(res)
+                    "PushPlus 接口已受理（最终送达以接收端为准）"
                 }
                 ForwardingChannels.WECHAT_TEST -> {
                     val appId = instance.optString("appId")
@@ -381,7 +376,7 @@ object ChannelTestSender {
                     require(target.isNotBlank()) { "QQ 消息配置不能为空，请先配置" }
                     val text = "$title\n$content"
                     if (type == "qmsg" || !target.startsWith("http")) {
-                        postJson("https://qmsg.zendee.cn/send/$target", JSONObject().put("msg", text))
+                        QmsgSender.send(target, text)
                     } else {
                         val targetType = instance.optString("targetType").ifBlank { "private" }
                         val targetId = instance.optString("targetId")
@@ -401,11 +396,11 @@ object ChannelTestSender {
                             mapOf("Authorization" to "Bearer ${accessToken.trim()}")
                         }
                         val response = postJson("$baseUrl/$action", payload, headers)
-                        check(response.optInt("retcode", 0) == 0 && response.optString("status", "ok") != "failed") {
+                        check(response.optInt("retcode", -1) == 0 && response.optString("status") == "ok") {
                             response.optString("message").ifBlank { response.optString("wording", "OneBot 11 发送失败") }
                         }
                     }
-                    "QQ 消息已成功推送！"
+                    if (type == "qmsg") "Qmsg 已受理（可凭消息 ID 查询最终回执）" else "QQ 消息已成功推送！"
                 }
                 ForwardingChannels.WECOM, ForwardingChannels.WECOM_APP -> {
                     val corpId = instance.optString("corpId")
@@ -518,10 +513,10 @@ object ChannelTestSender {
                     val key = instance.optString("deviceKey").trim()
                     require(server.isNotBlank() && key.isNotBlank()) { "Bark URL 或 DeviceKey 不能为空，请先配置" }
                     ForwardingUrlPolicy.requireAllowed(server.trim().trimEnd('/'), server.startsWith("http://"))
-                    val url = "$server/${URLEncoder.encode(key, "UTF-8")}/${URLEncoder.encode(title, "UTF-8")}/${URLEncoder.encode(content, "UTF-8")}"
-                    val res = getJson(url)
+                    val url = "$server/${URLEncoder.encode(key, "UTF-8")}"
+                    val res = postJson(url, JSONObject().put("title", title).put("body", content))
                     check(res.optInt("code", -1) == 200) { res.optString("message", "Bark 请求失败") }
-                    "Bark 消息已推送至苹果 APNs！"
+                    "Bark 服务端已受理（设备通知待确认）"
                 }
                 ForwardingChannels.TELEGRAM -> {
                     val token = instance.optString("botToken")
@@ -572,6 +567,10 @@ object ChannelTestSender {
                     check(res.optLong("id", -1L) > 0L) { "Gotify 推送失败" }
                     "Gotify 消息推送成功！"
                 }
+                ForwardingChannels.WXPUSHER -> {
+                    WxPusherSender.send(instance.optString("appToken"), instance.optString("targetId"), title, content)
+                    "WxPusher 已创建发送任务（最终送达以接收端为准）"
+                }
                 ForwardingChannels.NTFY -> {
                     val serverUrl = instance.optString("serverUrl").trim().ifBlank { "https://ntfy.sh" }.trimEnd('/')
                     val topic = instance.optString("topic")
@@ -579,16 +578,16 @@ object ChannelTestSender {
                     val priority = instance.optString("priority").ifBlank { "default" }
                     require(topic.isNotBlank()) { "ntfy Topic 不能为空，请先配置" }
                     ForwardingUrlPolicy.requireAllowed(serverUrl, serverUrl.startsWith("http://"))
-                    val headers = mutableMapOf("Title" to title, "Priority" to priority)
+                    val headers = mutableMapOf("Title" to NtfyProtocol.titleHeader(title), "Priority" to priority)
                     if (token.isNotBlank()) headers["Authorization"] = "Bearer ${token.trim()}"
                     instance.optString("tags").takeIf { it.isNotBlank() }?.let { headers["Tags"] = it.trim() }
                     instance.optString("clickUrl").takeIf { it.isNotBlank() }?.let { headers["Click"] = it.trim() }
                     postText(
-                        "$serverUrl/${URLEncoder.encode(topic.trim(), "UTF-8")}",
+                        "$serverUrl/${NtfyProtocol.requireTopic(topic)}",
                         content,
                         headers
                     )
-                    "ntfy 消息推送成功！"
+                    "ntfy 服务端已受理（设备通知待确认）"
                 }
                 ForwardingChannels.WEBSOCKET -> {
                     sendWebSocketTest(
@@ -597,7 +596,7 @@ object ChannelTestSender {
                         title,
                         content
                     )
-                    "WebSocket 测试消息已发送！"
+                    "WebSocket 消息已加入发送队列（服务端接收待确认）"
                 }
                 ForwardingChannels.EMAIL -> {
                     val port = instance.optInt("port", 465)
@@ -639,11 +638,8 @@ object ChannelTestSender {
                         payload.put("tags", tags)
                     }
                     val res = postJson(url, payload)
-                    val code = res.optInt("code", res.optInt("errno", -1))
-                    check(code == 0 || code == 200 || res.optString("message").contains("success", ignoreCase = true)) {
-                        res.optString("message", res.optString("errmsg", "Server酱³ 推送失败"))
-                    }
-                    "Server酱³ 消息推送成功！"
+                    ServerChan3Protocol.requireAccepted(res)
+                    "Server酱³ 服务端已受理，请检查客户端通知。"
                 }
                 ForwardingChannels.SMS_DIRECT -> {
                     val phone = instance.optString("phone")
@@ -670,17 +666,17 @@ object ChannelTestSender {
                     require(members.isNotEmpty()) { "通道组中尚未添加任何成员通道" }
                     val repo = org.fossify.messages.forwarding.repository.ChannelRepository.getInstance(context)
                     val results = mutableListOf<String>()
-                    members.forEach { memberId ->
+                    members.distinct().forEach { memberId ->
                         val subInstance = repo.getInstanceById(memberId)
                         if (subInstance != null) {
-                            val res = sendTestInstance(context, subInstance)
+                            val res = sendTestInstance(context, subInstance, path)
                             if (res.isSuccess) {
                                 results.add("✅ ${subInstance.name}")
                             } else {
                                 results.add("❌ ${subInstance.name}: ${res.exceptionOrNull()?.message}")
                             }
                         } else {
-                            val res = sendTest(context, memberId)
+                            val res = sendTest(context, memberId, path)
                             if (res.isSuccess) {
                                 results.add("✅ ${ForwardingChannels.displayName(memberId)}")
                             } else {
@@ -688,6 +684,7 @@ object ChannelTestSender {
                             }
                         }
                     }
+                    check(results.none { it.startsWith("❌") }) { "群组实例测试未全部成功:\n" + results.joinToString("\n") }
                     "群组实例分发完成:\n" + results.joinToString("\n")
                 }
                 else -> error("该通道暂不支持实例测试：${instance.channelType}")
@@ -826,7 +823,10 @@ object ChannelTestSender {
         val failure = AtomicReference<Throwable?>(null)
         val client = OkHttpClient.Builder().connectTimeout(8, TimeUnit.SECONDS).build()
         val request = Request.Builder().url(serverUrl).apply {
-            if (token.isNotBlank()) header("Authorization", "Bearer ${token.trim()}")
+            if (token.isNotBlank()) {
+                header("Authorization", "Bearer ${token.trim()}")
+                header("X-Token", token.trim())
+            }
         }.build()
         client.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
@@ -849,97 +849,10 @@ object ChannelTestSender {
     }
 
     private fun sendEmailTest(
-        host: String,
-        port: Int,
-        user: String,
-        password: String,
-        recipientsText: String,
-        subject: String,
-        content: String,
+        host: String, port: Int, user: String, password: String,
+        recipientsText: String, subject: String, content: String,
         security: Int = if (port == 587) MultiForwardConfig.EMAIL_SECURITY_STARTTLS else MultiForwardConfig.EMAIL_SECURITY_SSL
-    ) {
-        val recipients = recipientsText.split(',', ';').map(String::trim).filter(String::isNotBlank)
-        require(host.isNotBlank() && user.isNotBlank() && password.isNotBlank() && recipients.isNotEmpty()) {
-            "邮件配置不完整"
-        }
-        if (security == MultiForwardConfig.EMAIL_SECURITY_STARTTLS) {
-            val plainSocket = java.net.Socket()
-            plainSocket.connect(java.net.InetSocketAddress(host, port), 8_000)
-            plainSocket.soTimeout = 8_000
-            plainSocket.use {
-                val reader = it.inputStream.bufferedReader(StandardCharsets.UTF_8)
-                val writer = it.outputStream.bufferedWriter(StandardCharsets.UTF_8)
-                expectSmtp(reader, 220)
-                smtpCommand(writer, reader, "EHLO android-sms-forwarder", 250)
-                smtpCommand(writer, reader, "STARTTLS", 220)
-
-                val tlsSocket = (SSLSocketFactory.getDefault() as SSLSocketFactory)
-                    .createSocket(it, host, port, true) as SSLSocket
-                tlsSocket.soTimeout = 8_000
-                tlsSocket.sslParameters = tlsSocket.sslParameters.apply { endpointIdentificationAlgorithm = "HTTPS" }
-                tlsSocket.startHandshake()
-                tlsSocket.use { ssl ->
-                    runSmtpSession(ssl, user, password, recipients, subject, content)
-                }
-            }
-        } else {
-            val plainSocket = java.net.Socket()
-            plainSocket.connect(java.net.InetSocketAddress(host, port), 8_000)
-            plainSocket.soTimeout = 8_000
-            val socket = (SSLSocketFactory.getDefault() as SSLSocketFactory)
-                .createSocket(plainSocket, host, port, true) as SSLSocket
-            socket.soTimeout = 8_000
-            socket.sslParameters = socket.sslParameters.apply { endpointIdentificationAlgorithm = "HTTPS" }
-            socket.startHandshake()
-            socket.use {
-                expectSmtp(it.inputStream.bufferedReader(StandardCharsets.UTF_8), 220)
-                runSmtpSession(it, user, password, recipients, subject, content)
-            }
-        }
-    }
-
-    private fun runSmtpSession(
-        socket: java.net.Socket,
-        user: String,
-        password: String,
-        recipients: List<String>,
-        subject: String,
-        content: String
-    ) {
-        val reader = socket.inputStream.bufferedReader(StandardCharsets.UTF_8)
-        val writer = socket.outputStream.bufferedWriter(StandardCharsets.UTF_8)
-        smtpCommand(writer, reader, "EHLO android-sms-forwarder", 250)
-        smtpCommand(writer, reader, "AUTH LOGIN", 334)
-        smtpCommand(writer, reader, Base64.encodeToString(user.toByteArray(), Base64.NO_WRAP), 334)
-        smtpCommand(writer, reader, Base64.encodeToString(password.toByteArray(), Base64.NO_WRAP), 235)
-        smtpCommand(writer, reader, "MAIL FROM:<$user>", 250)
-        recipients.forEach { recipient -> smtpCommand(writer, reader, "RCPT TO:<$recipient>", 250) }
-        smtpCommand(writer, reader, "DATA", 354)
-        val encodedSubject = Base64.encodeToString(subject.toByteArray(StandardCharsets.UTF_8), Base64.NO_WRAP)
-        val encodedBody = java.util.Base64.getMimeEncoder(76, "\r\n".toByteArray())
-            .encodeToString(content.toByteArray(StandardCharsets.UTF_8))
-        writer.write("From: <$user>\r\n")
-        writer.write("To: ${recipients.joinToString(", ")}\r\n")
-        writer.write("Subject: =?UTF-8?B?$encodedSubject?=\r\n")
-        writer.write("MIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\n")
-        writer.write("Content-Transfer-Encoding: base64\r\n\r\n$encodedBody\r\n.\r\n")
-        writer.flush()
-        expectSmtp(reader, 250)
-        smtpCommand(writer, reader, "QUIT", 221)
-    }
-
-    private fun smtpCommand(writer: BufferedWriter, reader: BufferedReader, command: String, expected: Int) {
-        writer.write("$command\r\n")
-        writer.flush()
-        expectSmtp(reader, expected)
-    }
-
-    private fun expectSmtp(reader: BufferedReader, expected: Int) {
-        var line = reader.readLine() ?: error("SMTP 服务器无响应")
-        val code = line.take(3).toIntOrNull() ?: error("SMTP 响应无效")
-        while (line.length > 3 && line[3] == '-') line = reader.readLine() ?: break
-        check(code == expected) { "SMTP $code ${line.drop(4)}" }
-    }
+    ) = SmtpSender.send(host, port, security, user, password, recipientsText, subject, content)
 
     private fun postText(urlString: String, body: String, headers: Map<String, String> = emptyMap()) {
         val conn = (URL(urlString).openConnection() as HttpURLConnection).apply {

@@ -15,6 +15,9 @@ interface RecoveryRecordDao {
     @Query("SELECT * FROM recovery_records ORDER BY scan_time DESC LIMIT :limit")
     suspend fun queryLatest(limit: Int = 50): List<RecoveryRecordEntity>
 
+    @Query("SELECT COUNT(*) FROM recovery_records")
+    suspend fun getTotalCount(): Int
+
     @Query("SELECT COUNT(*) FROM recovery_records WHERE scan_time >= :startOfDay")
     suspend fun getCountSince(startOfDay: Long): Int
 

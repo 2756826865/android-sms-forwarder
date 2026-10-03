@@ -15,6 +15,7 @@ import org.fossify.messages.R
 import org.fossify.messages.activities.EmailRemoteControlSettingsActivity
 import org.fossify.messages.remote.repository.RemoteSourceRepository
 import org.fossify.messages.remote.repository.RemoteSourceType
+import org.fossify.messages.remote.runtime.RemoteSourceRuntimeManager
 
 /**
  * 邮箱远程控制前台保活服务
@@ -29,12 +30,14 @@ class EmailRemoteControlService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val repo = RemoteSourceRepository.getInstance(applicationContext)
-        val hasEnabled = repo.getSourcesByType(RemoteSourceType.EMAIL).any { it.enabled }
+        val hasEnabled = repo.getSourcesByType(RemoteSourceType.EMAIL)
+            .any { it.enabled && it.hasValidCredentials() }
         if (!hasEnabled) {
             stopSelf()
             return START_NOT_STICKY
         }
         updateNotification("邮箱 IMAP 远程指令服务运行中")
+        RemoteSourceRuntimeManager.restoreAfterServiceRestart(applicationContext)
         return START_STICKY
     }
 
@@ -96,11 +99,12 @@ class EmailRemoteControlService : Service() {
 
     companion object {
         private const val CHANNEL_ID = "email_remote_control"
-        private const val NOTIFICATION_ID = 19086
+        private const val NOTIFICATION_ID = 19090
 
         fun ensureStarted(context: Context) {
             val repo = RemoteSourceRepository.getInstance(context)
-            val isEnabled = repo.getSourcesByType(RemoteSourceType.EMAIL).any { it.enabled }
+            val isEnabled = repo.getSourcesByType(RemoteSourceType.EMAIL)
+                .any { it.enabled && it.hasValidCredentials() }
             if (!isEnabled) {
                 context.stopService(Intent(context, EmailRemoteControlService::class.java))
                 return

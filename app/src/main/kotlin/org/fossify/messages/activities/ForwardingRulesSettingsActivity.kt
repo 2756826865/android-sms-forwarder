@@ -64,6 +64,7 @@ class ForwardingRulesSettingsActivity : SimpleActivity() {
     private fun loadState() {
         binding.rulesEnabled.isChecked = ruleRepository.isRulesEnabled()
         binding.rulesScope.setSelection(ruleRepository.getScope().coerceIn(0, 2))
+        binding.rulesTestSender.setText("10086")
         binding.rulesTestBody.setText(getString(R.string.forwarding_rules_test_body_default))
         binding.rulesLastDecision.text = ruleRepository.getLastDecision()
             .takeIf(String::isNotBlank)
@@ -247,7 +248,7 @@ class ForwardingRulesSettingsActivity : SimpleActivity() {
             selectedChannels.toSet()
         }
         val decision = ForwardingRuleEngine(listOf(rule)).evaluate(
-            sender = "测试发送方",
+            sender = binding.rulesTestSender.text?.toString()?.trim().orEmpty(),
             body = binding.rulesTestBody.text?.toString().orEmpty(),
             subscriptionId = -1,
             channelCandidates = candidates,
@@ -257,7 +258,10 @@ class ForwardingRulesSettingsActivity : SimpleActivity() {
                 else -> null
             },
         )
-        binding.rulesTestResult.text = if (decision.allowedChannels.isNotEmpty()) {
+        val result = if (candidates.isEmpty()) {
+            binding.rulesTestResult.setTextColor(ContextCompat.getColor(this, R.color.miui_unread_red))
+            getString(R.string.forwarding_rules_test_no_channels)
+        } else if (decision.allowedChannels.isNotEmpty()) {
             binding.rulesTestResult.setTextColor(ContextCompat.getColor(this, R.color.miui_action_blue))
             getString(
                 R.string.forwarding_rules_match,
@@ -265,8 +269,10 @@ class ForwardingRulesSettingsActivity : SimpleActivity() {
             )
         } else {
             binding.rulesTestResult.setTextColor(ContextCompat.getColor(this, R.color.miui_unread_red))
-            getString(R.string.forwarding_rules_no_match)
+            getString(R.string.forwarding_rules_test_no_match_reason, decision.reason)
         }
+        binding.rulesTestResult.text = result + if (binding.rulesEnabled.isChecked) "" else
+            getString(R.string.forwarding_rules_test_disabled_notice)
     }
 
     private fun updateChannelSummary() {

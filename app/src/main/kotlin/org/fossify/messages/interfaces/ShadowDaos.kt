@@ -23,6 +23,12 @@ interface ShadowDaos {
     @Query("SELECT * FROM message_operations WHERE operation_id = :operationId")
     suspend fun getOperation(operationId: String): MessageOperation?
 
+    @Query("SELECT * FROM message_operations ORDER BY created_at DESC LIMIT 10")
+    suspend fun getRecentOperations(): List<MessageOperation>
+
+    @Query("SELECT * FROM message_operation_steps WHERE operation_id = :operationId ORDER BY timestamp ASC LIMIT 100")
+    suspend fun getSteps(operationId: String): List<MessageOperationStep>
+
     @Insert
     suspend fun insertStep(step: MessageOperationStep)
 

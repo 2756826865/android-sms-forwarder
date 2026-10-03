@@ -15,6 +15,7 @@ import org.fossify.messages.R
 import org.fossify.messages.activities.WeComRemoteControlSettingsActivity
 import org.fossify.messages.remote.repository.RemoteSourceRepository
 import org.fossify.messages.remote.repository.RemoteSourceType
+import org.fossify.messages.remote.runtime.RemoteSourceRuntimeManager
 
 /**
  * 企业微信智能机器人远程控制前台保活服务
@@ -29,12 +30,14 @@ class WeComRemoteControlService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val repo = RemoteSourceRepository.getInstance(applicationContext)
-        val hasEnabled = repo.getSourcesByType(RemoteSourceType.WECOM).any { it.enabled }
+        val hasEnabled = repo.getSourcesByType(RemoteSourceType.WECOM)
+            .any { it.enabled && it.hasValidCredentials() }
         if (!hasEnabled) {
             stopSelf()
             return START_NOT_STICKY
         }
         updateNotification("企业微信长连接远程指令服务运行中")
+        RemoteSourceRuntimeManager.restoreAfterServiceRestart(applicationContext)
         return START_STICKY
     }
 
@@ -99,6 +102,13 @@ class WeComRemoteControlService : Service() {
         private const val NOTIFICATION_ID = 19086
 
         fun ensureStarted(context: Context) {
+            val runnable = RemoteSourceRepository.getInstance(context)
+                .getSourcesByType(RemoteSourceType.WECOM)
+                .any { it.enabled && it.hasValidCredentials() }
+            if (!runnable) {
+                stop(context)
+                return
+            }
             val intent = Intent(context, WeComRemoteControlService::class.java)
             try {
                 ContextCompat.startForegroundService(context, intent)

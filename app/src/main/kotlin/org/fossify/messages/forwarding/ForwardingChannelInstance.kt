@@ -30,6 +30,8 @@ data class ForwardingChannelInstance(
     /** Whether this instance contains the minimum fields required for forwarding dispatch. */
     fun hasDispatchConfiguration(): Boolean = when (channelType) {
         ForwardingChannels.PUSHPLUS -> optString("token").isNotBlank()
+        ForwardingChannels.WXPUSHER -> optString("appToken").isNotBlank() &&
+            optString("targetId").isNotBlank()
         ForwardingChannels.WECHAT_TEST -> listOf("appId", "appSecret", "templateId", "openId")
             .all { optString(it).isNotBlank() }
         ForwardingChannels.QQ -> optString("qmsgKey").isNotBlank() || optString("onebotUrl").isNotBlank()
@@ -52,6 +54,7 @@ data class ForwardingChannelInstance(
         ForwardingChannels.CUSTOM_WEBHOOK -> optString("url").isNotBlank()
         ForwardingChannels.GOTIFY -> optString("serverUrl").isNotBlank() && optString("token").isNotBlank()
         ForwardingChannels.NTFY -> optString("topic").isNotBlank()
+        ForwardingChannels.SERVERCHAN3 -> optString("sendKey").isNotBlank()
         else -> false
     }
 

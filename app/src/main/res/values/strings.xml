@@ -302,6 +302,10 @@
     <string name="forwarding_rules_test">测试匹配</string>
     <string name="forwarding_rules_match">✓ 匹配，将转发：%1$s</string>
     <string name="forwarding_rules_no_match">✕ 不匹配，不转发</string>
+    <string name="forwarding_rules_test_sender">模拟发件人号码</string>
+    <string name="forwarding_rules_test_no_channels">未选择作用渠道，不会转发</string>
+    <string name="forwarding_rules_test_no_match_reason">✕ 不匹配：%1$s</string>
+    <string name="forwarding_rules_test_disabled_notice">\n规则总开关已关闭，当前仅为预览，实际不会按此规则转发。</string>
     <string name="forwarding_rules_invalid_regex">正则表达式无效</string>
     <string name="forwarding_rules_list_title">规则列表</string>
     <string name="forwarding_rules_editor_title">编辑当前规则</string>

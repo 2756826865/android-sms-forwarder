@@ -30,6 +30,7 @@ class RescheduleAlarmsReceiver : BroadcastReceiver() {
                 HeartbeatWorker.sync(context)
                 LowBatteryCheckWorker.sync(context)
                 SmsRecoveryWorker.schedule(context)
+                org.fossify.messages.security.root.RootMaintenanceWorker.sync(context)
                 SmsRecoveryWorker.enqueueFullResync(context)
                 SmsKeepAliveService.ensureStarted(context)
                 org.fossify.messages.remote.runtime.RemoteSourceRuntimeManager.getInstance(context).sync()

@@ -9,8 +9,8 @@ import java.util.concurrent.TimeUnit
 /**
  * Root 增强模式的唯一命令入口。
  *
- * 当前阶段只允许固定的只读检测命令。这里不接受来自界面的任意 Shell 文本，避免把
- * Root 权限变成通用命令执行器。任何后续修改型操作都必须单独实现白名单动作与回滚。
+ * 只允许固定的诊断和修复命令。这里不接受来自界面的任意 Shell 文本，避免把
+ * Root 权限变成通用命令执行器。修改动作执行后必须回读验证。
  */
 object RootEnhancementManager {
 
@@ -41,6 +41,41 @@ object RootEnhancementManager {
         "加入系统电池白名单" to "dumpsys deviceidle whitelist +$packageName"
     )
 
+    /** Fixed read-back commands; command acceptance alone does not prove a setting took effect. */
+    fun verificationCommand(index: Int, packageName: String): String = when (index) {
+        0 -> "cmd role get-role-holders --user current android.app.role.SMS"
+        1 -> "settings get secure sms_default_application"
+        2 -> "appops get $packageName WRITE_SMS"
+        3 -> "appops get $packageName RECEIVE_SMS"
+        4 -> "appops get $packageName SEND_SMS"
+        5 -> "appops get $packageName RUN_ANY_IN_BACKGROUND"
+        6 -> "dumpsys deviceidle whitelist"
+        else -> error("Unknown fixed action")
+    }
+
+    fun verificationMatches(index: Int, packageName: String, output: String): Boolean = when (index) {
+        0, 1 -> output.lineSequence().any { it.trim() == packageName }
+        2, 3, 4, 5 -> {
+            val operation = listOf("WRITE_SMS", "RECEIVE_SMS", "SEND_SMS", "RUN_ANY_IN_BACKGROUND")[index - 2]
+            Regex("(?m)^\\s*${operation}:\\s*allow(?:[;\\s]|$)").containsMatchIn(output)
+        }
+        6 -> output.lineSequence().any { line -> line.split(',').any { it.trim() == packageName } }
+        else -> false
+    }
+
+    fun brandGuidance(): String {
+        val brand = (Build.MANUFACTURER + " " + Build.BRAND).lowercase(java.util.Locale.ROOT)
+        return when {
+            "xiaomi" in brand || "redmi" in brand -> "检查自启动、后台无限制和锁屏网络；系统短信网络发送尚未适配"
+            "honor" in brand -> "检查应用启动管理中的自动启动、关联启动、后台活动"
+            "huawei" in brand -> "检查应用启动管理和电池优化；不同 EMUI/HarmonyOS 版本需真机核验"
+            listOf("oppo", "oneplus", "realme").any { it in brand } -> "检查自启动、后台活动及系统发送确认；不自动改写未知厂商设置"
+            "vivo" in brand || "iqoo" in brand -> "检查自启动、高耗电后台和后台耗电管理"
+            "meizu" in brand -> "检查后台管理、自启动和系统验证码短信的可读性"
+            else -> "检查电池优化、后台权限和默认短信角色"
+        }
+    }
+
     suspend fun checkRoot(): RootStatus = withContext(Dispatchers.IO) {
         val result = runFixedCommand("id", timeoutSeconds = 8)
         when {
@@ -57,16 +92,18 @@ object RootEnhancementManager {
 
         val packageName = context.packageName
         val commands = listOf(
-            "默认短信角色" to "cmd role get-role-holders android.app.role.SMS",
+            "默认短信角色" to "cmd role get-role-holders --user current android.app.role.SMS",
             "底层短信路由" to "settings get secure sms_default_application",
             "短信写入权限" to "appops get $packageName WRITE_SMS",
             "短信接收权限" to "appops get $packageName RECEIVE_SMS",
+            "短信发送权限" to "appops get $packageName SEND_SMS",
             "后台运行权限" to "appops get $packageName RUN_ANY_IN_BACKGROUND",
             "电池白名单" to "dumpsys deviceidle whitelist"
         )
         val lines = buildList {
             add("设备：${Build.MANUFACTURER} ${Build.MODEL} · Android ${Build.VERSION.RELEASE}")
             add("应用：$packageName")
+            add("品牌适配建议：${brandGuidance()}")
             commands.forEach { (label, command) ->
                 val result = runFixedCommand(command, timeoutSeconds = 10)
                 val output = result?.output?.trim().orEmpty()
@@ -84,12 +121,26 @@ object RootEnhancementManager {
     suspend fun applyRootFix(context: Context): FixResult = withContext(Dispatchers.IO) {
         val packageName = context.packageName
         val commands = getStandardFixCommands(packageName)
-        val details = commands.map { (label, command) ->
+        val details = commands.mapIndexed { index, (label, command) ->
             val result = runFixedCommand(command, timeoutSeconds = 10)
-            label to (result?.exitCode == 0)
+            val verified = if (result?.exitCode == 0) {
+                runFixedCommand(verificationCommand(index, packageName), timeoutSeconds = 10)
+            } else null
+            label to (verified?.exitCode == 0 && verificationMatches(index, packageName, verified.output))
         }
         val successCount = details.count { it.second }
         FixResult(successCount, details.size, details)
+    }
+
+    /** Restore declared SMS read access through the framework, never read or mutate its database file. */
+    suspend fun restoreSmsReadAccess(context: Context): Boolean = withContext(Dispatchers.IO) {
+        val packageName = context.packageName
+        require(Regex("[A-Za-z0-9_.]+").matches(packageName))
+        val user = android.os.Process.myUid() / 100000
+        runFixedCommand("pm grant --user $user $packageName android.permission.READ_SMS", 10)
+        runFixedCommand("appops set --user $user $packageName READ_SMS allow", 10)
+        context.checkSelfPermission(android.Manifest.permission.READ_SMS) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
     }
 
     private data class CommandResult(val exitCode: Int, val output: String)

@@ -22,10 +22,7 @@ import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import org.fossify.messages.messaging.sendMessageCompat
 import org.json.JSONObject
-import java.io.BufferedReader
-import java.io.BufferedWriter
 import java.net.HttpURLConnection
-import java.net.Socket
 import java.net.URL
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
@@ -38,8 +35,6 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
-import javax.net.ssl.SSLSocket
-import javax.net.ssl.SSLSocketFactory
 import org.fossify.commons.extensions.notificationManager
 import org.fossify.messages.extensions.conversationsDB
 import org.fossify.messages.extensions.markThreadMessagesRead
@@ -128,6 +123,7 @@ class MultiChannelForwardWorker(
 
         val successes = mutableListOf<String>()
         val failures = mutableListOf<String>()
+        val skippedReasons = mutableListOf<String>()
 
         suspend fun runChannel(name: String, channelKey: String, action: suspend () -> Unit) {
             operationId?.let { ShadowRepository.recordStep(applicationContext, it, "CHANNEL_REQUEST", "STARTED", name) }
@@ -139,8 +135,7 @@ class MultiChannelForwardWorker(
                         ShadowRepository.recordAttempt(applicationContext, it, channelKey, 
                             ForwardingShadowAttempt(
                                 attemptNumber = runAttemptCount + 1,
-                                state = "SUCCESS",
-                                httpStatus = 200
+                                state = "SUCCESS"
                             )
                         )
                     }
@@ -165,6 +160,27 @@ class MultiChannelForwardWorker(
 
         if (targetInstanceId.isNotBlank()) {
             val instance = config.channelInstances().firstOrNull { it.id == targetInstanceId }
+            // Safe one-hop fallback: only missing/disabled/unconfigured primary, before API submission.
+            if (!isTest && (instance == null || !instance.enabled || !instance.hasDispatchConfiguration()) &&
+                !inputData.getBoolean("fallback_hop", false)) {
+                val backup = ForwardingFallbackConfig(applicationContext).resolve(targetInstanceId, config.channelInstances())
+                if (backup != null) {
+                    val fallbackWork = OneTimeWorkRequestBuilder<MultiChannelForwardWorker>()
+                        .setInputData(androidx.work.Data.Builder().putAll(inputData)
+                            .putString(KEY_INSTANCE_ID, backup.id)
+                            .putString(KEY_TARGET_CHANNEL, backup.channelType)
+                            .putBoolean("fallback_hop", true)
+                            .putString(KEY_HISTORY_RECORD_ID, history.registerQueued(
+                                "fallback-${id}", "instance_${backup.id}", sender, body, receivedAt, subscriptionId, false))
+                            .build())
+                        .setConstraints(androidx.work.Constraints.Builder()
+                            .setRequiredNetworkType(if (backup.channelType in ForwardingChannels.networkChannels) NetworkType.CONNECTED else NetworkType.NOT_REQUIRED)
+                            .build()).build()
+                    WorkManager.getInstance(applicationContext).enqueueUniqueWork("fallback-${id}", ExistingWorkPolicy.KEEP, fallbackWork)
+                    if (historyRecordId.isNotBlank()) history.markSkipped(historyRecordId, "主通道发送前不可用，已交给备用通道")
+                    return@withContext Result.success()
+                }
+            }
             if (instance == null) {
                 history.markSkipped(historyRecordId, "目标实例不存在 (ID: $targetInstanceId)")
                 return@withContext Result.success()
@@ -173,7 +189,13 @@ class MultiChannelForwardWorker(
                 history.markSkipped(historyRecordId, "目标通道实例已停用 (${instance.name})")
                 return@withContext Result.success()
             }
-            runChannel(instance.name, "instance_${instance.id}") {
+            if (!isTest && instance.channelType == ForwardingChannels.SMS_DIRECT &&
+                instance.optBoolean("onlyOnNoNetwork", config.smsDirectOnlyOnNoNetwork) && isNetworkAvailable()
+            ) {
+                history.markSkipped(historyRecordId, "网络已通过系统验证，短信直发实例仅在断网时发送")
+                return@withContext Result.success()
+            }
+            runChannel(instance.name, instance.id) {
                 when (instance.channelType) {
                     ForwardingChannels.WECHAT_TEST -> {
                         val appId = instance.optString("appId")
@@ -282,6 +304,9 @@ class MultiChannelForwardWorker(
                         check(url.isNotBlank() && token.isNotBlank()) { "Gotify URL 或 Token 未配置" }
                         sendGotify(url, token, title, content, true)
                     }
+                    ForwardingChannels.WXPUSHER -> WxPusherSender.send(
+                        instance.optString("appToken"), instance.optString("targetId"), title, content
+                    )
                     ForwardingChannels.NTFY -> {
                         sendNtfy(
                             instance.optString("serverUrl").ifBlank { "https://ntfy.sh" },
@@ -346,12 +371,14 @@ class MultiChannelForwardWorker(
 
         // 短信直发逻辑
         if (shouldRun(ForwardingChannels.SMS_DIRECT, config.smsDirectEnabled)) {
-            if (onlyOnNoNetwork) {
+            if (onlyOnNoNetwork && !isTest) {
                 // 仅断网时发送模式
                 if (!networkAvailable) {
                     runChannel("短信直发", ForwardingChannels.SMS_DIRECT) {
                         sendSmsDirect(config.smsDirectPhone(), content, subscriptionId, isTest = isTest)
                     }
+                } else {
+                    skippedReasons += "网络已通过系统验证，跳过仅断网短信直发"
                 }
             } else {
                 // 始终发送模式
@@ -442,8 +469,14 @@ class MultiChannelForwardWorker(
                     ruleAllowedChannels.contains(instance.channelType)
                 )
             if (!isInstanceTargeted) continue
+            if (!isTest && instance.channelType == ForwardingChannels.SMS_DIRECT &&
+                instance.optBoolean("onlyOnNoNetwork", config.smsDirectOnlyOnNoNetwork) && isNetworkAvailable()
+            ) {
+                skippedReasons += "${instance.name}：网络已通过系统验证，跳过仅断网短信直发"
+                continue
+            }
 
-            runChannel(instance.name, "instance_${instance.id}") {
+            runChannel(instance.name, instance.id) {
                 when (instance.channelType) {
                     ForwardingChannels.WECHAT_TEST -> sendWechatTest(
                         instance.optString("appId"),
@@ -551,6 +584,9 @@ class MultiChannelForwardWorker(
                         check(url.isNotBlank() && token.isNotBlank()) { "Gotify URL 或 Token 未配置" }
                         sendGotify(url, token, title, content, true)
                     }
+                    ForwardingChannels.WXPUSHER -> WxPusherSender.send(
+                        instance.optString("appToken"), instance.optString("targetId"), title, content
+                    )
                     ForwardingChannels.NTFY -> {
                         val topic = instance.optString("topic")
                         check(topic.isNotBlank()) { "ntfy Topic 未配置" }
@@ -565,15 +601,20 @@ class MultiChannelForwardWorker(
                             content
                         )
                     }
-                    ForwardingChannels.EMAIL -> sendEmail(
-                        instance.optString("host"),
-                        instance.optInt("port", 465),
-                        0,
-                        instance.optString("user"),
-                        instance.optString("password"),
-                        instance.optString("recipients"),
-                        title,
-                        content
+                    ForwardingChannels.EMAIL -> {
+                        val port = instance.optInt("port", 465)
+                        val security = instance.optInt(
+                            "security",
+                            if (port == 587) MultiForwardConfig.EMAIL_SECURITY_STARTTLS else MultiForwardConfig.EMAIL_SECURITY_SSL
+                        )
+                        sendEmail(
+                            instance.optString("host"), port, security,
+                            instance.optString("user"), instance.optString("password"),
+                            instance.optString("recipients"), title, content
+                        )
+                    }
+                    ForwardingChannels.SERVERCHAN3 -> sendServerChan3(
+                        instance.optString("sendKey"), instance.optString("tags"), title, content
                     )
                     ForwardingChannels.QQ -> {
                         val qmsgKey = instance.optString("qmsgKey")
@@ -602,6 +643,7 @@ class MultiChannelForwardWorker(
             append(now)
             if (successes.isNotEmpty()) append(" 成功：${successes.joinToString("、")}")
             if (failures.isNotEmpty()) append(" 失败：${failures.joinToString("；")}")
+            if (skippedReasons.isNotEmpty()) append(" 跳过：${skippedReasons.joinToString("；")}")
         }
         Log.d(TAG, "result: successes=$successes, failures=$failures, attempt=$runAttemptCount, isTest=$isTest")
 
@@ -615,12 +657,15 @@ class MultiChannelForwardWorker(
         }
 
         val allFailuresArePermanent = failures.isNotEmpty() && failures.all { isPermanentError(it) }
-        val canRetry = !isTest && !allFailuresArePermanent && runAttemptCount < 2
+        // Retrying the whole Worker after one channel succeeded would submit that channel again.
+        val canRetry = !isTest && successes.isEmpty() && !allFailuresArePermanent && runAttemptCount < 2
 
         when {
             failures.isEmpty() && successes.isNotEmpty() -> {
                 if (historyRecordId.isNotBlank()) {
-                    history.markSuccess(historyRecordId, "发送成功：${successes.joinToString("、")}")
+                    val skippedDetail = if (skippedReasons.isEmpty()) "" else
+                        "；跳过：${skippedReasons.joinToString("；")}"
+                    history.markSuccess(historyRecordId, "已提交：${successes.joinToString("、")}$skippedDetail")
                 }
                 if (!isTest && config.markAsReadAfterForward && sender.isNotBlank()) {
                     markSmsAsRead(applicationContext, threadId, sender)
@@ -630,7 +675,8 @@ class MultiChannelForwardWorker(
             }
             failures.isEmpty() -> {
                 if (historyRecordId.isNotBlank()) {
-                    history.markSkipped(historyRecordId, "渠道已关闭、规则未允许或发送条件未满足")
+                    history.markSkipped(historyRecordId, skippedReasons.joinToString("；")
+                        .ifBlank { "渠道已关闭、规则未允许或发送条件未满足" })
                 }
                 Log.d(TAG, "result: skipped")
                 Result.success()
@@ -641,7 +687,10 @@ class MultiChannelForwardWorker(
                 Result.retry()
             }
             else -> {
-                if (historyRecordId.isNotBlank()) history.markFailed(historyRecordId, failures.joinToString("；"))
+                val detail = if (successes.isNotEmpty()) {
+                    "部分通道已提交（${successes.joinToString("、")}），为避免重复投递不自动重试；失败：${failures.joinToString("；")}"
+                } else failures.joinToString("；")
+                if (historyRecordId.isNotBlank()) history.markFailed(historyRecordId, detail)
                 Log.d(TAG, "result: failed (permanent or test error, no loop retry)")
                 Result.failure()
             }
@@ -735,136 +784,9 @@ class MultiChannelForwardWorker(
     }
 
     private fun sendEmail(
-        host: String,
-        port: Int,
-        security: Int,
-        user: String,
-        password: String,
-        recipientsText: String,
-        subject: String,
-        content: String,
-    ) {
-        require(host.isNotBlank() && user.isNotBlank() && password.isNotBlank() && recipientsText.isNotBlank()) {
-            "邮箱配置不完整"
-        }
-        val recipients = recipientsText.split(',', ';')
-            .map(String::trim)
-            .filter(String::isNotBlank)
-        require(recipients.isNotEmpty()) { "未配置收件邮箱" }
-
-        if (security == MultiForwardConfig.EMAIL_SECURITY_STARTTLS) {
-            sendEmailStartTls(host, port, user, password, recipients, subject, content)
-        } else {
-            createTlsSocket(host, port).use { socket ->
-                expectSmtp(socket.inputStream.bufferedReader(StandardCharsets.UTF_8), 220)
-                runSmtpSession(socket, user, password, recipients, subject, content)
-            }
-        }
-    }
-
-    private fun sendEmailStartTls(
-        host: String,
-        port: Int,
-        user: String,
-        password: String,
-        recipients: List<String>,
-        subject: String,
-        content: String,
-    ) {
-        val plainSocket = Socket()
-        plainSocket.connect(java.net.InetSocketAddress(host, port), SMTP_TIMEOUT_MS)
-        plainSocket.soTimeout = SMTP_TIMEOUT_MS
-        plainSocket.use {
-            val reader = it.inputStream.bufferedReader(StandardCharsets.UTF_8)
-            val writer = it.outputStream.bufferedWriter(StandardCharsets.UTF_8)
-            expectSmtp(reader, 220)
-            smtpCommand(writer, reader, "EHLO android-sms-forwarder", 250)
-            smtpCommand(writer, reader, "STARTTLS", 220)
-
-            val tlsSocket = (SSLSocketFactory.getDefault() as SSLSocketFactory)
-                .createSocket(it, host, port, true) as SSLSocket
-            configureTls(tlsSocket)
-            tlsSocket.use { ssl ->
-                runSmtpSession(ssl, user, password, recipients, subject, content)
-            }
-        }
-    }
-
-    private fun runSmtpSession(
-        socket: Socket,
-        user: String,
-        password: String,
-        recipients: List<String>,
-        subject: String,
-        content: String,
-    ) {
-        val reader = socket.inputStream.bufferedReader(StandardCharsets.UTF_8)
-        val writer = socket.outputStream.bufferedWriter(StandardCharsets.UTF_8)
-        smtpCommand(writer, reader, "EHLO android-sms-forwarder", 250)
-        smtpCommand(writer, reader, "AUTH LOGIN", 334)
-        smtpCommand(writer, reader, Base64.encodeToString(user.toByteArray(), Base64.NO_WRAP), 334)
-        smtpCommand(writer, reader, Base64.encodeToString(password.toByteArray(), Base64.NO_WRAP), 235)
-        smtpCommand(writer, reader, "MAIL FROM:<$user>", 250)
-        recipients.forEach { smtpCommand(writer, reader, "RCPT TO:<$it>", 250) }
-        smtpCommand(writer, reader, "DATA", 354)
-
-        val encodedSubject = Base64.encodeToString(subject.toByteArray(StandardCharsets.UTF_8), Base64.NO_WRAP)
-        val encodedBody = java.util.Base64.getMimeEncoder(76, "\r\n".toByteArray())
-            .encodeToString(content.toByteArray(StandardCharsets.UTF_8))
-        writer.write("From: <$user>\r\n")
-        writer.write("To: ${recipients.joinToString(", ")}\r\n")
-        writer.write("Subject: =?UTF-8?B?$encodedSubject?=\r\n")
-        writer.write("MIME-Version: 1.0\r\n")
-        writer.write("Content-Type: text/plain; charset=UTF-8\r\n")
-        writer.write("Content-Transfer-Encoding: base64\r\n\r\n")
-        writer.write(encodedBody)
-        writer.write("\r\n.\r\n")
-        writer.flush()
-        expectSmtp(reader, 250)
-        smtpCommand(writer, reader, "QUIT", 221)
-    }
-
-    private fun createTlsSocket(host: String, port: Int): SSLSocket {
-        val plainSocket = Socket()
-        plainSocket.connect(java.net.InetSocketAddress(host, port), SMTP_TIMEOUT_MS)
-        plainSocket.soTimeout = SMTP_TIMEOUT_MS
-        val sslSocket = (SSLSocketFactory.getDefault() as SSLSocketFactory)
-            .createSocket(plainSocket, host, port, true) as SSLSocket
-        configureTls(sslSocket)
-        return sslSocket
-    }
-
-    private fun configureTls(socket: SSLSocket) {
-        socket.soTimeout = SMTP_TIMEOUT_MS
-        socket.enabledProtocols = socket.enabledProtocols
-            .filter { it == "TLSv1.2" || it == "TLSv1.3" }
-            .toTypedArray()
-        socket.sslParameters = socket.sslParameters.apply {
-            endpointIdentificationAlgorithm = "HTTPS"
-        }
-        socket.startHandshake()
-    }
-
-    private fun smtpCommand(
-        writer: BufferedWriter,
-        reader: BufferedReader,
-        command: String,
-        expected: Int
-    ) {
-        writer.write(command)
-        writer.write("\r\n")
-        writer.flush()
-        expectSmtp(reader, expected)
-    }
-
-    private fun expectSmtp(reader: BufferedReader, expected: Int) {
-        var line = reader.readLine() ?: error("SMTP 服务器无响应")
-        val code = line.take(3).toIntOrNull() ?: error("SMTP 响应无效")
-        while (line.length > 3 && line[3] == '-') {
-            line = reader.readLine() ?: break
-        }
-        check(code == expected) { "SMTP $code ${line.drop(4)}" }
-    }
+        host: String, port: Int, security: Int, user: String, password: String,
+        recipientsText: String, subject: String, content: String
+    ) = SmtpSender.send(host, port, security, user, password, recipientsText, subject, content)
 
     private fun hmacSha256Base64(secret: String, content: String): String {
         val mac = Mac.getInstance("HmacSHA256")
@@ -922,14 +844,14 @@ class MultiChannelForwardWorker(
         require(serverUrl.isNotBlank() && topic.isNotBlank()) { "ntfy 服务地址或 Topic 未配置" }
         val base = serverUrl.trim().trimEnd('/')
         requireHttpsOrAllowedHttp(base, base.startsWith("http://"))
-        val connection = URL("$base/${URLEncoder.encode(topic.trim(), "UTF-8")}").openConnection() as HttpURLConnection
+        val connection = URL("$base/${NtfyProtocol.requireTopic(topic)}").openConnection() as HttpURLConnection
         connection.withDisconnect {
             requestMethod = "POST"
             connectTimeout = 10_000
             readTimeout = 12_000
             doOutput = true
             setRequestProperty("Content-Type", "text/plain; charset=utf-8")
-            setRequestProperty("Title", title)
+            setRequestProperty("Title", NtfyProtocol.titleHeader(title))
             setRequestProperty("Priority", priority.ifBlank { "default" })
             if (token.isNotBlank()) setRequestProperty("Authorization", "Bearer ${token.trim()}")
             if (tags.isNotBlank()) setRequestProperty("Tags", tags.trim())
@@ -967,10 +889,7 @@ class MultiChannelForwardWorker(
             payload.put("tags", tags.trim())
         }
         val res = postJson(url, payload)
-        val code = res.optInt("code", res.optInt("errno", -1))
-        check(code == 0 || code == 200 || res.optString("message").contains("success", ignoreCase = true)) {
-            res.optString("message", res.optString("errmsg", "Server酱³ 推送失败"))
-        }
+        ServerChan3Protocol.requireAccepted(res)
     }
 
     private fun getJson(url: String) = requestJson(url, "GET", null)
@@ -1032,21 +951,14 @@ class MultiChannelForwardWorker(
         val internet = capabilities.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
         val validated = capabilities.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED)
         Log.d(TAG, "network check: internet=$internet, validated=$validated")
-        return internet || validated
+        return internet && validated
     }
 
     private fun sendPushPlus(token: String, topic: String, title: String, content: String) {
         require(token.isNotBlank()) { "PushPlus Token 不能为空" }
-        val payload = JSONObject()
-            .put("token", token)
-            .put("title", title)
-            .put("content", content.replace("\n", "<br/>"))
-            .put("template", "html")
-        if (topic.isNotBlank()) payload.put("topic", topic)
+        val payload = PushPlusPayload.create(token, topic, title, content)
         val result = postJson("https://www.pushplus.plus/send", payload)
-        check(result.optInt("code", -1) == 200) {
-            result.optString("msg", "PushPlus 推送失败")
-        }
+        PushPlusPayload.requireAccepted(result)
     }
 
     private fun sendWechatTest(appId: String, appSecret: String, templateId: String, openId: String, title: String, content: String) {
@@ -1085,8 +997,7 @@ class MultiChannelForwardWorker(
         require(webhookOrKey.isNotBlank()) { "QQ 消息配置不能为空" }
         val text = "【$title】\n$content"
         if (type == "qmsg" || !webhookOrKey.startsWith("http")) {
-            val url = "https://qmsg.zendee.cn/send/$webhookOrKey"
-            postJson(url, JSONObject().put("msg", text))
+            QmsgSender.send(webhookOrKey, text)
         } else {
             require(targetId.isNotBlank()) { "OneBot 11 必须配置 user_id 或 group_id" }
             val isGroup = targetType == "group"
@@ -1103,7 +1014,7 @@ class MultiChannelForwardWorker(
                 mapOf("Authorization" to "Bearer ${accessToken.trim()}")
             }
             val response = postJson("$baseUrl/$action", payload, headers)
-            check(response.optInt("retcode", 0) == 0 && response.optString("status", "ok") != "failed") {
+            check(response.optInt("retcode", -1) == 0 && response.optString("status") == "ok") {
                 response.optString("message").ifBlank { response.optString("wording", "OneBot 11 发送失败") }
             }
         }

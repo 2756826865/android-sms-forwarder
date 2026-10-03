@@ -58,6 +58,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -67,6 +68,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -121,7 +124,9 @@ data class ChannelTypeDefinition(
 )
 
 val ALL_CHANNEL_TYPE_DEFINITIONS = listOf(
+    ChannelTypeDefinition(ForwardingChannels.WXPUSHER, "WxPusher 消息推送", "按 UID 或主题推送至已绑定设备", "📨", ChannelCategory.WECHAT),
     ChannelTypeDefinition(ForwardingChannels.PUSHPLUS, "PushPlus 微信推送", "微信服务号一对一或群组推送", "💬", ChannelCategory.WECHAT),
+    ChannelTypeDefinition(ForwardingChannels.SERVERCHAN3, "Server酱³", "客户端与厂商通道通知推送", "🔔", ChannelCategory.WECHAT),
     ChannelTypeDefinition(ForwardingChannels.WECHAT_TEST, "微信测试号", "微信公众平台测试号模板消息直推", "🟢", ChannelCategory.WECHAT),
     ChannelTypeDefinition(ForwardingChannels.WECOM_BOT, "企业微信群机器人", "企业微信内部群 Webhook 机器人", "🤖", ChannelCategory.WECHAT),
     ChannelTypeDefinition(ForwardingChannels.WECOM_STREAM, "企业微信智能机器人 (长连接)", "通过官方长连接主动推送消息（免公网IP）", "💬", ChannelCategory.WECHAT),
@@ -213,6 +218,8 @@ fun getChannelTutorial(channelId: String): String = when (channelId) {
         【Qmsg酱模式】:
         1. 访问 qmsg.zendee.cn 登录并添加 Qmsg 官方 QQ 机器人为好友
         2. 在后台复制您的 Qmsg Key 填入即可
+        3. 使用 Qmsg v3 表单接口；单条最多 1800 字，同一 Key 每 5 秒最多提交一次
+        4. “测试已受理”表示取得异步消息 ID，最终送达仍以 QQ 或 Qmsg 回执为准
         【OneBot 11 / NapCat 模式】:
         1. 在 NapCat 中开启 OneBot 11 HTTP 服务，填写服务地址（例如 http://设备IP:3000）
         2. NapCat 配置了 Token 时必须填写 Access Token；未配置则留空
@@ -255,6 +262,11 @@ fun getChannelTutorial(channelId: String): String = when (channelId) {
         2. 打开 Bark 首页复制您的专属 Device Key
         3. 填入 App 保存，苹果设备即可通过 APNs 极速低功耗弹窗
     """.trimIndent()
+    ForwardingChannels.WXPUSHER -> """
+        1. 在 WxPusher 后台创建应用，复制 AppToken
+        2. 接收者关注应用后，填写 UID_ 开头的 UID；群发可填写数字 Topic ID
+        3. 测试成功表示服务端创建发送任务，最终通知以接收设备为准
+    """.trimIndent()
     ForwardingChannels.NTFY -> """
         1. 使用 ntfy.sh 或部署自己的 ntfy 服务
         2. 创建一个不易猜测的 Topic，并在接收设备订阅该 Topic
@@ -286,11 +298,15 @@ fun getChannelTutorial(channelId: String): String = when (channelId) {
         2. 复制生成的告警 Webhook URL 与 Secret 填入，可触发免费短信提醒
     """.trimIndent()
     ForwardingChannels.EMAIL -> """
+        支持提供 SMTP + SSL/STARTTLS + 密码或应用授权码的邮箱，不限 QQ/163。
+        仅允许 OAuth 登录的服务暂不支持。
         以 QQ 邮箱为例:
         1. SMTP 服务器: smtp.qq.com (端口 465 SSL)
         2. 发件账号: 您的 QQ 邮箱
         3. 授权码: QQ邮箱网页版 ->【设置】->【账户】-> 开启 POP3/SMTP 生成的16位授权码
-        4. 接收邮箱: 填入接收通知的目标邮箱
+        4. 接收邮箱: 多个邮箱用英文逗号或分号分隔
+        5. 其他邮箱按服务商文档填写主机、端口与安全模式；通常 465 使用 SSL，587 使用 STARTTLS。
+        测试成功表示邮件服务器已受理，仍需检查收件箱或垃圾邮件。
     """.trimIndent()
     ForwardingChannels.SMS_DIRECT -> """
         通过手机插入的备用 SIM 卡，直接以短信方式重发给指定的目标手机号。
@@ -307,7 +323,7 @@ fun getChannelTutorial(channelId: String): String = when (channelId) {
         1. 前往方糖 Server酱³ 官网 (ft07.com) 扫码登录并获取 SendKey（例如 sctp123456t...）
         2. 手机安装 Server酱 客户端 App 并注册厂商通道（小米/华为/OPPO/vivo/iOS/FCM等）
         3. 填入 SendKey 即可实现免后台厂商原生推送，省电且无需后台常驻
-        4. 可选配置消息标签 tags（半角逗号分隔，客户端内分类过滤）
+        4. 可选配置消息标签 tags（使用竖线 | 分隔，客户端内分类过滤）
     """.trimIndent()
     ForwardingChannels.CHANNEL_GROUP -> """
         自由勾选多个已配置的通道组合为一个群组。
@@ -390,6 +406,7 @@ fun getInstanceSummary(instance: ForwardingChannelInstance): String {
             val serverUrl = instance.optString("serverUrl")
             if (serverUrl.isNotBlank()) "Server: ${serverUrl.take(20)}..." else "未配置服务"
         }
+        ForwardingChannels.WXPUSHER -> instance.optString("targetId").ifBlank { "未配置 UID / Topic ID" }
         ForwardingChannels.NTFY -> {
             val serverUrl = instance.optString("serverUrl")
             val topic = instance.optString("topic")
@@ -503,12 +520,7 @@ fun ChannelHubScreen(
     var showForwardSettingsDialog by remember { mutableStateOf(false) }
 
     val allChannelItems = remember(instances) {
-        val removedTypes = setOf(
-            ForwardingChannels.WECHAT_TEST,
-            ForwardingChannels.WECOM_BOT,
-            ForwardingChannels.WECOM_APP
-        )
-        val supportedDefinitions = ALL_CHANNEL_TYPE_DEFINITIONS.filterNot { it.type in removedTypes }
+        val supportedDefinitions = ALL_CHANNEL_TYPE_DEFINITIONS
         val catalogItems = supportedDefinitions.flatMap { definition ->
             instances.filter { it.channelType == definition.type }.ifEmpty {
                 listOf(
@@ -523,7 +535,7 @@ fun ChannelHubScreen(
             }
         }
         catalogItems + instances.filter { instance ->
-            supportedDefinitions.none { it.type == instance.channelType } && instance.channelType !in removedTypes
+            supportedDefinitions.none { it.type == instance.channelType }
         }
     }
     val visibleInstances = if (selectedSection == "custom") instances else allChannelItems
@@ -1047,6 +1059,7 @@ fun InstanceEditorDialog(
         mutableStateOf(
             when (selectedType) {
                 ForwardingChannels.PUSHPLUS -> existingInstance?.optString("token") ?: ""
+                ForwardingChannels.WXPUSHER -> existingInstance?.optString("appToken") ?: ""
                 ForwardingChannels.WECHAT_TEST -> existingInstance?.optString("appId") ?: ""
                 ForwardingChannels.QQ -> existingInstance?.optString("qmsgKey")?.ifBlank { existingInstance.optString("onebotUrl") } ?: ""
                 ForwardingChannels.WECOM, ForwardingChannels.WECOM_APP -> existingInstance?.optString("corpId") ?: ""
@@ -1072,6 +1085,7 @@ fun InstanceEditorDialog(
         mutableStateOf(
             when (selectedType) {
                 ForwardingChannels.PUSHPLUS -> existingInstance?.optString("topic") ?: ""
+                ForwardingChannels.WXPUSHER -> existingInstance?.optString("targetId") ?: ""
                 ForwardingChannels.WECHAT_TEST -> existingInstance?.optString("appSecret") ?: ""
                 ForwardingChannels.QQ -> existingInstance?.optString("type") ?: "qmsg"
                 ForwardingChannels.WECOM, ForwardingChannels.WECOM_APP -> existingInstance?.optString("agentId") ?: ""
@@ -1157,6 +1171,16 @@ fun InstanceEditorDialog(
     var dingTalkWhitelistEnabled by remember {
         mutableStateOf(existingInstance?.optBoolean("whitelistEnabled", false) ?: false)
     }
+    var smsDirectOnlyOnNoNetwork by remember {
+        val legacyMode = MultiForwardConfig(context).smsDirectOnlyOnNoNetwork
+        mutableStateOf(existingInstance?.optBoolean("onlyOnNoNetwork", legacyMode) ?: legacyMode)
+    }
+    var emailPort by remember { mutableStateOf(existingInstance?.optInt("port", 465)?.toString() ?: "465") }
+    var emailSecurity by remember {
+        val port = existingInstance?.optInt("port", 465) ?: 465
+        mutableIntStateOf(existingInstance?.optInt("security", if (port == 587) MultiForwardConfig.EMAIL_SECURITY_STARTTLS else MultiForwardConfig.EMAIL_SECURITY_SSL)
+            ?: MultiForwardConfig.EMAIL_SECURITY_SSL)
+    }
     var weComSourceId by remember {
         mutableStateOf(existingInstance?.optString("sourceInstanceId").orEmpty())
     }
@@ -1164,11 +1188,15 @@ fun InstanceEditorDialog(
     var typeMenuExpanded by remember { mutableStateOf(false) }
     var weComSourceMenuExpanded by remember { mutableStateOf(false) }
     var isTesting by remember { mutableStateOf(false) }
+    var showSecrets by remember { mutableStateOf(false) }
+    val secretVisualTransformation = if (showSecrets) VisualTransformation.None else PasswordVisualTransformation()
     var testFeedback by remember { mutableStateOf<String?>(null) }
     var testedConfiguration by remember { mutableStateOf<Pair<String, String>?>(null) }
 
     fun hasRequiredConfiguration(): Boolean = when (selectedType) {
         ForwardingChannels.PUSHPLUS -> f1.isNotBlank()
+        ForwardingChannels.WXPUSHER -> f1.isNotBlank() &&
+            (f2.trim().startsWith("UID_") || f2.trim().toLongOrNull()?.let { it > 0 } == true)
         ForwardingChannels.WECHAT_TEST -> listOf(f1, f2, f3, f4).all { it.isNotBlank() }
         ForwardingChannels.QQ -> f1.isNotBlank() && (f2 == "qmsg" || f4.isNotBlank())
         ForwardingChannels.WECOM, ForwardingChannels.WECOM_APP -> listOf(f1, f2, f3, f4).all { it.isNotBlank() }
@@ -1183,7 +1211,8 @@ fun InstanceEditorDialog(
         ForwardingChannels.WEBSOCKET -> f1.isNotBlank()
         ForwardingChannels.TELEGRAM -> f1.isNotBlank() && f2.isNotBlank()
         ForwardingChannels.DISCORD, ForwardingChannels.TENCENT_CLOUD -> f1.isNotBlank()
-        ForwardingChannels.EMAIL -> listOf(f1, f2, f3, f4).all { it.isNotBlank() }
+        ForwardingChannels.EMAIL -> listOf(f1, f2, f3, f4).all { it.isNotBlank() } &&
+            emailPort.toIntOrNull()?.let { it in 1..65535 } == true
         ForwardingChannels.SMS_DIRECT -> f1.isNotBlank()
         ForwardingChannels.CUSTOM_WEBHOOK -> f1.isNotBlank() &&
             customWebhookMethod.uppercase() in setOf("GET", "POST", "PUT")
@@ -1194,12 +1223,13 @@ fun InstanceEditorDialog(
     }
 
     fun currentInstance(): ForwardingChannelInstance {
-        // Keep persisted settings that this editor does not expose (for example SMTP port).
+        // Keep persisted settings that this editor does not expose.
         val configJson = existingInstance?.takeIf { it.channelType == selectedType }?.let {
             runCatching { JSONObject(it.configJson) }.getOrNull()
         } ?: JSONObject()
         when (selectedType) {
             ForwardingChannels.PUSHPLUS -> configJson.put("token", f1).put("topic", f2)
+            ForwardingChannels.WXPUSHER -> configJson.put("appToken", f1).put("targetId", f2.trim())
             ForwardingChannels.WECHAT_TEST -> configJson.put("appId", f1).put("appSecret", f2).put("templateId", f3).put("openId", f4)
             ForwardingChannels.QQ -> {
                 // Only one provider target may remain after changing the QQ provider.
@@ -1235,10 +1265,11 @@ fun InstanceEditorDialog(
             ForwardingChannels.DISCORD -> configJson.put("webhook", f1)
             ForwardingChannels.TENCENT_CLOUD -> configJson.put("webhook", f1).put("secret", f2)
             ForwardingChannels.EMAIL -> {
-                if (!configJson.has("port")) configJson.put("port", 465)
-                configJson.put("host", f1).put("user", f2).put("password", f3).put("recipients", f4)
+                configJson.put("port", emailPort.toIntOrNull() ?: 465).put("security", emailSecurity)
+                    .put("host", f1).put("user", f2).put("password", f3).put("recipients", f4)
             }
             ForwardingChannels.SMS_DIRECT -> configJson.put("phone", f1)
+                .put("onlyOnNoNetwork", smsDirectOnlyOnNoNetwork)
             ForwardingChannels.CUSTOM_WEBHOOK -> configJson.put("url", f1).put("headers", f2)
                 .put("method", customWebhookMethod.uppercase())
                 .put("contentType", customWebhookContentType)
@@ -1272,6 +1303,9 @@ fun InstanceEditorDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                TextButton(onClick = { showSecrets = !showSecrets }) {
+                    Text(if (showSecrets) "隐藏密钥与授权码" else "显示密钥与授权码")
+                }
                 // 通道类型选择器 (仅新增时可选)
                 if (!isEditing) {
                     Text("选择通道类型：", fontSize = 12.sp, fontWeight = FontWeight.Bold)
@@ -1318,6 +1352,8 @@ fun InstanceEditorDialog(
                                         f5 = ""
                                         f6 = ""
                                         f7 = ""
+                                        emailPort = "465"
+                                        emailSecurity = MultiForwardConfig.EMAIL_SECURITY_SSL
                                         dingTalkWhitelistEnabled = false
                                         weComSourceId = if (def.type == ForwardingChannels.WECOM_STREAM && weComSources.size == 1) {
                                             weComSources.single().id
@@ -1362,12 +1398,12 @@ fun InstanceEditorDialog(
                 // 根据类型显示对应输入字段
                 when (selectedType) {
                     ForwardingChannels.PUSHPLUS -> {
-                        OutlinedTextField(value = f1, onValueChange = { f1 = it }, label = { Text("Token (一对一密钥)") }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(value = f1, onValueChange = { f1 = it }, label = { Text("Token (一对一密钥)") }, visualTransformation = secretVisualTransformation, modifier = Modifier.fillMaxWidth())
                         OutlinedTextField(value = f2, onValueChange = { f2 = it }, label = { Text("Topic (群组编码 选填)") }, modifier = Modifier.fillMaxWidth())
                     }
                     ForwardingChannels.WECHAT_TEST -> {
                         OutlinedTextField(value = f1, onValueChange = { f1 = it }, label = { Text("appID") }, modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(value = f2, onValueChange = { f2 = it }, label = { Text("appsecret") }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(value = f2, onValueChange = { f2 = it }, label = { Text("appsecret") }, visualTransformation = secretVisualTransformation, modifier = Modifier.fillMaxWidth())
                         OutlinedTextField(value = f3, onValueChange = { f3 = it }, label = { Text("template_id (模板ID)") }, modifier = Modifier.fillMaxWidth())
                         OutlinedTextField(value = f4, onValueChange = { f4 = it }, label = { Text("openID (接收者微信号)") }, modifier = Modifier.fillMaxWidth())
                     }
@@ -1384,7 +1420,7 @@ fun InstanceEditorDialog(
                             }
                         }
                         if (f2 == "qmsg") {
-                            OutlinedTextField(value = f1, onValueChange = { f1 = it }, label = { Text("Qmsg Key") }, modifier = Modifier.fillMaxWidth())
+                            OutlinedTextField(value = f1, onValueChange = { f1 = it }, label = { Text("Qmsg Key") }, visualTransformation = secretVisualTransformation, modifier = Modifier.fillMaxWidth())
                         } else {
                             OutlinedTextField(
                                 value = f1,
@@ -1397,6 +1433,7 @@ fun InstanceEditorDialog(
                                 value = f3,
                                 onValueChange = { f3 = it },
                                 label = { Text("Access Token（未启用鉴权可留空）") },
+                                visualTransformation = secretVisualTransformation,
                                 modifier = Modifier.fillMaxWidth()
                             )
                             Text("消息目标", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
@@ -1425,7 +1462,7 @@ fun InstanceEditorDialog(
                     ForwardingChannels.WECOM, ForwardingChannels.WECOM_APP -> {
                         OutlinedTextField(value = f1, onValueChange = { f1 = it }, label = { Text("企业ID (corpid)") }, modifier = Modifier.fillMaxWidth())
                         OutlinedTextField(value = f2, onValueChange = { f2 = it }, label = { Text("应用ID (agentid)") }, modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(value = f3, onValueChange = { f3 = it }, label = { Text("应用Secret (corpsecret)") }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(value = f3, onValueChange = { f3 = it }, label = { Text("应用Secret (corpsecret)") }, visualTransformation = secretVisualTransformation, modifier = Modifier.fillMaxWidth())
                         OutlinedTextField(value = f4, onValueChange = { f4 = it }, label = { Text("接收人 (touser 如 @all)") }, modifier = Modifier.fillMaxWidth())
                     }
                     ForwardingChannels.WECOM_STREAM -> {
@@ -1518,15 +1555,15 @@ fun InstanceEditorDialog(
                     }
                     ForwardingChannels.FEISHU_APP -> {
                         OutlinedTextField(value = f1, onValueChange = { f1 = it }, label = { Text("App ID (cli_xxx)") }, modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(value = f2, onValueChange = { f2 = it }, label = { Text("App Secret") }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(value = f2, onValueChange = { f2 = it }, label = { Text("App Secret") }, visualTransformation = secretVisualTransformation, modifier = Modifier.fillMaxWidth())
                         OutlinedTextField(value = f3, onValueChange = { f3 = it }, label = { Text("接收人 receive_id (open_id)") }, modifier = Modifier.fillMaxWidth())
                     }
                     ForwardingChannels.DINGTALK -> {
                         OutlinedTextField(value = f1, onValueChange = { f1 = it }, label = { Text("Webhook URL") }, modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(value = f2, onValueChange = { f2 = it }, label = { Text("加签密钥 Secret (SEC...)") }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(value = f2, onValueChange = { f2 = it }, label = { Text("加签密钥 Secret (SEC...)") }, visualTransformation = secretVisualTransformation, modifier = Modifier.fillMaxWidth())
                         Text("远程发送（选填）", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                         OutlinedTextField(value = f3, onValueChange = { f3 = it }, label = { Text("Stream Client ID") }, modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(value = f4, onValueChange = { f4 = it }, label = { Text("Stream Client Secret") }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(value = f4, onValueChange = { f4 = it }, label = { Text("Stream Client Secret") }, visualTransformation = secretVisualTransformation, modifier = Modifier.fillMaxWidth())
                         OutlinedTextField(value = f5, onValueChange = { f5 = it }, label = { Text("指令前缀（选填，默认 /发信）") }, modifier = Modifier.fillMaxWidth())
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -1564,18 +1601,18 @@ fun InstanceEditorDialog(
                     }
                     ForwardingChannels.FEISHU, ForwardingChannels.FEISHU_BOT -> {
                         OutlinedTextField(value = f1, onValueChange = { f1 = it }, label = { Text("Webhook URL") }, modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(value = f2, onValueChange = { f2 = it }, label = { Text("签名密钥 Secret (选填)") }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(value = f2, onValueChange = { f2 = it }, label = { Text("签名密钥 Secret (选填)") }, visualTransformation = secretVisualTransformation, modifier = Modifier.fillMaxWidth())
                     }
                     ForwardingChannels.BARK -> {
                         OutlinedTextField(value = f1, onValueChange = { f1 = it }, label = { Text("服务器 (默认 https://api.day.app)") }, modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(value = f2, onValueChange = { f2 = it }, label = { Text("Device Key") }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(value = f2, onValueChange = { f2 = it }, label = { Text("Device Key") }, visualTransformation = secretVisualTransformation, modifier = Modifier.fillMaxWidth())
                     }
                     ForwardingChannels.WEBSOCKET -> {
                         OutlinedTextField(value = f1, onValueChange = { f1 = it }, label = { Text("WebSocket URL (ws://... 或 http://...)") }, modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(value = f2, onValueChange = { f2 = it }, label = { Text("客户端 Token / 频道号") }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(value = f2, onValueChange = { f2 = it }, label = { Text("客户端 Token / 频道号") }, visualTransformation = secretVisualTransformation, modifier = Modifier.fillMaxWidth())
                     }
                     ForwardingChannels.TELEGRAM -> {
-                        OutlinedTextField(value = f1, onValueChange = { f1 = it }, label = { Text("Bot Token (如 123456:ABC-DEF...)") }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(value = f1, onValueChange = { f1 = it }, label = { Text("Bot Token (如 123456:ABC-DEF...)") }, visualTransformation = secretVisualTransformation, modifier = Modifier.fillMaxWidth())
                         OutlinedTextField(value = f2, onValueChange = { f2 = it }, label = { Text("Chat ID (如 -100123456)") }, modifier = Modifier.fillMaxWidth())
                     }
                     ForwardingChannels.DISCORD -> {
@@ -1583,16 +1620,39 @@ fun InstanceEditorDialog(
                     }
                     ForwardingChannels.TENCENT_CLOUD -> {
                         OutlinedTextField(value = f1, onValueChange = { f1 = it }, label = { Text("告警 Webhook URL") }, modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(value = f2, onValueChange = { f2 = it }, label = { Text("Secret 签名密钥 (选填)") }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(value = f2, onValueChange = { f2 = it }, label = { Text("Secret 签名密钥 (选填)") }, visualTransformation = secretVisualTransformation, modifier = Modifier.fillMaxWidth())
                     }
                     ForwardingChannels.EMAIL -> {
                         OutlinedTextField(value = f1, onValueChange = { f1 = it }, label = { Text("SMTP 服务器 (如 smtp.qq.com)") }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(value = emailPort, onValueChange = { emailPort = it.filter(Char::isDigit) }, label = { Text("SMTP 端口 (465 或 587)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FilterChip(selected = emailSecurity == MultiForwardConfig.EMAIL_SECURITY_SSL, onClick = {
+                                emailSecurity = MultiForwardConfig.EMAIL_SECURITY_SSL
+                                if (emailPort == "587") emailPort = "465"
+                            }, label = { Text("SSL/TLS") })
+                            FilterChip(selected = emailSecurity == MultiForwardConfig.EMAIL_SECURITY_STARTTLS, onClick = {
+                                emailSecurity = MultiForwardConfig.EMAIL_SECURITY_STARTTLS
+                                if (emailPort == "465") emailPort = "587"
+                            }, label = { Text("STARTTLS") })
+                        }
                         OutlinedTextField(value = f2, onValueChange = { f2 = it }, label = { Text("发件账号 (如 xxx@qq.com)") }, modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(value = f3, onValueChange = { f3 = it }, label = { Text("授权码 / 密码") }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(value = f3, onValueChange = { f3 = it }, label = { Text("授权码 / 密码") }, visualTransformation = secretVisualTransformation, modifier = Modifier.fillMaxWidth())
                         OutlinedTextField(value = f4, onValueChange = { f4 = it }, label = { Text("接收邮箱 (多个用逗号隔开)") }, modifier = Modifier.fillMaxWidth())
                     }
                     ForwardingChannels.SMS_DIRECT -> {
                         OutlinedTextField(value = f1, onValueChange = { f1 = it }, label = { Text("目标接收手机号码") }, modifier = Modifier.fillMaxWidth())
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                            Text("仅断网时发送", modifier = Modifier.weight(1f))
+                            Switch(
+                                checked = smsDirectOnlyOnNoNetwork,
+                                onCheckedChange = { smsDirectOnlyOnNoNetwork = it }
+                            )
+                        }
+                        Text(
+                            "开启后，仅在当前网络不可用时自动转发；通道测试仍会发送短信。",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                     ForwardingChannels.CUSTOM_WEBHOOK -> {
                         OutlinedTextField(value = f1, onValueChange = { f1 = it }, label = { Text("请求地址") }, modifier = Modifier.fillMaxWidth())
@@ -1649,7 +1709,11 @@ fun InstanceEditorDialog(
                     }
                     ForwardingChannels.GOTIFY -> {
                         OutlinedTextField(value = f1, onValueChange = { f1 = it }, label = { Text("Gotify 服务地址 (http://... 或 https://...)") }, modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(value = f2, onValueChange = { f2 = it }, label = { Text("App Token") }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(value = f2, onValueChange = { f2 = it }, label = { Text("App Token") }, visualTransformation = secretVisualTransformation, modifier = Modifier.fillMaxWidth())
+                    }
+                    ForwardingChannels.WXPUSHER -> {
+                        OutlinedTextField(value = f1, onValueChange = { f1 = it }, label = { Text("WxPusher AppToken") }, visualTransformation = secretVisualTransformation, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(value = f2, onValueChange = { f2 = it }, label = { Text("接收 UID_... 或数字 Topic ID") }, modifier = Modifier.fillMaxWidth())
                     }
                     ForwardingChannels.NTFY -> {
                         OutlinedTextField(value = f1, onValueChange = { f1 = it }, label = { Text("ntfy 服务地址") }, modifier = Modifier.fillMaxWidth())
@@ -1664,6 +1728,7 @@ fun InstanceEditorDialog(
                             value = f3,
                             onValueChange = { f3 = it },
                             label = { Text("访问 Token（选填）") },
+                            visualTransformation = secretVisualTransformation,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -1682,6 +1747,7 @@ fun InstanceEditorDialog(
                             value = f1,
                             onValueChange = { f1 = it },
                             label = { Text("SendKey (例如 sctp123456t...)") },
+                            visualTransformation = secretVisualTransformation,
                             placeholder = { Text("从方糖 Server酱³ 控制台获取") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
                             modifier = Modifier.fillMaxWidth()
@@ -1689,8 +1755,8 @@ fun InstanceEditorDialog(
                         OutlinedTextField(
                             value = f2,
                             onValueChange = { f2 = it },
-                            label = { Text("标签 Tags（选填，逗号分隔）") },
-                            placeholder = { Text("例如 验证码,重要通知") },
+                            label = { Text("标签 Tags（选填，用 | 分隔）") },
+                            placeholder = { Text("例如 验证码|重要通知") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -1749,7 +1815,7 @@ fun InstanceEditorDialog(
                             }
                         }
                     },
-                    enabled = !isTesting
+                    enabled = !isTesting && hasRequiredConfiguration()
                 ) {
                     if (isTesting) {
                         CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
@@ -2017,7 +2083,7 @@ fun ForwardSettingsDialog(onDismiss: () -> Unit) {
                         Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
                             Text("Root 增强模式（实验）", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
                             Text(
-                                "开发版能力总开关，默认关闭。开启仅保存授权意向，当前版本不会自动执行 Root 命令或修改系统。",
+                                "开启后检查 Root、补同步近一天短信，必要时尝试恢复 READ_SMS 权限。同时开启后台保活时启动实验守护；不补转发历史短信。",
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -2027,6 +2093,7 @@ fun ForwardSettingsDialog(onDismiss: () -> Unit) {
                             onCheckedChange = {
                                 rootEnhancementEnabled = it
                                 config.rootEnhancementEnabled = it
+                                org.fossify.messages.security.root.RootMaintenanceWorker.sync(context)
                             }
                         )
                     }
@@ -2090,6 +2157,7 @@ fun ForwardSettingsDialog(onDismiss: () -> Unit) {
                                             rootCheckRunning = true
                                             scope.launch {
                                                 val fixResult = RootEnhancementManager.applyRootFix(context)
+                                                RootEnhancementManager.restoreSmsReadAccess(context)
                                                 val report = RootEnhancementManager.collectReadOnlyDiagnostics(context)
                                                 rootStatusText = "Root 修复完成 (${fixResult.successCount}/${fixResult.totalCount})"
                                                 val fixLog = fixResult.details.joinToString("\n") { (k, v) -> if (v) "✓ $k: 成功" else "✗ $k: 失败" }

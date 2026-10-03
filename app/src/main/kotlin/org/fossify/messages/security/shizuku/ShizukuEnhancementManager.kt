@@ -117,9 +117,12 @@ object ShizukuEnhancementManager {
     suspend fun applyShizukuFix(context: Context): RootEnhancementManager.FixResult = withContext(Dispatchers.IO) {
         val packageName = context.packageName
         val commands = RootEnhancementManager.getStandardFixCommands(packageName)
-        val details = commands.map { (label, command) ->
+        val details = commands.mapIndexed { index, (label, command) ->
             val result = runFixedShizukuCommand(command, timeoutSeconds = 10)
-            label to (result?.exitCode == 0)
+            val verified = if (result?.exitCode == 0) {
+                runFixedShizukuCommand(RootEnhancementManager.verificationCommand(index, packageName), timeoutSeconds = 10)
+            } else null
+            label to (verified?.exitCode == 0 && RootEnhancementManager.verificationMatches(index, packageName, verified.output))
         }
         val successCount = details.count { it.second }
         RootEnhancementManager.FixResult(successCount, details.size, details)

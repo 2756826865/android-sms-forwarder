@@ -69,7 +69,8 @@ class NotificationForwardListenerService : NotificationListenerService() {
         val deduplicateKey = "$packageName|$title|$text"
         val now = System.currentTimeMillis()
         cleanExpiredDeduplicationKeys(now)
-        if (recentDeduplicationMap.putIfAbsent(deduplicateKey, now) != null) {
+        val previous = recentDeduplicationMap.put(deduplicateKey, now)
+        if (previous != null && now - previous in 0 until DEDUPLICATE_WINDOW_MS) {
             // 命中防抖窗口，直接忽略
             return
         }

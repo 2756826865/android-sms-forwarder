@@ -25,6 +25,13 @@ data class ChannelDefinition(
 object ChannelRegistry {
     val allDefinitions: List<ChannelDefinition> = listOf(
         ChannelDefinition(
+            id = ForwardingChannels.WXPUSHER,
+            name = "WxPusher 消息推送",
+            description = "向已关注应用的 UID 或主题 Topic 推送消息",
+            iconEmoji = "📨",
+            category = ChannelCategory.WECHAT
+        ),
+        ChannelDefinition(
             id = ForwardingChannels.PUSHPLUS,
             name = "PushPlus 微信推送",
             description = "免自建服务器，微信公众号极速实时触达",

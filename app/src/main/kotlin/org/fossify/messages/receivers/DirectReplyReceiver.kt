@@ -27,6 +27,7 @@ class DirectReplyReceiver : BroadcastReceiver() {
         var body = RemoteInput.getResultsFromIntent(intent)?.getCharSequence(REPLY)?.toString() ?: return
 
         body = context.removeDiacriticsIfNeeded(body)
+        if (body.isBlank()) return
 
         if (address != null) {
             val simResult = SubscriptionResolver.resolve(
@@ -46,6 +47,7 @@ class DirectReplyReceiver : BroadcastReceiver() {
                         addresses = listOf(address),
                         subId = subscriptionId,
                         attachments = emptyList(),
+                        propagateErrors = true,
                         triggerType = SmsSendTriggerType.DIRECT_REPLY
                     )
                     val message = context.getMessages(
@@ -59,6 +61,7 @@ class DirectReplyReceiver : BroadcastReceiver() {
                     }
                 } catch (e: Exception) {
                     context.showErrorToast(e)
+                    return@ensureBackgroundThread
                 }
 
                 val photoUri = context.getNameAndPhotoFromPhoneNumber(address).photoUri.orEmpty()

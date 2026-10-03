@@ -281,7 +281,7 @@ class RuleEditorViewModel(
         val rendered = decision.targets.firstOrNull()?.renderedContent ?: engine.applyRegexReplacements(state.testBody, draftRule.regexReplacements)
 
         _uiState.update {
-            it.copy(testResultSummary = summary, testRenderedContent = rendered)
+            it.copy(testResultSummary = summary + "\n" + decision.diagnostics.joinToString("\n"), testRenderedContent = rendered)
         }
     }
 

@@ -13,6 +13,8 @@ import org.fossify.messages.models.SmsSendOperationEntity
 import org.fossify.messages.models.SmsSendPartEntity
 import org.fossify.messages.models.SmsSendState
 import org.fossify.messages.models.SmsSendTriggerType
+import org.fossify.messages.models.Events
+import org.greenrobot.eventbus.EventBus
 import kotlin.coroutines.cancellation.CancellationException
 
 /**
@@ -51,6 +53,7 @@ object SmsSendRepository {
                     state = SmsSendState.PENDING.name
                 )
                 context.getMessagesDB().SmsSendDao().insertOperation(operation)
+                EventBus.getDefault().post(Events.RefreshSendHistory())
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -116,6 +119,7 @@ object SmsSendRepository {
                     submittedAt = now,
                     updatedAt = now
                 ))
+                EventBus.getDefault().post(Events.RefreshSendHistory())
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -241,6 +245,7 @@ object SmsSendRepository {
                         updatedAt = now
                     )
                 )
+                EventBus.getDefault().post(Events.RefreshSendHistory())
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -285,6 +290,7 @@ object SmsSendRepository {
                         updatedAt = now
                     )
                 )
+                EventBus.getDefault().post(Events.RefreshSendHistory())
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -301,6 +307,7 @@ object SmsSendRepository {
                 val dao = context.getMessagesDB().SmsSendDao()
                 val existing = dao.getOperationById(operationId) ?: return@launch
                 dao.updateOperation(existing.copy(state = SmsSendState.FAILED.name, errorClass = errorClass, failedAt = now, updatedAt = now))
+                EventBus.getDefault().post(Events.RefreshSendHistory())
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

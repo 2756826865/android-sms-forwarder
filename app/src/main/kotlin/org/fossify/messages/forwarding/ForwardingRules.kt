@@ -187,7 +187,8 @@ data class ForwardingRuleDecision(
     val matchedRules: List<ForwardingRule>,
     val allowedInstanceIds: Set<String> = emptySet(),
     val reason: String,
-    val isDndBlocked: Boolean = false
+    val isDndBlocked: Boolean = false,
+    val diagnostics: List<String> = emptyList()
 ) {
     fun isAllowed(channel: String) = allowedChannels.contains(channel)
     fun isInstanceAllowed(instanceId: String) = allowedInstanceIds.isEmpty() || allowedInstanceIds.contains(instanceId)
@@ -232,10 +233,15 @@ class ForwardingRuleEngine(
         val matchedRules = mutableListOf<ForwardingRule>()
         val generatedTargets = mutableListOf<ForwardingTarget>()
         var dndBlockedCount = 0
+        val diagnostics = mutableListOf<String>()
+        var ruleNumber = 0
 
         for (rule in activeRules) {
+            ruleNumber++
+            val prefix = "规则 $ruleNumber"
             // 1. 卡槽匹配
             if (!simMatches(rule.simScope, simSlotIndex)) {
+                diagnostics.add("$prefix：SIM 不满足要求${if (simSlotIndex == null) "（当前卡槽未知）" else ""}")
                 continue
             }
 
@@ -250,15 +256,18 @@ class ForwardingRuleEngine(
             }
             if (dndActive) {
                 dndBlockedCount++
+                diagnostics.add("$prefix：免打扰或允许时段限制，未继续检查正文条件")
                 continue
             }
 
             // 3. 条件匹配
             if (!matchesConditions(rule, sender, body)) {
+                diagnostics.addAll(explainConditions(rule, sender, body).map { "$prefix：$it" })
                 continue
             }
 
             matchedRules.add(rule)
+            diagnostics.add("$prefix：条件匹配通过")
 
             // 4. 执行按顺序的正则替换
             val textAfterRuleReplacements = applyRegexReplacements(body, rule.regexReplacements)
@@ -311,7 +320,7 @@ class ForwardingRuleEngine(
         }
 
         if (matchedRules.isEmpty()) {
-            val reason = if (dndBlockedCount > 0) "命中规则但处于免打扰时段，已跳过发送" else "没有命中任何启用的规则"
+            val reason = if (dndBlockedCount > 0) "有规则被时段限制跳过，其余规则未命中" else "没有命中任何启用的规则"
             return ForwardingRuleDecision(
                 targets = emptyList(),
                 allowedChannels = emptySet(),
@@ -319,7 +328,8 @@ class ForwardingRuleEngine(
                 matchedRules = emptyList(),
                 allowedInstanceIds = emptySet(),
                 reason = reason,
-                isDndBlocked = dndBlockedCount > 0
+                isDndBlocked = dndBlockedCount > 0,
+                diagnostics = diagnostics
             )
         }
 
@@ -349,8 +359,27 @@ class ForwardingRuleEngine(
             blockedChannels = channelCandidates - allowedChannels,
             matchedRules = matchedRules,
             allowedInstanceIds = allowedInstances,
-            reason = "命中 ${matchedRules.size} 条规则，生成 ${deduplicatedTargets.size} 个投递目标"
+            reason = "命中 ${matchedRules.size} 条规则，生成 ${deduplicatedTargets.size} 个投递目标",
+            diagnostics = diagnostics
         )
+    }
+
+    /** Local UI explanation: never include the number, body or configured secret values. */
+    fun explainConditions(rule: ForwardingRule, sender: String, body: String): List<String> {
+        if (rule.conditions.isEmpty()) return listOf(
+            if (matchesConditions(rule, sender, body)) "旧版条件匹配通过" else "旧版包含/排除条件未满足"
+        )
+        val active = rule.conditions.filter { it.enabled }
+        if (active.isEmpty()) return listOf("没有启用的匹配条件")
+        return listOf("条件关系：${rule.conditionRelation.displayName}") + active.mapIndexed { index, condition ->
+            val validRegex = condition.operator != RuleOperator.REGEX || runCatching { Regex(condition.value) }.isSuccess
+            val matched = evaluateSingleCondition(
+                if (condition.field == RuleTargetField.SENDER) sender else body,
+                condition.operator, condition.value, condition.ignoreCase
+            )
+            "条件 ${index + 1}（${condition.field.displayName} / ${condition.operator.displayName}）：" +
+                if (!validRegex) "正则表达式无效" else if (matched) "满足" else "不满足"
+        }
     }
 
     private fun matchesConditions(rule: ForwardingRule, sender: String, body: String): Boolean {

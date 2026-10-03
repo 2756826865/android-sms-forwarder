@@ -15,6 +15,7 @@ import org.fossify.messages.R
 import org.fossify.messages.activities.DingTalkRemoteControlSettingsActivity
 import org.fossify.messages.remote.repository.RemoteSourceRepository
 import org.fossify.messages.remote.repository.RemoteSourceType
+import org.fossify.messages.remote.runtime.RemoteSourceRuntimeManager
 
 /**
  * 钉钉远程控制前台保活服务
@@ -29,12 +30,14 @@ class DingTalkRemoteControlService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val repo = RemoteSourceRepository.getInstance(applicationContext)
-        val hasEnabled = repo.getSourcesByType(RemoteSourceType.DINGTALK).any { it.enabled }
+        val hasEnabled = repo.getSourcesByType(RemoteSourceType.DINGTALK)
+            .any { it.enabled && it.hasValidCredentials() }
         if (!hasEnabled) {
             stopSelf()
             return START_NOT_STICKY
         }
         updateNotification("钉钉 Stream 远程指令服务运行中")
+        RemoteSourceRuntimeManager.restoreAfterServiceRestart(applicationContext)
         return START_STICKY
     }
 
@@ -100,7 +103,8 @@ class DingTalkRemoteControlService : Service() {
 
         fun ensureStarted(context: Context) {
             val repo = RemoteSourceRepository.getInstance(context)
-            val isEnabled = repo.getSourcesByType(RemoteSourceType.DINGTALK).any { it.enabled }
+            val isEnabled = repo.getSourcesByType(RemoteSourceType.DINGTALK)
+                .any { it.enabled && it.hasValidCredentials() }
             if (!isEnabled) {
                 context.stopService(Intent(context, DingTalkRemoteControlService::class.java))
                 return

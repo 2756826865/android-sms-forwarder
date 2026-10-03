@@ -117,7 +117,7 @@ fun MessageCenterScreen(
                         item {
                             GatewayCard(title = "暂无近期发信流水") {
                                 Text(
-                                    text = "当收到新短信或执行短信转发时，这里将实时展示完整的生命周期时间线与基带回执状态。",
+                                    text = "这里显示本机短信发送操作及其发送、送达回执；收到的短信请到短信页查看。",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )

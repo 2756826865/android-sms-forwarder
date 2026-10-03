@@ -32,6 +32,9 @@ interface MessagesDao {
      * [getAll] 会把每条短信的完整实体（body / participants / attachment）全部实例化，
      * 在数万条的大库上会直接 OOM；补偿扫描只需要 id 做判重，这里只投影 id 一列。
      */
+    @Query("SELECT COUNT(*) FROM messages WHERE type = 1 AND is_mms = 0 AND is_scheduled = 0 AND date >= :startSeconds AND date < :endSeconds AND id NOT IN (SELECT id FROM recycle_bin_messages)")
+    fun getReceivedSmsCountBetween(startSeconds: Long, endSeconds: Long): Int
+
     @Query("SELECT id FROM messages")
     fun getAllIds(): List<Long>
 

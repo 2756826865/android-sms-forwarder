@@ -437,7 +437,10 @@ class ChannelRepository internal constructor(
                     channelType = ForwardingChannels.SMS_DIRECT,
                     defaultName = "短信直发 (导入)",
                     isEnabled = multiConfig.smsDirectEnabled,
-                    configJson = JSONObject().put("phone", multiConfig.smsDirectPhone()).toString()
+                    configJson = JSONObject()
+                        .put("phone", multiConfig.smsDirectPhone())
+                        .put("onlyOnNoNetwork", multiConfig.smsDirectOnlyOnNoNetwork)
+                        .toString()
                 )
             )
         }

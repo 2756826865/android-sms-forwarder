@@ -261,29 +261,7 @@ class RemoteSourceRepository internal constructor(
         for (item in safeList) {
             // 任一来源的敏感字段加密失败 ⇒ 整批中止，连"部分字段写明文"的混合态都不产生。
             val encryptedConfig = encryptSensitiveConfig(item.configJson) ?: return false
-            val obj = JSONObject().apply {
-                put("id", item.id)
-                put("name", item.name)
-                put("type", item.type.name)
-                put("enabled", item.enabled)
-                put("connectionState", item.connectionState.name)
-                put("lastConnectedAt", item.lastConnectedAt)
-                put("lastMessageAt", item.lastMessageAt)
-                put("lastErrorCode", item.lastErrorCode)
-                put("lastErrorMessage", item.lastErrorMessage)
-                put("customCommandPrefix", item.customCommandPrefix)
-                put("whitelistEnabled", item.whitelistEnabled)
-                put("authorizedUsers", JSONArray(item.authorizedUsers.toList()))
-                put("authorizedGroups", JSONArray(item.authorizedGroups.toList()))
-                put("requireMention", item.requireMention)
-                put("defaultSimMode", item.defaultSimMode)
-                put("quietHoursEnabled", item.quietHoursEnabled)
-                put("quietHoursStart", item.quietHoursStart)
-                put("quietHoursEnd", item.quietHoursEnd)
-                put("hourlyLimit", item.hourlyLimit)
-                put("dailyLimit", item.dailyLimit)
-                put("configJson", encryptedConfig)
-            }
+            val obj = backupJson(item, encryptedConfig)
             array.put(obj)
         }
         // 全部来源都加密成功后才统一落盘并更新内存态，磁盘与内存永远同构。
@@ -291,6 +269,77 @@ class RemoteSourceRepository internal constructor(
         _sourcesFlow.value = safeList
         return true
     }
+
+    private fun backupJson(item: RemoteSourceInstance, config: String): JSONObject = JSONObject().apply {
+        put("id", item.id)
+        put("name", item.name)
+        put("type", item.type.name)
+        put("enabled", item.enabled)
+        put("connectionState", item.connectionState.name)
+        put("lastConnectedAt", item.lastConnectedAt)
+        put("lastMessageAt", item.lastMessageAt)
+        put("lastErrorCode", item.lastErrorCode)
+        put("lastErrorMessage", item.lastErrorMessage)
+        put("customCommandPrefix", item.customCommandPrefix)
+        put("whitelistEnabled", item.whitelistEnabled)
+        put("authorizedUsers", JSONArray(item.authorizedUsers.toList()))
+        put("authorizedGroups", JSONArray(item.authorizedGroups.toList()))
+        put("requireMention", item.requireMention)
+        put("defaultSimMode", item.defaultSimMode)
+        put("quietHoursEnabled", item.quietHoursEnabled)
+        put("quietHoursStart", item.quietHoursStart)
+        put("quietHoursEnd", item.quietHoursEnd)
+        put("hourlyLimit", item.hourlyLimit)
+        put("dailyLimit", item.dailyLimit)
+        put("configJson", config)
+    }
+
+    /** Portable credentials are exported in plaintext and re-encrypted on the target device. */
+    fun exportBackup(): JSONArray = JSONArray().apply {
+        getAllSources().forEach { item ->
+            val config = JSONObject(item.configJson)
+            check(SENSITIVE_CONFIG_KEYS.none { config.optString(it).startsWith(ENC_PREFIX) }) {
+                "远程来源凭据不可解密"
+            }
+            put(backupJson(item, item.configJson).apply {
+                remove("connectionState")
+                remove("lastConnectedAt")
+                remove("lastMessageAt")
+                remove("lastErrorCode")
+                remove("lastErrorMessage")
+            })
+        }
+    }
+
+    fun parseBackup(array: JSONArray): List<RemoteSourceInstance> {
+        for (index in 0 until array.length()) {
+            val item = array.getJSONObject(index)
+            require(item.getString("id").isNotBlank())
+            require(RemoteSourceType.fromString(item.getString("type")) != null)
+            val config = JSONObject(item.getString("configJson"))
+            require(SENSITIVE_CONFIG_KEYS.none { config.optString(it).startsWith(ENC_PREFIX) })
+        }
+        val sources = parseJson(array.toString())
+        require(sources.size == array.length())
+        require(sources.map { it.id }.distinct().size == sources.size)
+        return sources.map { it.copy(
+            connectionState = if (it.enabled) RemoteSourceConnectionState.CONFIG_REQUIRED else RemoteSourceConnectionState.DISABLED,
+            lastConnectedAt = 0, lastMessageAt = 0, lastErrorCode = 0, lastErrorMessage = ""
+        ) }
+    }
+
+    @Synchronized
+    fun restoreBackup(sources: List<RemoteSourceInstance>): Boolean {
+        val merged = getAllSources().associateBy { it.id }.toMutableMap()
+        sources.forEach { source ->
+            merged[source.id] = if (source.type == RemoteSourceType.SMS) {
+                source.copy(authorizedUsers = NumberMatcher.normalizeWhitelist(source.authorizedUsers))
+            } else source
+        }
+        return persist(merged.values.toList())
+    }
+
+    fun reconnectAfterRestore() = syncRuntime()
 
     fun getAllSources(): List<RemoteSourceInstance> = _sourcesFlow.value
 

@@ -3,6 +3,8 @@ package org.fossify.messages.forwarding
 import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
+import org.fossify.messages.models.Events
+import org.greenrobot.eventbus.EventBus
 
 data class ForwardingHistoryRecord(
     val recordId: String,
@@ -110,6 +112,7 @@ class ForwardingHistoryStore(context: Context) {
 
     fun clear() = synchronized(lock) {
         prefs.edit().remove(KEY_RECORDS).apply()
+        EventBus.getDefault().post(Events.RefreshDashboard())
     }
 
     private fun update(recordId: String, transform: (ForwardingHistoryRecord) -> ForwardingHistoryRecord) =
@@ -125,6 +128,7 @@ class ForwardingHistoryStore(context: Context) {
         val kept = records.sortedByDescending { it.updatedAt }.take(MAX_RECORDS)
         val encoded = JSONArray().apply { kept.forEach { put(encode(it)) } }.toString()
         prefs.edit().putString(KEY_RECORDS, encoded).apply()
+        EventBus.getDefault().post(Events.RefreshDashboard())
     }
 
     private fun encode(record: ForwardingHistoryRecord) = JSONObject()

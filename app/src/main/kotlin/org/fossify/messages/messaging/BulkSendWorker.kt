@@ -23,6 +23,7 @@ class BulkSendWorker(
         val numbers = inputData.getString(KEY_NUMBERS)?.let(::decodeNumbers).orEmpty()
         if (body.isBlank() || numbers.isEmpty()) return Result.failure()
 
+        var failedCount = 0
         numbers.forEachIndexed { index, number ->
             try {
                 applicationContext.sendMessageCompat(
@@ -30,17 +31,19 @@ class BulkSendWorker(
                     addresses = listOf(number),
                     subId = subId,
                     attachments = emptyList(),
+                    propagateErrors = true,
                     triggerType = SmsSendTriggerType.BULK
                 )
             } catch (e: Exception) {
-                Log.e(TAG, "Bulk send failed for recipient $number: ${e.message}", e)
+                failedCount++
+                Log.e(TAG, "Bulk send submission failed for recipient index $index: ${e.javaClass.simpleName}")
             }
             if (index < numbers.lastIndex) {
                 delay(applicationContext.config.bulkSendDelaySeconds * 1_000L)
             }
         }
         refreshConversations()
-        return Result.success()
+        return if (failedCount == 0) Result.success() else Result.failure()
     }
 
     private fun decodeNumbers(value: String): List<String> {

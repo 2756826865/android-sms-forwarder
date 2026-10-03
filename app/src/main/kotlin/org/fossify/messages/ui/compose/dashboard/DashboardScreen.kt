@@ -589,7 +589,7 @@ fun DashboardContent(
                             }
                         }
                         Text(
-                            text = "今日短信收发水压",
+                            text = "今日短信收发",
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (isDark) Color.White else TextPrimary
@@ -597,20 +597,26 @@ fun DashboardContent(
                     }
 
                     Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "已同步收到 ${stats.todayReceivedCount} 条短信 · 发送结果未知 ${stats.todayUnknownCount} 条",
+                        fontSize = 12.sp,
+                        color = if (isDark) Color.LightGray else TextSecondary
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         StatMetricColumn(
-                            title = "总发信事实",
+                            title = "已记录发送",
                             value = "${stats.todaySentCount}",
                             icon = "🚀",
                             color = GatewayBlue,
                             modifier = Modifier.weight(1f)
                         )
                         StatMetricColumn(
-                            title = "成功送达",
+                            title = "发送成功",
                             value = "${stats.todaySuccessCount}",
                             icon = "✅",
                             color = GatewayGreen,
@@ -652,7 +658,7 @@ fun DashboardContent(
                             }
                         }
                         Text(
-                            text = "今日多渠道转发水压",
+                            text = "今日转发 · 近期保留记录",
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (isDark) Color.White else TextPrimary
@@ -660,13 +666,19 @@ fun DashboardContent(
                     }
 
                     Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "按短信接收日期统计，基于最多 200 条保留流水，不含测试；受理不代表终端已收到。",
+                        fontSize = 11.sp,
+                        color = if (isDark) Color.LightGray else TextSecondary
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         StatMetricColumn(
-                            title = "转发成功",
+                            title = "已受理",
                             value = "${stats.todayForwardSuccessCount}",
                             icon = "✈️",
                             color = GatewayGreen,
@@ -804,7 +816,7 @@ fun DashboardContent(
 
                     if (stats.recentHistoryRecords.isEmpty()) {
                         Text(
-                            text = "暂无近期发送/转发流水（收到短信或在通道页点击「发测试」后在此实时展示）",
+                            text = "暂无近期转发流水（通道测试和实际转发的处理记录显示在这里；收到的短信请到短信页查看）",
                             fontSize = 12.sp,
                             color = if (isDark) Color(0xFF9CA3AF) else TextSecondary,
                             modifier = Modifier.padding(vertical = 4.dp)
