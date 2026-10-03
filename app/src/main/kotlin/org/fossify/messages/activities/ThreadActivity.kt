@@ -2421,7 +2421,7 @@ class ThreadActivity : SimpleActivity() {
             lastTap = now
             if (taps >= 5) {
                 taps = 0
-                showComposerPositionDialog()
+                if (binding.messageHolder.root.isShown) showComposerPositionDialog()
             }
         }
         binding.threadTitleText.setOnClickListener(listener)
@@ -2434,20 +2434,26 @@ class ThreadActivity : SimpleActivity() {
         val original = composerOffsetDp
         var saved = false
         val density = resources.displayMetrics.density
-        val layout = LinearLayout(this).apply {
+        val dialogContext = androidx.appcompat.view.ContextThemeWrapper(this, R.style.SmsComposerPositionDialogTheme)
+        val layout = LinearLayout(dialogContext).apply {
             orientation = LinearLayout.VERTICAL
             val padding = (20 * density).toInt()
             setPadding(padding, padding, padding, padding)
         }
-        val label = android.widget.TextView(this)
+        val label = android.widget.TextView(dialogContext).apply {
+            setTextColor(getColor(R.color.miui_primary_text))
+            textSize = 15f
+        }
         layout.addView(label)
         fun update() {
             label.text = "额外上移：${composerOffsetDp} dp\n对所有短信会话生效；下移最多恢复到自动避让位置。"
             ViewCompat.requestApplyInsets(binding.threadCoordinator)
         }
         listOf("上移 +4 dp" to 4, "下移 −4 dp" to -4, "恢复默认" to 0).forEach { (title, step) ->
-            layout.addView(android.widget.Button(this).apply {
+            layout.addView(android.widget.Button(dialogContext).apply {
                 text = title
+                setTextColor(getColor(R.color.miui_primary_text))
+                backgroundTintList = ColorStateList.valueOf(getColor(R.color.classic_settings_background))
                 setOnClickListener {
                     composerOffsetDp = if (step == 0) 0 else (composerOffsetDp + step).coerceIn(0, 160)
                     update()
@@ -2455,7 +2461,7 @@ class ThreadActivity : SimpleActivity() {
             })
         }
         update()
-        val dialog = androidx.appcompat.app.AlertDialog.Builder(this)
+        val dialog = androidx.appcompat.app.AlertDialog.Builder(dialogContext)
             .setTitle("输入栏位置调整")
             .setView(layout)
             .setPositiveButton("保存") { _, _ ->

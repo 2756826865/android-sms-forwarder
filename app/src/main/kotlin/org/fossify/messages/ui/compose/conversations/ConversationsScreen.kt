@@ -94,6 +94,7 @@ fun ConversationsScreen(
     val uiState by conversationsViewModel.uiState.collectAsState()
     var searchQuery by remember { mutableStateOf("") }
     var confirmSync by remember { mutableStateOf(false) }
+    var showMoreOptions by remember { mutableStateOf(false) }
     val syncProgress by org.fossify.messages.helpers.SmsSyncProgress.state.collectAsState()
     LaunchedEffect(searchQuery) { conversationsViewModel.search(searchQuery) }
     if (confirmSync) androidx.compose.material3.AlertDialog(
@@ -222,6 +223,30 @@ fun ConversationsScreen(
                             )
                         }
                     }
+                    Box {
+                        Surface(
+                            onClick = { showMoreOptions = true },
+                            shape = RoundedCornerShape(14.dp),
+                            color = if (isDark) DarkSurface else Color.White,
+                            border = BorderStroke(1.dp, if (isDark) DarkOutline else OutlineSoft),
+                            modifier = Modifier.size(38.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                Icon(painterResource(R.drawable.ic_more), contentDescription = "更多操作",
+                                    tint = primaryTextColor, modifier = Modifier.size(20.dp))
+                            }
+                        }
+                        androidx.compose.material3.DropdownMenu(
+                            expanded = showMoreOptions,
+                            onDismissRequest = { showMoreOptions = false }
+                        ) {
+                            androidx.compose.material3.DropdownMenuItem(
+                                text = { Text("全量同步历史短信") },
+                                enabled = !syncProgress.running,
+                                onClick = { showMoreOptions = false; confirmSync = true }
+                            )
+                        }
+                    }
                 }
             }
 
@@ -282,11 +307,15 @@ fun ConversationsScreen(
                 }
             }
 
-            Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-                Text(uiState.searchStatus, style = MaterialTheme.typography.bodySmall, color = secondaryTextColor)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(if (syncProgress.running) "全量同步 ${syncProgress.completed}/${syncProgress.total} · 失败${syncProgress.failed}" else "刷新会话列表与全量历史同步分开执行", modifier = Modifier.weight(1f), fontSize = 11.sp, color = secondaryTextColor)
-                    androidx.compose.material3.TextButton(enabled = !syncProgress.running, onClick = { confirmSync = true }) { Text("全量同步") }
+            if (searchQuery.isNotBlank() || syncProgress.running) {
+                Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
+                    if (searchQuery.isNotBlank()) {
+                        Text(uiState.searchStatus, style = MaterialTheme.typography.bodySmall, color = secondaryTextColor)
+                    }
+                    if (syncProgress.running) {
+                        Text("全量同步 ${syncProgress.completed}/${syncProgress.total} · 失败${syncProgress.failed}",
+                            style = MaterialTheme.typography.bodySmall, color = secondaryTextColor)
+                    }
                 }
             }
             // 默认短信应用轻量提醒条 (若非默认应用，置于搜索栏下方)

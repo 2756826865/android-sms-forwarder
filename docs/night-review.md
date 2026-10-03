@@ -196,3 +196,9 @@
 - 开发版运维增加原生拦截名单、回收站会话、显示密度及灵动岛设置；信息页支持已同步短信正文的本地会话搜索，区分普通刷新和前台全量同步。全量同步与旧入口共用防并发状态，不重复转发历史短信。
 - 运维诊断以独立状态卡片显示最近检查时间、有限长度日志和相关设置快捷入口；实际通道/设备送达仍需外部实测。
 - `:app:assembleCoreDebug :app:testCoreDebugUnitTest --offline --no-daemon -Pkotlin.incremental=false`：BUILD SUCCESSFUL，208 项测试通过，失败/错误/跳过均为 0。日志 `docs/logs/backup-parity-complete.log`；`git diff --check` 通过。构建环境只读主目录时使用 `/tmp/sms-gradle-home` 缓存；Kotlin daemon 无法写主目录后回退进程内编译，构建结果仍成功。按用户要求跳过真机验收。
+
+### 同步提示和输入栏位置弹窗复查
+
+- 对照23:15:42与23:15:53截图，同步218/319属于运行中快照，11秒后的页面已回到空闲；常驻的是搜索范围说明与全量同步入口。空闲时收起这两行，搜索词非空才显示搜索结果说明，同步运行中才显示进度；重新同步入口移到信息页右上角更多操作，仍保留确认弹窗。
+- 会话顶部五次点击位置调整在没有可见输入栏的短码/回收站会话不再弹出。独立浅色弹窗主题与显式深色文字修正截图中白底白字，按钮也采用深色文字和浅色底。
+- `:app:assembleCoreDebug :app:testCoreDebugUnitTest --offline --no-daemon -Pkotlin.incremental=false` BUILD SUCCESSFUL（1m11s），208项测试失败0、错误0、跳过0。日志 `docs/logs/sync-dialog-visual-fix.log`。未做真机视觉验收。
