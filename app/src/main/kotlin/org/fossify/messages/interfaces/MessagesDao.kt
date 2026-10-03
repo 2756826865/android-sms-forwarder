@@ -65,6 +65,9 @@ interface MessagesDao {
     @Query("SELECT * FROM messages WHERE thread_id = :threadId AND id = :messageId AND is_scheduled = 1")
     fun getScheduledMessageWithId(threadId: Long, messageId: Long): Message
 
+    @Query("SELECT thread_id FROM messages WHERE is_scheduled = 0 AND id NOT IN (SELECT id FROM recycle_bin_messages) AND instr(lower(body), lower(:text)) > 0 GROUP BY thread_id ORDER BY MAX(date) DESC LIMIT :limit")
+    fun searchConversationIds(text: String, limit: Int = 501): List<Long>
+
     @Query("SELECT * FROM messages WHERE body LIKE :text")
     fun getMessagesWithText(text: String): List<Message>
 

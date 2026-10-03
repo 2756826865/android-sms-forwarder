@@ -732,8 +732,7 @@ class MainActivity : SimpleActivity() {
             val threadsToSync = conversations.distinctBy { it.threadId }
             var completed = 0
             var failed = 0
-            org.fossify.messages.helpers.SmsSyncProgress.update(
-                org.fossify.messages.helpers.SmsSyncProgress.State(true, 0, threadsToSync.size, 0))
+            if (org.fossify.messages.helpers.SmsSyncProgress.tryStart(threadsToSync.size)) {
             try {
                 threadsToSync.forEach { conversation ->
                     try {
@@ -749,6 +748,7 @@ class MainActivity : SimpleActivity() {
             } finally {
                 org.fossify.messages.helpers.SmsSyncProgress.update(
                     org.fossify.messages.helpers.SmsSyncProgress.State(false, completed, threadsToSync.size, failed))
+            }
             }
 
             messagesDB.getAll()

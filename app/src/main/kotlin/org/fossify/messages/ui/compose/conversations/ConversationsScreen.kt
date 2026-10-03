@@ -61,6 +61,7 @@ import kotlinx.coroutines.withContext
 import org.fossify.messages.R
 import org.fossify.messages.activities.NewConversationActivity
 import org.fossify.messages.activities.ThreadActivity
+import org.fossify.messages.extensions.config
 import org.fossify.messages.helpers.THREAD_ID
 import org.fossify.messages.helpers.THREAD_NUMBER
 import org.fossify.messages.helpers.THREAD_TITLE
@@ -92,18 +93,26 @@ fun ConversationsScreen(
     val context = LocalContext.current
     val uiState by conversationsViewModel.uiState.collectAsState()
     var searchQuery by remember { mutableStateOf("") }
+    var confirmSync by remember { mutableStateOf(false) }
+    val syncProgress by org.fossify.messages.helpers.SmsSyncProgress.state.collectAsState()
+    LaunchedEffect(searchQuery) { conversationsViewModel.search(searchQuery) }
+    if (confirmSync) androidx.compose.material3.AlertDialog(
+        onDismissRequest = { confirmSync = false }, title = { Text("全量同步历史短信") },
+        text = { Text("读取系统短信并补齐本地会话记录，大量历史可能耗时。不会补转发历史短信。普通刷新只刷新会话列表。") },
+        confirmButton = { androidx.compose.material3.TextButton(onClick = { confirmSync = false; conversationsViewModel.resyncAll() }) { Text("开始同步") } },
+        dismissButton = { androidx.compose.material3.TextButton(onClick = { confirmSync = false }) { Text("取消") } })
     val isDark = isSystemInDarkTheme()
 
     val pageBgColor = if (isDark) DarkBackground else AppBackground
     val primaryTextColor = if (isDark) Color.White else TextPrimary
     val secondaryTextColor = if (isDark) Color(0xFF9CA3AF) else TextSecondary
 
-    val filteredConversations = remember(uiState.conversations, searchQuery) {
+    val filteredConversations = remember(uiState.conversations, uiState.searchThreadIds, searchQuery) {
         if (searchQuery.isBlank()) {
             uiState.conversations
         } else {
             uiState.conversations.filter {
-                it.title.contains(searchQuery, ignoreCase = true) ||
+                it.threadId in uiState.searchThreadIds || it.title.contains(searchQuery, ignoreCase = true) ||
                 it.snippet.contains(searchQuery, ignoreCase = true) ||
                 it.phoneNumber.contains(searchQuery, ignoreCase = true)
             }
@@ -273,6 +282,13 @@ fun ConversationsScreen(
                 }
             }
 
+            Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                Text(uiState.searchStatus, style = MaterialTheme.typography.bodySmall, color = secondaryTextColor)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(if (syncProgress.running) "全量同步 ${syncProgress.completed}/${syncProgress.total} · 失败${syncProgress.failed}" else "刷新会话列表与全量历史同步分开执行", modifier = Modifier.weight(1f), fontSize = 11.sp, color = secondaryTextColor)
+                    androidx.compose.material3.TextButton(enabled = !syncProgress.running, onClick = { confirmSync = true }) { Text("全量同步") }
+                }
+            }
             // 默认短信应用轻量提醒条 (若非默认应用，置于搜索栏下方)
             if (!uiState.isDefaultSmsApp) {
                 Spacer(modifier = Modifier.height(8.dp))
@@ -375,6 +391,9 @@ fun ConversationItem(
 ) {
     val context = LocalContext.current
     val isDark = isSystemInDarkTheme()
+    val density = context.config.homeListDensity
+    val itemHeight = when (density) { 4 -> 98.dp; 8 -> 64.dp; 10 -> 58.dp; else -> 74.dp }
+    val rowPadding = when (density) { 4 -> 18.dp; 8 -> 7.dp; 10 -> 4.dp; else -> 11.dp }
     val dateFormat = remember { SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()) }
     val formattedDate = remember(conversation.date) {
         dateFormat.format(Date(conversation.date.toLong() * 1000L))
@@ -412,7 +431,7 @@ fun ConversationItem(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .defaultMinSize(minHeight = 74.dp)
+            .defaultMinSize(minHeight = itemHeight)
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(20.dp),
         color = if (isDark) DarkSurface else SurfaceCard,
@@ -422,7 +441,7 @@ fun ConversationItem(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 11.dp),
+                .padding(horizontal = 14.dp, vertical = rowPadding),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // 联系人头像：真实头像或品牌绿色圆形默认头像

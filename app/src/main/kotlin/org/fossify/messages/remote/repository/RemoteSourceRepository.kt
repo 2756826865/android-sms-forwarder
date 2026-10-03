@@ -341,6 +341,13 @@ class RemoteSourceRepository internal constructor(
 
     fun reconnectAfterRestore() = syncRuntime()
 
+    fun reloadConfigurationAfterRestore() = loadFromPrefs()
+
+    fun reloadAfterRestore() {
+        loadFromPrefs()
+        syncRuntime()
+    }
+
     fun getAllSources(): List<RemoteSourceInstance> = _sourcesFlow.value
 
     fun getEnabledSources(): List<RemoteSourceInstance> = _sourcesFlow.value.filter { it.enabled }

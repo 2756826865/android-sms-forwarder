@@ -150,60 +150,7 @@ class SettingsActivity : SimpleActivity() {
             startActivity(Intent(this@SettingsActivity, RecycleBinConversationsActivity::class.java))
         }
         settingsBackupHolder.setOnClickListener {
-            val options = arrayOf("导出转发配置到剪贴板（含凭据）", "从剪贴板导入配置")
-            AlertDialog.Builder(this@SettingsActivity)
-                .setTitle("配置备份与迁移")
-                .setItems(options) { _, which ->
-                    when (which) {
-                        0 -> {
-                            val json = runCatching {
-                                org.fossify.messages.helpers.ConfigBackupHelper.exportToJson(applicationContext)
-                            }.getOrElse {
-                                toast("导出失败：凭据不可读取，未生成不完整备份")
-                                return@setItems
-                            }
-                            AlertDialog.Builder(this@SettingsActivity)
-                                .setTitle("导出预览")
-                                .setMessage(org.fossify.messages.helpers.ConfigBackupHelper.preview(json))
-                                .setPositiveButton("复制备份") { _, _ ->
-                                    val clipboard = getSystemService(android.content.ClipboardManager::class.java)
-                                    clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("SMS_Forwarder_Config", json))
-                                    toast("配置已复制，包含密钥和密码，请妥善保管")
-                                }
-                                .setNegativeButton(android.R.string.cancel, null).show()
-
-                        }
-                        1 -> {
-                            val clipboard = getSystemService(android.content.ClipboardManager::class.java)
-                            val text = clipboard?.primaryClip?.getItemAt(0)?.text?.toString().orEmpty()
-                            if (text.isBlank()) {
-                                toast("剪贴板中无内容")
-                                return@setItems
-                            }
-                            val preview = runCatching {
-                                org.fossify.messages.helpers.ConfigBackupHelper.preview(text)
-                            }.getOrElse {
-                                toast("无法预览：备份格式无效")
-                                return@setItems
-                            }
-                            AlertDialog.Builder(this@SettingsActivity)
-                                .setTitle("恢复预览")
-                                .setMessage(preview)
-                                .setPositiveButton("确认恢复") { _, _ ->
-                                    val success = org.fossify.messages.helpers.ConfigBackupHelper.importFromJson(applicationContext, text)
-                                    if (success) {
-                                        toast("配置导入成功")
-                                        refreshToggleStates()
-                                    } else toast("导入失败：格式不兼容或凭据保存失败")
-                                }
-                                .setNegativeButton(android.R.string.cancel, null).show()
-
-                        }
-                    }
-                }
-                .setNegativeButton(android.R.string.cancel, null)
-                .create()
-                .showSmsStyled()
+            startActivity(Intent(this@SettingsActivity, ConfigBackupActivity::class.java))
         }
         settingsAboutHolder.setOnClickListener {
             startActivity(Intent(this@SettingsActivity, AboutActivity::class.java))

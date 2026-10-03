@@ -23,19 +23,19 @@ object ConfigBackupHelper {
     fun preview(json: String): String {
         val root = JSONObject(json)
         val version = root.optInt("backupSchemaVersion", 1)
-        require(version in 1..2) { "Unsupported backup version" }
+        require(version in 1..3) { "Unsupported backup version" }
         require(listOf("forwardingRules", "forwardingChannels", "channelInstances", "remoteSources", "autoReply", "pushPlus", "remoteCommand").any(root::has))
         fun count(section: String, nested: String? = null): String {
             val array = if (nested == null) root.optJSONArray(section) else root.optJSONObject(section)?.optJSONArray(nested)
             return array?.length()?.toString() ?: "未包含，保留当前配置"
         }
         return "备份格式：$version\n通道实例：${count("channelInstances")}\n转发规则：${count("forwardingRules", "rules")}\n远程来源：${count("remoteSources")}\n自动回复规则：${count("autoReply", "rules")}\n" +
-            "同 ID 实例/来源会更新，规则列表会替换；未包含的部分保留。\n不包含短信正文、历史流水及全部界面设置。\n备份包含凭据；导入还需校验内容，预览不保证导入成功。"
+            "同 ID 实例/来源会更新，规则列表会替换；未包含的部分保留。\n包含SIM、备用通道及常用设置（v3）；不包含短信正文、历史流水、系统授权。\n备份包含凭据；导入还需校验内容，预览不保证导入成功。"
     }
 
     fun exportToJson(context: Context): String {
         val root = JSONObject()
-        root.put("backupSchemaVersion", 2)
+        root.put("backupSchemaVersion", 3)
         root.put("version", BuildConfig.VERSION_NAME)
         root.put("exportTime", SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date()))
 
@@ -100,13 +100,39 @@ object ConfigBackupHelper {
             .put("customPrefix", remoteConfig.customPrefix)
         root.put("remoteCommand", remoteObj)
 
+        root.put("featureSettings", BackupPreferences.export(context))
+        root.put("uiSettings", BackupUiSettings.export(context))
         check(!CredentialHealth.hasFailures()) { "凭据不可解密，无法导出完整备份" }
         return root.toString(2)
     }
 
-    fun importFromJson(context: Context, jsonStr: String): Boolean = runCatching {
+    @Synchronized
+    fun importFromJson(context: Context, jsonStr: String): Boolean {
+        // Do not overwrite a journal from an earlier interrupted restore.
+        if (!ConfigRestoreGuard.rollback(context)) return false
+        RemoteSourceRepository.getInstance(context).reloadConfigurationAfterRestore()
+        val success = RestoreTransaction.run(
+            apply = { applyImport(context, jsonStr) },
+            commit = { ConfigRestoreGuard.commit(context) },
+            rollback = { ConfigRestoreGuard.rollback(context) })
+        // If rollback is incomplete, do not reconnect runtimes using partially restored settings.
+        if (!ConfigRestoreGuard.hasPending(context)) runCatching { refreshAfterRestore(context) }
+        return success
+    }
+
+    private fun refreshAfterRestore(context: Context) {
+        RemoteSourceRepository.getInstance(context).reloadAfterRestore()
+        ChannelRepository.getInstance(context).refresh()
+        org.fossify.messages.forwarding.repository.RuleRepository.getInstance(context).refresh()
+        org.fossify.messages.helpers.HeartbeatWorker.sync(context)
+        org.fossify.messages.helpers.LowBatteryCheckWorker.sync(context)
+        org.fossify.messages.security.root.RootMaintenanceWorker.sync(context)
+        org.fossify.messages.services.SmsKeepAliveService.ensureStarted(context)
+    }
+
+    private fun applyImport(context: Context, jsonStr: String): Boolean = runCatching {
         val root = JSONObject(jsonStr)
-        require(root.optInt("backupSchemaVersion", 1) in 1..2)
+        require(root.optInt("backupSchemaVersion", 1) in 1..3)
         require(listOf("forwardingChannels", "forwardingRules", "channelInstances", "remoteSources", "pushPlus", "autoReply", "remoteCommand").any(root::has))
         // Validate known sections before any import writes. Missing sections remain unchanged.
         listOf("forwardingChannels", "forwardingRules", "pushPlus", "autoReply", "remoteCommand").forEach { section ->
@@ -140,6 +166,9 @@ object ConfigBackupHelper {
                 obj.getInt("emailSecurity")
             }
         }
+        val featureSettings = root.optJSONObject("featureSettings")?.let(BackupPreferences::parse)
+        val uiSettings = if (root.has("uiSettings")) root.getJSONObject("uiSettings").also(BackupUiSettings::validate) else null
+        if (root.has("featureSettings")) root.getJSONObject("featureSettings")
         val remoteSources = RemoteSourceRepository.getInstance(context)
         val importedSources = root.optJSONArray("remoteSources")?.let(remoteSources::parseBackup)
         // Parse new sections before changing existing configuration.
@@ -163,6 +192,9 @@ object ConfigBackupHelper {
                 ForwardingChannelInstance.fromJson(item)
             }.also { require(it.map { instance -> instance.id }.distinct().size == it.size) }
         }
+        ConfigRestoreGuard.begin(context)
+        featureSettings?.forEach { (name, values) -> BackupPreferences.write(context.getSharedPreferences(name, Context.MODE_PRIVATE), values, replace = name == "forwarding_fallback") }
+        uiSettings?.let { BackupUiSettings.restore(context, it) }
         if (importedSources != null) check(remoteSources.restoreBackup(importedSources))
         if (importedInstances != null) {
             val config = MultiForwardConfig(context)
@@ -240,7 +272,7 @@ object ConfigBackupHelper {
             obj.optString("customPrefix").takeIf { it.isNotBlank() }?.let { remoteConfig.customPrefix = it }
         }
 
-        if (importedSources != null) remoteSources.reconnectAfterRestore()
+        // Runtime reconnect occurs only after the journal is committed or rolled back.
         true
     }.getOrDefault(false)
 }

@@ -212,11 +212,14 @@ fun OperationsContent(
             start = 16.dp,
             end = 16.dp,
             top = 4.dp,
-            bottom = org.fossify.messages.ui.compose.navigation.LocalGatewayBottomPadding.current
+            bottom = org.fossify.messages.ui.compose.navigation.LocalGatewayBottomPadding.current + 24.dp
         ),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        item { ConfigBackupCard() }
         item { SmsChainDiagnosticsCard() }
+        item { DeveloperSettingsCard() }
+        item { ClassicSettingsAccessCard() }
         // 1. 厂商保活与白名单一键直达向导 (OEM Whitelist Wizard)
         item {
             Surface(

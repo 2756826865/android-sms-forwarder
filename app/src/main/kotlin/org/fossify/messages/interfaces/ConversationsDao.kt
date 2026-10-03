@@ -26,6 +26,9 @@ interface ConversationsDao {
         return getAllWithMessagesInRecycleBinWithLatestSnippet().map { it.toConversation() }
     }
 
+    @Query("SELECT * FROM conversations WHERE thread_id IN (SELECT messages.thread_id FROM messages INNER JOIN recycle_bin_messages ON messages.id = recycle_bin_messages.id) ORDER BY date DESC LIMIT 50")
+    fun getRecentRecycledConversations(): List<Conversation>
+
     @Query("SELECT * FROM conversations WHERE thread_id = :threadId")
     fun getConversationWithThreadId(threadId: Long): Conversation?
 

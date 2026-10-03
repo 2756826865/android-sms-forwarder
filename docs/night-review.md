@@ -179,3 +179,20 @@
 - 最新命令 :app:clean :app:assembleCoreDebug :app:testCoreDebugUnitTest -Pkotlin.incremental=false：BUILD SUCCESSFUL，2m3s，50项任务全部执行。
 - 25套件195项测试全部通过，失败0、错误0、跳过0。APK签名验证通过；最新独立副本artifacts/SMS-Forwarder-1.2.1-core-debug-latest.apk，SHA256 a6ee664f2f4b20805fcaeec22915771c2976b0dcbdaa8ec6bb9ada5993c66e9d。日志docs/logs/latest-build-clean.log。
 - 此结果覆盖本轮所有当前源码新增功能，替代此前未编译状态；仍不代表三键导航、Root守护、厂商适配或外部通道真机实测通过。Debug测试包，不替换正式APK，不推送云端。
+
+### 运维布局、文件备份与两版入口对齐
+
+- 开发版运维增加“备份与恢复”，通过系统文件选择器导出JSON/从文件恢复；导出和恢复先预览，确认后执行。读写在IO线程，导入文件上限2MiB，取消不写配置；沿用ConfigBackupHelper，不声称完整应用备份或跨存储原子事务。
+- 运维链路区域改为独立主题圆角卡片（同步、配置、队列、影子链路、请求、Root、备用、连接），长内容可展开；滚动底部额外24dp留白。未做设备截图/交互验收。
+- 运维补“打开完整设置”，让开发版能访问经典版拦截、回收站、显示密度、灵动岛、全量重新同步和关于。未强行重写原有设置行为。
+- 已核实规则模拟输入updateTestInputs立即runLiveTest，计算当前草稿并渲染，不实际发送。
+- 完整入口对照及剩余差异：docs/classic-developer-parity.md。两版共用业务不等于所有控件完全一致；备份仍不包含全部设置和备用通道独立配置。
+- 最终本地 :app:assembleCoreDebug :app:testCoreDebugUnitTest -Pkotlin.incremental=false BUILD SUCCESSFUL（1m4s），195项测试失败0/错误0/跳过0。日志docs/logs/operations-parity-final-build.log。未推送，本轮未构建正式签名包。
+
+### 1.2.1 配置恢复与开发版功能补齐（本次提交）
+
+- 经典设置与开发版运维共用文件备份入口，可导出/导入 v3 JSON；保留剪贴板兼容。新增备用通道、SIM 名称与号码、常用转发及界面设置；v1/v2 导入仍兼容。JSON 含凭据，导出前提示用户保管。备份不包含短信内容、系统授权及全部设置项。
+- 恢复前创建 Android Keystore 加密本机快照和待恢复日志；写入失败或启动发现未完成日志时回滚配置。对远程命令及远程来源只回滚配置键，保留同时发生的执行防重和限流事实；快照损坏或密钥不可用时保留日志并暂停后台初始化。多存储恢复仍非跨库原子事务。
+- 开发版运维增加原生拦截名单、回收站会话、显示密度及灵动岛设置；信息页支持已同步短信正文的本地会话搜索，区分普通刷新和前台全量同步。全量同步与旧入口共用防并发状态，不重复转发历史短信。
+- 运维诊断以独立状态卡片显示最近检查时间、有限长度日志和相关设置快捷入口；实际通道/设备送达仍需外部实测。
+- `:app:assembleCoreDebug :app:testCoreDebugUnitTest --offline --no-daemon -Pkotlin.incremental=false`：BUILD SUCCESSFUL，208 项测试通过，失败/错误/跳过均为 0。日志 `docs/logs/backup-parity-complete.log`；`git diff --check` 通过。构建环境只读主目录时使用 `/tmp/sms-gradle-home` 缓存；Kotlin daemon 无法写主目录后回退进程内编译，构建结果仍成功。按用户要求跳过真机验收。
