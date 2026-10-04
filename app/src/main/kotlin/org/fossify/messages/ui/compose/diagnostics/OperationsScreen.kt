@@ -119,8 +119,8 @@ fun OperationsScreen(
             ) {
                 Column {
                     Text(
-                        text = "运维控制与保活排障中心",
-                        fontSize = 20.sp,
+                        text = "运维中心",
+                        fontSize = 24.sp,
                         fontWeight = FontWeight.Bold,
                         color = primaryTextColor,
                         maxLines = 1,
@@ -129,8 +129,8 @@ fun OperationsScreen(
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "厂商白名单直达 · 硬件诊断包 · 实时日志瀑布流",
-                        fontSize = 12.sp,
+                        text = "后台运行、短信链路与配置管理",
+                        fontSize = 13.sp,
                         color = secondaryTextColor,
                         maxLines = 1,
                         softWrap = false,
@@ -188,6 +188,7 @@ fun OperationsContent(
     val scope = rememberCoroutineScope()
     var showReportDialog by remember { mutableStateOf(false) }
     var plainReportText by remember { mutableStateOf("") }
+    var showAllLogs by remember { mutableStateOf(false) }
     val isDark = isSystemInDarkTheme()
     val primaryTextColor = if (isDark) Color.White else TextPrimary
     val secondaryTextColor = if (isDark) Color(0xFF9CA3AF) else TextSecondary
@@ -211,11 +212,12 @@ fun OperationsContent(
         contentPadding = PaddingValues(
             start = 16.dp,
             end = 16.dp,
-            top = 4.dp,
+            top = 10.dp,
             bottom = org.fossify.messages.ui.compose.navigation.LocalGatewayBottomPadding.current + 24.dp
         ),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        item { OperationsGroupHeading("01", "后台运行", "先检查系统限制与服务状态") }
         // 1. 厂商保活与白名单一键直达向导 (OEM Whitelist Wizard)
         item {
             Surface(
@@ -225,10 +227,10 @@ fun OperationsContent(
                 border = BorderStroke(1.dp, if (isDark) DarkOutline else Color(0xFFF0F3F7)),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Column(modifier = Modifier.padding(14.dp)) {
+                Column(modifier = Modifier.padding(18.dp)) {
                     Text(
-                        text = "🛡️ 后台运行",
-                        fontSize = 15.sp,
+                        text = "🛡️ 保活设置",
+                        fontSize = 17.sp,
                         fontWeight = FontWeight.Bold,
                         color = if (isDark) Color.White else TextPrimary
                     )
@@ -261,7 +263,7 @@ fun OperationsContent(
                     Spacer(modifier = Modifier.height(8.dp))
 
                     Text(
-                        text = "国内安卓系统在息屏后会激进杀后台。请配置以下两项，确保 7x24h 挂机不掉线：",
+                        text = "依次检查电池优化、自启动与前台服务。厂商系统仍可能限制后台运行。",
                         fontSize = 12.sp,
                         color = secondaryTextColor,
                         lineHeight = 18.sp
@@ -495,9 +497,11 @@ fun OperationsContent(
             }
         }
 
+        item { OperationsGroupHeading("02", "链路诊断", "按需检查，同步状态随时可见") }
         item { SmsChainDiagnosticsCard() }
 
         // 2. 硬件加密排障诊断包 (Encrypted Diagnostics Export)
+        item { OperationsGroupHeading("03", "诊断报告", "先查看内容，再选择复制或分享") }
         item {
             Surface(
                 shape = RoundedCornerShape(22.dp),
@@ -506,15 +510,15 @@ fun OperationsContent(
                 border = BorderStroke(1.dp, if (isDark) DarkOutline else Color(0xFFF0F3F7)),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Column(modifier = Modifier.padding(14.dp)) {
+                Column(modifier = Modifier.padding(18.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "📦 诊断报告",
-                            fontSize = 15.sp,
+                            text = "📦 运行报告",
+                            fontSize = 17.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (isDark) Color.White else TextPrimary
                         )
@@ -523,7 +527,7 @@ fun OperationsContent(
                             color = if (isDark) Color(0xFF2C1E3A) else Color(0xFFF3E8FF)
                         ) {
                             Text(
-                                text = "KeyStore AES-256",
+                                text = "本机生成",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = GatewayPurple,
@@ -537,7 +541,7 @@ fun OperationsContent(
                     Spacer(modifier = Modifier.height(8.dp))
 
                     Text(
-                        text = "一键聚合收集当前手机运行环境、7大底层依赖、Outbox 待发队列深度、自愈记录与脱敏日志。可用于自主排障或发送给技术支持进行深度分析。",
+                        text = "汇总设备环境、队列状态与近期日志。默认生成可阅读的明文报告，分享前请检查内容。",
                         fontSize = 12.sp,
                         color = secondaryTextColor,
                         lineHeight = 18.sp
@@ -564,7 +568,7 @@ fun OperationsContent(
                                         color = if (isDark) Color(0xFF2C1E3A) else Color(0xFFF3E8FF)
                                     ) {
                                         Text(
-                                            text = if (bundle.isEncrypted) "已硬件芯片加密" else "明文格式",
+                                            text = if (bundle.isEncrypted) "Keystore 加密" else "明文格式",
                                             fontSize = 10.5.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = GatewayPurple,
@@ -573,7 +577,7 @@ fun OperationsContent(
                                     }
                                 }
                                 Text(
-                                    text = "摘要签名 SHA-256: ${bundle.checksumSha256}",
+                                    text = "内容校验 SHA-256: ${bundle.checksumSha256}",
                                     fontFamily = FontFamily.Monospace,
                                     fontSize = 11.sp,
                                     color = secondaryTextColor,
@@ -582,7 +586,7 @@ fun OperationsContent(
                                     overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
-                                    text = "内容大小: ${bundle.bundleContent.length} 字符 | 保护级别: 硬件 KeyStore TEE 隔离",
+                                    text = "内容大小：${bundle.bundleContent.length} 字符 · ${if (bundle.isEncrypted) "Keystore 加密" else "未加密"}",
                                     fontSize = 11.sp,
                                     color = primaryTextColor
                                 )
@@ -666,10 +670,13 @@ fun OperationsContent(
             }
         }
 
+        item { OperationsGroupHeading("04", "备份与恢复", "迁移配置前先导出文件") }
         item { ConfigBackupCard() }
+        item { OperationsGroupHeading("05", "更多设置", "显示、拦截与经典设置入口") }
         item { DeveloperSettingsCard() }
         item { ClassicSettingsAccessCard() }
 
+        item { OperationsGroupHeading("06", "运行日志", "最近事件，仅供排查") }
         // 3. RingBuffer 实时日志瀑布流 (Live Log Waterfall)
         item {
             Surface(
@@ -679,7 +686,7 @@ fun OperationsContent(
                 border = BorderStroke(1.dp, if (isDark) DarkOutline else Color(0xFFF0F3F7)),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Column(modifier = Modifier.padding(14.dp)) {
+                Column(modifier = Modifier.padding(18.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -696,7 +703,7 @@ fun OperationsContent(
                             color = if (isDark) Color(0xFF1E3A5F) else Color(0xFFE8F1FF)
                         ) {
                             Text(
-                                text = "最新 50 条",
+                                text = "最近 ${minOf(state.recentLogs.size, 25)} 条",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = GatewayBlue,
@@ -717,7 +724,7 @@ fun OperationsContent(
                             modifier = Modifier.padding(vertical = 4.dp)
                         )
                     } else {
-                        state.recentLogs.takeLast(25).reversed().forEach { log ->
+                        state.recentLogs.takeLast(if (showAllLogs) 25 else 5).reversed().forEach { log ->
                             val levelColor = when (log.level) {
                                 LogLevel.ERROR, LogLevel.CRITICAL -> GatewayRed
                                 LogLevel.WARN -> GatewayOrange
@@ -760,6 +767,11 @@ fun OperationsContent(
                                         overflow = TextOverflow.Ellipsis
                                     )
                                 }
+                            }
+                        }
+                        if (state.recentLogs.size > 5) {
+                            TextButton(onClick = { showAllLogs = !showAllLogs }) {
+                                Text(if (showAllLogs) "收起日志" else "查看最近 25 条")
                             }
                         }
                     }
@@ -810,6 +822,33 @@ fun OperationsContent(
                 }
             }
         )
+    }
+}
+
+@Composable
+private fun OperationsGroupHeading(number: String, title: String, description: String) {
+    val dark = isSystemInDarkTheme()
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Surface(
+            shape = RoundedCornerShape(10.dp),
+            color = if (dark) Color(0xFF183A2A) else BrandGreenSoft
+        ) {
+            Text(
+                number,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                color = if (dark) Color(0xFF8DE1A7) else Color(0xFF138348),
+                fontWeight = FontWeight.Bold,
+                fontSize = 12.sp
+            )
+        }
+        Column {
+            Text(title, color = if (dark) Color.White else TextPrimary, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+            Text(description, color = if (dark) Color(0xFF9CA3AF) else TextSecondary, fontSize = 11.sp)
+        }
     }
 }
 

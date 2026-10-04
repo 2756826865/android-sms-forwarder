@@ -41,6 +41,7 @@ fun SmsChainDiagnosticsCard() {
     }
     var checkedAt by remember { mutableStateOf(0L) }
     var loading by remember { mutableStateOf(false) }
+    var showDetails by remember { mutableStateOf(false) }
     var report by remember { mutableStateOf(listOf(DiagnosticPanel("短信链路", "点击检查最近10条影子记录；记录缺失不代表业务失败。", "待检查"))) }
     val sources by remember { org.fossify.messages.remote.repository.RemoteSourceRepository.getInstance(context) }.sourcesFlow.collectAsState()
     val sync by org.fossify.messages.helpers.SmsSyncProgress.state.collectAsState()
@@ -49,7 +50,7 @@ fun SmsChainDiagnosticsCard() {
         DiagnosticBadge(if (sync.running) "同步中" else if (sync.failed > 0) "有失败" else "空闲", sync.failed > 0)
         Text("短信同步：${if (sync.running) "进行中" else "空闲"} · ${sync.completed}/${sync.total} 个会话 · ${sync.failed} 个失败")
         }
-        OperationsSection("短信链路诊断") {
+        OperationsSection("链路诊断") {
         Text(if (checkedAt > 0) "最近检查：${DateFormat.getDateTimeInstance().format(Date(checkedAt))}" else "尚未检查", style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
         Text("仅显示步骤和状态，不显示号码、正文或凭据；通道受理不等于设备送达。")
         OutlinedButton(enabled = !loading, onClick = {
@@ -92,10 +93,14 @@ fun SmsChainDiagnosticsCard() {
                     }
                 } catch (e: CancellationException) { throw e }
                 catch (_: Exception) { report = listOf(DiagnosticPanel("读取失败", "读取诊断记录失败，请稍后重试。", "请重试", true)) }
-                finally { checkedAt = System.currentTimeMillis(); loading = false }
+                finally { checkedAt = System.currentTimeMillis(); loading = false; showDetails = true }
             }
         }) { Text(if (loading) "读取中…" else "检查 / 刷新") }
+        androidx.compose.material3.TextButton(onClick = { showDetails = !showDetails }) {
+            Text(if (showDetails) "收起诊断详情" else "展开诊断详情与备用通道")
         }
+        }
+        if (showDetails) {
         report.forEach { panel -> OperationsSection(panel.title) {
             val title = panel.title
             val body = panel.body
@@ -131,6 +136,7 @@ fun SmsChainDiagnosticsCard() {
             context.startActivity(android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                 android.net.Uri.parse("package:${context.packageName}")))
         }) { Text("打开应用权限与后台设置") }
+        }
         }
 
     }
