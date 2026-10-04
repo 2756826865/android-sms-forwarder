@@ -140,9 +140,9 @@ val ALL_CHANNEL_TYPE_DEFINITIONS = listOf(
     ChannelTypeDefinition(ForwardingChannels.DISCORD, "Discord 群机器人", "Discord Webhook 频道卡片推送", "🎮", ChannelCategory.INSTANT),
     ChannelTypeDefinition(ForwardingChannels.GOTIFY, "Gotify 消息推送", "自建 Gotify 服务即时推送", "🚀", ChannelCategory.INSTANT),
     ChannelTypeDefinition(ForwardingChannels.NTFY, "ntfy 推送", "支持官方或自建 ntfy 服务与独立 Topic", "📣", ChannelCategory.INSTANT),
-    ChannelTypeDefinition(ForwardingChannels.WEBSOCKET, "WebSocket 客户端", "长连接实时推流，毫秒级响应", "🔌", ChannelCategory.INSTANT),
+    ChannelTypeDefinition(ForwardingChannels.WEBSOCKET, "WebSocket 客户端", "通过自建 WebSocket 或 HTTP 服务转发", "🔌", ChannelCategory.INSTANT),
     ChannelTypeDefinition(ForwardingChannels.EMAIL, "邮件消息 (SMTP)", "标准 SMTP 协议发信 (SSL/STARTTLS)", "📧", ChannelCategory.CLOUD),
-    ChannelTypeDefinition(ForwardingChannels.TENCENT_CLOUD, "腾讯云自定义告警", "腾讯云监控告警回调，触发短信与通知", "☁️", ChannelCategory.CLOUD),
+    ChannelTypeDefinition(ForwardingChannels.TENCENT_CLOUD, "腾讯云自定义告警", "向配置的腾讯云告警 Webhook 提交消息", "☁️", ChannelCategory.CLOUD),
     ChannelTypeDefinition(ForwardingChannels.SMS_DIRECT, "短信直发 (SIM 转发)", "通过本机备用 SIM 卡向指定手机转发", "📱", ChannelCategory.CLOUD),
     ChannelTypeDefinition(ForwardingChannels.CUSTOM_WEBHOOK, "自定义 Webhook", "适配任意第三方 HTTP POST/GET 接口", "🌐", ChannelCategory.CLOUD)
 )
@@ -294,8 +294,9 @@ fun getChannelTutorial(channelId: String): String = when (channelId) {
         2. 点击【复制 Webhook URL】并填入 App 即可
     """.trimIndent()
     ForwardingChannels.TENCENT_CLOUD -> """
-        1. 登录腾讯云控制台 -> 云监控 -> 告警回调设置
-        2. 复制生成的告警 Webhook URL 与 Secret 填入，可触发免费短信提醒
+        1. 准备可接收本通道请求格式的告警 Webhook URL，并确认接收端的鉴权方式
+        2. 填入 Webhook URL 与接收端约定的 Secret，保存后先测试
+        3. 本通道只提交 HTTP 请求；短信通知是否触发及其资费由接收端配置决定
     """.trimIndent()
     ForwardingChannels.EMAIL -> """
         支持提供 SMTP + SSL/STARTTLS + 密码或应用授权码的邮箱，不限 QQ/163。
@@ -1834,10 +1835,13 @@ fun ChannelFullTutorialDialog(onDismiss: () -> Unit) {
         "快速开始" to listOf(
             "推荐流程" to "添加并保存通道 → 点击测试 → 新建规则 → 选择具体通道实例 → 开启规则。",
             "多实例" to "同一种通道可以创建多份配置，例如 Bark A、Bark B。规则可以只发给其中一个，也可以同时选择多个实例。",
-            "先测试再启用" to "测试成功只代表凭据和网络可用；还需要开启通道实例，并在规则中选中它。"
+            "先测试再启用" to "测试成功通常只代表服务端已受理请求，不保证接收设备已弹出通知；还需开启实例，并在规则中选中它。"
         ),
         "转发通道" to listOf(
             "PushPlus" to "登录 pushplus.plus，在一对一推送中复制 Token；群组推送可再填写 Topic。",
+            "WxPusher / 微信测试号" to "WxPusher 填 AppToken 和接收者 UID 或 Topic ID；微信测试号填 App ID、App Secret、关注者 openID 和模板 ID。",
+            "企业微信应用 / 群机器人" to "应用消息填写企业 ID、AgentId、Secret 和成员 User ID；群机器人填写群聊 Webhook。两者是不同的接口。",
+            "企业微信智能机器人" to "先在远程发送页启用长连接来源，再选择对应来源与接收会话 ID；连接就绪后测试推送。",
             "钉钉 / 飞书机器人" to "在群聊中添加自定义机器人，复制 Webhook；开启加签时还要填写对应 Secret。",
             "飞书自建应用" to "在飞书开放平台创建企业自建应用，填写 App ID、App Secret 和接收人的 open_id。",
             "Bark" to "在 iPhone 的 Bark App 中复制 Device Key；自建服务可填写自己的 HTTPS 或局域网 HTTP 地址。",
@@ -1845,7 +1849,8 @@ fun ChannelFullTutorialDialog(onDismiss: () -> Unit) {
             "Gotify" to "填写 Gotify 服务地址和应用 Token。公网服务使用 HTTPS，局域网可使用 HTTP。",
             "ntfy" to "填写 ntfy 服务地址与 Topic，私有主题再填写访问 Token。不要使用容易猜到的公开 Topic 传输验证码。",
             "QQ / OneBot / NapCat" to "Qmsg 模式填写 Key；OneBot 11 / NapCat 填写 HTTP 地址、Access Token 和 user_id 或 group_id。",
-            "邮件 / WebSocket" to "邮件填写 SMTP 服务器、账号、授权码和收件人；WebSocket 填写服务地址及可选 Token。",
+            "邮件 / WebSocket" to "邮件使用通用 SMTP：填写服务器、端口、SSL 或 STARTTLS、账号、密码或应用授权码及收件人；仅允许 OAuth2 登录的账号暂不支持。WebSocket 填写服务地址及可选 Token。",
+            "腾讯云自定义告警" to "填写云监控告警回调地址及 Secret；测试受理不等于短信最终送达，是否产生短信由云端告警配置决定。",
             "短信直发 / 自定义 Webhook" to "短信直发会产生运营商费用；Webhook 支持 GET、POST、PUT，可配置 Content-Type、Headers 与请求体模板，并使用 [receiver] 获取卡槽本机号码。",
             "Server酱³" to "官网登录获取 SendKey；手机安装 Server酱 App 授权厂商通道后即可收到免后台推送，省电无常驻。",
             "通道组" to "把多个已配置实例组合后并发发送。不要把通道组互相循环引用。"

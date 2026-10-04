@@ -2439,10 +2439,18 @@ class ThreadActivity : SimpleActivity() {
             orientation = LinearLayout.VERTICAL
             val padding = (20 * density).toInt()
             setPadding(padding, padding, padding, padding)
+            setBackgroundColor(Color.WHITE)
         }
+        layout.addView(android.widget.TextView(dialogContext).apply {
+            text = "输入栏位置调整"
+            textSize = 20f
+            setTextColor(getColor(R.color.miui_primary_text))
+            setTypeface(null, android.graphics.Typeface.BOLD)
+        })
         val label = android.widget.TextView(dialogContext).apply {
             setTextColor(getColor(R.color.miui_primary_text))
-            textSize = 15f
+            textSize = 14f
+            setPadding(0, (14 * density).toInt(), 0, (12 * density).toInt())
         }
         layout.addView(label)
         fun update() {
@@ -2452,25 +2460,55 @@ class ThreadActivity : SimpleActivity() {
         listOf("上移 +4 dp" to 4, "下移 −4 dp" to -4, "恢复默认" to 0).forEach { (title, step) ->
             layout.addView(android.widget.Button(dialogContext).apply {
                 text = title
+                isAllCaps = false
                 setTextColor(getColor(R.color.miui_primary_text))
-                backgroundTintList = ColorStateList.valueOf(getColor(R.color.classic_settings_background))
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    setColor(Color.rgb(248, 250, 252))
+                    cornerRadius = 12 * density
+                    setStroke((1 * density).toInt().coerceAtLeast(1), Color.rgb(225, 231, 237))
+                }
                 setOnClickListener {
                     composerOffsetDp = if (step == 0) 0 else (composerOffsetDp + step).coerceIn(0, 160)
                     update()
                 }
+            }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (48 * density).toInt()).apply {
+                bottomMargin = (10 * density).toInt()
             })
         }
+        val actions = LinearLayout(dialogContext).apply {
+            gravity = Gravity.END
+            setPadding(0, (10 * density).toInt(), 0, 0)
+        }
+        val cancel = android.widget.TextView(dialogContext).apply {
+            text = "取消"
+            textSize = 15f
+            gravity = Gravity.CENTER
+            setTextColor(getColor(R.color.miui_primary_text))
+        }
+        val save = android.widget.TextView(dialogContext).apply {
+            text = "保存"
+            textSize = 15f
+            gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(Color.rgb(22, 150, 84))
+                cornerRadius = 12 * density
+            }
+        }
+        actions.addView(cancel, LinearLayout.LayoutParams((76 * density).toInt(), (44 * density).toInt()))
+        actions.addView(save, LinearLayout.LayoutParams((88 * density).toInt(), (44 * density).toInt()))
+        layout.addView(actions)
         update()
         val dialog = androidx.appcompat.app.AlertDialog.Builder(dialogContext)
-            .setTitle("输入栏位置调整")
             .setView(layout)
-            .setPositiveButton("保存") { _, _ ->
-                saved = true
-                getSharedPreferences("thread_layout", MODE_PRIVATE).edit()
-                    .putInt("composer_offset_dp", composerOffsetDp).apply()
-            }
-            .setNegativeButton("取消", null)
             .create()
+        cancel.setOnClickListener { dialog.dismiss() }
+        save.setOnClickListener {
+            saved = true
+            getSharedPreferences("thread_layout", MODE_PRIVATE).edit()
+                .putInt("composer_offset_dp", composerOffsetDp).apply()
+            dialog.dismiss()
+        }
         composerPositionDialog = dialog
         dialog.setOnDismissListener {
             if (!saved) composerOffsetDp = original

@@ -216,10 +216,6 @@ fun OperationsContent(
         ),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        item { ConfigBackupCard() }
-        item { SmsChainDiagnosticsCard() }
-        item { DeveloperSettingsCard() }
-        item { ClassicSettingsAccessCard() }
         // 1. 厂商保活与白名单一键直达向导 (OEM Whitelist Wizard)
         item {
             Surface(
@@ -499,6 +495,8 @@ fun OperationsContent(
             }
         }
 
+        item { SmsChainDiagnosticsCard() }
+
         // 2. 硬件加密排障诊断包 (Encrypted Diagnostics Export)
         item {
             Surface(
@@ -667,6 +665,10 @@ fun OperationsContent(
                 }
             }
         }
+
+        item { ConfigBackupCard() }
+        item { DeveloperSettingsCard() }
+        item { ClassicSettingsAccessCard() }
 
         // 3. RingBuffer 实时日志瀑布流 (Live Log Waterfall)
         item {
