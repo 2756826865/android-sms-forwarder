@@ -19,6 +19,7 @@ import kotlinx.coroutines.withContext
 import org.fossify.messages.extensions.getConversations
 import org.fossify.messages.models.Conversation
 import org.fossify.messages.extensions.messagesDB
+import org.fossify.messages.extensions.conversationsDB
 import org.fossify.messages.extensions.config
 import org.fossify.messages.extensions.syncThreadToLocal
 import org.fossify.messages.helpers.SmsSyncProgress
@@ -29,7 +30,8 @@ data class ConversationsUiState(
     val isDefaultSmsApp: Boolean = true,
     val searchThreadIds: Set<Long> = emptySet(),
     val searchStatus: String = "搜索联系人/号码及已同步短信正文",
-    val initialLoaded: Boolean = false
+    val initialLoaded: Boolean = false,
+    val loadError: String = ""
 )
 
 class ConversationsViewModel(application: Application) : AndroidViewModel(application) {
@@ -62,10 +64,14 @@ class ConversationsViewModel(application: Application) : AndroidViewModel(applic
             var failed = 0
             var total = 0
             try {
+                _uiState.value = _uiState.value.copy(loadError = "")
                 withContext(Dispatchers.IO) {
                     require(androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.READ_SMS) == android.content.pm.PackageManager.PERMISSION_GRANTED)
                     context.config.fullHistorySyncedV2 = false
                     val threads = context.getConversations()
+                    if (threads.isEmpty() && context.conversationsDB.getAllRegular().isNotEmpty()) {
+                        throw IllegalStateException("系统短信列表暂时为空，请检查短信权限及默认短信应用后重试")
+                    }
                     total = threads.size
                     SmsSyncProgress.update(SmsSyncProgress.State(true, 0, total, 0))
                     for (thread in threads) {
@@ -80,7 +86,12 @@ class ConversationsViewModel(application: Application) : AndroidViewModel(applic
                 }
                 refresh()
             } catch (e: CancellationException) { throw e }
-            catch (_: Exception) { failed++ }
+            catch (error: Exception) {
+                failed++
+                _uiState.value = _uiState.value.copy(loadError =
+                    error.message?.takeIf { it.contains("系统短信列表") }
+                        ?: "全量同步失败，请检查短信读取权限后重试")
+            }
             finally { SmsSyncProgress.update(SmsSyncProgress.State(false, done, total, failed)) }
         }
     }
@@ -90,6 +101,8 @@ class ConversationsViewModel(application: Application) : AndroidViewModel(applic
     }
 
     fun refresh(isInitial: Boolean = false) {
+        // 首次加载不能被连续刷新事件反复取消，否则空页面会一直显示转圈。
+        if (refreshJob?.isActive == true && !_uiState.value.initialLoaded) return
         refreshJob?.cancel()
         refreshJob = viewModelScope.launch {
             if (!isInitial) delay(300)
@@ -107,7 +120,24 @@ class ConversationsViewModel(application: Application) : AndroidViewModel(applic
                 _uiState.value = _uiState.value.copy(isDefaultSmsApp = isDefault)
             }
 
-            val list = try {
+            val cached = withContext(Dispatchers.IO) {
+                runCatching { context.conversationsDB.getAllRegular() }.getOrDefault(emptyList())
+            }
+            if (cached.isNotEmpty() && _uiState.value.conversations.isEmpty()) {
+                _uiState.value = _uiState.value.copy(conversations = cached, isLoading = false, initialLoaded = true)
+            }
+
+            val loadingWatchdog = launch {
+                delay(15_000)
+                if (_uiState.value.isLoading && _uiState.value.conversations.isEmpty()) {
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        initialLoaded = true,
+                        loadError = "系统短信读取耗时较长，请检查权限或稍后刷新"
+                    )
+                }
+            }
+            val provider = try {
                 withContext(Dispatchers.IO) { context.getConversations() }
             } catch (error: CancellationException) {
                 throw error
@@ -115,14 +145,22 @@ class ConversationsViewModel(application: Application) : AndroidViewModel(applic
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     initialLoaded = true,
+                    loadError = "系统短信读取失败，已保留本地记录，可稍后刷新"
                 )
                 return@launch
+            } finally {
+                loadingWatchdog.cancel()
             }
 
+            val list = (provider + cached)
+                .distinctBy { it.threadId }
+                .sortedByDescending { it.date }
             _uiState.value = _uiState.value.copy(
                 conversations = list,
                 isLoading = false,
-                initialLoaded = true
+                initialLoaded = true,
+                loadError = if (provider.isEmpty() && list.isNotEmpty())
+                    "系统短信列表暂时为空，当前显示已同步记录" else ""
             )
         }
     }

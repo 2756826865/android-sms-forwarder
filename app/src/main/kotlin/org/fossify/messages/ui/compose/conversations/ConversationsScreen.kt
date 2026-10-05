@@ -318,6 +318,14 @@ fun ConversationsScreen(
                     }
                 }
             }
+            if (uiState.loadError.isNotBlank()) {
+                Text(
+                    text = uiState.loadError,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = GatewayOrange
+                )
+            }
             // 默认短信应用轻量提醒条 (若非默认应用，置于搜索栏下方)
             if (!uiState.isDefaultSmsApp) {
                 Spacer(modifier = Modifier.height(8.dp))
