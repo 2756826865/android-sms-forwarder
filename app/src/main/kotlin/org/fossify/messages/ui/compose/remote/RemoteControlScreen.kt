@@ -763,7 +763,7 @@ private fun RemoteSourceCard(
                 if (source.whitelistEnabled && source.authorizedUsers.isEmpty()) {
                     WarningTag(text = "缺授权用户·远程发短信已停用", color = GatewayRed)
                 } else if (!source.whitelistEnabled) {
-                    WarningTag(text = "白名单已关闭·任何人可用本机发信", color = GatewayOrange)
+                    SmallTag(text = "白名单关闭", isDark = isDark)
                 } else {
                     SmallTag(text = "白名单: ${source.authorizedUsers.size}人", isDark = isDark)
                 }
@@ -890,6 +890,22 @@ private fun WarningTag(text: String, color: Color) {
 }
 
 @Composable
+private fun RemoteConnectionGuide(title: String, steps: String) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        color = GatewayBlue.copy(alpha = 0.08f),
+        border = BorderStroke(1.dp, GatewayBlue.copy(alpha = 0.2f))
+    ) {
+        Column(modifier = Modifier.padding(10.dp)) {
+            Text(title, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = GatewayBlue)
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(steps, fontSize = 11.sp, lineHeight = 16.sp, color = TextSecondary)
+        }
+    }
+}
+
+@Composable
 private fun RemoteSourceEditDialog(
     initialSource: RemoteSourceInstance?,
     initialType: RemoteSourceType,
@@ -905,7 +921,7 @@ private fun RemoteSourceEditDialog(
     var prefix by remember { mutableStateOf(initialSource?.customCommandPrefix ?: "") }
     var simMode by remember { mutableStateOf(initialSource?.defaultSimMode ?: SubscriptionResolver.MODE_FOLLOW_RECEIVE) }
 
-    var whitelistEnabled by remember { mutableStateOf(initialSource?.whitelistEnabled ?: true) }
+    var whitelistEnabled by remember { mutableStateOf(initialSource?.whitelistEnabled ?: false) }
     var authUsersText by remember { mutableStateOf(initialSource?.authorizedUsers?.joinToString("\n") ?: "") }
     var authGroupsText by remember { mutableStateOf(initialSource?.authorizedGroups?.joinToString("\n") ?: "") }
     var requireMention by remember { mutableStateOf(initialSource?.requireMention ?: true) }
@@ -1088,6 +1104,13 @@ private fun RemoteSourceEditDialog(
                         )
                     }
                     RemoteSourceType.DINGTALK -> {
+                        RemoteConnectionGuide(
+                            title = "钉钉 Stream 远程发信配置",
+                            steps = "1. 登录 open.dingtalk.com，创建企业内部应用，在应用凭证中取得 Client ID 与 Client Secret。\n" +
+                                "2. 为该应用添加机器人能力，在机器人消息接收设置中选择 Stream 模式；发布/启用应用，并把机器人添加到目标群。无需填写公网回调地址。\n" +
+                                "3. 将凭证填入下方，保存并启用来源，确认连接状态就绪。在私聊发送 /发信 10086 查询；群聊请 @机器人 再发送指令。\n" +
+                                "4. 如开启用户白名单，填写钉钉 senderStaffId（企业内用户 ID；缺失时使用 senderId）；群聊还需填写 conversationId 到群组白名单。群自定义机器人 Webhook 只能单向推送，不能代替此应用凭证。"
+                        )
                         OutlinedTextField(
                             value = param1,
                             onValueChange = { param1 = it },
@@ -1104,6 +1127,13 @@ private fun RemoteSourceEditDialog(
                         )
                     }
                     RemoteSourceType.FEISHU -> {
+                        RemoteConnectionGuide(
+                            title = "飞书长连接远程发信配置",
+                            steps = "1. 登录 open.feishu.cn 创建企业自建应用，启用机器人能力，在应用凭证中取得 App ID 和 App Secret；申请接收消息及机器人回复所需权限，并按平台要求发布可用版本。\n" +
+                                "2. 进入「开发配置 → 事件与回调 → 事件配置」，选择「使用长连接接收事件」，订阅「接收消息」事件 im.message.receive_v1。这里配置的是事件订阅，不是 Webhook 回调地址。\n" +
+                                "3. 填入下方凭证，保存并启用来源，保持手机联网，待连接就绪后在飞书后台完成长连接验证。在单聊发送 /发信 10086 查询；群聊请 @机器人。\n" +
+                                "4. 如开启用户白名单，填写事件中的 sender_id.open_id（优先使用）；群聊还需把 chat_id 填入群组白名单。事件未送达时检查飞书开放平台的事件日志、权限和应用可见范围。"
+                        )
                         OutlinedTextField(
                             value = param1,
                             onValueChange = { param1 = it },
@@ -1142,8 +1172,8 @@ private fun RemoteSourceEditDialog(
                                            "3. 连接方式必须勾选【使用长连接】（免公网IP/免域名），点击查看/获取 Bot ID 与 Secret 密钥；\n\n" +
                                            "【手机企微App直接创建】\n" +
                                            "打开企业微信手机端 →「通讯录」→「智能机器人」→「创建智能机器人」→ 选择【API模式】并勾选【使用长连接】；\n\n" +
-                                           "【使用说明】\n" +
-                                           "将获取的 Bot ID 与 Secret 填入下方保存；把机器人拉入群聊或单聊，@机器人 发送 /发信 10086 查询 即可远程代发短信并原路接收回执。",
+                                   "【使用说明】\n" +
+                                           "将 Bot ID 与 Secret 填入下方保存并启用来源，确认连接就绪；把机器人拉入群聊或单聊，群聊 @机器人 发送 /发信 10086 查询。若开启用户白名单，填写消息 from.userid；群聊还需将 chatid 填入群组白名单。单向群机器人 Webhook 凭证不能用于此处。",
                                     fontSize = 11.sp,
                                     color = TextSecondary,
                                     lineHeight = 16.sp
@@ -1286,12 +1316,7 @@ private fun RemoteSourceEditDialog(
                                 color = TextSecondary
                             )
                         } else {
-                            Text(
-                                "⚠ 安全风险：关闭后任何能联系到本来源的人，都可以用你的手机向任意号码发短信",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = GatewayRed
-                            )
+                            Text("未限制发送者；开启后仅允许名单内用户", fontSize = 11.sp, color = TextSecondary)
                         }
                     }
                     Switch(checked = whitelistEnabled, onCheckedChange = { whitelistEnabled = it })
@@ -1300,16 +1325,16 @@ private fun RemoteSourceEditDialog(
                 OutlinedTextField(
                     value = authUsersText,
                     onValueChange = { authUsersText = it },
-                    label = { Text("用户白名单（必填，每行一个）") },
+                    label = { Text(if (whitelistEnabled) "用户白名单（必填，每行一个）" else "用户白名单（可选，每行一个）") },
                     placeholder = { Text("账号、手机号或用户 ID") },
                     supportingText = {
-                        if (authUsersText.lines().none { it.isNotBlank() }) {
+                        if (whitelistEnabled && authUsersText.lines().none { it.isNotBlank() }) {
                             Text("必须至少填写一个授权用户，否则无法保存")
                         } else {
-                            Text("名单为空的来源不会执行任何远程发短信指令")
+                            Text(if (whitelistEnabled) "仅名单内用户可以发送指令" else "白名单关闭时不按此名单过滤")
                         }
                     },
-                    isError = authUsersText.lines().none { it.isNotBlank() },
+                    isError = whitelistEnabled && authUsersText.lines().none { it.isNotBlank() },
                     modifier = Modifier.fillMaxWidth(),
                     maxLines = 3
                 )
@@ -1483,8 +1508,7 @@ private fun RemoteSourceEditDialog(
                     )
                     onSave(item)
                 },
-                // 无论白名单开关处于何种状态，都必须配置授权用户才能保存。
-                enabled = authUsersText.lines().any { it.isNotBlank() },
+                enabled = !whitelistEnabled || authUsersText.lines().any { it.isNotBlank() },
                 colors = ButtonDefaults.buttonColors(containerColor = BrandGreen)
             ) {
                 Text("保存")

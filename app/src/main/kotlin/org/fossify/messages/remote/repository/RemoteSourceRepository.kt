@@ -72,8 +72,8 @@ data class RemoteSourceInstance(
     val lastErrorCode: Int = 0,
     val lastErrorMessage: String = "",
     val customCommandPrefix: String = "",
-    // 安全默认值：白名单默认开启。关闭白名单意味着任何人都可以用本机号码对外发短信。
-    val whitelistEnabled: Boolean = true,
+    // 新建来源默认关闭白名单；用户开启后必须填写授权用户。
+    val whitelistEnabled: Boolean = false,
     val authorizedUsers: Set<String> = emptySet(),
     val authorizedGroups: Set<String> = emptySet(),
     val requireMention: Boolean = false,
@@ -165,78 +165,18 @@ class RemoteSourceRepository internal constructor(
     private fun loadFromPrefs() {
         val raw = prefs.getString(KEY_SOURCES, "[]").orEmpty()
         val parsed = parseJson(raw)
-        val list = enforceWhitelistSecurityDefault(parsed)
+        val list = parsed
         _sourcesFlow.value = list
         val storedCount = runCatching { JSONArray(raw).length() }.getOrDefault(list.size)
         if (storedCount != list.size || list != parsed) {
-            // 清除已弃用或未知类型的持久化实例，避免旧凭据继续滞留或被误识别；
-            // 同时把白名单安全加固结果立即落库，避免重复计算。
+            // 清除已弃用或未知类型的持久化实例，避免旧凭据继续滞留或被误识别。
             persist(list)
         }
-    }
-
-    /**
-     * 存量名单自动回填（升级迁移）：把「白名单关闭且名单为空」的**短信来源**
-     * 用历史发件人记录补充完整名单并开启白名单。
-     *
-     * 两个分支：
-     * - 能取到历史发件人 → `copy(whitelistEnabled = true, authorizedUsers = 历史号码)`：
-     *   既收敛了"任何人可发"的风险，又不会中断功能。
-     * - 取不到历史发件人（含非短信来源 —— 只有短信路径会落限流记录）→ **保持关闭、接受全部**，
-     *   与旧版行为一致，功能同样不中断，由设置页的橙色警告标签提示。
-     *
-     * 硬约束：**绝不允许出现"名单为空 + 白名单开启"的失效态**（那会被
-     * AUTHORIZED_USERS_REQUIRED 全部拒绝，用户必须手动补充名单才能恢复）。
-     *
-     * 「白名单关闭但名单非空」的来源不做迁移 —— 那是用户在填写了名单的前提下显式选择
-     * "接受所有用户"，迁移会让其存量配置突然失效；这类来源仅在设置页以警告色提示。
-     *
-     * 该函数在 [loadFromPrefs] 与 [persist] 两处调用，等价于在 synchronized 内做
-     * read-modify-write；回填是一次性的（回填后名单非空，下次不再命中条件）。
-     *
-     * @return 加固后的实例列表；无变化时返回原列表。
-     */
-    private fun enforceWhitelistSecurityDefault(list: List<RemoteSourceInstance>): List<RemoteSourceInstance> {
-        if (list.none(::needsWhitelistBackfill)) return list
-        // 惰性读取：只有确实存在待回填来源时才去读 prefs，避免每次 persist 都白白读盘。
-        val knownRequesters = smsCommandConfig?.knownRequesters().orEmpty()
-        if (knownRequesters.isEmpty()) return list
-        val backfilledIds = linkedSetOf<String>()
-        val migrated = list.map { instance ->
-            if (needsWhitelistBackfill(instance)) {
-                backfilledIds.add(instance.id)
-                instance.copy(whitelistEnabled = true, authorizedUsers = knownRequesters)
-            } else {
-                instance
-            }
-        }
-        markAutoBackfilled(backfilledIds)
-        return migrated
-    }
-
-    /** 记录"名单由历史记录自动生成"的来源，供 UI 提示核对。 */
-    private fun markAutoBackfilled(ids: Set<String>) {
-        if (ids.isEmpty()) return
-        val merged = _autoBackfilledIds.value + ids
-        _autoBackfilledIds.value = merged
-        prefs.edit()
-            .putString(KEY_AUTO_BACKFILLED_IDS, JSONArray(merged.toList()).toString())
-            .apply()
     }
 
     private fun readAutoBackfilledIds(): Set<String> = runCatching {
         parseStringSet(JSONArray(prefs.getString(KEY_AUTO_BACKFILLED_IDS, "[]").orEmpty()))
     }.getOrDefault(emptySet())
-
-    /**
-     * 是否属于"关闭白名单且名单为空"、需要用历史发件人回填的状态。
-     * 仅限短信来源：历史发件人记录来自短信指令的限流表，回填到非短信来源（其名单是
-     * 用户 ID / 邮箱，不是号码）只会让该来源永远匹配不上，反而制造出失效态。
-     */
-    private fun needsWhitelistBackfill(instance: RemoteSourceInstance): Boolean =
-        !instance.whitelistEnabled &&
-            instance.authorizedUsers.isEmpty() &&
-            instance.type == RemoteSourceType.SMS
 
     /**
      * 白名单已启用但未配置任何授权用户的来源。
@@ -256,7 +196,7 @@ class RemoteSourceRepository internal constructor(
      */
     @Synchronized
     private fun persist(list: List<RemoteSourceInstance>): Boolean {
-        val safeList = enforceWhitelistSecurityDefault(list)
+        val safeList = list
         val array = JSONArray()
         for (item in safeList) {
             // 任一来源的敏感字段加密失败 ⇒ 整批中止，连"部分字段写明文"的混合态都不产生。
