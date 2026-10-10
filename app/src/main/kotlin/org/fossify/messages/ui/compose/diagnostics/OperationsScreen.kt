@@ -42,6 +42,14 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import org.fossify.messages.extensions.config
+import org.fossify.messages.helpers.RecentTasksVisibility
+import org.fossify.messages.R
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -206,6 +214,15 @@ fun OperationsContent(
     val multiForwardConfig = remember { MultiForwardConfig(context) }
     var keepAliveEnabled by remember { mutableStateOf(multiForwardConfig.keepAliveServiceEnabled) }
     var showServiceNotificationChannels by remember { mutableStateOf(false) }
+    var hideRecentTasks by remember { mutableStateOf(context.config.hideFromRecentTasks) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, context) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) hideRecentTasks = context.config.hideFromRecentTasks
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     LazyColumn(
         modifier = modifier,
@@ -382,6 +399,31 @@ fun OperationsContent(
                         }
                     }
 
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = if (isDark) Color(0xFF22262B) else Color(0xFFF8FAFC),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                Text(stringResource(R.string.settings_hide_recent_tasks), fontWeight = FontWeight.Bold,
+                                    fontSize = 12.sp, color = primaryTextColor)
+                                Text(stringResource(R.string.settings_hide_recent_tasks_summary),
+                                    fontSize = 11.sp, color = secondaryTextColor)
+                            }
+                            Switch(checked = hideRecentTasks, onCheckedChange = { hidden ->
+                                hideRecentTasks = hidden
+                                if (!RecentTasksVisibility.setHidden(context, hidden)) {
+                                    Toast.makeText(context, R.string.settings_hide_recent_tasks_apply_failed, Toast.LENGTH_LONG).show()
+                                }
+                            })
+                        }
+                    }
                     Spacer(modifier = Modifier.height(10.dp))
 
                     // 前台常驻保活服务开关

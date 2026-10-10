@@ -38,6 +38,7 @@ class App : FossifyApp() {
     override fun onCreate() {
         super.onCreate()
         if (!org.fossify.messages.helpers.ConfigRestoreGuard.rollback(this)) return
+        org.fossify.messages.helpers.RecentTasksVisibility.install(this)
         config.primaryColor = getColor(R.color.miui_action_blue)
         config.accentColor = getColor(R.color.miui_fab_green)
         getSharedPreferences("Prefs", MODE_PRIVATE)

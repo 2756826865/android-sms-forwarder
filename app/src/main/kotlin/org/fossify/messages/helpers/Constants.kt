@@ -19,6 +19,7 @@ const val USE_SIM_ID_PREFIX = "use_sim_id_"
 const val NOTIFICATION_CHANNEL_ID = "fossify_messages"
 const val SHOW_CHARACTER_COUNTER = "show_character_counter"
 const val USE_GATEWAY_DEVELOPER_UI = "use_gateway_developer_ui"
+const val HIDE_FROM_RECENT_TASKS = "hide_from_recent_tasks"
 const val SHOW_HOME_BOTTOM_NAVIGATION = "show_home_bottom_navigation"
 const val HOME_LIST_DENSITY = "home_list_density"
 const val HOME_LIST_DENSITY_4 = 4

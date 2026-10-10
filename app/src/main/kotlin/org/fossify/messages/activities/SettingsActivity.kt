@@ -50,6 +50,12 @@ class SettingsActivity : SimpleActivity() {
     }
 
     private fun bindToggles() {
+        binding.settingsHideRecentTasksSwitch.setOnCheckedChangeListener { _, hidden ->
+            if (config.hideFromRecentTasks != hidden &&
+                !org.fossify.messages.helpers.RecentTasksVisibility.setHidden(this, hidden)) {
+                toast(R.string.settings_hide_recent_tasks_apply_failed)
+            }
+        }
         binding.settingsHomeBottomNavSwitch.setOnCheckedChangeListener { _, isChecked ->
             config.showHomeBottomNavigation = isChecked
         }
@@ -61,6 +67,7 @@ class SettingsActivity : SimpleActivity() {
     }
 
     private fun refreshToggleStates() {
+        binding.settingsHideRecentTasksSwitch.isChecked = config.hideFromRecentTasks
         binding.settingsHomeBottomNavSwitch.isChecked = config.showHomeBottomNavigation
         binding.settingsLiveIslandSwitch.isChecked = config.enableLiveIsland
         updateLiveIslandSummary()

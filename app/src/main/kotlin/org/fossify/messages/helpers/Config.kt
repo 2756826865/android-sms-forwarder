@@ -17,6 +17,10 @@ class Config(context: Context) : BaseConfig(context) {
 
     fun getUseSIMIdAtNumber(number: String) = prefs.getInt(USE_SIM_ID_PREFIX + number, 0)
 
+    var hideFromRecentTasks: Boolean
+        get() = prefs.getBoolean(HIDE_FROM_RECENT_TASKS, false)
+        set(value) = prefs.edit().putBoolean(HIDE_FROM_RECENT_TASKS, value).apply()
+
     var showHomeBottomNavigation: Boolean
         get() = prefs.getBoolean(SHOW_HOME_BOTTOM_NAVIGATION, false)
         set(value) = prefs.edit().putBoolean(SHOW_HOME_BOTTOM_NAVIGATION, value).apply()

@@ -9,6 +9,7 @@ internal object BackupUiSettings {
     fun export(context: Context): JSONObject {
         val config = context.config
         return JSONObject()
+            .put("hideFromRecentTasks", config.hideFromRecentTasks)
             .put("showHomeBottomNavigation", config.showHomeBottomNavigation)
             .put("enableLiveIsland", config.enableLiveIsland)
             .put("showCharacterCounter", config.showCharacterCounter)
@@ -35,6 +36,7 @@ internal object BackupUiSettings {
             .apply { if (config.hasLowBatteryInstanceSelection) put("lowBatteryChannelInstanceIds", JSONArray(config.lowBatteryChannelInstanceIds.toList())) }
     }
     fun validate(json: JSONObject) {
+        if (json.has("hideFromRecentTasks")) require(json.get("hideFromRecentTasks") is Boolean)
         if (json.has("showHomeBottomNavigation")) require(json.get("showHomeBottomNavigation") is Boolean)
         if (json.has("enableLiveIsland")) require(json.get("enableLiveIsland") is Boolean)
         if (json.has("showCharacterCounter")) require(json.get("showCharacterCounter") is Boolean)
@@ -65,6 +67,7 @@ internal object BackupUiSettings {
     fun restore(context: Context, json: JSONObject) {
         validate(json)
         val config = context.config
+        if (json.has("hideFromRecentTasks")) RecentTasksVisibility.setHidden(context, json.getBoolean("hideFromRecentTasks"))
         if (json.has("showHomeBottomNavigation")) config.showHomeBottomNavigation = json.getBoolean("showHomeBottomNavigation")
         if (json.has("enableLiveIsland")) config.enableLiveIsland = json.getBoolean("enableLiveIsland")
         if (json.has("showCharacterCounter")) config.showCharacterCounter = json.getBoolean("showCharacterCounter")

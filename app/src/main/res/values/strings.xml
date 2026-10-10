@@ -673,4 +673,7 @@
     <string name="database_degraded_in_memory_title">严重：本地数据库不可用，已切换为内存模式</string>
     <string name="database_degraded_in_memory_text">本地数据库无法读写，已切换为内存模式。本次运行期间的本地数据（草稿、回收站、会话缓存、发送记录等）不会保存，退出应用后即丢失。系统短信库不受影响，已收到的短信不会丢失，但请尽快修复存储空间或重新安装应用。</string>
     <string name="database_recovery_action_known">知道了</string>
+    <string name="settings_hide_recent_tasks">在最近任务列表中隐藏</string>
+    <string name="settings_hide_recent_tasks_summary">隐藏本应用的任务卡片，关闭可恢复显示；不等于后台保活。隐藏后可从桌面图标重新打开，部分系统需重新锁定任务。</string>
+    <string name="settings_hide_recent_tasks_apply_failed">设置已保存，系统暂未应用；请重新打开应用后检查</string>
 </resources>
