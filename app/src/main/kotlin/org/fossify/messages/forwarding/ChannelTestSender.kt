@@ -313,6 +313,7 @@ object ChannelTestSender {
     }
 
     suspend fun sendTestInstance(context: Context, instance: ForwardingChannelInstance, ancestors: Set<String> = emptySet()): Result<String> = withContext(Dispatchers.IO) {
+        val config = MultiForwardConfig(context)
         val node = "instance:${instance.id}"
         if (node in ancestors || ancestors.size >= 16) {
             return@withContext Result.failure(IllegalArgumentException("通道组存在循环引用或嵌套过深"))
