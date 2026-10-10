@@ -114,7 +114,8 @@ object SmsSendRepository {
                 val dao = context.getMessagesDB().SmsSendDao()
                 val existing = dao.getOperationById(operationId) ?: return@launch
                 dao.updateOperation(existing.copy(
-                    state = SmsSendState.SUBMITTED.name,
+                    state = if (existing.state in setOf(SmsSendState.SENT.name, SmsSendState.FAILED.name,
+                        SmsSendState.UNKNOWN_AFTER_SUBMIT.name)) existing.state else SmsSendState.SUBMITTED.name,
                     partCount = partCount,
                     submittedAt = now,
                     updatedAt = now

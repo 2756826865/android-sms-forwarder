@@ -48,7 +48,6 @@ object SmsSendCoordinator {
     fun observeApiSubmitted(context: Context, operationId: String?, partCount: Int) {
         if (operationId == null) return
         SmsSendRepository.recordSubmitted(context, operationId, partCount)
-        SmsSendRepository.recordParts(context, operationId, partCount)
     }
 
     /**

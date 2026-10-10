@@ -26,6 +26,7 @@ class FeishuStreamClient(
     private val customPrefix: String = "",
     private val onCommand: (FeishuRemoteCommand) -> Unit,
     private val onStatus: (String) -> Unit,
+    private val onWhitelistRequest: (BotWhitelistRequest) -> Unit,
 ) {
     private val http = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
@@ -155,6 +156,15 @@ class FeishuStreamClient(
             textContent,
             mentions?.map { it.key.orEmpty() }.orEmpty(),
         )
+
+        val identityKind = DingTalkWhitelistRequest.parseKind(cleanText)
+        if (identityKind != null) {
+            val chatId = message.chatId.orEmpty()
+            onWhitelistRequest(BotWhitelistRequest(messageId, identityKind, "飞书", senderId, senderIdType,
+                chatId, "chat_id", message.chatType == "group", isMentioned,
+                if (chatId.isNotBlank()) "chat_id:$chatId" else "$senderIdType:$senderId"))
+            return
+        }
 
         RemoteSmsCommand.parse(cleanText, customPrefix)?.let { command ->
             runCatching {

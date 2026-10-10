@@ -18,10 +18,10 @@ object SimSendResolver {
         val request = SimResolutionRequest(
             receivedSubId = receiveSubId,
             configuredMode = configuredMode,
-            allowFallback = true
+            allowFallback = configuredMode !in setOf(MODE_SIM1, MODE_SIM2)
         )
         val result = SubscriptionResolver.resolve(context, request)
-        return if (result.resolvedSubscriptionId != SubscriptionManager.INVALID_SUBSCRIPTION_ID && result.resolvedSubscriptionId >= 0) {
+        return if (result.isSuccessful) {
             result.resolvedSubscriptionId
         } else {
             null
@@ -39,7 +39,7 @@ object SimSendResolver {
         val request = SimResolutionRequest(
             receivedSubId = receiveSubId,
             configuredMode = configuredMode,
-            allowFallback = true
+            allowFallback = configuredMode !in setOf(MODE_SIM1, MODE_SIM2)
         )
         val result = SubscriptionResolver.resolve(context, request)
         val slotName = result.resolvedSlotIndex?.let { "SIM${it + 1}" }

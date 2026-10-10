@@ -55,6 +55,7 @@ class SmsSender(val app: Application) {
         sendOperationId: String?
     ) {
         val smsManager = getSmsManager(app, subId)
+        val callbackOperationId = sendOperationId ?: java.util.UUID.randomUUID().toString()
         val messageCount = messages.size
         val deliveryIntents = ArrayList<PendingIntent?>(messageCount)
         val sentIntents = ArrayList<PendingIntent>(messageCount)
@@ -72,6 +73,7 @@ class SmsSender(val app: Application) {
 
         try {
             SmsSendCoordinator.observeSubmitting(app, sendOperationId)
+            sendOperationId?.let { org.fossify.messages.helpers.SmsSendRepository.recordParts(app, it, messageCount) }
             for (i in 0 until messageCount) {
                 // Make pending intents different for each message part
                 val partId = if (messageCount <= 1) 0 else i + 1
@@ -84,7 +86,7 @@ class SmsSender(val app: Application) {
                             getDeliveredStatusIntent(
                                 requestUri = messageUri,
                                 subId = subId,
-                                sendOperationId = sendOperationId,
+                                sendOperationId = callbackOperationId,
                                 partIndex = i,
                                 partCount = messageCount,
                                 isLastPart = true
@@ -105,7 +107,7 @@ class SmsSender(val app: Application) {
                             guardKey = guardKey,
                             threadId = threadId,
                             address = dest,
-                            sendOperationId = sendOperationId,
+                            sendOperationId = callbackOperationId,
                             partIndex = i,
                             partCount = messageCount,
                             isLastPart = isLastPart

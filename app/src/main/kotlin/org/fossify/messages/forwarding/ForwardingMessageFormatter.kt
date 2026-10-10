@@ -2,15 +2,37 @@ package org.fossify.messages.forwarding
 
 import android.annotation.SuppressLint
 import android.content.Context
-import android.telephony.SubscriptionManager
 import org.fossify.messages.extensions.getNameAndPhotoFromPhoneNumber
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+data class ForwardingSimSnapshot(val slotIndex: Int, val description: String, val receiverNumber: String, val customLabel: String)
+
 data class ForwardingPayload(val title: String, val content: String)
 
 object ForwardingMessageFormatter {
+    /** Text-only endpoints have no separate title field to carry the configured SIM name. */
+    @SuppressLint("MissingPermission")
+    fun withCustomSimLabel(
+        context: Context,
+        config: MultiForwardConfig,
+        subscriptionId: Int,
+        content: String,
+        snapshot: ForwardingSimSnapshot? = null,
+    ): String {
+        if (subscriptionId < 0) return content
+        val label = snapshot?.customLabel ?: runCatching {
+            val slot = resolveSimInfo(context, subscriptionId)?.simSlotIndex
+            slot?.takeIf { it >= 0 }?.let(config::customSimLabel).orEmpty().trim()
+        }.getOrDefault("")
+        if (label.isBlank()) return content
+        val alreadyLabeled = content.lineSequence().any {
+            it == "【$label】" || it == "卡槽：$label" || it == "📶卡槽：$label"
+        }
+        return if (alreadyLabeled) content else "【$label】\n$content"
+    }
+
     fun renderRuleTemplate(
         context: Context,
         template: String,
@@ -28,11 +50,8 @@ object ForwardingMessageFormatter {
         val timeOnly = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(receivedAt))
         val sim = if (subscriptionId >= 0) getSimDescription(context, config, subscriptionId) else ""
         val receiverNumber = if (subscriptionId >= 0) getReceiverNumber(context, config, subscriptionId) else ""
-        val simIndex = runCatching {
-            val manager = context.getSystemService(SubscriptionManager::class.java)
-            val info = if (subscriptionId >= 0 && manager != null) manager.getActiveSubscriptionInfo(subscriptionId) else null
-            ((info?.simSlotIndex ?: if (subscriptionId > 0) subscriptionId - 1 else 0) + 1).toString()
-        }.getOrDefault("1")
+        val simIndex = resolveSimInfo(context, subscriptionId)?.simSlotIndex
+            ?.takeIf { it >= 0 }?.let { (it + 1).toString() }.orEmpty()
         val code = org.fossify.messages.rule.template.TemplateRenderer.extractVerificationCode(body)
         return template
             .replace("{{CODE}}", code).replace("{{VERIFICATION_CODE}}", code)
@@ -64,6 +83,7 @@ object ForwardingMessageFormatter {
         includeSender: Boolean = true,
         includeSim: Boolean = true,
         includeTime: Boolean = true,
+        simSnapshot: ForwardingSimSnapshot? = null,
     ): ForwardingPayload {
         val config = MultiForwardConfig(context)
         val contactName = runCatching {
@@ -72,13 +92,13 @@ object ForwardingMessageFormatter {
         val senderTitle = contactName ?: sender.ifBlank { "新短信" }
         
         val sim = if (includeSim && subscriptionId >= 0) {
-            getSimDescription(context, config, subscriptionId)
+            simSnapshot?.description ?: getSimDescription(context, config, subscriptionId)
         } else {
             ""
         }
         
         val receiverNumber = if (subscriptionId >= 0) {
-            getReceiverNumber(context, config, subscriptionId)
+            simSnapshot?.receiverNumber ?: getReceiverNumber(context, config, subscriptionId)
         } else {
             ""
         }
@@ -125,12 +145,8 @@ object ForwardingMessageFormatter {
                     val code = org.fossify.messages.rule.template.TemplateRenderer.extractVerificationCode(body)
                     val dateOnly = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(receivedAt))
                     val timeOnly = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(receivedAt))
-                    val simSlotIdx = runCatching {
-                        val manager = context.getSystemService(SubscriptionManager::class.java)
-                        val info = if (subscriptionId >= 0 && manager != null) manager.getActiveSubscriptionInfo(subscriptionId) else null
-                        val slot = info?.simSlotIndex ?: if (subscriptionId > 0) subscriptionId - 1 else 0
-                        (slot + 1).toString()
-                    }.getOrDefault("1")
+                    val simSlotIdx = (simSnapshot?.slotIndex ?: resolveSimInfo(context, subscriptionId)?.simSlotIndex)
+                        ?.takeIf { it >= 0 }?.let { (it + 1).toString() }.orEmpty()
 
                     val result = customTemplate
                         // 1. 验证码提取 (核心修复)
@@ -220,87 +236,49 @@ object ForwardingMessageFormatter {
         return ForwardingPayload(title, finalContent)
     }
 
+    /** Subscription IDs are identities, never physical slot numbers. */
     @SuppressLint("MissingPermission")
-    fun getSimDescription(
-        context: Context,
-        config: MultiForwardConfig,
-        subscriptionId: Int,
-    ): String = runCatching {
-        val manager = context.getSystemService(SubscriptionManager::class.java)
-        var info = if (subscriptionId >= 0 && manager != null) {
-            runCatching { manager.getActiveSubscriptionInfo(subscriptionId) }.getOrNull()
-        } else null
+    private fun resolveSimInfo(context: Context, subscriptionId: Int): android.telephony.SubscriptionInfo? {
+        return org.fossify.messages.messaging.SubscriptionResolver.findActiveInfo(context, subscriptionId)
+    }
 
-        if (info == null && manager != null) {
-            val list = runCatching { manager.activeSubscriptionInfoList }.getOrNull()
-            info = list?.firstOrNull { it.subscriptionId == subscriptionId }
-                ?: list?.firstOrNull { it.simSlotIndex == subscriptionId }
-                ?: (if (subscriptionId > 0) list?.firstOrNull { it.simSlotIndex == subscriptionId - 1 } else null)
-                ?: list?.firstOrNull()
+    fun captureSim(context: Context, subscriptionId: Int): ForwardingSimSnapshot {
+        val config = MultiForwardConfig(context)
+        val info = resolveSimInfo(context, subscriptionId)
+        val slot = info?.simSlotIndex?.takeIf { it >= 0 } ?: -1
+        val custom = config.customSimLabel(slot)
+        val carrier = info?.carrierName?.toString().orEmpty()
+        val description = if (slot < 0) "未知接收卡" else custom.ifBlank {
+            if (carrier.isBlank()) "SIM${slot + 1}" else "SIM${slot + 1} · $carrier"
         }
+        @Suppress("DEPRECATION")
+        val number = config.customSimNumber(slot).ifBlank { info?.number.orEmpty() }
+        return ForwardingSimSnapshot(slot, description, number, custom)
+    }
 
-        if (info != null) {
-            val custom = config.customSimLabel(info.simSlotIndex)
-            if (custom.isNotBlank()) return@runCatching custom
-            val slotNum = info.simSlotIndex + 1
-            val carrier = info.carrierName?.toString()?.takeIf { it.isNotBlank() }
-                ?: info.displayName?.toString()?.takeIf { it.isNotBlank() }
-                .orEmpty()
-            if (carrier.isNotBlank()) "SIM$slotNum · $carrier" else "SIM$slotNum"
-        } else {
-            val fallbackSlot = if (subscriptionId == 1 || subscriptionId == 0) "SIM${subscriptionId + 1}" else if (subscriptionId > 1) "SIM$subscriptionId" else "SIM1"
-            fallbackSlot
-        }
-    }.getOrDefault(if (subscriptionId > 0) "SIM${subscriptionId}" else "SIM1")
+    @SuppressLint("MissingPermission")
+    fun getSimDescription(context: Context, config: MultiForwardConfig, subscriptionId: Int): String {
+        val info = resolveSimInfo(context, subscriptionId) ?: return "未知接收卡"
+        val slot = info.simSlotIndex.takeIf { it >= 0 } ?: return "未知接收卡"
+        val custom = config.customSimLabel(slot)
+        if (custom.isNotBlank()) return custom
+        val carrier = info.carrierName?.toString()?.takeIf { it.isNotBlank() }
+            ?: info.displayName?.toString().orEmpty()
+        return if (carrier.isNotBlank()) "SIM${slot + 1} · $carrier" else "SIM${slot + 1}"
+    }
 
     @SuppressLint("MissingPermission", "HardwareIds")
-    fun getReceiverNumber(
-        context: Context,
-        config: MultiForwardConfig,
-        subscriptionId: Int,
-    ): String = runCatching {
-        val manager = context.getSystemService(SubscriptionManager::class.java)
-        var info = if (subscriptionId >= 0 && manager != null) {
-            runCatching { manager.getActiveSubscriptionInfo(subscriptionId) }.getOrNull()
-        } else null
-
-        if (info == null && manager != null) {
-            val list = runCatching { manager.activeSubscriptionInfoList }.getOrNull()
-            info = list?.firstOrNull { it.subscriptionId == subscriptionId }
-                ?: list?.firstOrNull { it.simSlotIndex == subscriptionId }
-                ?: (if (subscriptionId > 0) list?.firstOrNull { it.simSlotIndex == subscriptionId - 1 } else null)
-                ?: list?.firstOrNull()
-        }
-
-        val custom = info?.simSlotIndex?.let(config::customSimNumber).orEmpty()
-        if (custom.isNotBlank()) return@runCatching custom
+    fun getReceiverNumber(context: Context, config: MultiForwardConfig, subscriptionId: Int): String {
+        val info = resolveSimInfo(context, subscriptionId) ?: return ""
+        val custom = info.simSlotIndex.takeIf { it >= 0 }?.let(config::customSimNumber).orEmpty()
+        if (custom.isNotBlank()) return custom
         @Suppress("DEPRECATION")
-        info?.number ?: ""
-    }.getOrDefault("")
+        return info.number.orEmpty()
+    }
 
     @SuppressLint("MissingPermission")
-    fun getSimSlotName(
-        context: Context,
-        config: MultiForwardConfig,
-        subscriptionId: Int,
-    ): String = runCatching {
-        val manager = context.getSystemService(SubscriptionManager::class.java)
-        var info = if (subscriptionId >= 0 && manager != null) {
-            runCatching { manager.getActiveSubscriptionInfo(subscriptionId) }.getOrNull()
-        } else null
-
-        if (info == null && manager != null) {
-            val list = runCatching { manager.activeSubscriptionInfoList }.getOrNull()
-            info = list?.firstOrNull { it.subscriptionId == subscriptionId }
-                ?: list?.firstOrNull { it.simSlotIndex == subscriptionId }
-                ?: (if (subscriptionId > 0) list?.firstOrNull { it.simSlotIndex == subscriptionId - 1 } else null)
-                ?: list?.firstOrNull()
-        }
-
-        if (info != null) {
-            "SIM${info.simSlotIndex + 1}"
-        } else {
-            if (subscriptionId == 1 || subscriptionId == 0) "SIM${subscriptionId + 1}" else if (subscriptionId > 1) "SIM$subscriptionId" else "SIM1"
-        }
-    }.getOrDefault(if (subscriptionId > 0) "SIM$subscriptionId" else "SIM1")
+    fun getSimSlotName(context: Context, config: MultiForwardConfig, subscriptionId: Int): String {
+        val slot = resolveSimInfo(context, subscriptionId)?.simSlotIndex?.takeIf { it >= 0 }
+        return slot?.let { "SIM${it + 1}" } ?: "未知接收卡"
+    }
 }

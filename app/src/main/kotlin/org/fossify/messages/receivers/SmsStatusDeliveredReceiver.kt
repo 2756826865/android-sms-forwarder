@@ -7,7 +7,6 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.Telephony.Sms
 import android.util.Log
-import org.fossify.commons.helpers.ensureBackgroundThread
 import org.fossify.messages.extensions.messagesDB
 import org.fossify.messages.extensions.messagingUtils
 import org.fossify.messages.helpers.refreshMessages
@@ -21,7 +20,7 @@ class SmsStatusDeliveredReceiver : SendStatusReceiver() {
 
     override fun updateAndroidDatabase(context: Context, intent: Intent, receiverResultCode: Int) {
         val messageUri: Uri? = intent.data
-        val smsMessage = context.messagingUtils.getSmsMessageFromDeliveryReport(intent) ?: return
+        val smsMessage = runCatching { context.messagingUtils.getSmsMessageFromDeliveryReport(intent) }.getOrNull() ?: return
 
         try {
             val format = intent.getStringExtra("format")
@@ -59,16 +58,15 @@ class SmsStatusDeliveredReceiver : SendStatusReceiver() {
             return
         }
 
-        updateSmsStatusAndDateSent(context, messageUri, System.currentTimeMillis())
+        updateSmsStatus(context, messageUri)
     }
 
-    private fun updateSmsStatusAndDateSent(context: Context, messageUri: Uri?, timeSentInMillis: Long = -1L) {
+    private fun updateSmsStatus(context: Context, messageUri: Uri?) {
         val resolver = context.contentResolver
         val values = ContentValues().apply {
             if (status != Sms.Sent.STATUS_NONE) {
                 put(Sms.Sent.STATUS, status)
             }
-            put(Sms.Sent.DATE_SENT, timeSentInMillis)
         }
 
         if (messageUri != null) {
@@ -80,6 +78,8 @@ class SmsStatusDeliveredReceiver : SendStatusReceiver() {
     }
 
     override fun updateAppDatabase(context: Context, intent: Intent, receiverResultCode: Int) {
+        if (status == Sms.STATUS_NONE) return // Missing/unreadable PDU is not a delivery failure.
+        val terminal = status == Sms.STATUS_COMPLETE || status >= Sms.STATUS_FAILED
         val messageUri: Uri? = intent.data
         val sendOperationId = intent.getStringExtra(SendStatusReceiver.EXTRA_SEND_OPERATION_ID)
         val partIndex = if (intent.hasExtra(SendStatusReceiver.EXTRA_PART_INDEX)) {
@@ -89,7 +89,7 @@ class SmsStatusDeliveredReceiver : SendStatusReceiver() {
         }
 
         // 1B-3C: Record delivered status to shadow repository (Fail-open, non-blocking)
-        if (!sendOperationId.isNullOrBlank()) {
+        if (terminal && !sendOperationId.isNullOrBlank()) {
             SmsSendRepository.recordDeliveredResult(
                 context = context,
                 operationId = sendOperationId,
@@ -102,11 +102,11 @@ class SmsStatusDeliveredReceiver : SendStatusReceiver() {
 
         if (messageUri != null) {
             val messageId = messageUri.lastPathSegment?.toLongOrNull() ?: 0L
-            ensureBackgroundThread {
+            run {
                 if (status != Sms.Sent.STATUS_NONE) {
                     context.messagesDB.updateStatus(messageId, status)
                 }
-                RemoteControlReceiptForwarder.onDelivered(
+                if (terminal) RemoteControlReceiptForwarder.onDelivered(
                     context = context,
                     messageId = messageId,
                     delivered = status == Sms.STATUS_COMPLETE,

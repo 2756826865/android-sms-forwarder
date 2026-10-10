@@ -33,6 +33,32 @@ class SubscriptionResolverTest {
     private val singleSimList = listOf(sim1Snapshot)
 
     @Test
+    fun subscriptionThreeInFirstSlot_isStillSimOne() {
+        val result = SubscriptionResolver.resolveInternal(
+            activeSubscriptions = listOf(sim1Snapshot.copy(subscriptionId = 3)),
+            defaultSmsSubId = 3,
+            getAddressPreferredSubId = { null },
+            request = SimResolutionRequest(explicitSubId = 3, allowFallback = false),
+            hasPhonePermission = true
+        )
+        assertEquals(3, result.resolvedSubscriptionId)
+        assertEquals(0, result.resolvedSlotIndex)
+        assertEquals("SIM1 (中国移动)", result.simDisplayName)
+    }
+
+    @Test
+    fun unknownPhysicalSlot_isNotGuessedFromSubscriptionId() {
+        val result = SubscriptionResolver.resolveInternal(
+            activeSubscriptions = listOf(sim1Snapshot.copy(subscriptionId = 3, simSlotIndex = -1)),
+            defaultSmsSubId = 3,
+            getAddressPreferredSubId = { null },
+            request = SimResolutionRequest(explicitSubId = 3, allowFallback = false),
+            hasPhonePermission = true
+        )
+        assertEquals("未知卡槽 (中国移动)", result.simDisplayName)
+    }
+
+    @Test
     fun testExplicitSubId_matchesDirectly() {
         val request = SimResolutionRequest(explicitSubId = 2, allowFallback = false)
         val result = SubscriptionResolver.resolveInternal(

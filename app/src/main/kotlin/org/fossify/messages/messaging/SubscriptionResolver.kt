@@ -137,6 +137,32 @@ object SubscriptionResolver {
     const val MODE_SIM2 = 2
     const val MODE_DEFAULT = 3
 
+    /** Fresh identity lookup shared by display and forwarding; never guesses a slot. */
+    @android.annotation.SuppressLint("MissingPermission")
+    fun findActiveInfo(context: Context, subscriptionId: Int): SubscriptionInfo? {
+        if (subscriptionId < 0) return null
+        val manager = runCatching { context.subscriptionManagerCompat() }.getOrNull() ?: return null
+        val exact = runCatching { manager.getActiveSubscriptionInfo(subscriptionId) }.getOrNull()
+        if (exact?.subscriptionId == subscriptionId) return exact
+        return runCatching { manager.activeSubscriptionInfoList.orEmpty() }
+            .getOrDefault(emptyList()).firstOrNull { it.subscriptionId == subscriptionId }
+    }
+
+    fun describeMapping(context: Context): String {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED) {
+            return "缺少电话权限，无法读取 SIM 映射"
+        }
+        val result = runCatching { context.subscriptionManagerCompat().activeSubscriptionInfoList.orEmpty() }
+        if (result.isFailure) return "SIM 信息读取失败，请重试"
+        val config = MultiForwardConfig(context)
+        return result.getOrThrow().sortedBy { it.simSlotIndex }.joinToString("\n") { info ->
+            val slot = info.simSlotIndex
+            val position = if (slot >= 0) "卡位${slot + 1}" else "未知卡位"
+            val name = config.customSimLabel(slot).ifBlank { info.carrierName?.toString().orEmpty() }
+            "$position → 订阅${info.subscriptionId} → ${name.ifBlank { "未命名" }}"
+        }.ifBlank { "未读取到可用 SIM 卡" }
+    }
+
     /**
      * 统一对外部暴露的解析入口
      */
@@ -381,8 +407,8 @@ object SubscriptionResolver {
 
         val simDisplayConfig = MultiForwardConfig(context)
 
-        return activeList.mapIndexed { index, info ->
-            val slotIndex = info.simSlotIndex.takeIf { it >= 0 } ?: index
+        return activeList.map { info ->
+            val slotIndex = info.simSlotIndex
             val systemLabel = info.carrierName?.toString()?.takeIf(String::isNotBlank)
                 ?: info.displayName?.toString().orEmpty()
             val finalLabel = simDisplayConfig.customSimLabel(slotIndex).ifBlank { systemLabel }
@@ -399,7 +425,7 @@ object SubscriptionResolver {
     }
 
     private fun formatDisplayName(snapshot: SubscriptionSnapshot): String {
-        val slotPrefix = "SIM${snapshot.simSlotIndex + 1}"
+        val slotPrefix = if (snapshot.simSlotIndex >= 0) "SIM${snapshot.simSlotIndex + 1}" else "未知卡槽"
         return if (snapshot.displayName.isNotBlank()) {
             "$slotPrefix (${snapshot.displayName})"
         } else {

@@ -70,6 +70,7 @@ class WeComStreamClient(
     private val customPrefix: String = "",
     private val onCommand: (WeComRemoteCommand) -> Unit,
     private val onStatus: (String) -> Unit,
+    private val onWhitelistRequest: (BotWhitelistRequest) -> Unit,
 ) {
     data class PushResult(
         val isSuccess: Boolean,
@@ -318,6 +319,13 @@ class WeComStreamClient(
 
         // 去掉企微群聊中自动附加的前导 @机器人昵称（如 "@智能机器人 /短信发送 ..."）
         val cleanContent = cleanAtPrefix(rawContent)
+
+        val identityKind = DingTalkWhitelistRequest.parseKind(cleanContent)
+        if (identityKind != null) {
+            onWhitelistRequest(BotWhitelistRequest(msgId.ifBlank { reqId }, identityKind, "企业微信", senderId,
+                "from.userid", chatId, "chatid", chatType == "group", chatType == "group", reqId))
+            return
+        }
 
         val command = RemoteSmsCommand.parse(cleanContent, customPrefix)
         if (command != null) {

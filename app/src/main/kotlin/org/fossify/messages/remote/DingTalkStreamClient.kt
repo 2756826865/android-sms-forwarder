@@ -19,6 +19,7 @@ class DingTalkStreamClient(
     private val customPrefix: String = "",
     private val onCommand: (DingTalkRemoteCommand) -> Unit,
     private val onStatus: (String) -> Unit,
+    private val onWhitelistRequest: (DingTalkWhitelistRequest) -> Unit,
 ) {
     private val http = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
@@ -187,6 +188,25 @@ class DingTalkStreamClient(
                 val sessionWebhook = data.optString("sessionWebhook")
                 val isInAtList = data.optBoolean("isInAtList", false)
 
+                val identityKind = DingTalkWhitelistRequest.parseKind(content)
+                if (identityKind != null) {
+                    // ACK before the HTTP reply; an unlisted user's ID request must not reach the SMS path.
+                    reply(webSocket, messageId, JSONObject().put("response", JSONObject.NULL))
+                    onWhitelistRequest(
+                        DingTalkWhitelistRequest(
+                            messageId = commandMessageId,
+                            kind = identityKind,
+                            senderStaffId = data.optString("senderStaffId"),
+                            senderId = data.optString("senderId"),
+                            conversationId = conversationId,
+                            isGroup = conversationType == "2",
+                            isMentioned = isInAtList,
+                            sessionWebhook = sessionWebhook,
+                        )
+                    )
+                    return
+                }
+
                 RemoteSmsCommand.parse(content, customPrefix)?.let { command ->
                     if (commandMessageId.isBlank()) {
                         onStatus("忽略缺少 messageId 的钉钉远程指令")
@@ -243,7 +263,12 @@ class DingTalkStreamClient(
             .post(payload.toString().toRequestBody(JSON_MEDIA_TYPE))
             .build()
         return runCatching {
-            http.newCall(request).execute().use { response ->
+            http.newBuilder()
+                .readTimeout(15, TimeUnit.SECONDS)
+                .callTimeout(20, TimeUnit.SECONDS)
+                .followRedirects(false)
+                .followSslRedirects(false)
+                .build().newCall(request).execute().use { response ->
                 val body = response.body?.string().orEmpty()
                 response.isSuccessful && runCatching {
                     JSONObject(body).optInt("errcode", -1) == 0

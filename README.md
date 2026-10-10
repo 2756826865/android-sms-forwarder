@@ -60,19 +60,18 @@
 - 📧 **邮件 SMTP (Email)**：支持 SSL/TLS 加密与各大国内外邮箱服务器。
 - 🔔 **Gotify 自建推送**：支持私有化部署通知服务器。
 
-### 3. 📡 8 大远程控制发信渠道矩阵 (Remote SMS Command Hub · v1.1.5)
+### 3. 📡 7 类远程控制发信来源 (Remote SMS Command Hub)
 支持通过远程接收指令（如 `/发信 [SIM1|SIM2|默认] 13800138000 短信内容`）驱动备用机本地 SIM 卡发送短信：
 - ✈️ **Telegram Bot 模式**：基于 `getUpdates` 长轮询与自定义反代 Host 支持，支持 ChatID/UserID 白名单，回执原路直接响应；
 - 🔌 **WebSocket 全双工模式**：支持与服务端全双工长连接，服务端主动下发 `send_sms` JSON 载荷，发信及送达状态通过同一连接实时上推；
-- 🐧 **QQ (OneBot 11) 模式**：支持 OneBot 11 WebSocket 协议，支持 QQ 号/群号白名单与「群聊必须 @机器人」开关，回执原路回复；
 - 📌 **钉钉 Stream 模式**：无需公网 IP，通过钉钉官方长连接协议接收机器人消息指令；
 - 🕊️ **飞书 Stream 模式**：通过飞书 OpenAPI WebSocket 长连接订阅机器人事件；
 - 💬 **企业微信智能机器人官方长连接 (WeCom WebSocket Bot Stream · v1.1.7)**：
   - **免公网 IP / 免配置回调 URL**：基于腾讯企业微信官方 SDK (`aibot-node-sdk`) 协议标准，通过官方长连接端点直连；
   - **双向发信与原路回执**：凭 `bot_id` 与 `secret` 握手鉴权，群内或私聊中发送 `/发信 10086 查询` 驱动备用机发信，并原路接收发送状态及送达回执；
-- 💬 **企业微信自建应用**：支持 CorpID/AgentID/Secret 鉴权与成员 UserID 白名单安全过滤；
 - 📧 **邮箱 IMAP/SSL 轮询**：支持 QQ/163/Gmail 等邮箱轮询与发件人白名单安全校验；
-- 🧾 **回执闭环与去重防重**：全渠道支持 SHA-256 指纹防重、规则引擎安全拦截、原路直连回复与发信状态回执统一上报。
+- 📱 **短信指令**：监听本机收到的指令短信，按授权设置和发送卡配置执行。
+- 🧾 **回执与防重**：网络机器人来源可原路回复；短信与邮箱来源使用配置的转发目标。系统提交、发送回调和运营商送达报告是不同阶段。QQ / OneBot 当前仅用于通知转发。
 
 > ### 💡 钉钉、飞书与企业微信机器人配置指南（单向推送 vs 远程发信）
 >
@@ -160,3 +159,6 @@ cd android-sms-forwarder
 
 - 本项目基于 [Fossify Messages](https://github.com/FossifyOrg/Messages) 衍生开发，遵循 **GPL-3.0** 开源协议；
 - 部分 Webhook 及推送通道实现借鉴并优化自 [message-pusher](https://github.com/songquanpeng/message-pusher) 优秀方案。
+
+
+QQ 交流群：**569321348**。应用内入口：关于 → 使用教程与排障 / QQ 交流群。完整说明：[使用教程](docs/user-guide.md)。

@@ -210,6 +210,28 @@ import org.joda.time.DateTime
 import java.io.File
 
 class ThreadActivity : SimpleActivity() {
+    private var requiresSimReselection = false
+    private var simChangeListener: android.telephony.SubscriptionManager.OnSubscriptionsChangedListener? = null
+
+    @Suppress("DEPRECATION")
+    private fun observeSimChanges() {
+        if (simChangeListener != null) return
+        val listener = object : android.telephony.SubscriptionManager.OnSubscriptionsChangedListener() {
+            override fun onSubscriptionsChanged() {
+                runOnUiThread { if (!isFinishing && !isDestroyed) setupSIMSelector() }
+            }
+        }
+        runCatching { subscriptionManagerCompat().addOnSubscriptionsChangedListener(listener) }
+            .onSuccess { simChangeListener = listener }
+    }
+
+    private fun stopObservingSimChanges() {
+        simChangeListener?.let { listener ->
+            runCatching { subscriptionManagerCompat().removeOnSubscriptionsChangedListener(listener) }
+        }
+        simChangeListener = null
+    }
+
     private var threadId = 0L
     private var currentSIMCardIndex = 0
     private var isActivityVisible = false
@@ -305,6 +327,7 @@ class ThreadActivity : SimpleActivity() {
 
     override fun onResume() {
         super.onResume()
+        observeSimChanges()
         val threadBg = ContextCompat.getColor(this, R.color.classic_settings_background)
         setupTopAppBar(
             topAppBar = binding.threadAppbar,
@@ -372,6 +395,7 @@ class ThreadActivity : SimpleActivity() {
     }
 
     override fun onPause() {
+        stopObservingSimChanges()
         super.onPause()
         saveDraftMessage()
         bus?.post(Events.RefreshConversations())
@@ -905,7 +929,8 @@ class ThreadActivity : SimpleActivity() {
 
     private fun loadConversation() {
         handlePermission(PERMISSION_READ_PHONE_STATE) { granted ->
-            if (granted) {
+            if (!granted) toast("未授予电话权限，仍可查看短信；选择发送卡时可重新授权")
+            run {
                 setupButtons()
                 setupConversation()
                 setupCachedMessages {
@@ -918,8 +943,6 @@ class ThreadActivity : SimpleActivity() {
                     }
                     setupScrollListener()
                 }
-            } else {
-                finish()
             }
         }
     }
@@ -1205,19 +1228,42 @@ class ThreadActivity : SimpleActivity() {
 
     @SuppressLint("MissingPermission")
     private fun setupSIMSelector() {
-        val availableSIMs = runCatching { subscriptionManagerCompat().activeSubscriptionInfoList.orEmpty() }
-            .getOrDefault(emptyList())
+        val simRead = runCatching { subscriptionManagerCompat().activeSubscriptionInfoList.orEmpty() }
+        val availableSIMs = simRead.getOrDefault(emptyList())
+            .filter { it.subscriptionId >= 0 && it.simSlotIndex >= 0 }
+            .sortedBy { it.simSlotIndex }
+        val previousSubId = availableSIMCards.getOrNull(currentSIMCardIndex)?.subscriptionId
+        if (previousSubId != null && availableSIMs.none { it.subscriptionId == previousSubId }) {
+            requiresSimReselection = true
+        }
         val simDisplayConfig = MultiForwardConfig(applicationContext)
         availableSIMCards.clear()
 
         if (availableSIMs.isEmpty()) {
-            binding.messageHolder.threadSelectSimIcon.beGone()
-            binding.messageHolder.threadSelectSimNumber.beGone()
+            val detail = when (simRead.exceptionOrNull()) {
+                is SecurityException -> "缺少电话权限，点击授权后重试"
+                null -> "未读取到可用 SIM 卡，请检查卡是否启用后重试"
+                else -> "SIM 卡信息读取失败，点击重试"
+            }
+            binding.messageHolder.threadSelectSimIcon.beVisible()
+            binding.messageHolder.threadSelectSimNumber.beVisible()
+            binding.messageHolder.threadSelectSimNumber.text = "?"
+            binding.messageHolder.threadSelectSimNumber.setTextColor(Color.WHITE)
+            binding.messageHolder.threadSelectSimNumber.contentDescription = detail
+            binding.messageHolder.threadSelectSimIcon.contentDescription = detail
+            val retry = {
+                toast(detail)
+                handlePermission(PERMISSION_READ_PHONE_STATE) { granted ->
+                    if (granted) setupSIMSelector()
+                }
+            }
+            binding.messageHolder.threadSelectSimIcon.setOnClickListener { retry() }
+            binding.messageHolder.threadSelectSimNumber.setOnClickListener { retry() }
             return
         }
 
-        availableSIMs.forEachIndexed { index, subscriptionInfo ->
-            val slotIndex = subscriptionInfo.simSlotIndex.takeIf { it >= 0 } ?: index
+        availableSIMs.forEach { subscriptionInfo ->
+            val slotIndex = subscriptionInfo.simSlotIndex
             val systemLabel = subscriptionInfo.carrierName?.toString()
                 ?.takeIf(String::isNotBlank)
                 ?: subscriptionInfo.displayName?.toString().orEmpty()
@@ -1268,8 +1314,11 @@ class ThreadActivity : SimpleActivity() {
                 selectedIndex = currentSIMCardIndex,
             ) { selectedIndex ->
                 currentSIMCardIndex = selectedIndex
+                requiresSimReselection = false
                 val currentSIMCard = availableSIMCards[selectedIndex]
                 binding.messageHolder.threadSelectSimNumber.text = currentSIMCard.id.toString()
+                binding.messageHolder.threadSelectSimNumber.contentDescription = currentSIMCard.label
+                binding.messageHolder.threadSelectSimIcon.contentDescription = currentSIMCard.label
                 numbers.forEach {
                     config.saveUseSIMIdAtNumber(it, currentSIMCard.subscriptionId)
                 }
@@ -1282,7 +1331,9 @@ class ThreadActivity : SimpleActivity() {
         try {
             @SuppressLint("SetTextI18n")
             val currentCard = availableSIMCards.getOrNull(currentSIMCardIndex) ?: availableSIMCards.first()
-            binding.messageHolder.threadSelectSimNumber.text = currentCard.id.toString()
+            binding.messageHolder.threadSelectSimNumber.text = if (requiresSimReselection) "?" else currentCard.id.toString()
+            binding.messageHolder.threadSelectSimNumber.contentDescription = currentCard.label
+            binding.messageHolder.threadSelectSimIcon.contentDescription = currentCard.label
         } catch (e: Exception) {
             showErrorToast(e)
         }
@@ -1849,8 +1900,17 @@ class ThreadActivity : SimpleActivity() {
         }
     }
 
-    private fun sendNormalMessage(text: String, subscriptionId: Int) {
+    private fun sendNormalMessage(text: String, subscriptionId: Int, onSubmitted: (() -> Unit)? = null) {
         if (sendInProgress) return
+        // Revalidate the selected identity immediately before sending. Do not switch
+        // a stale selection to another subscription, which may incur charges there.
+        val activeCards = runCatching { subscriptionManagerCompat().activeSubscriptionInfoList.orEmpty() }
+        if (requiresSimReselection || subscriptionId < 0 || activeCards.isFailure ||
+            activeCards.getOrDefault(emptyList()).none { it.subscriptionId == subscriptionId }) {
+            toast("发送卡不可用或无法读取，请检查电话权限并重新选择 SIM 卡")
+            setupSIMSelector()
+            return
+        }
         val addresses = participants.getAddresses()
         val attachments = buildMessageAttachments()
         val draftText = binding.messageHolder.threadTypeMessage.value
@@ -1881,6 +1941,7 @@ class ThreadActivity : SimpleActivity() {
                     return@ensureBackgroundThread
                 }
 
+                onSubmitted?.invoke()
                 runOnUiThread {
                     sendInProgress = false
                     if (binding.messageHolder.threadTypeMessage.value == draftText &&
@@ -2165,11 +2226,10 @@ class ThreadActivity : SimpleActivity() {
                 TYPE_DELETE -> cancelScheduledMessageAndRefresh(message.id)
                 TYPE_EDIT -> editScheduledMessage(message)
                 TYPE_SEND -> {
-                    messages = messages.toSortedMessages()
-                        .filterNot { message.id == it.id }
                     extractAttachments(message)
-                    sendNormalMessage(message.body, message.subscriptionId)
-                    cancelScheduledMessageAndRefresh(message.id)
+                    sendNormalMessage(message.body, message.subscriptionId) {
+                        cancelScheduledMessageAndRefresh(message.id)
+                    }
                 }
             }
         }

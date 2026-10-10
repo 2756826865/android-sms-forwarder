@@ -4,6 +4,8 @@ import android.content.Context
 import android.util.Log
 import org.fossify.messages.forwarding.MultiForwardConfig
 import org.fossify.messages.remote.DingTalkStreamClient
+import org.fossify.messages.remote.BotWhitelistReplyLimiter
+import org.fossify.messages.remote.BotWhitelistRequest
 import org.fossify.messages.remote.EmailRemoteCommandPoller
 import org.fossify.messages.remote.FeishuStreamClient
 import org.fossify.messages.remote.RemoteControlPendingReceipt
@@ -33,6 +35,12 @@ import java.util.concurrent.atomic.AtomicBoolean
  * 5. 动态响应实例的新增、修改、启用、禁用与删除。
  */
 class RemoteSourceRuntimeManager private constructor(private val appContext: Context) {
+    private val whitelistReplies = BotWhitelistReplyLimiter()
+    private val whitelistReplyExecutor = java.util.concurrent.ThreadPoolExecutor(
+        1, 1, 30, java.util.concurrent.TimeUnit.SECONDS,
+        java.util.concurrent.ArrayBlockingQueue<Runnable>(32),
+        java.util.concurrent.ThreadFactory { task -> Thread(task, "bot-whitelist-reply").apply { isDaemon = true } },
+    ).apply { allowCoreThreadTimeOut(true) }
 
     data class WeComPushResult(
         val isSuccess: Boolean,
@@ -247,6 +255,10 @@ class RemoteSourceRuntimeManager private constructor(private val appContext: Con
                             } else if (status.contains("失败") || status.contains("异常") || status.contains("终止")) {
                                 repo.updateConnectionState(instance.id, RemoteSourceConnectionState.ERROR, errorMessage = status)
                             }
+                        },
+                        onWhitelistRequest = { request ->
+                            val currentHandle = handleRef ?: return@DingTalkStreamClient
+                            replyToWhitelistRequest(currentHandle, request.asBotRequest())
                         }
                     )
                     val handle = RuntimeHandle.DingTalk(instance.id, fingerprint, client)
@@ -297,6 +309,10 @@ class RemoteSourceRuntimeManager private constructor(private val appContext: Con
                             } else if (status.contains("失败") || status.contains("异常")) {
                                 repo.updateConnectionState(instance.id, RemoteSourceConnectionState.ERROR, errorMessage = status)
                             }
+                        },
+                        onWhitelistRequest = { request ->
+                            val currentHandle = handleRef ?: return@FeishuStreamClient
+                            replyToWhitelistRequest(currentHandle, request)
                         }
                     )
                     val handle = RuntimeHandle.Feishu(instance.id, fingerprint, client)
@@ -351,6 +367,10 @@ class RemoteSourceRuntimeManager private constructor(private val appContext: Con
                             } else if (status.contains("失败") || status.contains("异常") || status.contains("断开")) {
                                 repo.updateConnectionState(instance.id, RemoteSourceConnectionState.ERROR, errorMessage = status)
                             }
+                        },
+                        onWhitelistRequest = { request ->
+                            val currentHandle = handleRef ?: return@WeComStreamClient
+                            replyToWhitelistRequest(currentHandle, request)
                         }
                     )
                     val handle = RuntimeHandle.WeCom(instance.id, fingerprint, client)
@@ -371,6 +391,39 @@ class RemoteSourceRuntimeManager private constructor(private val appContext: Con
                     MultiForwardConfig(appContext).appendEmailRemoteLog("[${instance.name}] $status")
                 })
             }
+        }
+    }
+
+    private fun replyToWhitelistRequest(handle: RuntimeHandle, request: BotWhitelistRequest) {
+        val repo = RemoteSourceRepository.getInstance(appContext)
+        val current = repo.getSourceById(handle.instanceId) ?: return
+        if (!isHandleActive(handle) || !current.enabled || !current.hasValidCredentials() ||
+            computeConfigFingerprint(current) != handle.configFingerprint) return
+        if (!whitelistReplies.claim(handle.instanceId, request)) return
+        try {
+            // Keep the WebSocket/SDK callback free to receive ACKs and heartbeat frames.
+            whitelistReplyExecutor.execute {
+                val latest = repo.getSourceById(handle.instanceId) ?: return@execute
+                if (!isHandleActive(handle) || !latest.enabled || !latest.hasValidCredentials() ||
+                    computeConfigFingerprint(latest) != handle.configFingerprint) return@execute
+                val accepted = when (handle) {
+                    is RuntimeHandle.DingTalk -> handle.client.sendReply(request.replyTarget, request.replyText())
+                    is RuntimeHandle.Feishu -> handle.client.sendReply(request.replyTarget, request.replyText())
+                    is RuntimeHandle.WeCom -> handle.client.sendReply(request.replyTarget, request.replyText())
+                    else -> false
+                }
+                val line = "[${latest.name}] 白名单 ID 申请：" +
+                    if (accepted) "回复已提交；未修改授权" else "回复未确认；请检查会话和网络"
+                val config = MultiForwardConfig(appContext)
+                when (handle) {
+                    is RuntimeHandle.DingTalk -> config.appendDingTalkRemoteLog(line)
+                    is RuntimeHandle.Feishu -> config.appendFeishuRemoteLog(line)
+                    is RuntimeHandle.WeCom -> config.appendWeComRemoteLog(line)
+                    else -> Unit
+                }
+            }
+        } catch (_: java.util.concurrent.RejectedExecutionException) {
+            Log.w(TAG, "白名单 ID 回复队列已满，已忽略请求")
         }
     }
 

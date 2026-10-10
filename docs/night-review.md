@@ -202,3 +202,47 @@
 - 对照23:15:42与23:15:53截图，同步218/319属于运行中快照，11秒后的页面已回到空闲；常驻的是搜索范围说明与全量同步入口。空闲时收起这两行，搜索词非空才显示搜索结果说明，同步运行中才显示进度；重新同步入口移到信息页右上角更多操作，仍保留确认弹窗。
 - 会话顶部五次点击位置调整在没有可见输入栏的短码/回收站会话不再弹出。独立浅色弹窗主题与显式深色文字修正截图中白底白字，按钮也采用深色文字和浅色底。
 - `:app:assembleCoreDebug :app:testCoreDebugUnitTest --offline --no-daemon -Pkotlin.incremental=false` BUILD SUCCESSFUL（1m11s），208项测试失败0、错误0、跳过0。日志 `docs/logs/sync-dialog-visual-fix.log`。未做真机视觉验收。
+# 2026-10-09 自定义 SIM 名称在部分通道缺失
+
+- 定位：`ForwardingMessageFormatter` 将自定义卡名写入标题；企业微信应用/群机器人、钉钉、飞书群机器人、腾讯云告警和短信直发的实际发送接口只接收正文，因此这些通道不会看到卡名。多实例定向、普通分发及通道组展开均存在此路径。
+- 修改：`MultiChannelForwardWorker` 对纯正文通道补入由真实接收 subscriptionId 解析出的自定义卡名。已有详细/Emoji 模板包含卡名时不重复添加；显式自定义模板及规则正文保持原样。无自定义卡名、无权限或无法确定接收 SIM 时保持原正文，不猜卡槽。自定义 Webhook 测试模板的模拟 SIM1 名称/号码改用当前配置。
+- 验证：`git diff --check` 通过，逐一核对三个调度分支的纯正文调用。当前环境 Gradle Wrapper 9.7 分发包缺失且网络不可用，编译停在下载前，没有生成新 APK，也没有真机发信验收。
+
+
+### 2026-10-09 卡槽误显示 SIM3 与会话选卡入口
+
+- 确认源码缺陷：接收 subscriptionId 查询失败时将其当卡槽、取第一张活跃卡；模板 SIM_INDEX 同样用订阅 ID 推算，可能把卡一显示为 SIM3。改为仅按真实 subscriptionId 匹配系统 SubscriptionInfo，以真实 simSlotIndex 读取名称/号码；无法确定显示“未知接收卡”，数字模板字段留空，不猜卡。
+- 会话选卡读取异常/空列表不再隐藏，显示“?”并提供权限申请/重新读取入口及状态说明；已识别卡按物理卡槽排序，单卡保留入口。发送前重新检查选中订阅是否活跃，失败保留草稿、不提交、不换另一张卡。
+- 新建会话、统一订阅快照去掉列表下标当卡槽；群发选项复用真实卡槽名称，卡二单卡不再显示卡一。会话 onResume 原有刷新机制保留，自定义卡名同步至控件无障碍说明。
+- 增加两个 SubscriptionResolver 仪器回归测试：订阅 ID 3/卡槽0显示 SIM1、未知物理卡槽不推算 SIM3。这些测试未执行，没有设备环境。
+- git diff --check 通过，全文检索未再发现 subscriptionId - 1、订阅 ID 拼 SIM 或 simSlotIndex 回退列表下标的旧写法。
+- 尝试 :app:testCoreDebugUnitTest :app:assembleCoreDebug --offline --no-daemon -Pkotlin.incremental=false；Wrapper 在下载 Gradle 9.7.0 时因 Network is unreachable 失败，未进入编译/测试，未产出新 APK。完整日志 docs/logs/sim-identity-fix-build.log。现有 APK 未替换、未推送。
+- 待验收：红米 K50 电话权限/订阅列表返回情况、卡一订阅 ID 3 通知、自定义卡名各通道、换卡后发送拦截。当前没有手机日志，不能宣称截图中的实际发送失败已消除。
+
+
+### 2026-10-09 SIM 映射与转发快照优化
+
+- 统一按真实 subscriptionId 查询 SubscriptionInfo，供转发标题、正文、模板及自定义 Webhook 使用；查询异常返回未知，不推算卡位。运维诊断增加“SIM 卡位映射”，显示真实卡位、订阅 ID、自定义名称，不显示本机号码。
+- 会话和新建会话页面在前台监听订阅列表变化，暂停时解除监听；返回页面重新读取。新建会话也保留未知状态的权限/重试入口。卡被拔出/停用后记录需要重新选卡，显示 ?，直到用户明确选择才恢复发送，避免监听刷新后偷偷切到另一张卡。
+- 新转发任务入队时记录真实卡位、当时名称和接收号码至 WorkManager Data；延迟、重试、普通格式、自定义模板和 Webhook 使用同一快照；旧队列没有快照时保留实时查询兼容。这里是转发入队快照，未迁移短信 Room 历史记录，也不宣称历史会话永久保存旧名称。
+- git diff --check 通过。构建重试仍在 Wrapper 下载阶段因 Network is unreachable 失败（docs/logs/sim-mapping-optimization-build.log），未进入 Kotlin 编译或测试，未生成新 APK；新增订阅回归测试未执行。未推送/替换发布资产。
+
+
+### 2026-10-09 扩大源码巡检
+
+- 358 个生产 Kotlin 文件路径/风险模式扫描，并人工复查主要短信、远程命令、同步、转发、备份、规则、SMTP 和生命周期路径。新增 11 组确认缺陷修正，详见 docs/full-code-audit-2026-10-09.md；并非全文件逐行审核或全功能验收。
+- Room 状态更新实际 SQL 在本机 SQLite 的 8 个场景通过，git diff --check 通过；新增长短信回执聚合三项 Kotlin 单测尚未执行。
+- 最终构建仍因 Gradle 9.7.0 缺失且网络不可达停在 Wrapper 下载阶段，没有 APK。日志 docs/logs/full-audit-build-attempt.log；未推送。保留超长 WorkData、定时闹钟竞争、历史卡名快照迁移等待处理边界，不宣称完全修复。
+
+
+## 2026-10-09 继续审查：QQ群、教程及两版入口
+
+- QQ 交流群统一为 569321348：中英文 README、共用教程、关于页点击复制。关于页改可滚动，避免新增入口在小屏/大字体下被截断。
+- 新增 UserGuideActivity（非导出），复用 ChannelFullTutorialDialog；经典远程页、两版关于页及开发版运维提供入口。开发版运维同时提供关于/群号直达。
+- 核查实际 RemoteSourceType 枚举：7 类。纠正 README 宣称 QQ/OneBot 远程发送与企业微信应用远程来源的错误；这些并未在运行时实现，不新增功能冒充修复。
+- 补充钉钉、飞书、企业微信、Telegram、WebSocket、IMAP步骤；区分 SMTP/IMAP、真实 ID 白名单、物理卡槽/订阅 ID、提交/发送/送达状态。完整版写入 docs/user-guide.md；同步 docs/classic-developer-parity.md 中全量同步入口说明。
+- 新确认问题：4000字符不等于 WorkManager 10KB，中文正文和元数据可能导致构建 Data 失败。改按 UTF-8 6000字节预算裁剪（保留明确后缀、不拆代理对），限制发送者显示长度，构建 Data 异常记历史失败后停止入队。6000只是正文预算；元数据异常仍由实际 Data 构建校验，不能声称任何配置均保证入队。
+- 添加 WorkPayloadTextTest 三例：短文保留、中文字节限额、补充 Unicode 不拆分。JUnit 尚未执行。
+- 已执行：git diff --check、三个 XML 解析、strings资源重名检查、实际 Room SQL 提取后的8条状态迁移检查通过。
+- 构建尝试 :app:testCoreDebugUnitTest :app:assembleCoreDebug --offline --no-daemon：Wrapper缺失Gradle9.7.0，下载 Network is unreachable，未进入 Kotlin 编译；日志 docs/logs/tutorial-review-build.log。没有新的APK、没有push、没有发布。
+- 尚需：编译与新增JUnit；两版页面设备验收；定时闹钟与手动立即发送的并发认领、远程超长指令WorkData、旧短信卡名称等未解决边界保留，不算已修复。

@@ -23,6 +23,14 @@ class AboutActivity : SimpleActivity() {
         binding.aboutToolbar.title = ""
         applyMiuiTopAppBarChrome(binding.aboutAppbar, binding.aboutToolbar)
 
+        binding.aboutUserGuide.setOnClickListener {
+            startActivity(Intent(this, UserGuideActivity::class.java))
+        }
+        binding.aboutQqGroup.setOnClickListener {
+            val clipboard = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            clipboard.setPrimaryClip(android.content.ClipData.newPlainText("QQ 交流群", "569321348"))
+            android.widget.Toast.makeText(this, "群号已复制：569321348", android.widget.Toast.LENGTH_SHORT).show()
+        }
         binding.aboutCommonQuestions.setOnClickListener {
             showText(R.string.about_common_questions, R.string.about_common_questions_text)
         }

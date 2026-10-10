@@ -274,7 +274,7 @@ object RemoteCommandProcessor {
                 receivedSubId = envelope.subscriptionId.takeIf { it >= 0 },
                 configuredMode = sendMode,
                 targetAddress = targetNumber,
-                allowFallback = true
+                allowFallback = sendMode !in setOf(SubscriptionResolver.MODE_SIM1, SubscriptionResolver.MODE_SIM2)
             )
         )
 

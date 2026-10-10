@@ -233,7 +233,7 @@ object ChannelTestSender {
                     sendCustomWebhookTest(
                         url, config.customWebhookHeaders(), config.customWebhookMethod(),
                         config.customWebhookContentType(), config.customWebhookBodyTemplate(),
-                        title, content, now
+                        title, content, now, config
                     )
                     "自定义 Webhook 请求成功送达！"
                 }
@@ -551,7 +551,7 @@ object ChannelTestSender {
                         url, instance.optString("headers"), instance.optString("method", "POST"),
                         instance.optString("contentType", "application/json"),
                         instance.optString("bodyTemplate", MultiForwardConfig.DEFAULT_CUSTOM_WEBHOOK_BODY),
-                        title, content, now
+                        title, content, now, config
                     )
                     "自定义 Webhook 请求成功送达！"
                 }
@@ -753,7 +753,8 @@ object ChannelTestSender {
         template: String,
         title: String,
         content: String,
-        time: String
+        time: String,
+        config: MultiForwardConfig
     ) {
         val normalizedUrl = url.trim()
         ForwardingUrlPolicy.requireAllowed(normalizedUrl, normalizedUrl.startsWith("http://", ignoreCase = true))
@@ -771,8 +772,9 @@ object ChannelTestSender {
             mapOf(
                 "title" to encoded(title), "msg" to encoded(content),
                 "from" to encoded("10086"), "time" to encoded(time),
-                "sim" to encoded("SIM 1 · 中国移动"), "sim_slot" to encoded("SIM 1"),
-                "receiver" to encoded("13800138000")
+                "sim" to encoded(config.simOneLabel.ifBlank { "SIM1 · 中国移动（模拟）" }),
+                "sim_slot" to encoded("SIM1"),
+                "receiver" to encoded(config.simOneNumber.ifBlank { "13800138000（模拟）" })
             )
         )
         val requestUrl = if (method == "GET" && body.isNotBlank()) {

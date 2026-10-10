@@ -29,7 +29,7 @@
 
 ## 🔄 Dual-Mode Architecture & Seamless Switching
 
-This project features a dual-view architecture — **「Classic Mode」** and **「Developer Mode (SMS Gateway Workbench)」** — with 100% two-way real-time data synchronization at the database layer:
+This project features a dual-view architecture — **「Classic Mode」** and **「Developer Mode (SMS Gateway Workbench)」** — with shared database and configuration; refresh timing and feature entry points differ:
 
 | Mode | Core Purpose | Typical Use Case | How to Switch |
 | :--- | :--- | :--- | :--- |
@@ -77,8 +77,8 @@ This project features a dual-view architecture — **「Classic Mode」** and **
 - **Smart Verification Code Sandbox**: Built-in regex engine with lookaround matching to accurately extract 4–8 digit verification codes.
 
 ### 5. 🛡️ Dual Broadcast Fallback & Config Backup (v1.1.3 New)
-- **Dual Broadcast Fallback**: Dual `SMS_DELIVER` + `SMS_RECEIVED` listeners with SHA-256 deduplication for 100% reliable reception even when not default SMS app.
-- **One-Click Config Backup & Restore (`ConfigBackupHelper`)**: Export/import all 12 channels, rules, and templates as structured JSON.
+- **Dual Broadcast Fallback**: Dual `SMS_DELIVER` + `SMS_RECEIVED` listeners with SHA-256 deduplication for best-effort reception subject to Android permissions and OEM routing.
+- **One-Click Config Backup & Restore (`ConfigBackupHelper`)**: Export/import supported channel instances, rules, templates and selected settings as structured JSON; SMS history and system permissions are excluded.
 
 ### 4. Offline Transaction Queue & Self-Healing Engine
 - **Outbox Dispatcher**: Automatically buffers tasks (`PENDING / RETRY / FAILED`) when disconnected or screen-off, and retries with exponential backoff upon reconnection.
@@ -138,3 +138,6 @@ Build outputs: `app/build/outputs/apk/core/`
 
 - Licensed under **GPL-3.0**, derived from [Fossify Messages](https://github.com/FossifyOrg/Messages);
 - Select Webhook and push channel architectures inspired by and optimized from [message-pusher](https://github.com/songquanpeng/message-pusher).
+
+
+QQ community group: **569321348**. In-app help: About → User guide. [Chinese guide](docs/user-guide.md).

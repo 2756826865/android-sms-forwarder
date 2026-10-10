@@ -172,6 +172,12 @@ fun ClassicSettingsAccessCard() {
     val context = LocalContext.current
     OperationsSection("更多设置") {
         Text("系统兼容、关于及更多短信设置仍可通过完整设置页管理。", style = MaterialTheme.typography.bodyMedium)
+        OutlinedButton(onClick = { context.startActivity(Intent(context, org.fossify.messages.activities.UserGuideActivity::class.java)) }) {
+            Text("使用教程与排障")
+        }
+        OutlinedButton(onClick = { context.startActivity(Intent(context, org.fossify.messages.activities.AboutActivity::class.java)) }) {
+            Text("关于与 QQ 交流群")
+        }
         OutlinedButton(onClick = { context.startActivity(Intent(context, org.fossify.messages.activities.SettingsActivity::class.java)) }) {
             Text("打开完整设置")
         }

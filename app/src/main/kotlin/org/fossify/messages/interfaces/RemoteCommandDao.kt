@@ -34,7 +34,7 @@ interface RemoteCommandDao {
     @Query("UPDATE remote_command_executions SET authorized = :authorized, authorization_reason = :reason, execution_state = :state, updated_at = :now WHERE command_id = :commandId")
     suspend fun recordAuthorization(commandId: String, authorized: Boolean, reason: String, state: String, now: Long = System.currentTimeMillis())
 
-    @Query("UPDATE remote_command_executions SET execution_state = :state, send_operation_id = :sendOperationId, completed_at = :completedAt, error_class = :errorClass, error_hmac = :errorHmac, updated_at = :now WHERE command_id = :commandId")
+    @Query("UPDATE remote_command_executions SET execution_state = :state, send_operation_id = :sendOperationId, completed_at = :completedAt, error_class = :errorClass, error_hmac = :errorHmac, updated_at = :now WHERE command_id = :commandId AND (:state != 'SUBMITTED' OR execution_state NOT IN ('SENT', 'DELIVERED', 'FAILED', 'UNKNOWN_AFTER_SUBMIT'))")
     suspend fun recordExecutionResult(
         commandId: String,
         state: String,
@@ -45,7 +45,7 @@ interface RemoteCommandDao {
         now: Long = System.currentTimeMillis()
     )
 
-    @Query("UPDATE remote_command_executions SET execution_state = :state, completed_at = :completedAt, error_class = :errorClass, error_hmac = :errorHmac, updated_at = :now WHERE command_id = :commandId")
+    @Query("UPDATE remote_command_executions SET execution_state = :state, completed_at = :completedAt, error_class = :errorClass, error_hmac = :errorHmac, updated_at = :now WHERE command_id = :commandId AND (:state != 'SENT' OR execution_state NOT IN ('DELIVERED', 'FAILED'))")
     suspend fun updateExecutionCompletion(
         commandId: String,
         state: String,

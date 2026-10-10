@@ -103,7 +103,8 @@ class MessagingUtils(val context: Context) {
         subId: Int,
         requireDeliveryReport: Boolean,
         messageId: Long? = null,
-        triggerType: SmsSendTriggerType = SmsSendTriggerType.LEGACY_UNKNOWN
+        triggerType: SmsSendTriggerType = SmsSendTriggerType.LEGACY_UNKNOWN,
+        beforeSubmit: ((Uri) -> Unit)? = null,
     ): List<Uri> {
         val sentUris = mutableListOf<Uri>()
         if (addresses.size > 1) {
@@ -135,7 +136,7 @@ class MessagingUtils(val context: Context) {
                     birthdays = ArrayList(), anniversaries = ArrayList()
                 )
                 val localMessage = org.fossify.messages.models.Message(
-                    id = insertedId, body = text, type = Sms.MESSAGE_TYPE_SENT, status = Sms.STATUS_NONE,
+                    id = insertedId, body = text, type = Sms.MESSAGE_TYPE_OUTBOX, status = Sms.STATUS_NONE,
                     participants = arrayListOf(participant), date = (System.currentTimeMillis() / 1000).toInt(),
                     read = true, threadId = threadId, isMMS = false, attachment = null,
                     senderPhoneNumber = address, senderName = address, senderPhotoUri = "", subscriptionId = subId
@@ -165,6 +166,7 @@ class MessagingUtils(val context: Context) {
             )
 
             try {
+                beforeSubmit?.invoke(messageUri)
                 context.smsSender.sendMessage(
                     subId = subId, destination = address, body = text, serviceCenter = null,
                     requireDeliveryReport = requireDeliveryReport, messageUri = messageUri, threadId = threadId,
@@ -173,6 +175,7 @@ class MessagingUtils(val context: Context) {
                 sentUris += messageUri
             } catch (e: Exception) {
                 updateSmsMessageSendingStatus(messageUri, Sms.Outbox.MESSAGE_TYPE_FAILED)
+                if (insertedId > 0L) context.messagesDB.updateType(insertedId, Sms.MESSAGE_TYPE_FAILED)
                 throw e
             }
         }

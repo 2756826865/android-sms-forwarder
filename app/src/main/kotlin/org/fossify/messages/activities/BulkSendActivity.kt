@@ -233,9 +233,12 @@ class BulkSendActivity : SimpleActivity() {
         val active = runCatching { subscriptionManagerCompat().activeSubscriptionInfoList.orEmpty() }.getOrDefault(emptyList())
         simOptions = buildList {
             add(SimOption(getString(R.string.bulk_send_default_sim), SubscriptionManager.INVALID_SUBSCRIPTION_ID))
-            active.forEachIndexed { index, info ->
-                val carrier = info.carrierName?.toString().orEmpty()
-                add(SimOption("SIM${index + 1}${if (carrier.isBlank()) "" else " · $carrier"}", info.subscriptionId))
+            active.sortedBy { it.simSlotIndex }.forEach { info ->
+                val label = org.fossify.messages.forwarding.ForwardingMessageFormatter.getSimDescription(
+                    this@BulkSendActivity, org.fossify.messages.forwarding.MultiForwardConfig(this@BulkSendActivity),
+                    info.subscriptionId
+                )
+                add(SimOption(label, info.subscriptionId))
             }
         }
         binding.bulkSendSim.adapter = ArrayAdapter(this, R.layout.item_bulk_sim_option, simOptions).apply {

@@ -34,6 +34,8 @@ class BulkSendWorker(
                     propagateErrors = true,
                     triggerType = SmsSendTriggerType.BULK
                 )
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 failedCount++
                 Log.e(TAG, "Bulk send submission failed for recipient index $index: ${e.javaClass.simpleName}")

@@ -504,6 +504,8 @@
     <string name="attachment_select_one_recipient">请先选择一个收件人</string>
     <string name="continue_add_recipient">继续添加…</string>
     <string name="recipient_label">收件人：</string>
+    <string name="about_user_guide">使用教程与排障</string>
+    <string name="about_qq_group">QQ 交流群：569321348（点击复制）</string>
     <string name="about_common_questions">常见问题</string>
     <string name="about_known_issues">已知问题</string>
     <string name="about_licenses">第三方许可</string>

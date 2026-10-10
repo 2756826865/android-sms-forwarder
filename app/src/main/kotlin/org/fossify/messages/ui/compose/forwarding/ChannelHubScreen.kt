@@ -5,6 +5,7 @@ import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -1856,12 +1857,30 @@ fun ChannelFullTutorialDialog(onDismiss: () -> Unit) {
             "通道组" to "把多个已配置实例组合后并发发送。不要把通道组互相循环引用。"
         ),
         "远程发送" to listOf(
-            "支持来源" to "短信指令、钉钉 Stream、飞书长连接、Telegram Bot、WebSocket 和邮箱 IMAP。",
-            "指令格式" to "默认格式：/发信 [SIM1或SIM2] 目标号码 短信内容。自定义前缀后，请使用该实例自己的前缀。",
+            "支持来源" to "共 7 类：短信指令、钉钉 Stream、飞书长连接、企业微信智能机器人长连接、Telegram Bot、WebSocket 和邮箱 IMAP。QQ / OneBot 目前仅用于转发，不是远程来源；企业微信自建应用转发也不是智能机器人远程接入。",
+            "指令格式" to "示例：/发信 10086 1；指定卡槽：/发信 SIM1 10086 1 或 /发信 SIM2 10086 1；使用系统默认卡：/发信 默认 10086 1。省略卡槽时按该来源的发送卡设置解析。自定义前缀请使用该实例设置的前缀。",
             "白名单" to "关闭时接受所有符合格式的用户；开启后必须填写授权用户，群聊还应填写授权群组。",
-            "卡槽与限制" to "每个来源可设置默认卡槽、免打扰时段、每小时限额和每日限额。",
-            "回执" to "钉钉、飞书、Telegram、WebSocket 支持原路回执；短信和邮箱来源需选择普通转发通道接收回执。",
+            "卡槽与限制" to "每个来源可设置默认卡槽、免打扰和限额。SIM1 / SIM2 指物理卡槽，不是订阅 ID；换卡可能改变订阅 ID。指定卡失效时应停止并提示，不能静默换卡。自定义名称和号码只影响显示。",
+            "回执" to "钉钉、飞书、企业微信智能机器人、Telegram、WebSocket 支持原路回执；短信和邮箱来源需配置回执转发目标。已提交表示系统 API 接收；发送成功来自短信发送回调；送达依赖运营商报告，不能把前两项当作对方已收到。",
             "安全提示" to "远程发送会真实调用本机 SIM 卡。请启用白名单、设置限额，并只在本人或明确授权的设备上使用。"
+        ),
+        "长连接逐步配置" to listOf(
+            "钉钉 Stream" to "1. 在钉钉开放平台创建组织内部应用，取得 Client ID / Client Secret。2. 添加机器人能力，消息接收选择 Stream，发布并确认可见范围。3. 在远程发送创建钉钉来源，填写凭据、保存、启用，等连接就绪。4. 私聊发 /发信 10086 1；群聊先添加并 @机器人。5. 在目标群 @机器人 发送“申请用户白名单”或“申请群白名单”，复制回复的用户 ID 与群会话 ID 到对应白名单。申请仅展示 ID，不自动授权、不发短信；不能填手机号或群名。群 Webhook 仅发通知，不能接收 Stream 指令。",
+            "飞书长连接" to "1. 创建企业自建应用，开启机器人，取得 App ID / App Secret。2. 在事件与回调订阅接收消息 v2.0（im.message.receive_v1），选择使用长连接接收事件；配置接收消息及机器人发送消息所需权限。3. 创建来源并启用连接；如平台提示尚未建立连接，保持本应用连接后再保存平台配置。4. 发布应用版本并确认成员可用范围。5. 私聊测试；群聊添加机器人并 @它。可在群内 @机器人 发送“申请用户白名单”或“申请群白名单”，复制回复的 open_id 与 chat_id 到对应白名单；申请不自动授权。WebHook 群机器人不能代替自建应用。",
+            "企业微信智能机器人" to "在企业微信创建支持 API 长连接的智能机器人，取得 bot_id 与 secret；在远程发送新建企业微信来源，保存并启用，确认鉴权和连接状态后私聊 /发信 10086 1，群聊需 @机器人。在群内 @机器人 发送“申请用户白名单”或“申请群白名单”，复制回复的 from.userid 与 chatid 到对应白名单；申请不自动授权、不发短信。企业 ID / AgentId / 应用 Secret 是另一套应用消息凭据，不可混填。",
+            "Telegram" to "通过 BotFather 创建 Bot 并取得 Token，用户先与 Bot 对话；创建来源启用长轮询。已有 Webhook 需在平台删除后再轮询；避免多个程序同时 getUpdates。在群内 @机器人 发送“申请用户白名单”或“申请群白名单”，复制回复的数字 user_id / chat_id 到对应白名单；申请不自动授权、不发短信。群聊建议使用指令并确认 Bot 隐私设置。",
+            "WebSocket" to "填写自己的 ws:// 或 wss:// 服务端地址和接口约定的 Token；公网优先 wss://。它是自定义服务器客户端，不是 OneBot 11 适配器。先确认服务端与本应用消息字段、鉴权和回执协议一致，再测试 send_sms。",
+            "邮箱 IMAP" to "开启邮箱 IMAP，填写主机、端口、账号和密码或应用授权码；隐式 TLS 常用 993，STARTTLS 端口由服务商提供。启用后轮询 INBOX，未读邮件的主题或正文使用 /发信 10086 1；发件人白名单填邮箱地址。只支持现有账号密码认证，不是 OAuth2；正文编码和附件不能当作均已支持，先用纯文本邮件验证。",
+            "排障顺序" to "先看连接 / 鉴权，再看事件是否到达，再看白名单、规则、限额、卡槽与权限，最后看发送状态和回执。连接就绪不代表平台已发布事件权限。不要把同一来源凭据交给多台同时监听的设备，以免消息被别的客户端消费。"
+        ),
+        "邮件转发与备份" to listOf(
+            "SMTP 配置" to "邮件转发是发邮件；IMAP 远程来源是收邮件执行指令。SMTP 不限 QQ / 163，服务商允许账号密码或应用密码即可填写自定义主机。SSL/TLS 常用 465，STARTTLS 常用 587；账号和发件地址应符合服务商授权。多个收件人用英文逗号或分号分隔。测试后查收件箱、垃圾箱与退信，SMTP 受理不等于送达。",
+            "文件备份" to "经典版：设置 → 备份与恢复；开发版：运维 → 备份与恢复。可导出 JSON 文件、选择文件导入及剪贴板导入导出。导入先查看预览，并在恢复前生成本机回滚快照。备份包含通道、规则等配置，不含系统短信历史或系统授予的权限；普通导出文件含凭据，请妥善保存。",
+            "SIM 名称" to "在转发设置分别填写 SIM1 / SIM2 名称和号码。运维链路诊断可查看物理卡槽与订阅 ID 映射；号码可能无法自动读取。未知接收卡不会按订阅 ID 猜成 SIM3。旧历史记录不会自动重写名称。"
+        ),
+        "交流与反馈" to listOf(
+            "QQ 交流群" to "569321348；也可在关于页面点击群号复制。",
+            "提交 Bug" to "GitHub Issues：2756826865/android-sms-forwarder。请附版本、经典 / 开发版、机型系统、复现步骤、错误状态与脱敏日志；不要公开 Token、授权码、备份文件、完整号码和验证码。"
         ),
         "规则" to listOf(
             "匹配内容" to "可以按发件人、正文关键词、正则表达式、接收卡槽等条件筛选短信。",
@@ -1934,7 +1953,7 @@ fun ChannelFullTutorialDialog(onDismiss: () -> Unit) {
         text = {
             Column(
                 modifier = Modifier
-                    .height(420.dp)
+                    .heightIn(max = 520.dp)
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {

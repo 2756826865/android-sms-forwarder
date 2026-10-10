@@ -29,6 +29,13 @@ class RemoteForwardingActivity : SimpleActivity() {
         binding.remoteForwardingToolbar.title = ""
         applyMiuiTopAppBarChrome(binding.remoteForwardingAppbar, binding.remoteForwardingToolbar)
 
+        binding.remoteForwardingToolbar.menu.add("使用教程").apply {
+            setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_IF_ROOM)
+            setOnMenuItemClickListener {
+                startActivity(Intent(this@RemoteForwardingActivity, UserGuideActivity::class.java))
+                true
+            }
+        }
         binding.remoteForwardingSmsHolder.setOnClickListener {
             startActivity(Intent(this, RemoteSmsCommandSettingsActivity::class.java))
         }

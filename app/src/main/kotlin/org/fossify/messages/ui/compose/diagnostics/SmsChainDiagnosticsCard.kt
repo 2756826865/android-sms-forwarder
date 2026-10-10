@@ -85,7 +85,8 @@ fun SmsChainDiagnosticsCard() {
                         }
                         val chainReport = if (operations.isEmpty()) "暂无影子记录，请检查影子记录开关。"
                         else operationReports.joinToString("\n\n")
-                        listOf(DiagnosticPanel("配置体检", auditReport, if (issues.isEmpty()) "检查范围内正常" else "发现${issues.size}项", issues.isNotEmpty()),
+                        listOf(DiagnosticPanel("SIM 卡位映射", org.fossify.messages.messaging.SubscriptionResolver.describeMapping(context), "本次读取"),
+                            DiagnosticPanel("配置体检", auditReport, if (issues.isEmpty()) "检查范围内正常" else "发现${issues.size}项", issues.isNotEmpty()),
                             DiagnosticPanel("待发队列", queueReport, "待调度${works.count { it.state == androidx.work.WorkInfo.State.ENQUEUED }}"),
                             DiagnosticPanel("短信链路记录", chainReport, if (operations.isEmpty()) "暂无记录" else "${operations.size}条"),
                             DiagnosticPanel("最近通道请求", attemptReport.ifBlank { "暂无记录" }, "${attempts.size}次尝试"),

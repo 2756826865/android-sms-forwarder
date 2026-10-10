@@ -47,6 +47,14 @@ class MultiChannelForwardWorker(
     params: WorkerParameters
 ) : CoroutineWorker(appContext, params) {
 
+    private fun receivedSimSnapshot(): ForwardingSimSnapshot? {
+        if (!inputData.getBoolean(KEY_SIM_CAPTURED, false)) return null // Older queued work stays compatible.
+        return ForwardingSimSnapshot(
+            inputData.getInt(KEY_SIM_SLOT, -1), inputData.getString(KEY_SIM_LABEL).orEmpty(),
+            inputData.getString(KEY_SIM_NUMBER).orEmpty(), inputData.getString(KEY_SIM_CUSTOM).orEmpty()
+        )
+    }
+
     override suspend fun getForegroundInfo() = ForwardingForegroundInfo.create(applicationContext)
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
@@ -110,12 +118,22 @@ class MultiChannelForwardWorker(
             body = body,
             receivedAt = receivedAt,
             subscriptionId = subscriptionId,
+            simSnapshot = receivedSimSnapshot(),
         )
         val payload = if (inputData.getBoolean(KEY_BODY_ALREADY_RENDERED, false)) {
             formattedPayload.copy(content = body)
         } else formattedPayload
         val title = payload.title
         val content = payload.content
+        // Some providers only accept a text body. Their payload otherwise drops the
+        // SIM name, which the common formatter places in the separate title field.
+        // Keep explicit global/rule templates intact and avoid adding any SIM when
+        // the exact subscription cannot be resolved.
+        val textOnlyContent = if (inputData.getBoolean(KEY_BODY_ALREADY_RENDERED, false) ||
+            (config.templateMode == MultiForwardConfig.TEMPLATE_CUSTOM && config.customTemplate.isNotBlank())) content
+        else ForwardingMessageFormatter.withCustomSimLabel(
+            applicationContext, config, subscriptionId, content, receivedSimSnapshot()
+        )
 
         val targetInstanceId = inputData.getString(KEY_INSTANCE_ID).orEmpty()
         val ruleId = inputData.getString(KEY_RULE_ID).orEmpty()
@@ -215,12 +233,12 @@ class MultiChannelForwardWorker(
                         check(corpId.isNotBlank() && agentId.isNotBlank() && secret.isNotBlank() && toUser.isNotBlank()) {
                             "企业微信应用号配置不完整"
                         }
-                        sendWeCom(corpId, agentId, secret, toUser, content)
+                        sendWeCom(corpId, agentId, secret, toUser, textOnlyContent)
                     }
                     ForwardingChannels.WECOM_BOT -> {
                         val webhook = instance.optString("webhook")
                         check(webhook.isNotBlank()) { "企微群机器人 Webhook 未配置" }
-                        sendWeComBot(webhook, content)
+                        sendWeComBot(webhook, textOnlyContent)
                     }
                     ForwardingChannels.WECOM_STREAM -> {
                         val chatId = instance.optString("chatId")
@@ -237,13 +255,13 @@ class MultiChannelForwardWorker(
                         val webhook = instance.optString("webhook")
                         val secret = instance.optString("secret")
                         check(webhook.isNotBlank()) { "钉钉群机器人 Webhook 未配置" }
-                        sendDingTalk(webhook, secret, content)
+                        sendDingTalk(webhook, secret, textOnlyContent)
                     }
                     ForwardingChannels.FEISHU, ForwardingChannels.FEISHU_BOT -> {
                         val webhook = instance.optString("webhook")
                         val secret = instance.optString("secret")
                         check(webhook.isNotBlank()) { "飞书群机器人 Webhook 未配置" }
-                        sendFeishu(webhook, secret, content)
+                        sendFeishu(webhook, secret, textOnlyContent)
                     }
                     ForwardingChannels.FEISHU_APP -> {
                         val appId = instance.optString("appId")
@@ -285,7 +303,7 @@ class MultiChannelForwardWorker(
                     ForwardingChannels.TENCENT_CLOUD -> {
                         val webhook = instance.optString("webhook")
                         check(webhook.isNotBlank()) { "腾讯云告警 Webhook 未配置" }
-                        sendTencentCloud(webhook, instance.optString("secret"), content)
+                        sendTencentCloud(webhook, instance.optString("secret"), textOnlyContent)
                     }
                     ForwardingChannels.WEBSOCKET -> {
                         val serverUrl = instance.optString("serverUrl")
@@ -358,7 +376,7 @@ class MultiChannelForwardWorker(
                     ForwardingChannels.SMS_DIRECT -> {
                         val phone = instance.optString("phone")
                         check(phone.isNotBlank()) { "目标手机号未配置" }
-                        sendSmsDirect(phone, content, subscriptionId, isTest = isTest)
+                        sendSmsDirect(phone, textOnlyContent, subscriptionId, isTest = isTest)
                     }
                     ForwardingChannels.CHANNEL_GROUP -> error("通道组必须展开为具体实例后发送")
                     else -> error("暂不支持的通道类型：${instance.channelType}")
@@ -375,7 +393,7 @@ class MultiChannelForwardWorker(
                 // 仅断网时发送模式
                 if (!networkAvailable) {
                     runChannel("短信直发", ForwardingChannels.SMS_DIRECT) {
-                        sendSmsDirect(config.smsDirectPhone(), content, subscriptionId, isTest = isTest)
+                        sendSmsDirect(config.smsDirectPhone(), textOnlyContent, subscriptionId, isTest = isTest)
                     }
                 } else {
                     skippedReasons += "网络已通过系统验证，跳过仅断网短信直发"
@@ -383,7 +401,7 @@ class MultiChannelForwardWorker(
             } else {
                 // 始终发送模式
                 runChannel("短信直发", ForwardingChannels.SMS_DIRECT) {
-                    sendSmsDirect(config.smsDirectPhone(), content, subscriptionId, isTest = isTest)
+                    sendSmsDirect(config.smsDirectPhone(), textOnlyContent, subscriptionId, isTest = isTest)
                 }
             }
         }
@@ -404,20 +422,20 @@ class MultiChannelForwardWorker(
                 config.weComAgentId(),
                 config.weComSecret(),
                 config.weComToUser(),
-                content
+                textOnlyContent
             )
         }
         if (shouldRun(ForwardingChannels.WECOM_BOT, config.weComBotEnabled)) runChannel("企业微信群机器人", ForwardingChannels.WECOM_BOT) {
-            sendWeComBot(config.weComBotWebhook(), content)
+            sendWeComBot(config.weComBotWebhook(), textOnlyContent)
         }
         if (shouldRun(ForwardingChannels.FEISHU_APP, config.feishuAppEnabled)) runChannel("飞书自建应用", ForwardingChannels.FEISHU_APP) {
             sendFeishuApp(config.feishuAppId(), config.feishuAppSecret(), config.feishuReceiveId(), title, content)
         }
         if (shouldRun(ForwardingChannels.FEISHU_BOT, config.feishuEnabled)) runChannel("飞书群机器人", ForwardingChannels.FEISHU_BOT) {
-            sendFeishu(config.feishuWebhook(), config.feishuSecret(), content)
+            sendFeishu(config.feishuWebhook(), config.feishuSecret(), textOnlyContent)
         }
         if (shouldRun(ForwardingChannels.DINGTALK, config.dingTalkEnabled)) runChannel("钉钉群机器人", ForwardingChannels.DINGTALK) {
-            sendDingTalk(config.dingTalkWebhook(), config.dingTalkSecret(), content)
+            sendDingTalk(config.dingTalkWebhook(), config.dingTalkSecret(), textOnlyContent)
         }
         if (shouldRun(ForwardingChannels.BARK, config.barkEnabled)) runChannel("Bark", ForwardingChannels.BARK) {
             sendBark(config.barkServerUrl(), config.barkDeviceKey(), title, content, config.barkAllowHttp)
@@ -432,7 +450,7 @@ class MultiChannelForwardWorker(
             sendDiscord(config.discordWebhook(), title, content)
         }
         if (shouldRun(ForwardingChannels.TENCENT_CLOUD, config.tencentCloudEnabled)) runChannel("腾讯云自定义告警", ForwardingChannels.TENCENT_CLOUD) {
-            sendTencentCloud(config.tencentCloudWebhook(), config.tencentCloudSecret(), content)
+            sendTencentCloud(config.tencentCloudWebhook(), config.tencentCloudSecret(), textOnlyContent)
         }
         if (shouldRun(ForwardingChannels.EMAIL, config.emailEnabled)) runChannel("邮箱", ForwardingChannels.EMAIL) {
             sendEmail(
@@ -491,12 +509,12 @@ class MultiChannelForwardWorker(
                         instance.optString("agentId"),
                         instance.optString("secret"),
                         instance.optString("toUser"),
-                        content
+                        textOnlyContent
                     )
                     ForwardingChannels.WECOM_BOT -> {
                         val webhook = instance.optString("webhook")
                         check(webhook.isNotBlank()) { "企微群机器人 Webhook 未配置" }
-                        sendWeComBot(webhook, content)
+                        sendWeComBot(webhook, textOnlyContent)
                     }
                     ForwardingChannels.WECOM_STREAM -> {
                         val chatId = instance.optString("chatId")
@@ -513,18 +531,18 @@ class MultiChannelForwardWorker(
                         val webhook = instance.optString("webhook")
                         val secret = instance.optString("secret")
                         check(webhook.isNotBlank()) { "钉钉群机器人 Webhook 未配置" }
-                        sendDingTalk(webhook, secret, content)
+                        sendDingTalk(webhook, secret, textOnlyContent)
                     }
                     ForwardingChannels.FEISHU_BOT -> {
                         val webhook = instance.optString("webhook")
                         val secret = instance.optString("secret")
                         check(webhook.isNotBlank()) { "飞书群机器人 Webhook 未配置" }
-                        sendFeishu(webhook, secret, content)
+                        sendFeishu(webhook, secret, textOnlyContent)
                     }
                     ForwardingChannels.FEISHU -> {
                         val webhook = instance.optString("webhook")
                         check(webhook.isNotBlank()) { "飞书群机器人 Webhook 未配置" }
-                        sendFeishu(webhook, instance.optString("secret"), content)
+                        sendFeishu(webhook, instance.optString("secret"), textOnlyContent)
                     }
                     ForwardingChannels.FEISHU_APP -> sendFeishuApp(
                         instance.optString("appId"),
@@ -564,7 +582,7 @@ class MultiChannelForwardWorker(
                     ForwardingChannels.TENCENT_CLOUD -> sendTencentCloud(
                         instance.optString("webhook"),
                         instance.optString("secret"),
-                        content
+                        textOnlyContent
                     )
                     ForwardingChannels.WEBSOCKET -> sendWebsocket(
                         instance.optString("serverUrl"),
@@ -629,7 +647,7 @@ class MultiChannelForwardWorker(
                         )
                     }
                     ForwardingChannels.SMS_DIRECT -> sendSmsDirect(
-                        instance.optString("phone"), content, subscriptionId, isTest
+                        instance.optString("phone"), textOnlyContent, subscriptionId, isTest
                     )
                     ForwardingChannels.CHANNEL_GROUP -> error("通道组必须展开为具体实例后发送")
                     else -> error("暂不支持的通道类型：${instance.channelType}")
@@ -1144,13 +1162,14 @@ class MultiChannelForwardWorker(
         val contentType = contentTypeValue.trim().ifBlank { "application/json" }
         val time = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date(receivedAt))
         val sim = if (subscriptionId >= 0) {
-            ForwardingMessageFormatter.getSimDescription(applicationContext, MultiForwardConfig(applicationContext), subscriptionId)
+            receivedSimSnapshot()?.description ?: ForwardingMessageFormatter.getSimDescription(applicationContext, MultiForwardConfig(applicationContext), subscriptionId)
         } else ""
         val simSlot = if (subscriptionId >= 0) {
-            ForwardingMessageFormatter.getSimSlotName(applicationContext, MultiForwardConfig(applicationContext), subscriptionId)
+            receivedSimSnapshot()?.let { if (it.slotIndex >= 0) "SIM${it.slotIndex + 1}" else "未知接收卡" }
+                ?: ForwardingMessageFormatter.getSimSlotName(applicationContext, MultiForwardConfig(applicationContext), subscriptionId)
         } else ""
         val receiver = if (subscriptionId >= 0) {
-            ForwardingMessageFormatter.getReceiverNumber(applicationContext, MultiForwardConfig(applicationContext), subscriptionId)
+            receivedSimSnapshot()?.receiverNumber ?: ForwardingMessageFormatter.getReceiverNumber(applicationContext, MultiForwardConfig(applicationContext), subscriptionId)
         } else ""
         fun encoded(value: String): String = when {
             method == "GET" -> URLEncoder.encode(value, "UTF-8")
@@ -1262,6 +1281,11 @@ class MultiChannelForwardWorker(
         private const val KEY_BODY = "body"
         private const val KEY_RECEIVED_AT = "received_at"
         private const val KEY_SUBSCRIPTION_ID = "subscription_id"
+        private const val KEY_SIM_CAPTURED = "sim_captured"
+        private const val KEY_SIM_SLOT = "received_sim_slot"
+        private const val KEY_SIM_LABEL = "received_sim_label"
+        private const val KEY_SIM_NUMBER = "received_sim_number"
+        private const val KEY_SIM_CUSTOM = "received_sim_custom"
         private const val KEY_THREAD_ID = "thread_id"
         private const val KEY_TARGET_CHANNEL = "target_channel"
         private const val KEY_ALLOWED_CHANNELS = "allowed_channels"
@@ -1438,15 +1462,21 @@ class MultiChannelForwardWorker(
                 isTest = isTest,
             )
             Log.d(TAG, "enqueueSingle: channel=$targetChannel, instance=$targetInstanceId, historyId=$historyRecordId, workId=$uniqueId")
-            val safeBody = if (body.length > 4000) body.take(4000) + "…(内容过长已截断)" else body
+            val safeBody = WorkPayloadText.fitUtf8(body, 6000)
             val delaySeconds = if (!isTest) multiConfig.forwardingDelaySeconds else 0
+            val capturedSim = ForwardingMessageFormatter.captureSim(context, subscriptionId)
             val requestBuilder = OneTimeWorkRequestBuilder<MultiChannelForwardWorker>()
                 .setInputData(
-                    workDataOf(
-                        KEY_SENDER to sender,
+                    runCatching { workDataOf(
+                        KEY_SENDER to sender.take(256),
                         KEY_BODY to safeBody,
                         KEY_RECEIVED_AT to receivedAt,
                         KEY_SUBSCRIPTION_ID to subscriptionId,
+                        KEY_SIM_CAPTURED to true,
+                        KEY_SIM_SLOT to capturedSim.slotIndex,
+                        KEY_SIM_LABEL to capturedSim.description.take(100),
+                        KEY_SIM_NUMBER to capturedSim.receiverNumber.take(64),
+                        KEY_SIM_CUSTOM to capturedSim.customLabel.take(100),
                         KEY_TARGET_CHANNEL to targetChannel,
                         KEY_ALLOWED_CHANNELS to encodeRuleAllowedChannels(allowedChannels),
                         KEY_IS_TEST to isTest,
@@ -1457,7 +1487,10 @@ class MultiChannelForwardWorker(
                         KEY_ACTION_ID to actionId,
                         KEY_BODY_ALREADY_RENDERED to bodyAlreadyRendered,
                         KEY_THREAD_ID to threadId
-                    )
+                    ) }.getOrElse { error ->
+                        history.markFailed(historyRecordId, "发送任务数据构建失败：${error.message ?: error.javaClass.simpleName}")
+                        return
+                    }
                 )
                 .setConstraints(
                     Constraints.Builder()

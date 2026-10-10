@@ -24,6 +24,7 @@ import org.fossify.messages.helpers.refreshConversations
 import org.fossify.messages.helpers.refreshMessages
 import org.fossify.messages.remote.RemoteControlReceiptForwarder
 import org.fossify.messages.receivers.SendStatusReceiver
+import org.fossify.messages.messaging.MultipartSendResults
 import org.fossify.messages.helpers.SmsSendRepository
 import org.fossify.commons.models.SimpleContact
 import org.fossify.commons.models.PhoneNumber
@@ -33,7 +34,15 @@ class SmsStatusSentReceiver : SendStatusReceiver() {
 
     override fun updateAndroidDatabase(context: Context, intent: Intent, receiverResultCode: Int) {
         val messageUri: Uri? = intent.data
-        val resultCode = resultCode
+        val aggregate = runCatching { MultipartSendResults.record(context, intent, receiverResultCode) }
+            .getOrElse { android.telephony.SmsManager.RESULT_ERROR_GENERIC_FAILURE }
+        intent.putExtra(MultipartSendResults.EXTRA_PENDING, aggregate == null)
+        if (aggregate == null) return
+        org.fossify.messages.messaging.HonorSmsCompatibility.complete(
+            context, intent.getStringExtra(SendStatusReceiver.EXTRA_SEND_GUARD_KEY)
+        )
+        intent.putExtra(MultipartSendResults.EXTRA_RESULT, aggregate)
+        val resultCode = aggregate
         Log.i(TAG, "updateAndroidDatabase: uri=$messageUri, resultCode=$resultCode")
         val messagingUtils = context.messagingUtils
 
@@ -68,14 +77,17 @@ class SmsStatusSentReceiver : SendStatusReceiver() {
             )
         }
 
+        if (intent.getBooleanExtra(MultipartSendResults.EXTRA_PENDING, false)) return
+        val effectiveResultCode = intent.getIntExtra(MultipartSendResults.EXTRA_RESULT, receiverResultCode)
+
         Log.i(TAG, "updateAppDatabase: uri=$messageUri, resultCode=$receiverResultCode, opId=$sendOperationId, part=$partIndex")
         if (messageUri != null) {
             val messageId = messageUri.lastPathSegment?.toLongOrNull() ?: 0L
             val intentThreadId = intent.getLongExtra(SendStatusReceiver.EXTRA_THREAD_ID, 0L)
             val intentAddress = intent.getStringExtra(SendStatusReceiver.EXTRA_ADDRESS) ?: ""
 
-            ensureBackgroundThread {
-                val type = if (receiverResultCode == Activity.RESULT_OK) {
+            run {
+                val type = if (effectiveResultCode == Activity.RESULT_OK) {
                     Sms.MESSAGE_TYPE_SENT
                 } else {
                     showSendingFailedNotification(context, messageId)
@@ -140,7 +152,7 @@ class SmsStatusSentReceiver : SendStatusReceiver() {
                 RemoteControlReceiptForwarder.onSendResult(
                     context = context,
                     messageId = messageId,
-                    resultCode = receiverResultCode,
+                    resultCode = effectiveResultCode,
                     errorCode = intent.getIntExtra(SendStatusReceiver.EXTRA_ERROR_CODE, SendStatusReceiver.NO_ERROR_CODE),
                 )
                 refreshMessages()

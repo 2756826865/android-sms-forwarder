@@ -6,6 +6,7 @@ import android.app.AppOpsManager
 import android.app.NotificationManager
 import android.app.role.RoleManager
 import android.content.Intent
+import android.net.Uri
 import android.content.pm.PackageManager
 import android.content.pm.ShortcutInfo
 import android.content.pm.ShortcutManager
@@ -263,20 +264,30 @@ class MainActivity : SimpleActivity() {
     }
 
     fun requestDefaultSmsApp() {
+        if (isDefaultSmsApp()) {
+            conversationsViewModel?.refresh(isInitial = false)
+            toast("已是默认短信应用")
+            return
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val roleManager = getSystemService(RoleManager::class.java)
-            if (roleManager?.isRoleAvailable(RoleManager.ROLE_SMS) == true && !roleManager.isRoleHeld(RoleManager.ROLE_SMS)) {
-                val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_SMS)
-                makeDefaultSmsAppLauncher.launch(intent)
-            }
-        } else {
-            if (Telephony.Sms.getDefaultSmsPackage(this) != packageName) {
-                val intent = Intent(Telephony.Sms.Intents.ACTION_CHANGE_DEFAULT).apply {
-                    putExtra(Telephony.Sms.Intents.EXTRA_PACKAGE_NAME, packageName)
-                }
-                legacyDefaultSmsAppLauncher.launch(intent)
-            }
+            if (roleManager?.isRoleAvailable(RoleManager.ROLE_SMS) == true &&
+                runCatching {
+                    makeDefaultSmsAppLauncher.launch(roleManager.createRequestRoleIntent(RoleManager.ROLE_SMS))
+                }.isSuccess
+            ) return
         }
+        if (launchLegacyDefaultSmsRequest()) return
+
+        // Some ROMs neither expose the SMS role prompt nor handle the legacy change intent.
+        // Give the user a visible route to system settings instead of silently ignoring the tap.
+        val opened = runCatching {
+            startActivity(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS))
+        }.isSuccess || runCatching {
+            startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                Uri.parse("package:$packageName")))
+        }.isSuccess
+        if (!opened) toast("无法打开系统默认应用设置，请在系统设置中手动选择短信应用")
     }
 
     private fun initializeAppSession() {

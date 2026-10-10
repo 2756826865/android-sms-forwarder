@@ -25,6 +25,7 @@ class TelegramRemotePoller(
         .readTimeout(35, TimeUnit.SECONDS)
         .build()
     private val running = AtomicBoolean(false)
+    private val whitelistReplies = BotWhitelistReplyLimiter()
     private var lastUpdateId = 0L
     private val offsetPrefs = context.getSharedPreferences(PREFS_OFFSET, Context.MODE_PRIVATE)
 
@@ -186,6 +187,25 @@ class TelegramRemotePoller(
         val messageId = message.optLong("message_id", 0L).toString()
         val username = from?.optString("username").orEmpty()
         val isMentioned = text.contains("@")
+
+        val identityKind = DingTalkWhitelistRequest.parseKind(text)
+        if (identityKind != null) {
+            if (chatId == "0" || messageId == "0" || chat?.optString("type") !in setOf("private", "group", "supergroup"))
+                return UpdateProcessResult.IGNORED_PERMANENTLY
+            val instance = RemoteSourceRepository.getInstance(context).getSourceById(activeInstanceId)
+                ?: return UpdateProcessResult.IGNORED_PERMANENTLY
+            if (!instance.enabled || instance.optString("botToken") != token || !instance.hasValidCredentials())
+                return UpdateProcessResult.IGNORED_PERMANENTLY
+            val isGroup = chat?.optString("type") in setOf("group", "supergroup")
+            val request = BotWhitelistRequest("tg-$chatId-$messageId", identityKind, "Telegram",
+                senderId.takeUnless { it == "0" }.orEmpty(), "user_id", chatId, "chat_id", isGroup, isMentioned, chatId)
+            if (whitelistReplies.claim(activeInstanceId, request)) {
+                val accepted = sendReply(context, chatId, request.replyText(), activeInstanceId)
+                MultiForwardConfig(context).appendTelegramRemoteLog("白名单 ID 申请：" +
+                    if (accepted) "回复已受理；未修改授权" else "回复未确认；未修改授权")
+            }
+            return UpdateProcessResult.CONSUMED
+        }
 
         val envelope = RemoteCommandEnvelope(
             sourceType = RemoteSourceType.TELEGRAM,

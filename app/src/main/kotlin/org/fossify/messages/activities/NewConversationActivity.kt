@@ -82,6 +82,28 @@ import org.fossify.messages.models.SIMCard
 import java.util.Locale
 
 class NewConversationActivity : SimpleActivity() {
+    private var requiresSimReselection = false
+    private var simChangeListener: android.telephony.SubscriptionManager.OnSubscriptionsChangedListener? = null
+
+    @Suppress("DEPRECATION")
+    private fun observeSimChanges() {
+        if (simChangeListener != null) return
+        val listener = object : android.telephony.SubscriptionManager.OnSubscriptionsChangedListener() {
+            override fun onSubscriptionsChanged() {
+                runOnUiThread { if (!isFinishing && !isDestroyed) setupSIMSelector() }
+            }
+        }
+        runCatching { subscriptionManagerCompat().addOnSubscriptionsChangedListener(listener) }
+            .onSuccess { simChangeListener = listener }
+    }
+
+    private fun stopObservingSimChanges() {
+        simChangeListener?.let { listener ->
+            runCatching { subscriptionManagerCompat().removeOnSubscriptionsChangedListener(listener) }
+        }
+        simChangeListener = null
+    }
+
     private var allContacts = ArrayList<SimpleContact>()
     private var privateContacts = ArrayList<SimpleContact>()
     private val selectedRecipients = linkedMapOf<String, String>()
@@ -123,8 +145,14 @@ class NewConversationActivity : SimpleActivity() {
         }
     }
 
+    override fun onPause() {
+        stopObservingSimChanges()
+        super.onPause()
+    }
+
     override fun onResume() {
         super.onResume()
+        observeSimChanges()
         setupTopAppBar(binding.newConversationAppbar, NavigationIcon.Arrow)
         binding.newConversationToolbar.title = ""
         binding.newConversationToolbar.setBackgroundColor(Color.WHITE)
@@ -406,12 +434,15 @@ class NewConversationActivity : SimpleActivity() {
 
     @SuppressLint("MissingPermission")
     private fun setupSIMSelector() {
-        val active = runCatching { subscriptionManagerCompat().activeSubscriptionInfoList.orEmpty() }
-            .getOrDefault(emptyList())
+        val simRead = runCatching { subscriptionManagerCompat().activeSubscriptionInfoList.orEmpty() }
+        val active = simRead.getOrDefault(emptyList())
+        val previousSubId = availableSIMCards.getOrNull(currentSIMCardIndex)?.subscriptionId
+        if (previousSubId != null && active.none { it.subscriptionId == previousSubId }) requiresSimReselection = true
         val simDisplayConfig = MultiForwardConfig(applicationContext)
         availableSIMCards.clear()
-        active.forEachIndexed { index, info ->
-            val slotIndex = info.simSlotIndex.takeIf { it >= 0 } ?: index
+        active.filter { it.subscriptionId >= 0 && it.simSlotIndex >= 0 }
+            .sortedBy { it.simSlotIndex }.forEach { info ->
+            val slotIndex = info.simSlotIndex
             val systemLabel = info.carrierName?.toString()?.takeIf(String::isNotBlank)
                 ?: info.displayName?.toString().orEmpty()
             availableSIMCards += SIMCard(
@@ -422,16 +453,24 @@ class NewConversationActivity : SimpleActivity() {
             )
         }
         if (availableSIMCards.isEmpty()) {
-            binding.newConversationSimHolder.beGone()
+            binding.newConversationSimHolder.beVisible()
+            binding.newConversationSimNumber.text = "?"
+            binding.newConversationSimHolder.contentDescription = "SIM 信息不可用，点击授权或重试"
+            binding.newConversationSimHolder.setOnClickListener {
+                toast("SIM 信息不可用，请检查电话权限和卡是否启用")
+                handlePermission(org.fossify.commons.helpers.PERMISSION_READ_PHONE_STATE) { granted ->
+                    if (granted) setupSIMSelector()
+                }
+            }
             return
         }
 
         val defaultSubId = SmsManager.getDefaultSmsSubscriptionId()
-        currentSIMCardIndex = availableSIMCards.indexOfFirst { it.subscriptionId == defaultSubId }
+        currentSIMCardIndex = availableSIMCards.indexOfFirst { it.subscriptionId == (previousSubId ?: defaultSubId) }
             .takeIf { it >= 0 }
             ?: 0
         binding.newConversationSimIcon.applyColorFilter(Color.rgb(29, 206, 56))
-        binding.newConversationSimNumber.text = availableSIMCards[currentSIMCardIndex].id.toString()
+        binding.newConversationSimNumber.text = if (requiresSimReselection) "?" else availableSIMCards[currentSIMCardIndex].id.toString()
         binding.newConversationSimHolder.beVisible()
         binding.newConversationSimHolder.setOnClickListener {
             SimSelectionPopup(
@@ -440,6 +479,7 @@ class NewConversationActivity : SimpleActivity() {
                 selectedIndex = currentSIMCardIndex,
             ) { selectedIndex ->
                 currentSIMCardIndex = selectedIndex
+                requiresSimReselection = false
                 val card = availableSIMCards[selectedIndex]
                 binding.newConversationSimNumber.text = card.id.toString()
                 selectedRecipients.keys.forEach { config.saveUseSIMIdAtNumber(it, card.subscriptionId) }
@@ -457,6 +497,11 @@ class NewConversationActivity : SimpleActivity() {
                 val recipients = selectedRecipients.keys.toList()
                 val subId = availableSIMCards.getOrNull(currentSIMCardIndex)?.subscriptionId
                     ?: SubscriptionManager.INVALID_SUBSCRIPTION_ID
+                if (requiresSimReselection || org.fossify.messages.messaging.SubscriptionResolver.findActiveInfo(this, subId) == null) {
+                    toast("发送卡不可用，请重新选择 SIM 卡")
+                    setupSIMSelector()
+                    return
+                }
                 if (recipients.size == 1) {
                     val address = recipients.first()
                     ensureBackgroundThread {

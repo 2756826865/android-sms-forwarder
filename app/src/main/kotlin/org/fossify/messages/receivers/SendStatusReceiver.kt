@@ -4,7 +4,6 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import org.fossify.commons.helpers.ensureBackgroundThread
-import org.fossify.messages.messaging.HonorSmsCompatibility
 
 abstract class SendStatusReceiver : BroadcastReceiver() {
     // Updates the status of the message in the internal database
@@ -20,10 +19,14 @@ abstract class SendStatusReceiver : BroadcastReceiver() {
         val address = intent.getStringExtra(EXTRA_ADDRESS)
         android.util.Log.d("MessagingDebug", "SentIntent extras: msgId=$msgId, threadId=$threadId, address=$address")
         
-        HonorSmsCompatibility.complete(context, intent.getStringExtra(EXTRA_SEND_GUARD_KEY))
+        val pendingResult = goAsync()
         ensureBackgroundThread {
-            updateAndroidDatabase(context, intent, resultCode)
-            updateAppDatabase(context, intent, resultCode)
+            try {
+                updateAndroidDatabase(context, intent, resultCode)
+                updateAppDatabase(context, intent, resultCode)
+            } finally {
+                pendingResult.finish()
+            }
         }
     }
 

@@ -1109,7 +1109,7 @@ private fun RemoteSourceEditDialog(
                             steps = "1. 登录 open.dingtalk.com，创建企业内部应用，在应用凭证中取得 Client ID 与 Client Secret。\n" +
                                 "2. 为该应用添加机器人能力，在机器人消息接收设置中选择 Stream 模式；发布/启用应用，并把机器人添加到目标群。无需填写公网回调地址。\n" +
                                 "3. 将凭证填入下方，保存并启用来源，确认连接状态就绪。在私聊发送 /发信 10086 查询；群聊请 @机器人 再发送指令。\n" +
-                                "4. 如开启用户白名单，填写钉钉 senderStaffId（企业内用户 ID；缺失时使用 senderId）；群聊还需填写 conversationId 到群组白名单。群自定义机器人 Webhook 只能单向推送，不能代替此应用凭证。"
+                                "4. 获取白名单 ID：在目标群 @机器人 发送“申请用户白名单”或“申请群白名单”；有私聊入口的平台也可私聊申请用户 ID。机器人会回复用户 ID 和当前群会话 ID；这不会自动授权，也不会发送短信。将回复的 ID 填入对应白名单，每行一个。用户优先用 senderStaffId，缺失时用 senderId；群组用 conversationId。群自定义机器人 Webhook 不能代替此应用凭证。"
                         )
                         OutlinedTextField(
                             value = param1,
@@ -1132,7 +1132,7 @@ private fun RemoteSourceEditDialog(
                             steps = "1. 登录 open.feishu.cn 创建企业自建应用，启用机器人能力，在应用凭证中取得 App ID 和 App Secret；申请接收消息及机器人回复所需权限，并按平台要求发布可用版本。\n" +
                                 "2. 进入「开发配置 → 事件与回调 → 事件配置」，选择「使用长连接接收事件」，订阅「接收消息」事件 im.message.receive_v1。这里配置的是事件订阅，不是 Webhook 回调地址。\n" +
                                 "3. 填入下方凭证，保存并启用来源，保持手机联网，待连接就绪后在飞书后台完成长连接验证。在单聊发送 /发信 10086 查询；群聊请 @机器人。\n" +
-                                "4. 如开启用户白名单，填写事件中的 sender_id.open_id（优先使用）；群聊还需把 chat_id 填入群组白名单。事件未送达时检查飞书开放平台的事件日志、权限和应用可见范围。"
+                                "4. 在目标群 @机器人 发送“申请用户白名单”或“申请群白名单”；有私聊入口的平台也可私聊申请用户 ID，复制回复的用户 ID 和 chat_id 到对应白名单。申请不会自动授权或发送短信；用户优先使用 open_id。事件未送达时检查飞书后台日志、权限和可见范围。"
                         )
                         OutlinedTextField(
                             value = param1,
@@ -1173,7 +1173,7 @@ private fun RemoteSourceEditDialog(
                                            "【手机企微App直接创建】\n" +
                                            "打开企业微信手机端 →「通讯录」→「智能机器人」→「创建智能机器人」→ 选择【API模式】并勾选【使用长连接】；\n\n" +
                                    "【使用说明】\n" +
-                                           "将 Bot ID 与 Secret 填入下方保存并启用来源，确认连接就绪；把机器人拉入群聊或单聊，群聊 @机器人 发送 /发信 10086 查询。若开启用户白名单，填写消息 from.userid；群聊还需将 chatid 填入群组白名单。单向群机器人 Webhook 凭证不能用于此处。",
+                                           "将 Bot ID 与 Secret 填入下方保存并启用来源，确认连接就绪；把机器人拉入群聊或单聊，群聊 @机器人 发送 /发信 10086 查询。在目标群 @机器人 发送“申请用户白名单”或“申请群白名单”；有私聊入口的平台也可私聊申请用户 ID；复制回复的 from.userid 和 chatid 到对应白名单。申请不会自动授权或发送短信。单向群机器人 Webhook 凭证不能用于此处。",
                                     fontSize = 11.sp,
                                     color = TextSecondary,
                                     lineHeight = 16.sp

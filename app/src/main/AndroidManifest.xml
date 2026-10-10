@@ -52,6 +52,8 @@
             android:name="miui.focusNotificationVersion"
             android:value="1" />
 
+        <activity android:name=".activities.UserGuideActivity" android:exported="false" />
+
         <activity android:name=".activities.ConfigBackupActivity" android:exported="false" />
 
         <provider
