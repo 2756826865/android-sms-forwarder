@@ -130,13 +130,11 @@ fun Context.getMessages(
     val selectionArgs = arrayOf(threadId.toString())
     val sortOrder = "${Sms.DATE} DESC LIMIT $limit"
 
-    val blockStatus = HashMap<String, Boolean>()
-    val blockedNumbers = getBlockedNumbers()
     val messages = ArrayList<Message>()
 
     // 优先尝试按 threadId 查询
     queryCursor(uri, projection, selection, selectionArgs, sortOrder, showErrors = true) { cursor ->
-        parseSmsFromCursor(cursor, messages, blockStatus, blockedNumbers)
+        parseSmsFromCursor(cursor, messages)
     }
 
     // 小米/HyperOS 兼容性兜底：
@@ -152,7 +150,7 @@ fun Context.getMessages(
                 do {
                     val id = cursor.getLongValue(Sms._ID)
                     if (!existingIds.contains(id)) {
-                        parseSmsFromCursor(cursor, messages, blockStatus, blockedNumbers, forceThreadId = threadId)
+                        parseSmsFromCursor(cursor, messages, forceThreadId = threadId)
                     }
                 } while (cursor.moveToNext())
             }
@@ -183,13 +181,11 @@ fun Context.getMessages(
 private fun Context.parseSmsFromCursor(
     cursor: Cursor,
     messages: ArrayList<Message>,
-    blockStatus: HashMap<String, Boolean>,
-    blockedNumbers: ArrayList<org.fossify.commons.models.BlockedNumber>,
     forceThreadId: Long? = null
 ) {
     val senderNumber = cursor.getStringValue(Sms.ADDRESS) ?: return
-    val isNumberBlocked = blockStatus.getOrPut(senderNumber) { isNumberBlocked(senderNumber, blockedNumbers) }
-    if (isNumberBlocked) return
+    // Blocking controls incoming notifications/forwarding, not access to stored SMS.
+    // Keep provider messages visible even after the sender is added to the system blocklist.
 
     val id = cursor.getLongValue(Sms._ID)
     val body = cursor.getStringValue(Sms.BODY) ?: ""
@@ -361,6 +357,39 @@ fun Context.getUnreadCountsByThread(): Map<Long, Int> {
     return result
 }
 
+/** Read message timestamps in two batched queries rather than trusting OEM thread metadata. */
+private fun Context.getStoredThreadDates(threadId: Long?): Map<Long, Int> {
+    val dates = HashMap<Long, Int>()
+    for ((uri, threadColumn, dateColumn, milliseconds) in listOf(
+        StoredThreadDateSource(Sms.CONTENT_URI, Sms.THREAD_ID, Sms.DATE, true),
+        StoredThreadDateSource(Mms.CONTENT_URI, Mms.THREAD_ID, Mms.DATE, false)
+    )) {
+        try {
+            contentResolver.query(
+                uri, arrayOf(threadColumn, dateColumn),
+                threadId?.let { "$threadColumn = ?" },
+                threadId?.let { arrayOf(it.toString()) }, null
+            )?.use { cursor ->
+                while (cursor.moveToNext()) {
+                    val id = cursor.getLongValue(threadColumn)
+                    val raw = cursor.getLongValue(dateColumn)
+                    val seconds = if (milliseconds) raw / 1000L else raw
+                    if (seconds in 1..Int.MAX_VALUE.toLong()) {
+                        dates[id] = maxOf(dates[id] ?: 0, seconds.toInt())
+                    }
+                }
+            }
+        } catch (_: Exception) {
+            // An unavailable SMS or MMS source must not discard the other source or thread fallback.
+        }
+    }
+    return dates
+}
+
+private data class StoredThreadDateSource(
+    val uri: Uri, val threadColumn: String, val dateColumn: String, val milliseconds: Boolean
+)
+
 fun Context.getConversations(
     threadId: Long? = null,
     privateContacts: ArrayList<SimpleContact> = ArrayList(),
@@ -385,8 +414,8 @@ fun Context.getConversations(
 
     val conversations = ArrayList<Conversation>()
     val simpleContactHelper = SimpleContactsHelper(this)
-    val blockedNumbers = getBlockedNumbers()
     val unreadMap = getUnreadCountsByThread()
+    val storedThreadDates = getStoredThreadDates(threadId)
     try {
         queryCursorUnsafe(
             uri,
@@ -405,11 +434,12 @@ fun Context.getConversations(
             if (date.toString().length > 10) {
                 date /= 1000
             }
+            date = storedThreadDates[id]?.toLong() ?: date
 
             // drafts are stored locally they take priority over the original date
             val draft = draftsDB.getDraftById(id)
             if (draft != null) {
-                date = draft.date / 1000
+                date = maxOf(date, draft.date / 1000)
             }
 
             val rawIds = cursor.getStringValue(Threads.RECIPIENT_IDS)
@@ -422,12 +452,8 @@ fun Context.getConversations(
                 phoneNumbers = getPhoneNumbersFromSmsTable(id)
             }
 
-            if (phoneNumbers.isEmpty() || phoneNumbers.any {
-                    isNumberBlocked(
-                        it,
-                        blockedNumbers
-                    )
-                }) {
+            // A system blocklist entry must not hide an existing conversation.
+            if (phoneNumbers.isEmpty()) {
                 return@queryCursorUnsafe
             }
 

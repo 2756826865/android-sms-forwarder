@@ -313,6 +313,7 @@
                                 android:id="@+id/conversations_list"
                                 android:layout_width="match_parent"
                                 android:layout_height="match_parent"
+                                android:saveEnabled="false"
                                 android:clipToPadding="false"
                                 android:layoutAnimation="@anim/layout_animation"
                                 android:overScrollMode="ifContentScrolls"

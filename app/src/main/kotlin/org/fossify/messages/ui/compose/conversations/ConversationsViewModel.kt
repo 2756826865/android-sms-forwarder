@@ -124,7 +124,10 @@ class ConversationsViewModel(application: Application) : AndroidViewModel(applic
                 runCatching { context.conversationsDB.getAllRegular() }.getOrDefault(emptyList())
             }
             if (cached.isNotEmpty() && _uiState.value.conversations.isEmpty()) {
-                _uiState.value = _uiState.value.copy(conversations = cached, isLoading = false, initialLoaded = true)
+                _uiState.value = _uiState.value.copy(
+                    conversations = org.fossify.messages.helpers.sortConversations(cached, context.config.pinnedConversations),
+                    isLoading = false, initialLoaded = true
+                )
             }
 
             val loadingWatchdog = launch {
@@ -152,9 +155,10 @@ class ConversationsViewModel(application: Application) : AndroidViewModel(applic
                 loadingWatchdog.cancel()
             }
 
-            val list = (provider + cached)
-                .distinctBy { it.threadId }
-                .sortedByDescending { it.date }
+            val list = org.fossify.messages.helpers.sortConversations(
+                org.fossify.messages.helpers.mergeConversationSources(provider, cached),
+                context.config.pinnedConversations
+            )
             _uiState.value = _uiState.value.copy(
                 conversations = list,
                 isLoading = false,

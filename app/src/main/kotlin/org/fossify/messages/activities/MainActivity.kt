@@ -116,6 +116,7 @@ class MainActivity : SimpleActivity() {
     private var lastSearchedText = ""
     private var bus: EventBus? = null
     private var isConversationSelectionMode = false
+    private var initialClassicScrollPending = true
 
     private val binding by viewBinding(ActivityMainBinding::inflate)
 
@@ -168,6 +169,13 @@ class MainActivity : SimpleActivity() {
 
         // 4. 经典原生极简短信版初始化
         setContentView(binding.root)
+        binding.conversationsList.addOnScrollListener(object : androidx.recyclerview.widget.RecyclerView.OnScrollListener() {
+            override fun onScrollStateChanged(recyclerView: androidx.recyclerview.widget.RecyclerView, newState: Int) {
+                if (newState == androidx.recyclerview.widget.RecyclerView.SCROLL_STATE_DRAGGING) {
+                    initialClassicScrollPending = false
+                }
+            }
+        })
         clearHomeBottomSystemScrim()
         config.showListAvatars = true
         config.showLetterAvatars = false
@@ -874,12 +882,9 @@ class MainActivity : SimpleActivity() {
         conversations: ArrayList<Conversation>,
         cached: Boolean = false,
     ) {
-        val sortedConversations = conversations
-            .sortedWith(
-                compareByDescending<Conversation> {
-                    config.pinnedConversations.contains(it.threadId.toString())
-                }.thenByDescending { it.date }
-            ).toMutableList() as ArrayList<Conversation>
+        val sortedConversations = ArrayList(org.fossify.messages.helpers.sortConversations(
+            conversations, config.pinnedConversations
+        ))
 
         updateHomeUnreadSubtitle(sortedConversations)
 
@@ -893,6 +898,14 @@ class MainActivity : SimpleActivity() {
         try {
             getOrCreateConversationsAdapter().apply {
                 updateConversations(sortedConversations) {
+                    // Both cached and provider snapshots may insert rows above the old anchor.
+                    // A new classic home starts at the top unless the user has begun scrolling.
+                    if (initialClassicScrollPending) {
+                        binding.conversationsList.stopScroll()
+                        (binding.conversationsList.layoutManager as? androidx.recyclerview.widget.LinearLayoutManager)
+                            ?.scrollToPositionWithOffset(0, 0)
+                        if (!cached) initialClassicScrollPending = false
+                    }
                     if (!cached) {
                         showOrHidePlaceholder(currentList.isEmpty())
                     }
