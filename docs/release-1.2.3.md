@@ -1,22 +1,23 @@
-# SMS Forwarder 1.2.3
+# SMS Forwarder 1.2.3 更新记录
 
-Version code: 1203. This release retains the SMS ordering, blocked-message visibility and recent-task settings from 1.2.2.
+版本代码：1203。保留 1.2.2 的短信排序、拦截名单短信显示和隐藏最近任务功能。
 
-## Changes
+## 本次更新
 
-- Call reminders preserve the receiving subscription observed while ringing when the idle broadcast lacks it. Default messages explicitly display the resolved physical SIM slot and custom label, plus the local receiving number when available. `[sim]` is the receiving SIM, `[receiver]` is the local number, and `[number]` remains the caller's number. Unknown subscriptions are displayed as unknown rather than inferred from the default SIM.
-- Call reminder text and its simulated test are marked as already rendered so the SMS template does not replace their content. Duplicate ringing broadcasts preserve the initial ringing time.
-- Enabling call reminders requests phone-state and call-log permissions and performs an actual read-only call-log query in the background. The page reports missing permissions, readable/empty records, hidden numbers, unavailable providers, denied access and query failures. Failed access prevents that enable attempt; a separate diagnostic button does not enable forwarding or send historical records.
-- Notification forwarding no longer classifies `FLAG_LOCAL_ONLY` as an ongoing notification. An empty expanded-text field falls back to ordinary text, inbox lines, messaging-style text or subtext.
-- Both interfaces share expanded tutorials for call permissions, SIM identity, notification forwarding and Meizu OTP troubleshooting.
+1. **未接来电接收卡**：保留响铃时获取到的接收订阅信息，减少挂断广播缺少信息造成的卡槽丢失。默认提醒显示 SIM1／SIM2 和自定义卡名称；本机号码可获取时也显示。无法确认卡槽时显示“未知接收卡”，不按默认卡猜测。
+2. **来电模板**：`[number]` 是对方号码，`[sim]` 是本机接收卡，`[receiver]` 是本机号码。来电正文和模拟测试不再被短信正文模板覆盖；重复响铃广播保留首次响铃时间。
+3. **权限与通话记录访问检测**：开启时申请电话状态和通话记录权限，并在后台实际只读查询通话记录。区分访问正常、记录为空、号码隐藏、系统拒绝和读取失败；失败会阻止本次开启。新增独立检测按钮，检测不发送、修改或保存历史通话号码。
+4. **通知转发兼容修复**：不再把“仅在本机显示”的通知误当作常驻通知过滤。空 BigText 可回退到普通正文、多行通知、消息样式正文或子文本。
+5. **使用教程完善**：经典版、开发版共用来电授权、卡一／卡二说明、通知转发步骤和魅族验证码排障教程。
 
-## Validation
+## 验证结果
 
-- 14 targeted host regression tests cover call-access decisions and notification text extraction, using the Android API jar for compilation. These are not on-device call-log or OEM notification tests.
-- Signed release compilation and APK signature verification are required by the GitHub build workflow.
+- 14 项针对性回归测试通过，覆盖通话记录访问判断和通知文本提取。
+- 正式签名 APK 构建及签名校验通过，下载文件的 SHA256 与 GitHub 发布包一致。
+- KSU 模块未变动。
 
-## Device checks still needed
+## 仍需真机验证
 
-- On a dual-SIM phone, call SIM1 and SIM2 separately and check the slot/label and receiving number, including while the screen is off. Broadcast subscription availability and overlapping calls remain device-dependent.
-- On the affected Meizu phone, record model/Flyme/Android versions and check whether the OTP exists in the SMS inbox or only as a notification. Notification forwarding cannot reconstruct OTP content withheld by the system; this is not a claim of universal Meizu compatibility.
-- Simulated channel tests prove submission to a channel, not real call broadcasts, caller identification, SIM identity or notification access.
+- 双卡手机请分别拨打 SIM1、SIM2，检查接收卡槽、本机号码和息屏状态；系统广播是否提供订阅信息及重叠来电行为仍与设备有关。
+- 魅族验证码请先确认是否进入短信收件箱，还是仅作为通知显示。通知转发不能恢复系统隐藏的验证码正文，尚未确认所有 Flyme 版本的兼容情况。
+- 模拟通道测试不等于真实来电广播、号码获取、卡槽识别或通知监听全部正常。

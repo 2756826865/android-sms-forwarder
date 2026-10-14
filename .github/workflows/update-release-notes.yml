@@ -1,0 +1,36 @@
+name: Update release notes
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/release-*.md'
+      - '.github/workflows/update-release-notes.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-notes-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sync existing release description
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          version="$(sed -n 's/^VERSION_NAME=//p' gradle.properties)"
+          test -n "$version"
+          notes="docs/release-$version.md"
+          test -f "$notes"
+          if gh release view "v$version" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release edit "v$version" --repo "$GITHUB_REPOSITORY" --notes-file "$notes"
+          else
+            echo "Release v$version is not published yet; APK publication will attach these notes."
+          fi

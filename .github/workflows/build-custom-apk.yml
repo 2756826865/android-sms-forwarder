@@ -14,6 +14,8 @@ permissions:
 
 jobs:
   build:
+    # Updating release prose alone must not replace an already distributed APK.
+    if: github.event_name != 'push' || !contains(github.event.head_commit.message, '[notes-only]')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -99,4 +101,8 @@ jobs:
               --target "$GITHUB_SHA" \
               --title "短信转发器 $version" \
               --generate-notes
+          fi
+          notes="docs/release-$version.md"
+          if [ -f "$notes" ]; then
+            gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --notes-file "$notes"
           fi
