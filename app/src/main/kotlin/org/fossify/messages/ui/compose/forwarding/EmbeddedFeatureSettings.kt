@@ -1,6 +1,9 @@
 package org.fossify.messages.ui.compose.forwarding
 
 import android.widget.Toast
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -227,15 +230,68 @@ fun MissedCallEmbeddedScreen() {
     var selectedIds by remember { mutableStateOf(cfg.channelInstanceIds) }
     var hasSelection by remember { mutableStateOf(cfg.hasChannelSelection) }
     var choosingChannels by remember { mutableStateOf(false) }
+    val accessScope = androidx.compose.runtime.rememberCoroutineScope()
+    var accessCheckRunning by remember { mutableStateOf(false) }
+    var accessResult by remember { mutableStateOf<org.fossify.messages.helpers.CallAccessResult?>(null) }
+    var accessJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    fun checkCallAccess(enableAfterCheck: Boolean) {
+        if (accessCheckRunning) return
+        accessCheckRunning = true
+        accessJob = accessScope.launch {
+            try {
+                val result = withContext(Dispatchers.IO) {
+                    org.fossify.messages.helpers.CallAccessDiagnostics.check(context.applicationContext)
+                }
+                accessResult = result
+                if (enableAfterCheck) {
+                    if (!result.canEnable) {
+                        enabled = false; cfg.enabled = false
+                        Toast.makeText(context, "来电访问检测未通过，请查看检测结果", Toast.LENGTH_LONG).show()
+                    } else if (hasSelection && selectedIds.isEmpty()) choosingChannels = true
+                    else { enabled = true; cfg.enabled = true }
+                }
+            } finally { accessCheckRunning = false }
+        }
+    }
+    val callPermissions = arrayOf(android.Manifest.permission.READ_PHONE_STATE, android.Manifest.permission.READ_CALL_LOG)
+    fun hasCallPermissions() = callPermissions.all {
+        androidx.core.content.ContextCompat.checkSelfPermission(context, it) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    }
+    val permissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()
+    ) {
+        if (hasCallPermissions()) {
+            checkCallAccess(enableAfterCheck = true)
+        } else {
+            enabled = false; cfg.enabled = false
+            checkCallAccess(enableAfterCheck = false)
+            Toast.makeText(context, "需要电话状态和通话记录权限才能获取来电号码；模拟测试不代表实际来电监听可用", Toast.LENGTH_LONG).show()
+        }
+    }
     val hasUnavailableSelection = hasSelection && selectedIds.any { selectedId ->
         realInstances.none { it.id == selectedId && it.enabled && it.hasDispatchConfiguration() }
     }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item { FeatureCard {
             SettingSwitch("来电提醒", "将来电记录发送到指定推送通道", enabled) { checked ->
-                if (checked && hasSelection && selectedIds.isEmpty()) choosingChannels = true
-                else { enabled = checked; cfg.enabled = checked }
+                if (!checked) {
+                    accessJob?.cancel()
+                    enabled = false; cfg.enabled = false
+                } else if (!accessCheckRunning) {
+                    if (!hasCallPermissions()) permissionLauncher.launch(callPermissions)
+                    else checkCallAccess(enableAfterCheck = true)
+                }
             }
+            Text("来电号码需要电话状态、通话记录权限。已保存的自定义模板需包含 [number] 或 [caller]。模拟测试只验证推送通道。", fontSize = 12.sp, color = TextSecondary)
+            Text("区分本机卡一/卡二：使用 [sim]；本机接收号码使用 [receiver]。系统不提供本机号码时，可在转发显示中填写对应卡槽号码。卡槽无法识别时显示「未知接收卡」。", fontSize = 12.sp, color = TextSecondary)
+            OutlinedButton(enabled = !accessCheckRunning, onClick = {
+                if (!hasCallPermissions()) permissionLauncher.launch(callPermissions)
+                else checkCallAccess(enableAfterCheck = true)
+            }) { Text("授权并启用来电提醒") }
+            OutlinedButton(enabled = !accessCheckRunning, onClick = { checkCallAccess(enableAfterCheck = false) }) {
+                Text(if (accessCheckRunning) "正在检测…" else "检测权限与通话记录访问")
+            }
+            accessResult?.let { Text(it.summary(), fontSize = 12.sp, color = TextSecondary) }
             SettingSwitch("仅未接来电", "忽略已接听和主动拒接的来电", missedOnly) { missedOnly = it; cfg.missedCallOnly = it }
             SettingSwitch("已接来电也提醒", "接听后的通话记录也发送提醒", answered) { answered = it; cfg.forwardAnsweredCall = it }
         } }
@@ -285,7 +341,8 @@ fun MissedCallEmbeddedScreen() {
                                 uniqueId = "test-call-$now-$channel",
                                 targetChannel = channel,
                                 allowedChannels = setOf(channel),
-                                isTest = true
+                                isTest = true,
+                                bodyAlreadyRendered = true
                             )
                         }
                         selectedInstances.forEach { instance ->
@@ -299,7 +356,8 @@ fun MissedCallEmbeddedScreen() {
                                 targetChannel = instance.channelType,
                                 targetInstanceId = instance.id,
                                 allowedChannels = setOf(instance.id),
-                                isTest = true
+                                isTest = true,
+                                bodyAlreadyRendered = true
                             )
                         }
                         android.widget.Toast.makeText(

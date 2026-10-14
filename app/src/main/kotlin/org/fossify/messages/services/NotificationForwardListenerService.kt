@@ -48,8 +48,7 @@ class NotificationForwardListenerService : NotificationListenerService() {
         if (config.ignoreOngoing) {
             val flags = notification.flags
             val isOngoing = (flags and Notification.FLAG_ONGOING_EVENT) != 0
-            val isLocalOnly = (flags and Notification.FLAG_LOCAL_ONLY) != 0
-            if (isOngoing || isLocalOnly) return
+            if (isOngoing) return
         }
 
         // 3. 检查包名白名单（只处理用户勾选的应用）
@@ -59,9 +58,15 @@ class NotificationForwardListenerService : NotificationListenerService() {
         // 4. 提取通知文本（兼顾标准、BigTextStyle 与子文本）
         val extras = notification.extras ?: return
         val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString()?.trim().orEmpty()
-        val text = (extras.getCharSequence(Notification.EXTRA_BIG_TEXT)
-            ?: extras.getCharSequence(Notification.EXTRA_TEXT)
-            ?: extras.getCharSequence(Notification.EXTRA_SUB_TEXT))?.toString()?.trim().orEmpty()
+        val text = org.fossify.messages.helpers.extractNotificationText(
+            bigText = extras.getCharSequence(Notification.EXTRA_BIG_TEXT),
+            text = extras.getCharSequence(Notification.EXTRA_TEXT),
+            subText = extras.getCharSequence(Notification.EXTRA_SUB_TEXT),
+            lines = extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)?.toList().orEmpty(),
+            messages = extras.getParcelableArray(Notification.EXTRA_MESSAGES)?.mapNotNull {
+                (it as? android.os.Bundle)?.getCharSequence("text")
+            }.orEmpty()
+        )
 
         if (title.isBlank() && text.isBlank()) return
 

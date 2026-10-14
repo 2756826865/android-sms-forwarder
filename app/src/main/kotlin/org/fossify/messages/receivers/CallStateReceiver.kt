@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.telephony.TelephonyManager
+import android.telephony.SubscriptionManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -31,7 +32,8 @@ class CallStateReceiver : BroadcastReceiver() {
 
         val stateStr = intent.getStringExtra(TelephonyManager.EXTRA_STATE) ?: return
         val incomingNumber = intent.getStringExtra(TelephonyManager.EXTRA_INCOMING_NUMBER).orEmpty()
-        val subId = intent.getIntExtra("subscription", -1)
+        val subId = intent.getIntExtra(SubscriptionManager.EXTRA_SUBSCRIPTION_INDEX, -1)
+            .takeIf { it >= 0 } ?: intent.getIntExtra("subscription", -1)
 
         val now = System.currentTimeMillis()
         val prefs = context.getSharedPreferences(PREFS_TRANSIENT, Context.MODE_PRIVATE)
@@ -39,9 +41,13 @@ class CallStateReceiver : BroadcastReceiver() {
         when (stateStr) {
             TelephonyManager.EXTRA_STATE_RINGING -> {
                 val num = incomingNumber.ifBlank { prefs.getString(KEY_LAST_NUMBER, "").orEmpty() }
+                val existingRingStart = prefs.getLong(KEY_RING_START, 0L)
+                val rememberedSubId = prefs.getInt(KEY_RECEIVING_SUB, -1)
                 prefs.edit()
                     .putString(KEY_LAST_NUMBER, num)
-                    .putLong(KEY_RING_START, now)
+                    .putInt(KEY_RECEIVING_SUB, rememberedSubId.takeIf { it >= 0 } ?: subId)
+                    // Android may deliver the same state twice, with and without a number.
+                    .putLong(KEY_RING_START, existingRingStart.takeIf { it > 0L } ?: now)
                     .putBoolean(KEY_ANSWERED, false)
                     .apply()
             }
@@ -58,6 +64,7 @@ class CallStateReceiver : BroadcastReceiver() {
                 val isAnswered = prefs.getBoolean(KEY_ANSWERED, false)
                 val callStart = prefs.getLong(KEY_CALL_START, 0L)
                 val number = incomingNumber.ifBlank { prefs.getString(KEY_LAST_NUMBER, "").orEmpty() }
+                val receivingSubId = prefs.getInt(KEY_RECEIVING_SUB, -1).takeIf { it >= 0 } ?: subId
 
                 // 立即重置暂态缓存
                 prefs.edit().clear().apply()
@@ -79,7 +86,7 @@ class CallStateReceiver : BroadcastReceiver() {
                                     callerNumber = number,
                                     isMissed = true,
                                     durationSeconds = ringDurationSeconds,
-                                    subId = subId,
+                                    subId = receivingSubId,
                                     timestamp = now
                                 )
                             } else if (!wasMissed && callConfig.forwardAnsweredCall) {
@@ -89,7 +96,7 @@ class CallStateReceiver : BroadcastReceiver() {
                                     callerNumber = number,
                                     isMissed = false,
                                     durationSeconds = callDuration,
-                                    subId = subId,
+                                    subId = receivingSubId,
                                     timestamp = now
                                 )
                             }
@@ -119,18 +126,19 @@ class CallStateReceiver : BroadcastReceiver() {
         val eventTitle = if (isMissed) "【未接来电提醒】" else "【通话结束提醒】"
 
         val multiConfig = MultiForwardConfig(context)
-        val simDesc = if (subId >= 0) {
-            ForwardingMessageFormatter.getSimDescription(context, multiConfig, subId)
-        } else ""
+        val slotName = ForwardingMessageFormatter.getSimSlotName(context, multiConfig, subId)
+        val description = ForwardingMessageFormatter.getSimDescription(context, multiConfig, subId)
+        val simDesc = if (description == slotName || description.startsWith("$slotName ·")) description
+            else if (slotName == "未知接收卡") slotName else "$slotName · $description"
+        val receiverNumber = ForwardingMessageFormatter.getReceiverNumber(context, multiConfig, subId)
 
         val defaultBody = buildString {
             appendLine(if (isMissed) "🔴 $eventTitle" else "🟢 $eventTitle")
             appendLine("📞 来电号码：$contactDisplay")
             appendLine(if (isMissed) "⏱️ 响铃时长：${durationSeconds}秒" else "⏱️ 通话时长：${durationSeconds}秒")
             appendLine("🕒 发生时间：$timeFormatted")
-            if (simDesc.isNotBlank()) {
-                appendLine("📶 接收卡槽：$simDesc")
-            }
+            appendLine("📶 接收卡槽：$simDesc")
+            if (receiverNumber.isNotBlank()) appendLine("📱 本机接收号码：$receiverNumber")
         }.trim()
 
         val callConfig = CallForwardConfig(context)
@@ -143,6 +151,7 @@ class CallStateReceiver : BroadcastReceiver() {
                 .replace("[duration]", durationSeconds.toString())
                 .replace("[time]", timeFormatted)
                 .replace("[sim]", simDesc)
+                .replace("[receiver]", receiverNumber)
         } ?: defaultBody
         val uniqueId = "call-${System.currentTimeMillis()}"
 
@@ -161,7 +170,8 @@ class CallStateReceiver : BroadcastReceiver() {
                         targetChannel = instance.channelType,
                         allowedChannels = setOf(instance.id),
                         isTest = false,
-                        targetInstanceId = instance.id
+                        targetInstanceId = instance.id,
+                        bodyAlreadyRendered = true
                     )
                 }
         } else {
@@ -175,7 +185,8 @@ class CallStateReceiver : BroadcastReceiver() {
                     uniqueId = uniqueId,
                     targetChannel = target,
                     allowedChannels = setOf(target),
-                    isTest = false
+                    isTest = false,
+                    bodyAlreadyRendered = true
                 )
             }
         }
@@ -184,6 +195,7 @@ class CallStateReceiver : BroadcastReceiver() {
     companion object {
         private const val PREFS_TRANSIENT = "call_state_transient"
         private const val KEY_LAST_NUMBER = "last_number"
+        private const val KEY_RECEIVING_SUB = "receiving_subscription"
         private const val KEY_RING_START = "ring_start"
         private const val KEY_CALL_START = "call_start"
         private const val KEY_ANSWERED = "answered"
