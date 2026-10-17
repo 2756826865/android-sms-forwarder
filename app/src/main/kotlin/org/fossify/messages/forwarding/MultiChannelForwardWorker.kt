@@ -57,7 +57,74 @@ class MultiChannelForwardWorker(
 
     override suspend fun getForegroundInfo() = ForwardingForegroundInfo.create(applicationContext)
 
-    override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
+    override suspend fun doWork(): Result {
+        val planText = inputData.getString(KEY_GROUP_PLAN).orEmpty()
+        if (planText.isBlank()) return performWork()
+        val history = ForwardingHistoryStore(applicationContext)
+        val recordId = inputData.getString(KEY_HISTORY_RECORD_ID).orEmpty()
+        val previous = history.groupStatus(recordId)
+        val plan = JSONObject(planText)
+        val group = MultiForwardConfig(applicationContext).getChannelInstanceById(plan.getString("groupId"))
+        if (group == null || !group.enabled) {
+            history.markSkipped(recordId, "通道组已停用或删除，停止后续执行")
+            return Result.success()
+        }
+        val terminal = setOf(ForwardingHistoryStore.STATUS_SUCCESS, ForwardingHistoryStore.STATUS_FAILED,
+            ForwardingHistoryStore.STATUS_SKIPPED, ForwardingHistoryStore.STATUS_UNKNOWN)
+        // A restarted group member must not resubmit a request whose outcome was not persisted.
+        val result = when {
+            previous in terminal -> Result.success()
+            previous == ForwardingHistoryStore.STATUS_RUNNING -> {
+                history.setGroupStatus(recordId, ForwardingHistoryStore.STATUS_UNKNOWN)
+                history.markUnknown(recordId, "任务中断，上一请求结果未知；已停止通道组，避免重复发送")
+                Result.success()
+            }
+            else -> {
+                history.setGroupStatus(recordId, ForwardingHistoryStore.STATUS_RUNNING)
+                val outcome = performWork()
+                val status = if (outcome == Result.retry()) ForwardingHistoryStore.STATUS_QUEUED
+                    else history.record(recordId)?.status ?: ForwardingHistoryStore.STATUS_UNKNOWN
+                history.setGroupStatus(recordId, status)
+                outcome
+            }
+        }
+        if (result != Result.retry()) advanceGroup(planText, history.groupStatus(recordId))
+        return result
+    }
+
+    private fun advanceGroup(planText: String, completed: String?) {
+        if (completed == null) return
+        val plan = JSONObject(planText)
+        if (!GroupExecutionPolicy.shouldContinue(plan.getString("mode"), completed)) return
+        val members = plan.getJSONArray("members")
+        val next = plan.optInt("index") + 1
+        if (next >= members.length()) return
+        plan.put("index", next)
+        val instanceId = members.getString(next)
+        val config = MultiForwardConfig(applicationContext)
+        val instance = config.getChannelInstanceById(instanceId)
+        val type = instance?.channelType ?: plan.getJSONArray("types").getString(next)
+        enqueueSingle(
+            context = applicationContext,
+            sender = inputData.getString(KEY_SENDER).orEmpty(),
+            body = inputData.getString(KEY_BODY).orEmpty(),
+            receivedAt = inputData.getLong(KEY_RECEIVED_AT, 0),
+            subscriptionId = inputData.getInt(KEY_SUBSCRIPTION_ID, -1),
+            uniqueId = plan.getString("run") + "-step-$next",
+            targetChannel = type, allowedChannels = setOf(instanceId),
+            isTest = inputData.getBoolean(KEY_IS_TEST, false),
+            operationId = inputData.getString(KEY_OPERATION_ID),
+            targetInstanceId = instanceId,
+            ruleId = inputData.getString(KEY_RULE_ID).orEmpty(),
+            actionId = inputData.getString(KEY_ACTION_ID).orEmpty(),
+            bodyAlreadyRendered = inputData.getBoolean(KEY_BODY_ALREADY_RENDERED, false),
+            threadId = inputData.getLong(KEY_THREAD_ID, 0),
+            groupPlan = plan.toString(),
+            originalSim = receivedSimSnapshot(),
+        )
+    }
+
+    private suspend fun performWork(): Result = withContext(Dispatchers.IO) {
         setForeground(getForegroundInfo())
         val config = MultiForwardConfig(applicationContext)
         val targetChannel = inputData.getString(KEY_TARGET_CHANNEL).orEmpty()
@@ -135,6 +202,7 @@ class MultiChannelForwardWorker(
         val ruleId = inputData.getString(KEY_RULE_ID).orEmpty()
         val actionId = inputData.getString(KEY_ACTION_ID).orEmpty()
 
+        var outcomeUnknown = false
         val successes = mutableListOf<String>()
         val failures = mutableListOf<String>()
         val skippedReasons = mutableListOf<String>()
@@ -156,6 +224,8 @@ class MultiChannelForwardWorker(
                     Log.d(TAG, "channel success: $name")
                 }
                 .onFailure {
+                    if (it is kotlinx.coroutines.CancellationException) throw it
+                    outcomeUnknown = outcomeUnknown || DeliveryFailurePolicy.isUnknown(it)
                     val detail = it.message ?: it.javaClass.simpleName
                     failures += "$name：$detail"
                     operationId?.let { 
@@ -176,7 +246,7 @@ class MultiChannelForwardWorker(
             val instance = config.channelInstances().firstOrNull { it.id == targetInstanceId }
             // Safe one-hop fallback: only missing/disabled/unconfigured primary, before API submission.
             if (!isTest && (instance == null || !instance.enabled || !instance.hasDispatchConfiguration()) &&
-                !inputData.getBoolean("fallback_hop", false)) {
+                !inputData.getBoolean("fallback_hop", false) && inputData.getString(KEY_GROUP_PLAN).isNullOrBlank()) {
                 val backup = ForwardingFallbackConfig(applicationContext).resolve(targetInstanceId, config.channelInstances())
                 if (backup != null) {
                     val fallbackWork = OneTimeWorkRequestBuilder<MultiChannelForwardWorker>()
@@ -288,7 +358,9 @@ class MultiChannelForwardWorker(
                             url, headers, instance.optString("method", "POST"),
                             instance.optString("contentType", "application/json"),
                             instance.optString("bodyTemplate", MultiForwardConfig.DEFAULT_CUSTOM_WEBHOOK_BODY),
-                            title, content, sender, receivedAt, subscriptionId
+                            title, content, sender, receivedAt, subscriptionId,
+                            instance.optString("successMode", "http"),
+                            instance.optString("successField"), instance.optString("successValue")
                         )
                     }
                     ForwardingChannels.DISCORD -> {
@@ -672,9 +744,13 @@ class MultiChannelForwardWorker(
 
         val allFailuresArePermanent = failures.isNotEmpty() && failures.all { isPermanentError(it) }
         // Retrying the whole Worker after one channel succeeded would submit that channel again.
-        val canRetry = !isTest && successes.isEmpty() && !allFailuresArePermanent && runAttemptCount < 2
+        val canRetry = !isTest && !outcomeUnknown && inputData.getString(KEY_GROUP_PLAN).isNullOrBlank() && successes.isEmpty() && !allFailuresArePermanent && runAttemptCount < 2
 
         when {
+            outcomeUnknown -> {
+                history.markUnknown(historyRecordId, "发送结果未知，为避免重复投递不自动重试或切换通道；" + failures.joinToString("；"))
+                Result.failure()
+            }
             failures.isEmpty() && successes.isNotEmpty() -> {
                 if (historyRecordId.isNotBlank()) {
                     val skippedDetail = if (skippedReasons.isEmpty()) "" else
@@ -1148,8 +1224,13 @@ class MultiChannelForwardWorker(
         content: String,
         sender: String,
         receivedAt: Long,
-        subscriptionId: Int
+        subscriptionId: Int,
+        successMode: String = "http",
+        successField: String = "",
+        successValue: String = "",
     ) {
+        val successRule = WebhookSuccessRule(successMode, successField, successValue)
+        successRule.validate()
         require(url.isNotBlank()) { "自定义 Webhook URL 不能为空" }
         val normalizedUrl = url.trim()
         ForwardingUrlPolicy.requireAllowed(normalizedUrl, normalizedUrl.startsWith("http://", ignoreCase = true))
@@ -1202,7 +1283,7 @@ class MultiChannelForwardWorker(
             val statusCode = responseCode
             val response = (if (statusCode in 200..299) inputStream else errorStream)
                 ?.bufferedReader(StandardCharsets.UTF_8)?.use { it.readText() }.orEmpty()
-            check(statusCode in 200..299) { "HTTP $statusCode: ${response.take(200)}" }
+            successRule.requireAccepted(statusCode, response)
         }
     }
 
@@ -1272,6 +1353,7 @@ class MultiChannelForwardWorker(
     }
 
     companion object {
+        private const val KEY_GROUP_PLAN = "group_execution_plan"
         private const val TAG = "MultiChannelForward"
         private const val KEY_SENDER = "sender"
         private const val KEY_BODY = "body"
@@ -1372,13 +1454,16 @@ class MultiChannelForwardWorker(
             actionId: String = "",
             bodyAlreadyRendered: Boolean = false,
             visitedGroupIds: Set<String> = emptySet(),
-            threadId: Long = 0L
+            threadId: Long = 0L,
+            groupPlan: String = "",
+            originalSim: ForwardingSimSnapshot? = null,
         ) {
             val multiConfig = MultiForwardConfig(context)
             val requestedInstance = targetInstanceId.takeIf(String::isNotBlank)
                 ?.let(multiConfig::getChannelInstanceById)
             if (targetChannel == ForwardingChannels.CHANNEL_GROUP || requestedInstance?.channelType == ForwardingChannels.CHANNEL_GROUP) {
                 val groupIdentity = targetInstanceId.ifBlank { ForwardingChannels.CHANNEL_GROUP }
+                if (requestedInstance != null && !requestedInstance.enabled) return
                 if (groupIdentity in visitedGroupIds) {
                     val history = ForwardingHistoryStore(context)
                     val historyId = history.registerQueued(
@@ -1403,7 +1488,7 @@ class MultiChannelForwardWorker(
                         }
                     }.getOrDefault(emptySet())
                 }.orEmpty()
-                val members = instanceMembers.ifEmpty { multiConfig.channelGroupMembers() }
+                val members = (if (requestedInstance != null) instanceMembers else multiConfig.channelGroupMembers())
                     .filterNot { it == ForwardingChannels.CHANNEL_GROUP || it == targetInstanceId }
                     .toSet()
                 if (members.isEmpty()) {
@@ -1418,6 +1503,25 @@ class MultiChannelForwardWorker(
                         isTest = isTest
                     )
                     history.markSkipped(historyId, "通道组没有可发送的成员")
+                    return
+                }
+                val mode = requestedInstance?.optString("executionMode", GroupExecutionPolicy.ALL) ?: GroupExecutionPolicy.ALL
+                if (mode != GroupExecutionPolicy.ALL) {
+                    require(mode in setOf(GroupExecutionPolicy.UNTIL_SUCCESS, GroupExecutionPolicy.UNTIL_FAIL)) { "未知通道组执行策略" }
+                    val selected = members.map { id ->
+                        multiConfig.getChannelInstanceById(id) ?: error("顺序通道组仅支持已配置的通道实例")
+                    }
+                    require(selected.size <= 16 && selected.none { it.channelType == ForwardingChannels.CHANNEL_GROUP }) {
+                        "顺序通道组最多16个成员，暂不支持嵌套组"
+                    }
+                    val first = selected.first()
+                    val plan = JSONObject().put("run", uniqueId).put("mode", mode).put("index", 0).put("groupId", groupIdentity)
+                        .put("members", org.json.JSONArray(selected.map { it.id }))
+                        .put("types", org.json.JSONArray(selected.map { it.channelType }))
+                    enqueueSingle(context, sender, body, receivedAt, subscriptionId,
+                        "$uniqueId-step-0", first.channelType, setOf(first.id), isTest, operationId,
+                        first.id, ruleId, actionId, bodyAlreadyRendered, visitedGroupIds + groupIdentity,
+                        threadId, plan.toString())
                     return
                 }
                 members.forEach { member ->
@@ -1438,7 +1542,10 @@ class MultiChannelForwardWorker(
                         actionId = actionId,
                         bodyAlreadyRendered = bodyAlreadyRendered,
                         visitedGroupIds = visitedGroupIds + groupIdentity,
-                        threadId = threadId
+                        threadId = threadId,
+                        groupPlan = if (requestedInstance != null) JSONObject()
+                            .put("mode", "parallel").put("groupId", groupIdentity).toString() else "",
+                        originalSim = originalSim,
                     )
                 }
                 return
@@ -1448,7 +1555,16 @@ class MultiChannelForwardWorker(
             val constraintChannel = if (targetInstanceId.isNotBlank()) {
                 MultiForwardConfig(context).getChannelInstanceById(targetInstanceId)?.channelType ?: targetChannel
             } else targetChannel
-            val historyRecordId = history.registerQueued(
+            if (groupPlan.isNotBlank()) {
+                val executionStatus = history.groupStatus(ForwardingHistoryStore.recordId(uniqueId, effectiveChannel))
+                if (executionStatus in setOf(ForwardingHistoryStore.STATUS_RUNNING,
+                    ForwardingHistoryStore.STATUS_SUCCESS, ForwardingHistoryStore.STATUS_FAILED,
+                    ForwardingHistoryStore.STATUS_SKIPPED, ForwardingHistoryStore.STATUS_UNKNOWN)) return
+                val existing = history.record(ForwardingHistoryStore.recordId(uniqueId, effectiveChannel))
+                if (existing?.status in setOf(ForwardingHistoryStore.STATUS_SUCCESS, ForwardingHistoryStore.STATUS_FAILED,
+                    ForwardingHistoryStore.STATUS_SKIPPED, ForwardingHistoryStore.STATUS_UNKNOWN)) return
+            }
+            val historyRecordId = (if (groupPlan.isNotBlank()) history.record(ForwardingHistoryStore.recordId(uniqueId, effectiveChannel))?.recordId else null) ?: history.registerQueued(
                 workId = uniqueId,
                 channel = effectiveChannel,
                 sender = sender,
@@ -1460,7 +1576,14 @@ class MultiChannelForwardWorker(
             Log.d(TAG, "enqueueSingle: channel=$targetChannel, instance=$targetInstanceId, historyId=$historyRecordId, workId=$uniqueId")
             val safeBody = WorkPayloadText.fitUtf8(body, 6000)
             val delaySeconds = if (!isTest) multiConfig.forwardingDelaySeconds else 0
-            val capturedSim = ForwardingMessageFormatter.captureSim(context, subscriptionId)
+            val capturedSim = originalSim ?: ForwardingMessageFormatter.captureSim(context, subscriptionId)
+            history.saveRetryPayload(historyRecordId, JSONObject()
+                .put("sender", sender.take(256)).put("body", safeBody).put("receivedAt", receivedAt)
+                .put("subscriptionId", subscriptionId).put("channel", targetChannel)
+                .put("instanceId", targetInstanceId).put("ruleId", ruleId).put("actionId", actionId)
+                .put("bodyAlreadyRendered", bodyAlreadyRendered).put("threadId", threadId)
+                .put("slot", capturedSim.slotIndex).put("sim", capturedSim.description)
+                .put("receiver", capturedSim.receiverNumber).put("label", capturedSim.customLabel))
             val requestBuilder = OneTimeWorkRequestBuilder<MultiChannelForwardWorker>()
                 .setInputData(
                     runCatching { workDataOf(
@@ -1482,7 +1605,8 @@ class MultiChannelForwardWorker(
                         KEY_RULE_ID to ruleId,
                         KEY_ACTION_ID to actionId,
                         KEY_BODY_ALREADY_RENDERED to bodyAlreadyRendered,
-                        KEY_THREAD_ID to threadId
+                        KEY_THREAD_ID to threadId,
+                        KEY_GROUP_PLAN to groupPlan,
                     ) }.getOrElse { error ->
                         history.markFailed(historyRecordId, "发送任务数据构建失败：${error.message ?: error.javaClass.simpleName}")
                         return

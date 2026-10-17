@@ -50,6 +50,10 @@ data class ForwardingChannelInstance(
         ForwardingChannels.TELEGRAM -> optString("botToken").isNotBlank() && optString("chatId").isNotBlank()
         ForwardingChannels.EMAIL -> listOf("host", "user", "password", "recipients")
             .all { optString(it).isNotBlank() }
+        ForwardingChannels.CHANNEL_GROUP -> runCatching {
+            val members = JSONObject(configJson).optJSONArray("members")
+            members != null && members.length() in 1..16
+        }.getOrDefault(false)
         ForwardingChannels.SMS_DIRECT -> optString("phone").isNotBlank()
         ForwardingChannels.CUSTOM_WEBHOOK -> optString("url").isNotBlank()
         ForwardingChannels.GOTIFY -> optString("serverUrl").isNotBlank() && optString("token").isNotBlank()

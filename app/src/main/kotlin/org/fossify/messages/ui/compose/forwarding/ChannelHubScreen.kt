@@ -145,6 +145,7 @@ val ALL_CHANNEL_TYPE_DEFINITIONS = listOf(
     ChannelTypeDefinition(ForwardingChannels.EMAIL, "邮件消息 (SMTP)", "标准 SMTP 协议发信 (SSL/STARTTLS)", "📧", ChannelCategory.CLOUD),
     ChannelTypeDefinition(ForwardingChannels.TENCENT_CLOUD, "腾讯云自定义告警", "向配置的腾讯云告警 Webhook 提交消息", "☁️", ChannelCategory.CLOUD),
     ChannelTypeDefinition(ForwardingChannels.SMS_DIRECT, "短信直发 (SIM 转发)", "通过本机备用 SIM 卡向指定手机转发", "📱", ChannelCategory.CLOUD),
+    ChannelTypeDefinition(ForwardingChannels.CHANNEL_GROUP, "通道组（规则目标）", "全部发送、成功停止或失败停止", "👥", ChannelCategory.CLOUD),
     ChannelTypeDefinition(ForwardingChannels.CUSTOM_WEBHOOK, "自定义 Webhook", "适配任意第三方 HTTP POST/GET 接口", "🌐", ChannelCategory.CLOUD)
 )
 
@@ -319,7 +320,7 @@ fun getChannelTutorial(channelId: String): String = when (channelId) {
         2. 可设置 Content-Type、Headers 和请求体模板
         3. 模板支持 [title]、[msg]、[from]、[time]、[sim]、[sim_slot]、[receiver]（支持大括号或中括号）
         4. GET 模式将模板作为查询参数；公网地址应使用 HTTPS
-        5. 保存后先点击测试，接收端返回 HTTP 2xx 才算成功
+        5. 保存后先点击测试；始终要求 HTTP 2xx，也可附加响应包含或 JSON 字段成功条件
     """.trimIndent()
     ForwardingChannels.SERVERCHAN3 -> """
         1. 前往方糖 Server酱³ 官网 (ft07.com) 扫码登录并获取 SendKey（例如 sctp123456t...）
@@ -1158,9 +1159,23 @@ fun InstanceEditorDialog(
             } ?: "private"
         )
     }
+    val groupCandidates = remember(existingInstance?.id) {
+        org.fossify.messages.forwarding.repository.ChannelRepository.getInstance(context).getInstances()
+            .filter { it.id != existingInstance?.id && it.channelType != ForwardingChannels.CHANNEL_GROUP }
+    }
+    var groupMembers by remember {
+        mutableStateOf(runCatching {
+            val values = org.json.JSONObject(existingInstance?.configJson ?: "{}").optJSONArray("members")
+            (0 until (values?.length() ?: 0)).map { values!!.getString(it) }
+        }.getOrDefault(emptyList<String>()))
+    }
+    var groupMode by remember { mutableStateOf(existingInstance?.optString("executionMode", "all") ?: "all") }
     var customWebhookMethod by remember {
         mutableStateOf(existingInstance?.optString("method")?.ifBlank { "POST" } ?: "POST")
     }
+    var webhookSuccessMode by remember { mutableStateOf(existingInstance?.optString("successMode", "http") ?: "http") }
+    var webhookSuccessField by remember { mutableStateOf(existingInstance?.optString("successField") ?: "") }
+    var webhookSuccessValue by remember { mutableStateOf(existingInstance?.optString("successValue") ?: "") }
     var customWebhookContentType by remember {
         mutableStateOf(existingInstance?.optString("contentType")?.ifBlank { "application/json" } ?: "application/json")
     }
@@ -1215,9 +1230,12 @@ fun InstanceEditorDialog(
         ForwardingChannels.DISCORD, ForwardingChannels.TENCENT_CLOUD -> f1.isNotBlank()
         ForwardingChannels.EMAIL -> listOf(f1, f2, f3, f4).all { it.isNotBlank() } &&
             emailPort.toIntOrNull()?.let { it in 1..65535 } == true
+        ForwardingChannels.CHANNEL_GROUP -> groupMembers.isNotEmpty() && groupMembers.size <= 16
         ForwardingChannels.SMS_DIRECT -> f1.isNotBlank()
         ForwardingChannels.CUSTOM_WEBHOOK -> f1.isNotBlank() &&
-            customWebhookMethod.uppercase() in setOf("GET", "POST", "PUT")
+            customWebhookMethod.uppercase() in setOf("GET", "POST", "PUT") &&
+            (webhookSuccessMode == "http" || (webhookSuccessMode == "contains" && webhookSuccessValue.isNotEmpty()) ||
+                (webhookSuccessMode == "json" && webhookSuccessField.isNotBlank()))
         ForwardingChannels.GOTIFY -> f1.isNotBlank() && f2.isNotBlank()
         ForwardingChannels.NTFY -> f1.isNotBlank() && f2.isNotBlank()
         ForwardingChannels.SERVERCHAN3 -> f1.isNotBlank()
@@ -1270,12 +1288,16 @@ fun InstanceEditorDialog(
                 configJson.put("port", emailPort.toIntOrNull() ?: 465).put("security", emailSecurity)
                     .put("host", f1).put("user", f2).put("password", f3).put("recipients", f4)
             }
+            ForwardingChannels.CHANNEL_GROUP -> configJson.put("members", org.json.JSONArray(groupMembers))
+                .put("executionMode", groupMode)
             ForwardingChannels.SMS_DIRECT -> configJson.put("phone", f1)
                 .put("onlyOnNoNetwork", smsDirectOnlyOnNoNetwork)
             ForwardingChannels.CUSTOM_WEBHOOK -> configJson.put("url", f1).put("headers", f2)
                 .put("method", customWebhookMethod.uppercase())
                 .put("contentType", customWebhookContentType)
                 .put("bodyTemplate", customWebhookBody)
+                .put("successMode", webhookSuccessMode).put("successField", webhookSuccessField)
+                .put("successValue", webhookSuccessValue)
             ForwardingChannels.GOTIFY -> configJson.put("serverUrl", f1).put("token", f2)
             ForwardingChannels.NTFY -> configJson.put("serverUrl", f1).put("topic", f2).put("token", f3)
                 .put("priority", f4).put("tags", f5).put("clickUrl", f6)
@@ -1656,7 +1678,41 @@ fun InstanceEditorDialog(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+                    ForwardingChannels.CHANNEL_GROUP -> {
+                        Text("执行策略", fontWeight = FontWeight.SemiBold)
+                        listOf("all" to "全部发送（并行）", "until_success" to "按顺序发送，成功即停止", "until_fail" to "按顺序发送，失败即停止").forEach { (mode, label) ->
+                            FilterChip(selected = groupMode == mode, onClick = { groupMode = mode }, label = { Text(label) })
+                        }
+                        Text("请在转发规则中选择此组作为发送目标；组不参加默认全通道广播，避免与成员重复发送。顺序模式遇到结果未知会停止。按添加顺序执行，最多16个。")
+                        groupMembers.forEachIndexed { index, id ->
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("${index + 1}. ${groupCandidates.find { it.id == id }?.name ?: "已删除通道"}", Modifier.weight(1f))
+                                TextButton(onClick = { groupMembers = groupMembers.filterNot { it == id } }) { Text("移除") }
+                            }
+                        }
+                        groupCandidates.filterNot { it.id in groupMembers }.forEach { item ->
+                            TextButton(onClick = { if (groupMembers.size < 16) groupMembers = groupMembers + item.id }) {
+                                Text("＋ ${item.name}${if (!item.enabled) "（已停用）" else ""}")
+                            }
+                        }
+                    }
                     ForwardingChannels.CUSTOM_WEBHOOK -> {
+                        Text("成功条件（始终要求 HTTP 2xx）", fontWeight = FontWeight.SemiBold)
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            listOf("http" to "HTTP成功", "contains" to "响应包含", "json" to "JSON字段").forEach { (mode, label) ->
+                                FilterChip(selected = webhookSuccessMode == mode,
+                                    onClick = { webhookSuccessMode = mode }, label = { Text(label) })
+                            }
+                        }
+                        if (webhookSuccessMode == "json") {
+                            OutlinedTextField(value = webhookSuccessField, onValueChange = { webhookSuccessField = it.trim() },
+                                label = { Text("成功字段，例如 code 或 data.success") }, modifier = Modifier.fillMaxWidth())
+                        }
+                        if (webhookSuccessMode != "http") {
+                            OutlinedTextField(value = webhookSuccessValue, onValueChange = { webhookSuccessValue = it },
+                                label = { Text(if (webhookSuccessMode == "json") "期望值，例如 0 或 true" else "成功响应包含的文本") },
+                                modifier = Modifier.fillMaxWidth())
+                        }
                         OutlinedTextField(value = f1, onValueChange = { f1 = it }, label = { Text("请求地址") }, modifier = Modifier.fillMaxWidth())
                         Column(
                             modifier = Modifier.fillMaxWidth(),

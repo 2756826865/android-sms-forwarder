@@ -223,7 +223,7 @@ fun MissedCallEmbeddedScreen() {
     val cfg = remember { CallForwardConfig(context) }
     val channelRepository = remember { ChannelRepository.getInstance(context) }
     val allInstances by channelRepository.instancesFlow.collectAsState()
-    val realInstances = allInstances.filterNot { it.id.startsWith("catalog:") }
+    val realInstances = allInstances.filterNot { it.id.startsWith("catalog:") || it.channelType == ForwardingChannels.CHANNEL_GROUP }
     var enabled by remember { mutableStateOf(cfg.enabled) }
     var missedOnly by remember { mutableStateOf(cfg.missedCallOnly) }
     var answered by remember { mutableStateOf(cfg.forwardAnsweredCall) }
@@ -439,7 +439,7 @@ fun LowBatteryEmbeddedScreen() {
     val cfg = context.config
     val channelRepository = remember { ChannelRepository.getInstance(context) }
     val allInstances by channelRepository.instancesFlow.collectAsState()
-    val realInstances = allInstances.filterNot { it.id.startsWith("catalog:") }
+    val realInstances = allInstances.filterNot { it.id.startsWith("catalog:") || it.channelType == ForwardingChannels.CHANNEL_GROUP }
     var enabled by remember { mutableStateOf(cfg.enableLowBatteryReminder) }
     var threshold by remember { mutableStateOf(cfg.lowBatteryThreshold) }
     var selectedIds by remember { mutableStateOf(cfg.lowBatteryChannelInstanceIds) }
@@ -581,7 +581,7 @@ fun HeartbeatEmbeddedScreen() {
     val enabledInstances = allInstances.filter {
         it.enabled && !it.id.startsWith("catalog:") && it.hasDispatchConfiguration()
     }
-    val realInstances = allInstances.filterNot { it.id.startsWith("catalog:") }
+    val realInstances = allInstances.filterNot { it.id.startsWith("catalog:") || it.channelType == ForwardingChannels.CHANNEL_GROUP }
     var selectedIds by remember { mutableStateOf(cfg.channelInstanceIds) }
     var hasSelection by remember { mutableStateOf(cfg.hasChannelSelection) }
     var choosingChannels by remember { mutableStateOf(false) }
@@ -861,7 +861,7 @@ fun NotificationForwardEmbeddedScreen() {
     val channelRepo = remember { ChannelRepository.getInstance(context) }
     val instances by channelRepo.instancesFlow.collectAsState()
     val realInstances = remember(instances) {
-        instances.filterNot { it.id.startsWith("catalog:") }
+        instances.filterNot { it.id.startsWith("catalog:") || it.channelType == ForwardingChannels.CHANNEL_GROUP }
     }
 
     var choosingChannels by remember { mutableStateOf(false) }

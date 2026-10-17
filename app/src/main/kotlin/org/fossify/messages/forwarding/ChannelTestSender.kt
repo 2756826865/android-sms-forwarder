@@ -552,7 +552,9 @@ object ChannelTestSender {
                         url, instance.optString("headers"), instance.optString("method", "POST"),
                         instance.optString("contentType", "application/json"),
                         instance.optString("bodyTemplate", MultiForwardConfig.DEFAULT_CUSTOM_WEBHOOK_BODY),
-                        title, content, now, config
+                        title, content, now, config,
+                        instance.optString("successMode", "http"),
+                        instance.optString("successField"), instance.optString("successValue")
                     )
                     "自定义 Webhook 请求成功送达！"
                 }
@@ -667,25 +669,21 @@ object ChannelTestSender {
                     require(members.isNotEmpty()) { "通道组中尚未添加任何成员通道" }
                     val repo = org.fossify.messages.forwarding.repository.ChannelRepository.getInstance(context)
                     val results = mutableListOf<String>()
-                    members.distinct().forEach { memberId ->
-                        val subInstance = repo.getInstanceById(memberId)
-                        if (subInstance != null) {
-                            val res = sendTestInstance(context, subInstance, path)
-                            if (res.isSuccess) {
-                                results.add("✅ ${subInstance.name}")
-                            } else {
-                                results.add("❌ ${subInstance.name}: ${res.exceptionOrNull()?.message}")
-                            }
-                        } else {
-                            val res = sendTest(context, memberId, path)
-                            if (res.isSuccess) {
-                                results.add("✅ ${ForwardingChannels.displayName(memberId)}")
-                            } else {
-                                results.add("❌ ${ForwardingChannels.displayName(memberId)}: ${res.exceptionOrNull()?.message}")
-                            }
-                        }
+                    val mode = instance.optString("executionMode", "all")
+                    var anySuccess = false
+                    var unknown = false
+                    for (memberId in members.distinct()) {
+                        val member = repo.getInstanceById(memberId)
+                        val result = if (member != null && member.enabled) sendTestInstance(context, member, path)
+                            else Result.failure(IllegalArgumentException("成员已停用或不存在"))
+                        val success = result.isSuccess
+                        anySuccess = anySuccess || success
+                        unknown = unknown || result.exceptionOrNull()?.let(DeliveryFailurePolicy::isUnknown) == true
+                        results += if (success) "✅ ${member?.name ?: memberId}" else "❌ ${member?.name ?: memberId}: ${result.exceptionOrNull()?.message}"
+                        val status = if (unknown) "unknown" else if (success) "success" else "failed"
+                        if (!GroupExecutionPolicy.shouldContinue(mode, status)) break
                     }
-                    check(results.none { it.startsWith("❌") }) { "群组实例测试未全部成功:\n" + results.joinToString("\n") }
+                    check(!unknown && (if (mode == GroupExecutionPolicy.UNTIL_SUCCESS) anySuccess else results.none { it.startsWith("❌") })) { "群组实例测试未全部成功:\n" + results.joinToString("\n") }
                     "群组实例分发完成:\n" + results.joinToString("\n")
                 }
                 else -> error("该通道暂不支持实例测试：${instance.channelType}")
@@ -755,8 +753,13 @@ object ChannelTestSender {
         title: String,
         content: String,
         time: String,
-        config: MultiForwardConfig
+        config: MultiForwardConfig,
+        successMode: String = "http",
+        successField: String = "",
+        successValue: String = "",
     ) {
+        val successRule = WebhookSuccessRule(successMode, successField, successValue)
+        successRule.validate()
         val normalizedUrl = url.trim()
         ForwardingUrlPolicy.requireAllowed(normalizedUrl, normalizedUrl.startsWith("http://", ignoreCase = true))
         val method = methodValue.trim().uppercase().ifBlank { "POST" }
@@ -798,7 +801,7 @@ object ChannelTestSender {
             val code = responseCode
             val response = (if (code in 200..299) inputStream else errorStream)
                 ?.bufferedReader(StandardCharsets.UTF_8)?.use { it.readText() }.orEmpty()
-            check(code in 200..299) { "HTTP $code: ${response.take(200)}" }
+            successRule.requireAccepted(code, response)
         }
     }
 

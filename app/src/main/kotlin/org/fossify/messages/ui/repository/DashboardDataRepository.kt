@@ -39,14 +39,14 @@ class DashboardDataRepository(private val context: Context) {
 
         // Use the same actual lifecycle records as the history list. Shadow observation
         // may be disabled or incomplete and must not be presented as business totals.
-        val allHistoryRecords = ForwardingHistoryStore(context).records()
-        val todayHistory = allHistoryRecords.filter { !it.isTest && it.receivedAt >= startOfDay && it.receivedAt < endOfDay }
-        val forwardSuccessCount = todayHistory.count { it.status == ForwardingHistoryStore.STATUS_SUCCESS }
-        val forwardFailedCount = todayHistory.count { it.status == ForwardingHistoryStore.STATUS_FAILED }
-        val forwardPendingCount = todayHistory.count { it.status in setOf(
+        val historyStore = ForwardingHistoryStore(context)
+        val counts = historyStore.countsBetween(startOfDay, endOfDay)
+        val forwardSuccessCount = counts[ForwardingHistoryStore.STATUS_SUCCESS] ?: 0
+        val forwardFailedCount = counts[ForwardingHistoryStore.STATUS_FAILED] ?: 0
+        val forwardPendingCount = listOf(
             ForwardingHistoryStore.STATUS_QUEUED, ForwardingHistoryStore.STATUS_RUNNING,
             ForwardingHistoryStore.STATUS_RETRY, ForwardingHistoryStore.STATUS_WAITING_NETWORK
-        ) }
+        ).sumOf { counts[it] ?: 0 }
 
         // 3. Outbox 健康
         val pendingOutboxCount = runCatching { db.OutboxTaskDao().getPendingTaskCount() }.getOrDefault(0)
@@ -72,7 +72,7 @@ class DashboardDataRepository(private val context: Context) {
 
         // 6. 发送与转发流水记录 (最新 30 条)
         val historyRecords = runCatching {
-            allHistoryRecords.take(30)
+            historyStore.records(limit = 30)
         }.getOrDefault(emptyList())
 
         DashboardStats(

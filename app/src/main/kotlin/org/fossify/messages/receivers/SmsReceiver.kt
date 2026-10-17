@@ -30,7 +30,13 @@ class SmsReceiver : BroadcastReceiver() {
             // 保活服务只是锦上添花：它若抛异常绝不能连累降级路径，否则兜底在最该生效时失效。
             runCatching { SmsKeepAliveService.ensureStarted(appContext) }
                 .onFailure { Log.w(TAG, "keep-alive service start failed", it) }
-            if (!IncomingSmsService.enqueue(appContext, intent)) {
+            val accepted = try {
+                IncomingSmsService.enqueue(appContext, intent)
+            } catch (error: Exception) {
+                Log.e(TAG, "incoming service handoff failed; using minimal processing", error)
+                false
+            }
+            if (!accepted) {
                 Log.w(TAG, "foreground service rejected; running degraded minimal path")
                 IncomingSmsService.processMinimal(appContext, intent)
             }

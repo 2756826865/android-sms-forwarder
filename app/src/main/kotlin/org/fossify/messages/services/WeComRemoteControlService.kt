@@ -36,7 +36,6 @@ class WeComRemoteControlService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
-        updateNotification("企业微信长连接远程指令服务运行中")
         RemoteSourceRuntimeManager.restoreAfterServiceRestart(applicationContext)
         return START_STICKY
     }
@@ -82,7 +81,7 @@ class WeComRemoteControlService : Service() {
                 },
             )
         }
-        updateNotification("企业微信长连接远程指令服务已就绪")
+        updateNotification("企业微信长连接远程指令监听服务运行中，连接状态请查看远程来源")
     }
 
     private fun startForegroundCompat(notification: android.app.Notification) {

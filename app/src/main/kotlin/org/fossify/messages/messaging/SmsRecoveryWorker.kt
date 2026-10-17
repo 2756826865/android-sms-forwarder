@@ -69,7 +69,7 @@ class SmsRecoveryWorker(
         val forcedSince = if (firstRun) 0L else inputData.getLong(KEY_FORCED_SINCE, 0L)
         val since = if (forcedSince > 0L) minOf(baseSince, forcedSince) else baseSince
         // 只取 id 列，避免数万条短信时把整表（含正文）加载进内存导致 OOM
-        val localIds = applicationContext.messagesDB.getAllIds().toHashSet()
+        val localIds by lazy { applicationContext.messagesDB.getAllIds().toHashSet() }
         // P1-A：恢复扫描**不能**只用 "id in localIds" 判重。
         // 降级路径的步骤 3（写 Room）与步骤 4（入队转发）各有独立的预算闸门：步骤 3 成功、步骤 4
         // 被闸门拦掉时，消息已经在 Room 里却**从未入队转发**。此时只用 id 判重会让恢复扫描永远
@@ -77,7 +77,7 @@ class SmsRecoveryWorker(
         // MultiChannelForwardWorker.enqueueSingle 在**入队时**就调用 ForwardingHistoryStore.registerQueued
         // (workId = uniqueId)，因此"历史里存在 sms-<id> 前缀的记录"等价于"这条短信已经进过转发队列"。
         // 扫描开始时读一次即可：扫描中自己新产生的记录不需要在本次扫描内立刻可见（每行只处理一次）。
-        val forwardedMessageIds = readForwardedMessageIds()
+        val forwardedMessageIds by lazy { readForwardedMessageIds() }
         var newestSeen = lastChecked
         var repairedAny = false
 
@@ -366,13 +366,13 @@ class SmsRecoveryWorker(
      * 在**入队时**（不是执行时）就会 `registerQueued(workId = uniqueId)`，所以"历史里存在该前缀
      * 记录"天然等价于"这条短信已经进过转发队列"，无需新增持久化结构。
      *
-     * 已知边界：[ForwardingHistoryStore] 只保留最近 200 条记录，极老的短信可能查不到记录，
+     * 已知边界：[ForwardingHistoryStore] 保留最近 2000 条完成记录及尚未结束的任务，极老的短信可能查不到记录，
      * 此时会退化为"再转发一次"。这是刻意的保守偏差——宁可重发，不可漏发。
      */
     private fun readForwardedMessageIds(): Set<Long> {
         return runCatching {
-            ForwardingHistoryStore(applicationContext).records()
-                .mapNotNull { record -> parseSmsWorkId(record.workId) }
+            ForwardingHistoryStore(applicationContext).workIds()
+                .mapNotNull(::parseSmsWorkId)
                 .toSet()
         }.getOrDefault(emptySet())
     }

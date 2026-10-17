@@ -222,7 +222,7 @@ class RuleEditorViewModel(
         val draftRule = buildRuleFromState()
 
         val engine = ForwardingRuleEngine(listOf(draftRule.copy(enabled = true)))
-        val candidates = channelRepository.getEnabledInstances()
+        val candidates = channelRepository.getEnabledInstances(includeGroups = true)
             .map { it.channelType }
             .toSet()
         val decision = engine.evaluate(

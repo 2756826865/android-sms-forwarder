@@ -3,7 +3,7 @@ name: Build custom APK
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, "build/**"]
 
 concurrency:
   group: build-custom-apk-${{ github.ref }}
@@ -48,10 +48,11 @@ jobs:
       - name: Fix gradlew permissions
         run: chmod +x gradlew
 
-      - name: Test power regressions
+      - name: Test forwarding and power regressions
         run: |
           python3 scripts/test_battery_queries.py
-          ./gradlew :app:testCoreDebugUnitTest --tests 'org.fossify.messages.remote.StreamReconnectBackoffTest' --tests 'org.fossify.messages.helpers.HomeRefreshGateTest' --tests 'org.fossify.messages.ChannelRepositoryTest'
+          python3 scripts/test_forwarding_history_sql.py
+          ./gradlew :app:testCoreDebugUnitTest --tests 'org.fossify.messages.remote.StreamReconnectBackoffTest' --tests 'org.fossify.messages.helpers.HomeRefreshGateTest' --tests 'org.fossify.messages.ChannelRepositoryTest' --tests 'org.fossify.messages.forwarding.ExecutionPolicyTest' --tests 'org.fossify.messages.updates.GitHubReleaseTest'
 
       - name: Build signed release APK
         env:

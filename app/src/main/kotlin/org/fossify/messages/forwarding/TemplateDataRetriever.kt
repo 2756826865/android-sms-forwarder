@@ -30,38 +30,31 @@ object TemplateDataRetriever {
 
     fun getDeviceModel(): String = Build.MODEL
 
-    fun getBatteryPct(context: Context): String {
-        val intent = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)) ?: return "未知"
-        val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
-        val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
-        val pct = if (level != -1 && scale != -1) (level * 100 / scale) else -1
-        return if (pct != -1) "$pct%" else "未知"
-    }
+    data class BatterySnapshot(val percent: String, val info: String)
 
-    fun getBatteryInfo(context: Context): String {
-        val intent = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)) ?: return "Unknown"
+    fun getBatteryPct(context: Context): String = batterySnapshot(context).percent
+    fun getBatteryInfo(context: Context): String = batterySnapshot(context).info
+
+    fun batterySnapshot(context: Context): BatterySnapshot {
+        val intent = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+            ?: return BatterySnapshot("未知", "Unknown")
         val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
         val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
-        val pct = if (level != -1 && scale != -1) (level * 100 / scale) else -1
-        
-        val status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
-        val statusString = when (status) {
+        val percent = if (level >= 0 && scale > 0) "${level.toLong() * 100 / scale}%" else "未知"
+        val status = when (intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1)) {
             BatteryManager.BATTERY_STATUS_CHARGING -> "充电中"
             BatteryManager.BATTERY_STATUS_DISCHARGING -> "放电中"
             BatteryManager.BATTERY_STATUS_FULL -> "已充满"
             BatteryManager.BATTERY_STATUS_NOT_CHARGING -> "未充电"
             else -> "未知"
         }
-
-        val plugged = intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, -1)
-        val pluggedString = when (plugged) {
+        val plugged = when (intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, -1)) {
             BatteryManager.BATTERY_PLUGGED_AC -> " (交流电)"
             BatteryManager.BATTERY_PLUGGED_USB -> " (USB)"
             BatteryManager.BATTERY_PLUGGED_WIRELESS -> " (无线充电)"
             else -> ""
         }
-
-        return if (pct != -1) "$pct% $statusString$pluggedString" else "未知 $statusString"
+        return BatterySnapshot(percent, "$percent $status$plugged")
     }
 
     fun getNetworkType(context: Context): String {

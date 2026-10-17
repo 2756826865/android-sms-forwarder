@@ -36,7 +36,6 @@ class WebSocketRemoteControlService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
-        updateNotification("WebSocket 远程指令服务运行中")
         RemoteSourceRuntimeManager.restoreAfterServiceRestart(applicationContext)
         return START_STICKY
     }
@@ -82,7 +81,7 @@ class WebSocketRemoteControlService : Service() {
                 },
             )
         }
-        updateNotification("WebSocket 远程指令服务已就绪")
+        updateNotification("WebSocket 远程指令监听服务运行中，连接状态请查看远程来源")
     }
 
     private fun startForegroundCompat(notification: android.app.Notification) {

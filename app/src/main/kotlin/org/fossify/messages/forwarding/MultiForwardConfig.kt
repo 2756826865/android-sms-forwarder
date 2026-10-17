@@ -69,8 +69,10 @@ class MultiForwardConfig(
         get() = prefs.getInt(KEY_FORWARDING_DELAY_SECONDS, 0).coerceIn(0, 60)
         set(value) = prefs.edit().putInt(KEY_FORWARDING_DELAY_SECONDS, value.coerceIn(0, 60)).apply()
 
+    // Event-driven by default; retain an explicitly saved compatibility-mode choice.
+    // IncomingSmsService is a separate, short-lived owner and does not depend on this flag.
     var keepAliveServiceEnabled: Boolean
-        get() = prefs.getBoolean(KEY_KEEP_ALIVE_SERVICE_ENABLED, true)
+        get() = prefs.getBoolean(KEY_KEEP_ALIVE_SERVICE_ENABLED, false)
         set(value) = prefs.edit().putBoolean(KEY_KEEP_ALIVE_SERVICE_ENABLED, value).apply()
 
     var dingTalkRemoteSendSimMode: Int
@@ -789,7 +791,7 @@ class MultiForwardConfig(
         if (channelGroupEnabled) add(ForwardingChannels.CHANNEL_GROUP)
         if (gotifyEnabled) add(ForwardingChannels.GOTIFY)
         removeAll(managedLegacyChannelTypes())
-        channelInstances().filter { it.enabled && it.hasDispatchConfiguration() }
+        channelInstances().filter { it.enabled && it.hasDispatchConfiguration() && it.channelType != ForwardingChannels.CHANNEL_GROUP }
             .forEach { add(it.channelType) }
     }
 

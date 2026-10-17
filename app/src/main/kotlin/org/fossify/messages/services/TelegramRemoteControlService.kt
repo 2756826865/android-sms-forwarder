@@ -36,7 +36,6 @@ class TelegramRemoteControlService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
-        updateNotification("Telegram 远程指令服务运行中")
         RemoteSourceRuntimeManager.restoreAfterServiceRestart(applicationContext)
         return START_STICKY
     }
@@ -82,7 +81,7 @@ class TelegramRemoteControlService : Service() {
                 },
             )
         }
-        updateNotification("Telegram 远程指令服务已就绪")
+        updateNotification("Telegram 远程指令监听服务运行中，连接状态请查看远程来源")
     }
 
     private fun startForegroundCompat(notification: android.app.Notification) {
