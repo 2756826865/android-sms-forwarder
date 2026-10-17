@@ -1,5 +1,7 @@
 package org.fossify.messages.ui.compose.forwarding
 
+import org.fossify.messages.forwarding.ForwardingChannels
+
 import android.widget.Toast
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
