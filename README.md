@@ -1,4 +1,4 @@
-# SMS Forwarder · Android 默认短信与多渠道转发网关
+# 默认短信渠道转发网关-SMS Forwarder · Android 
 
 <p align="center">
   <img src="graphics/icon.webp" width="112" alt="SMS Forwarder 图标" />
