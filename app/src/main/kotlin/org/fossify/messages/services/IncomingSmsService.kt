@@ -121,6 +121,13 @@ open class IncomingSmsService : Service() {
                 Log.e(TAG, "incoming SMS processing failed", error)
                 PushPlusConfig(applicationContext).lastReceiverStatus =
                     "广播已到达，处理失败：${error.message ?: error.javaClass.simpleName}"
+                // A foreground owner can fail after Android accepted the broadcast handoff.
+                // Preserve the SMS through the same bounded fallback used by the receiver,
+                // then reconcile partially completed work even when foregroundStarted is true.
+                runCatching { processMinimal(applicationContext, intent) }
+                    .onFailure { Log.e(TAG, "minimal fallback after processing failure failed", it) }
+                runCatching { SmsRecoveryWorker.enqueueNow(applicationContext) }
+                    .onFailure { Log.w(TAG, "recovery enqueue after processing failure failed", it) }
             } finally {
                 if (wakeLock.isHeld) wakeLock.release()
                 if (!foregroundStarted) {

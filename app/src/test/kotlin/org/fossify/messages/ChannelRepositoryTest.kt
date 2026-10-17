@@ -23,6 +23,32 @@ import java.lang.reflect.Proxy
 
 class ChannelRepositoryTest {
     @Test
+    fun onDemandIsDefaultAndExplicitCompatibilityChoiceSurvivesReopen() {
+        val prefs = createFakeSharedPrefs()
+        fun reopen() = MultiForwardConfig(customPrefs = prefs, cipher = PlaintextCipher)
+        assertFalse(reopen().keepAliveServiceEnabled)
+        reopen().keepAliveServiceEnabled = true
+        assertTrue(reopen().keepAliveServiceEnabled)
+        reopen().keepAliveServiceEnabled = false
+        assertFalse(reopen().keepAliveServiceEnabled)
+    }
+
+    @Test
+    fun groupsAreExplicitRuleTargetsAndNeverImplicitBroadcasts() {
+        val config = MultiForwardConfig(customPrefs = createFakeSharedPrefs(), cipher = PlaintextCipher)
+        val member = ForwardingChannelInstance(id = "push", channelType = ForwardingChannels.PUSHPLUS,
+            name = "PushPlus", configJson = "{\"token\":\"test\"}")
+        val group = ForwardingChannelInstance(id = "group", channelType = ForwardingChannels.CHANNEL_GROUP,
+            name = "Group", configJson = "{\"members\":[\"push\"],\"executionMode\":\"until_success\"}")
+        config.saveChannelInstances(listOf(member, group))
+        val repo = ChannelRepository(multiConfig = config)
+        assertEquals(listOf("push"), repo.getEnabledInstances().map { it.id })
+        assertEquals(setOf("push", "group"), repo.getEnabledInstances(includeGroups = true).map { it.id }.toSet())
+        assertFalse(config.enabledChannelIds().contains(ForwardingChannels.CHANNEL_GROUP))
+        assertTrue(group.hasDispatchConfiguration())
+    }
+
+    @Test
     fun editingImportedCredentialsDoesNotResurrectTheOldAccount() {
         val config = MultiForwardConfig(customPrefs = createFakeSharedPrefs(), cipher = PlaintextCipher)
         config.saveEmail("smtp.qq.com", 465, "old@qq.com", "secret", "target@qq.com")

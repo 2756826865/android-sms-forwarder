@@ -2,13 +2,17 @@ package org.fossify.messages.activities
 
 import android.graphics.Typeface
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import android.text.TextUtils
 import android.view.Gravity
 import android.view.View
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.*
+import org.greenrobot.eventbus.EventBus
+import org.greenrobot.eventbus.Subscribe
+import org.greenrobot.eventbus.ThreadMode
+import org.fossify.messages.models.Events
 import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
 import org.fossify.commons.extensions.viewBinding
@@ -28,12 +32,13 @@ class ForwardingHistoryActivity : SimpleActivity() {
     private val binding by viewBinding(ActivityForwardingHistoryBinding::inflate)
     private val history by lazy { ForwardingHistoryStore(applicationContext) }
     private var lastRenderedSignature: String? = null
-    private val refreshHandler = Handler(Looper.getMainLooper())
-    private val refreshRecords = object : Runnable {
-        override fun run() {
-            renderRecords()
-            refreshHandler.postDelayed(this, REFRESH_INTERVAL_MS)
-        }
+    private var visibleLimit = 50
+    private var refreshJob: Job? = null
+
+    @Subscribe(threadMode = ThreadMode.MAIN)
+    fun onHistoryChanged(event: Events.RefreshDashboard) {
+        refreshJob?.cancel()
+        refreshJob = lifecycleScope.launch { delay(150); renderRecords() }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -53,21 +58,25 @@ class ForwardingHistoryActivity : SimpleActivity() {
     override fun onResume() {
         super.onResume()
         applyMiuiTopAppBarChrome(binding.forwardingHistoryAppbar, binding.forwardingHistoryToolbar)
-        refreshHandler.post(refreshRecords)
+        EventBus.getDefault().register(this)
+        refreshJob = lifecycleScope.launch { renderRecords() }
     }
 
     override fun onPause() {
-        refreshHandler.removeCallbacks(refreshRecords)
+        EventBus.getDefault().unregister(this)
+        refreshJob?.cancel()
         super.onPause()
     }
 
-    private fun renderRecords() {
-        val records = history.records()
+    private suspend fun renderRecords() {
+        val (records, total) = withContext(Dispatchers.IO) {
+            history.records(limit = visibleLimit) to history.count()
+        }
         val signature = records.joinToString("|") {
             "${it.recordId}:${it.status}:${it.attempts}:${it.detail}:${it.updatedAt}"
         }
-        if (signature == lastRenderedSignature) return
-        lastRenderedSignature = signature
+        if ("$signature:$total" == lastRenderedSignature) return
+        lastRenderedSignature = "$signature:$total"
         binding.forwardingHistoryList.removeAllViews()
         binding.forwardingHistoryEmpty.visibility = if (records.isEmpty()) View.VISIBLE else View.GONE
         binding.forwardingHistoryClear.isEnabled = records.isNotEmpty()
@@ -76,6 +85,18 @@ class ForwardingHistoryActivity : SimpleActivity() {
             .values
             .sortedByDescending { group -> group.maxOf(ForwardingHistoryRecord::updatedAt) }
             .forEach { binding.forwardingHistoryList.addView(createMessageView(it)) }
+        if (records.size < total && visibleLimit < 2000) {
+            binding.forwardingHistoryList.addView(TextView(this).apply {
+                text = "加载更多（已显示 ${records.size} 条）"
+                gravity = Gravity.CENTER
+                setPadding(16, 24, 16, 24)
+                setOnClickListener {
+                    visibleLimit = (visibleLimit + 50).coerceAtMost(2000)
+                    refreshJob?.cancel()
+                    refreshJob = lifecycleScope.launch { renderRecords() }
+                }
+            })
+        }
     }
 
     private fun createMessageView(records: List<ForwardingHistoryRecord>): View {
@@ -148,6 +169,14 @@ class ForwardingHistoryActivity : SimpleActivity() {
                             setPadding(dp(12), 0, 0, 0)
                         })
                     })
+                    if (record.status in setOf(ForwardingHistoryStore.STATUS_FAILED, ForwardingHistoryStore.STATUS_UNKNOWN)) {
+                        addView(TextView(context).apply {
+                            text = "仅重试此通道"
+                            setPadding(0, dp(10), 0, dp(10))
+                            setTextColor(ContextCompat.getColor(context, R.color.miui_action_blue))
+                            setOnClickListener { confirmRetry(record) }
+                        })
+                    }
                     addView(TextView(context).apply {
                         text = buildString {
                             append(if (record.attempts == 0) "未尝试" else "尝试 ${record.attempts} 次")
@@ -163,13 +192,34 @@ class ForwardingHistoryActivity : SimpleActivity() {
         }
     }
 
+    private fun confirmRetry(record: ForwardingHistoryRecord) {
+        AlertDialog.Builder(this)
+            .setTitle("仅重试此通道")
+            .setMessage("只向原目标重新提交一次，不重新匹配规则，也不重新执行整个通道组。结果未知的请求可能已经送达，继续可能重复。短信直发可能产生运营商费用。")
+            .setPositiveButton("确认重试") { _, _ ->
+                lifecycleScope.launch {
+                    val result = withContext(Dispatchers.IO) {
+                        runCatching { org.fossify.messages.forwarding.ForwardingRetry.enqueue(applicationContext, record.recordId) }
+                    }
+                    android.widget.Toast.makeText(this@ForwardingHistoryActivity,
+                        result.exceptionOrNull()?.message ?: "已提交此通道重试", android.widget.Toast.LENGTH_LONG).show()
+                }
+            }
+            .setNegativeButton("取消", null).create().showSmsStyled()
+    }
+
     private fun confirmClear() {
         AlertDialog.Builder(this)
             .setTitle(R.string.forwarding_history_clear)
             .setMessage(R.string.forwarding_history_clear_confirm)
             .setPositiveButton(R.string.forwarding_history_clear) { _, _ ->
-                history.clear()
-                renderRecords()
+                refreshJob?.cancel()
+                refreshJob = lifecycleScope.launch {
+                    withContext(Dispatchers.IO) { history.clear() }
+                    visibleLimit = 50
+                    lastRenderedSignature = null
+                    renderRecords()
+                }
             }
             .setNegativeButton(android.R.string.cancel, null)
             .create()
@@ -190,12 +240,10 @@ class ForwardingHistoryActivity : SimpleActivity() {
         ForwardingHistoryStore.STATUS_SUCCESS -> R.color.miui_action_blue
         ForwardingHistoryStore.STATUS_FAILED -> R.color.miui_unread_red
         ForwardingHistoryStore.STATUS_WAITING_NETWORK,
-        ForwardingHistoryStore.STATUS_RETRY -> R.color.miui_warning_text
+        ForwardingHistoryStore.STATUS_RETRY,
+        ForwardingHistoryStore.STATUS_UNKNOWN -> R.color.miui_warning_text
         ForwardingHistoryStore.STATUS_SKIPPED -> R.color.miui_secondary_text
         else -> R.color.miui_primary_text
     }
 
-    companion object {
-        private const val REFRESH_INTERVAL_MS = 1_500L
-    }
 }

@@ -55,6 +55,12 @@ class SmsKeepAliveService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // A sticky restart can arrive after the switch or default-SMS role changed.
+        if (!shouldRun(applicationContext)) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelfResult(startId)
+            return START_NOT_STICKY
+        }
         return START_STICKY
     }
 
@@ -80,9 +86,15 @@ class SmsKeepAliveService : Service() {
         private const val CHANNEL_ID = "sms_background_service"
         private const val NOTIFICATION_ID = 19081
 
+        private fun shouldRun(context: Context): Boolean =
+            org.fossify.messages.forwarding.MultiForwardConfig(context).keepAliveServiceEnabled &&
+                DeviceCompatHelper.isDefaultSmsApp(context)
+
         fun ensureStarted(context: Context) {
-            if (!DeviceCompatHelper.isDefaultSmsApp(context)) return
-            if (!org.fossify.messages.forwarding.MultiForwardConfig(context).keepAliveServiceEnabled) return
+            if (!shouldRun(context)) {
+                stop(context)
+                return
+            }
             runCatching {
                 ContextCompat.startForegroundService(
                     context.applicationContext,

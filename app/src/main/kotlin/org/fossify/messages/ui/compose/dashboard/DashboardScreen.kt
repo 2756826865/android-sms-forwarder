@@ -826,6 +826,7 @@ fun DashboardContent(
                             val statusColor = when (record.status) {
                                 "success" -> GatewayGreen
                                 "failed" -> GatewayRed
+                                "unknown" -> GatewayOrange
                                 "retry" -> GatewayOrange
                                 "running" -> GatewayBlue
                                 else -> if (isDark) Color(0xFF9CA3AF) else TextSecondary
@@ -833,6 +834,7 @@ fun DashboardContent(
                             val statusText = when (record.status) {
                                 "success" -> "✅ 成功"
                                 "failed" -> "❌ 失败"
+                                "unknown" -> "❔ 结果未知"
                                 "retry" -> "🔄 重试"
                                 "running" -> "⚡ 发送中"
                                 "skipped" -> "⏭️ 跳过"
@@ -1112,6 +1114,7 @@ private fun ForwardingRecordDetailDialog(
     val statusColor = when (record.status) {
         "success" -> GatewayGreen
         "failed" -> GatewayRed
+                                "unknown" -> GatewayOrange
         "retry" -> GatewayOrange
         "running" -> GatewayBlue
         else -> if (isDark) Color(0xFF9CA3AF) else TextSecondary
@@ -1120,6 +1123,7 @@ private fun ForwardingRecordDetailDialog(
     val statusText = when (record.status) {
         "success" -> "✅ 发送成功"
         "failed" -> "❌ 发送失败"
+        "unknown" -> "❔ 结果未知，未自动重试"
         "retry" -> "🔄 正在重试"
         "running" -> "⚡ 正在发送中"
         "skipped" -> "⏭️ 规则跳过"

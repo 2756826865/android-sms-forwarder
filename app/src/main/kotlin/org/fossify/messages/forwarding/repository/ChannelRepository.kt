@@ -65,8 +65,9 @@ class ChannelRepository internal constructor(
         multiConfig.channelInstances().firstOrNull { it.id == id }
     }
 
-    fun getEnabledInstances(): List<ForwardingChannelInstance> = synchronized(lock) {
-        multiConfig.channelInstances().filter { it.enabled && it.hasDispatchConfiguration() }
+    fun getEnabledInstances(includeGroups: Boolean = false): List<ForwardingChannelInstance> = synchronized(lock) {
+        multiConfig.channelInstances().filter { it.enabled && it.hasDispatchConfiguration() &&
+            (includeGroups || it.channelType != ForwardingChannels.CHANNEL_GROUP) }
     }
 
     fun saveInstance(instance: ForwardingChannelInstance) = synchronized(lock) {

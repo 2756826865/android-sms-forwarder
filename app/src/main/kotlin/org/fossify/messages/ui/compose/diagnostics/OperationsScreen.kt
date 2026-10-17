@@ -440,7 +440,7 @@ fun OperationsContent(
                         ) {
                             Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
                                 Text(
-                                    text = "🛡️ 前台保活服务",
+                                    text = "🛡️ 兼容保活模式",
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 12.sp,
                                     color = primaryTextColor,
@@ -450,11 +450,10 @@ fun OperationsContent(
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
-                                    text = if (keepAliveEnabled) "已启用前台服务保持后台活跃" else "已停用（由 WorkManager 被动调度）",
+                                    text = if (keepAliveEnabled) "常驻辅助保活，适合锁屏后漏收的设备" else "按需运行：收到短信后处理，完成后结束",
                                     fontSize = 11.sp,
                                     color = if (keepAliveEnabled) BrandGreen else secondaryTextColor,
-                                    maxLines = 1,
-                                    softWrap = false
+                                    maxLines = 3
                                 )
                             }
                             Switch(

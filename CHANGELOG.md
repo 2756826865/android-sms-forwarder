@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.4] - 2026-10-17
+
+### 新增与优化
+
+- 按需短信处理、兼容保活校验及异常补偿，减少后台查询和重复通知刷新。
+- 转发记录数据库存储、分页与事件刷新，支持仅重试原通道。
+- 通道组执行策略、投递结果未知保护及 Webhook 响应校验。
+- 手动检查更新与安装包校验，QQ群复制并跳转。
+- 完善首次使用声明，“关于”新增特别声明入口。
+- 延续旧邮箱配置重复推送修复及已发布的查询、刷新和重连优化。
+
+[完整更新说明](docs/release-1.2.4.md)
+
 ## [1.2.0] - 2026-09-23
 
 ### 🛠️ Hotfix

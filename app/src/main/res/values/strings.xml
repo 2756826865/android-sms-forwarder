@@ -240,7 +240,7 @@
     <string name="forwarding_disclaimer_decline">不同意并退出</string>
     <string name="forwarding_disclaimer_body">短信转发会将收到的短信内容、发送号码、SIM 标识及接收时间发送到您配置的第三方服务（PushPlus、钉钉、飞书、企业微信或电子邮箱）。短信可能包含验证码、账户信息和其他敏感内容。请仅配置由您本人控制且可信的接收端，并妥善保管 Token、Webhook、密钥和邮箱凭据。因第三方平台、网络、系统限制、配置错误或凭据泄露造成的延迟、丢失或信息泄露风险由使用者承担。请勿将本功能用于未经授权的监控、转发或其他违法用途。点击“我已阅读并同意”表示您理解并同意上述内容。</string>
     <string name="first_use_notice_title">首次使用提示</string>
-    <string name="first_use_notice_message">本软件免费，请注意没有任何收费服务！！！\n\n短信发送、彩信、批量发送及远程代发可能产生运营商通信费用；短信转发会将内容发送至您自行配置的第三方服务。\n\n请仅在本人设备或已获得明确授权的设备上使用。严禁用于诈骗、骚扰、垃圾短信、未经授权的监控或转发，以及其他违法违规用途。使用者应自行承担配置、通信费用、数据安全及使用行为产生的责任。\n\nAPK仅用于测试和学习研究，禁止用于商业用途，不能保证其合法性，准确性，完整性和有效性，请根据情况自行判断。</string>
+    <string name="first_use_notice_message">本软件免费，请注意没有任何收费服务！！！\n\n短信发送、彩信、批量发送及远程代发可能产生运营商通信费用；短信转发会将内容发送至您自行配置的第三方服务。\n\n请仅在本人设备或已获得明确授权的设备上使用。严禁用于诈骗、骚扰、垃圾短信、未经授权的监控或转发，以及其他违法违规用途。使用者应自行承担配置、通信费用、数据安全及使用行为产生的责任。\n\nAPK仅用于测试和学习研究，禁止用于商业用途，不能保证其合法性，准确性，完整性和有效性，请根据情况自行判断。\n\n隐私声明：开发者不收集您的短信、通讯录及通道凭据。手动检查更新时访问 GitHub 获取发布信息，版本比较在本地完成。启用转发后，您选择发送的内容会交给对应的第三方服务处理，其数据处理规则以对应平台的隐私政策为准。\n\n防诈提醒：本项目完全免费开源，没有任何付费项目。请远离刷单返利陷阱，谨防网络诈骗！第三方通信、邮件或推送服务可能单独收费，与本项目无关。</string>
     <string name="first_use_notice_accept">我已知晓</string>
     <string name="forwarding_display">转发显示</string>
     <string name="forwarding_sim_one_label">SIM1 自定义名称</string>
@@ -505,10 +505,12 @@
     <string name="continue_add_recipient">继续添加…</string>
     <string name="recipient_label">收件人：</string>
     <string name="about_user_guide">使用教程与排障</string>
-    <string name="about_qq_group">QQ 交流群：569321348（点击复制）</string>
+    <string name="about_qq_group">QQ 交流群：569321348（复制并打开）</string>
     <string name="about_common_questions">常见问题</string>
     <string name="about_known_issues">已知问题</string>
     <string name="about_licenses">第三方许可</string>
+    <string name="about_check_update">检查更新</string>
+    <string name="about_check_update_summary">仅点击时检查，不自动弹出更新提醒</string>
     <string name="about_version">版本 %1$s</string>
     <string name="about_repository">项目仓库</string>
     <string name="about_repository_url">github.com/2756826865/android-sms-forwarder</string>
@@ -676,4 +678,5 @@
     <string name="settings_hide_recent_tasks">在最近任务列表中隐藏</string>
     <string name="settings_hide_recent_tasks_summary">隐藏本应用的任务卡片，关闭可恢复显示；不等于后台保活。隐藏后可从桌面图标重新打开，部分系统需重新锁定任务。</string>
     <string name="settings_hide_recent_tasks_apply_failed">设置已保存，系统暂未应用；请重新打开应用后检查</string>
+    <string name="about_special_statement">特别声明</string>
 </resources>
