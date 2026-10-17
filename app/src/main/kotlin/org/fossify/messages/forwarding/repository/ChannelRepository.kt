@@ -86,13 +86,11 @@ class ChannelRepository internal constructor(
     fun deleteInstance(id: String): Boolean = synchronized(lock) {
         val current = multiConfig.channelInstances().toMutableList()
         val removed = current.removeAll { it.id == id }
-        if (removed) {
-            // 落盘失败则不改内存态：避免 UI 显示"已删除"而磁盘仍有该实例。
-            if (multiConfig.saveChannelInstances(current)) {
-                _instancesFlow.value = current
-            }
-        }
-        removed
+        if (!removed) return@synchronized false
+        // Report failure as well as preserving memory when credentials cannot be saved.
+        if (!multiConfig.saveChannelInstances(current)) return@synchronized false
+        _instancesFlow.value = current
+        true
     }
 
     fun toggleInstanceEnabled(id: String, enabled: Boolean) = synchronized(lock) {
@@ -500,7 +498,10 @@ class ChannelRepository internal constructor(
             }
             val current = multiConfig.channelInstances().toMutableList()
 
+            val managedTypes = multiConfig.managedLegacyChannelTypes()
             for (legacy in detected.filterNot { it.channelType == ForwardingChannels.WECOM_STREAM }) {
+                // Once managed by instances, edits/deletion are authoritative across restarts.
+                if (legacy.channelType in managedTypes) continue
                 // 幂等防重：检查是否已有该类型的实例且配置主要凭据相同
                 val alreadyExists = current.any { existing ->
                     existing.channelType == legacy.channelType &&

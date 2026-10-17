@@ -95,15 +95,11 @@ class MultiChannelForwardWorker(
         val ruleAllowedChannels = decodeRuleAllowedChannels(
             inputData.getString(KEY_ALLOWED_CHANNELS).orEmpty(),
         )
-        val enabledInstanceTypes = config.channelInstances()
-            .asSequence()
-            .filter { it.enabled && it.hasDispatchConfiguration() }
-            .map { it.channelType }
-            .toSet()
+        val instanceManagedTypes = config.managedLegacyChannelTypes()
         fun shouldRun(channel: String, enabled: Boolean): Boolean {
             if (!enabled && !(isTest && targetChannel == channel)) return false
-            // 自动迁移后旧版扁平配置仍会保留；同类型已有启用实例时只发送实例，避免双发。
-            if (channel in enabledInstanceTypes) return false
+            // 已迁移、已停用或已删除的实例类型均不得回退到旧凭据发送。
+            if (channel in instanceManagedTypes) return false
             if (ruleAllowedChannels != null && channel !in ruleAllowedChannels) return false
             return when (targetChannel) {
                 "" -> true

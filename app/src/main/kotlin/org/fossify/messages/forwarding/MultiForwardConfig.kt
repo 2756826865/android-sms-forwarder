@@ -605,14 +605,11 @@ class MultiForwardConfig(
     fun gotifyServerUrl() = getSecret(KEY_GOTIFY_SERVER_URL)
     fun gotifyToken() = getSecret(KEY_GOTIFY_TOKEN)
 
-    fun anyEnabled() = channelInstances().any { it.enabled } ||
-        pushPlusEnabled || wechatTestEnabled || qqEnabled || weComEnabled || weComBotEnabled ||
-        feishuAppEnabled || feishuEnabled || dingTalkEnabled || barkEnabled || websocketEnabled ||
-        telegramEnabled || discordEnabled || tencentCloudEnabled || emailEnabled || smsDirectEnabled ||
-        customWebhookEnabled || channelGroupEnabled || gotifyEnabled
+    fun anyEnabled() = enabledChannelIds().isNotEmpty()
 
     fun isChannelEnabled(channel: String): Boolean {
         if (channelInstances().any { it.channelType == channel && it.enabled }) return true
+        if (channel in managedLegacyChannelTypes()) return false
         return when (channel) {
             ForwardingChannels.PUSHPLUS -> pushPlusEnabled
             ForwardingChannels.WECHAT_TEST -> wechatTestEnabled
@@ -714,7 +711,13 @@ class MultiForwardConfig(
             }
             array.put(obj)
         }
-        prefs.edit().putString(KEY_CHANNEL_INSTANCES, array.toString()).apply()
+        // Persist ownership together with the list, including types being deleted.
+        // Credentials may stay for backup, but must never recreate/send a removed channel.
+        val managedTypes = managedLegacyChannelTypes() + instances.map { it.channelType }
+        prefs.edit()
+            .putString(KEY_CHANNEL_INSTANCES, array.toString())
+            .putStringSet("instance_managed_legacy_types_v1", managedTypes)
+            .apply()
         CredentialHealth.clear(KEY_CHANNEL_INSTANCES)
         return true
     }
@@ -762,8 +765,11 @@ class MultiForwardConfig(
         }
     }
 
+    fun managedLegacyChannelTypes(): Set<String> =
+        prefs.getStringSet("instance_managed_legacy_types_v1", emptySet()).orEmpty().toSet() +
+            channelInstances().map { it.channelType }
+
     fun enabledChannelIds(includePushPlus: Boolean = false): Set<String> = buildSet {
-        channelInstances().filter { it.enabled && it.hasDispatchConfiguration() }.forEach { add(it.channelType) }
         if (includePushPlus || pushPlusEnabled) add(ForwardingChannels.PUSHPLUS)
         if (wechatTestEnabled) add(ForwardingChannels.WECHAT_TEST)
         if (qqEnabled) add(ForwardingChannels.QQ)
@@ -782,6 +788,9 @@ class MultiForwardConfig(
         if (customWebhookEnabled) add(ForwardingChannels.CUSTOM_WEBHOOK)
         if (channelGroupEnabled) add(ForwardingChannels.CHANNEL_GROUP)
         if (gotifyEnabled) add(ForwardingChannels.GOTIFY)
+        removeAll(managedLegacyChannelTypes())
+        channelInstances().filter { it.enabled && it.hasDispatchConfiguration() }
+            .forEach { add(it.channelType) }
     }
 
     private fun booleanPreference(key: String) = object : kotlin.properties.ReadWriteProperty<Any?, Boolean> {

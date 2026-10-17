@@ -51,7 +51,7 @@ jobs:
       - name: Test power regressions
         run: |
           python3 scripts/test_battery_queries.py
-          ./gradlew :app:testCoreDebugUnitTest --tests 'org.fossify.messages.remote.StreamReconnectBackoffTest' --tests 'org.fossify.messages.helpers.HomeRefreshGateTest'
+          ./gradlew :app:testCoreDebugUnitTest --tests 'org.fossify.messages.remote.StreamReconnectBackoffTest' --tests 'org.fossify.messages.helpers.HomeRefreshGateTest' --tests 'org.fossify.messages.ChannelRepositoryTest'
 
       - name: Build signed release APK
         env:

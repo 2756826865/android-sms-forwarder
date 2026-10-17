@@ -23,6 +23,71 @@ import java.lang.reflect.Proxy
 
 class ChannelRepositoryTest {
     @Test
+    fun editingImportedCredentialsDoesNotResurrectTheOldAccount() {
+        val config = MultiForwardConfig(customPrefs = createFakeSharedPrefs(), cipher = PlaintextCipher)
+        config.saveEmail("smtp.qq.com", 465, "old@qq.com", "secret", "target@qq.com")
+        config.emailEnabled = true
+        val repo = ChannelRepository(multiConfig = config)
+        val email = repo.getInstances().single()
+        repo.saveInstance(email.copy(configJson = JSONObject(email.configJson).put("user", "new@qq.com").toString()))
+        val reopened = ChannelRepository(multiConfig = config)
+        assertEquals(1, reopened.getInstances().size)
+        assertEquals("new@qq.com", reopened.getInstances().single().optString("user"))
+    }
+
+    @Test
+    fun disablingOneEmailDoesNotDisableAnotherExplicitInstance() {
+        val config = MultiForwardConfig(customPrefs = createFakeSharedPrefs(), cipher = PlaintextCipher)
+        config.saveEmail("smtp.qq.com", 465, "user@qq.com", "secret", "target@qq.com")
+        config.emailEnabled = true
+        val repo = ChannelRepository(multiConfig = config)
+        val first = repo.getInstances().single()
+        repo.saveInstance(first.copy(id = "second-email", name = "second"))
+        repo.toggleInstanceEnabled(first.id, false)
+        assertEquals(listOf("second-email"), repo.getEnabledInstances().map { it.id })
+        assertTrue(config.enabledChannelIds().contains(ForwardingChannels.EMAIL))
+        repo.deleteInstance("second-email")
+        assertFalse(config.enabledChannelIds().contains(ForwardingChannels.EMAIL))
+    }
+
+    @Test
+    fun disabledLegacyEmailCannotFallbackOrReenableOnRestart() {
+        val prefs = createFakeSharedPrefs()
+        val config = MultiForwardConfig(customPrefs = prefs, cipher = PlaintextCipher)
+        config.saveEmail("smtp.qq.com", 465, "user@qq.com", "test-secret", "recipient@qq.com")
+        config.emailEnabled = true
+        val repo = ChannelRepository(multiConfig = config)
+        val email = repo.getInstances().single { it.channelType == ForwardingChannels.EMAIL }
+        repo.toggleInstanceEnabled(email.id, false)
+        assertFalse(config.enabledChannelIds().contains(ForwardingChannels.EMAIL))
+        assertFalse(config.isChannelEnabled(ForwardingChannels.EMAIL))
+        assertFalse(config.anyEnabled())
+        val reopened = ChannelRepository(multiConfig = MultiForwardConfig(customPrefs = prefs, cipher = PlaintextCipher))
+        assertFalse(reopened.getInstanceById(email.id)!!.enabled)
+        assertEquals(0, reopened.importLegacyChannels())
+    }
+
+    @Test
+    fun deletedLegacyEmailStaysDeletedWhilePushPlusRemainsEnabled() {
+        val prefs = createFakeSharedPrefs()
+        val config = MultiForwardConfig(customPrefs = prefs, cipher = PlaintextCipher)
+        config.saveEmail("smtp.qq.com", 465, "user@qq.com", "test-secret", "recipient@qq.com")
+        config.emailEnabled = true
+        config.pushPlusEnabled = true
+        val repo = ChannelRepository(multiConfig = config)
+        val email = repo.getInstances().single { it.channelType == ForwardingChannels.EMAIL }
+        assertTrue(repo.deleteInstance(email.id))
+        val restoredConfig = MultiForwardConfig(customPrefs = prefs, cipher = PlaintextCipher)
+        val reopened = ChannelRepository(multiConfig = restoredConfig)
+        assertTrue(reopened.getInstances().none { it.channelType == ForwardingChannels.EMAIL })
+        assertFalse(restoredConfig.enabledChannelIds().contains(ForwardingChannels.EMAIL))
+        assertTrue(restoredConfig.enabledChannelIds().contains(ForwardingChannels.PUSHPLUS))
+        assertEquals(0, reopened.importLegacyChannels())
+        // Old credentials are retained without being used for automatic dispatch.
+        assertEquals("smtp.qq.com", restoredConfig.emailHost())
+    }
+
+    @Test
     fun weComLegacyIsLinkedOnStartupAndRefreshWithoutReenabling() {
         val config = MultiForwardConfig(customPrefs = createFakeSharedPrefs(), cipher = PlaintextCipher)
         config.saveWeComRemoteControl("bot", "secret", "chat")
@@ -96,6 +161,10 @@ class ChannelRepositoryTest {
                     if (v != null) prefsMap[k] = v else prefsMap.remove(k)
                     proxy
                 }
+                "putStringSet" -> {
+                    prefsMap[args[0] as String] = (args[1] as Set<*>).toSet()
+                    proxy
+                }
                 "putBoolean" -> {
                     prefsMap[args[0] as String] = args[1] as Boolean
                     proxy
@@ -118,6 +187,7 @@ class ChannelRepositoryTest {
             arrayOf(SharedPreferences::class.java)
         ) { _, method, args ->
             when (method.name) {
+                "getStringSet" -> prefsMap[args[0] as String] ?: args[1]
                 "getString" -> prefsMap[args[0] as String] ?: (args[1] as? String)
                 "getBoolean" -> prefsMap[args[0] as String] ?: (args[1] as? Boolean) ?: false
                 "getInt" -> prefsMap[args[0] as String] ?: (args[1] as? Int) ?: 0
