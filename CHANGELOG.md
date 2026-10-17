@@ -1,26 +1,8 @@
-# 更新记录
+# Changelog
+All notable changes to this project will be documented in this file.
 
-## 1.2.3(101703) · 测试构建
-
-按需短信处理与异常补偿、后台查询优化、转发记录数据库及分页、通道组执行策略、Webhook 成功校验、手动检查更新、QQ群入口。
-
-完整构建与所选回归测试通过，尚未正式发布；实际耗电与锁屏可靠性待真机验证。
-
-[完整说明](docs/release-1.2.3%28101703%29.md) · [测试构建产物](https://github.com/2756826865/android-sms-forwarder/actions/runs/39012737111)
-
-## 1.2.3(101702) · 已发布
-
-修复关闭邮箱后旧配置仍可能继续推送、删除后再次导入、修改账号后旧实例再次生成等问题，完善旧通道配置迁移与发送状态校验。
-
-[完整说明](docs/release-1.2.3%28101702%29.md) · [下载](https://github.com/2756826865/android-sms-forwarder/releases/tag/v1.2.3%28101702%29)
-
-## 更早版本
-
-[查看 GitHub Releases](https://github.com/2756826865/android-sms-forwarder/releases)
-
----
-
-以下保留既有版本记录；历史表述以对应版本实现和后续修复为准。
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [1.2.0] - 2026-09-23
 
