@@ -290,6 +290,7 @@ class SmsRecoveryWorker(
                                     ruleId = target.ruleId,
                                     actionId = target.actionId,
                                     bodyAlreadyRendered = true,
+                                    allowSimLabelPrefix = target.allowSimLabelPrefix,
                                 )
                             }
                         } else {

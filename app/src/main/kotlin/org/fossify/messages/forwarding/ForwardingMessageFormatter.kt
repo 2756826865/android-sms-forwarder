@@ -24,16 +24,12 @@ object ForwardingMessageFormatter {
         content: String,
         snapshot: ForwardingSimSnapshot? = null,
     ): String {
-        if (subscriptionId < 0) return content
+        if (snapshot == null && subscriptionId < 0) return content
         val label = snapshot?.customLabel ?: runCatching {
             val slot = resolveSimInfo(context, subscriptionId)?.simSlotIndex
             slot?.takeIf { it >= 0 }?.let(config::customSimLabel).orEmpty().trim()
         }.getOrDefault("")
-        if (label.isBlank()) return content
-        val alreadyLabeled = content.lineSequence().any {
-            it == "【$label】" || it == "卡槽：$label" || it == "📶卡槽：$label"
-        }
-        return if (alreadyLabeled) content else "【$label】\n$content"
+        return SimLabelPresentation.addLabel(content, label, config.enablePrivacyMask)
     }
 
     fun renderRuleTemplate(
@@ -42,7 +38,8 @@ object ForwardingMessageFormatter {
         sender: String,
         body: String,
         receivedAt: Long,
-        subscriptionId: Int
+        subscriptionId: Int,
+        simSnapshot: ForwardingSimSnapshot? = null,
     ): String {
         if (template.isBlank()) return body
         val battery by lazy { TemplateDataRetriever.batterySnapshot(context) }
@@ -53,7 +50,7 @@ object ForwardingMessageFormatter {
         val formattedTime by lazy { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date(receivedAt)) }
         val dateOnly by lazy { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(receivedAt)) }
         val timeOnly by lazy { SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(receivedAt)) }
-        val receivedSim by lazy { if (subscriptionId >= 0) captureSim(context, subscriptionId) else null }
+        val receivedSim by lazy { simSnapshot ?: if (subscriptionId >= 0) captureSim(context, subscriptionId) else null }
         val sim by lazy { receivedSim?.description.orEmpty() }
         val receiverNumber by lazy { receivedSim?.receiverNumber.orEmpty() }
         val simIndex by lazy { receivedSim?.slotIndex?.takeIf { it >= 0 }?.let { (it + 1).toString() }.orEmpty() }
@@ -65,8 +62,15 @@ object ForwardingMessageFormatter {
             .replace("{{SMS}}", body).replace("{{BODY}}", body).replace("{{CONTENT}}", body)
             .replaceWhenPresent("{{RECEIVE_TIME}}") { formattedTime }.replaceWhenPresent("{{DATE_YMD}}") { dateOnly }
             .replaceWhenPresent("{{DATE_HMS}}") { timeOnly }.replace("{{TIMESTAMP}}", receivedAt.toString())
-            .replaceWhenPresent("{{SIM_SLOT}}") { sim }.replaceWhenPresent("{{SIM_INDEX}}") { simIndex }
+            .replaceWhenPresent("{{SIM_SLOT}}") { sim }
+            .replaceWhenPresent("{{CARD_SLOT}}") { sim }.replaceWhenPresent("{{SIM}}") { sim }
+            .replaceWhenPresent("{{sim}}") { sim }.replaceWhenPresent("{sim}") { sim }
+            .replaceWhenPresent("{{卡槽}}") { sim }
+            .replaceWhenPresent("{{SIM_INDEX}}") { simIndex }
+            .replaceWhenPresent("{{SIM_ID}}") { simIndex }.replaceWhenPresent("{{卡槽序号}}") { simIndex }
             .replaceWhenPresent("{{RECEIVER_NUMBER}}") { receiverNumber }
+            .replaceWhenPresent("{{RECEIVER}}") { receiverNumber }.replaceWhenPresent("{receiver}") { receiverNumber }
+            .replaceWhenPresent("{{接收号码}}") { receiverNumber }
             .replaceWhenPresent("{{DEVICE_NAME}}") { TemplateDataRetriever.getDeviceName() }
             .replaceWhenPresent("{{DEVICE_BRAND}}") { TemplateDataRetriever.getDeviceBrand() }
             .replaceWhenPresent("{{DEVICE_MODEL}}") { TemplateDataRetriever.getDeviceModel() }
@@ -97,13 +101,13 @@ object ForwardingMessageFormatter {
         }.getOrNull()?.takeIf { it.isNotBlank() && it != sender }
         val senderTitle = contactName ?: sender.ifBlank { "新短信" }
         
-        val sim = if (includeSim && subscriptionId >= 0) {
+        val sim = if (includeSim && (subscriptionId >= 0 || simSnapshot?.slotIndex?.let { it >= 0 } == true)) {
             simSnapshot?.description ?: getSimDescription(context, config, subscriptionId)
         } else {
             ""
         }
         
-        val receiverNumber = if (subscriptionId >= 0) {
+        val receiverNumber = if (subscriptionId >= 0 || simSnapshot?.slotIndex?.let { it >= 0 } == true) {
             simSnapshot?.receiverNumber ?: getReceiverNumber(context, config, subscriptionId)
         } else {
             ""
@@ -249,6 +253,13 @@ object ForwardingMessageFormatter {
     @SuppressLint("MissingPermission")
     private fun resolveSimInfo(context: Context, subscriptionId: Int): android.telephony.SubscriptionInfo? {
         return org.fossify.messages.messaging.SubscriptionResolver.findActiveInfo(context, subscriptionId)
+    }
+
+    fun previewSim(context: Context, slotIndex: Int?): ForwardingSimSnapshot? {
+        val slot = slotIndex?.takeIf { it in 0..1 } ?: return null
+        val config = MultiForwardConfig(context)
+        val label = config.customSimLabel(slot)
+        return ForwardingSimSnapshot(slot, label.ifBlank { "SIM${slot + 1}" }, config.customSimNumber(slot), label)
     }
 
     fun captureSim(context: Context, subscriptionId: Int): ForwardingSimSnapshot {

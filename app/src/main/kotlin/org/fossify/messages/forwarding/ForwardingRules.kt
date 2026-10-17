@@ -128,7 +128,8 @@ data class ForwardingTarget(
     val actionId: String,
     val channelType: String,
     val instanceId: String,
-    val renderedContent: String
+    val renderedContent: String,
+    val allowSimLabelPrefix: Boolean = false
 )
 
 // ========================================================
@@ -284,7 +285,8 @@ class ForwardingRuleEngine(
                             actionId = action.id,
                             channelType = action.channelType,
                             instanceId = action.targetInstanceId,
-                            renderedContent = rendered
+                            renderedContent = rendered,
+                            allowSimLabelPrefix = action.templateMode != RuleTemplateMode.CUSTOM && rule.customTemplate.isBlank()
                         )
                     )
                 }
@@ -299,7 +301,8 @@ class ForwardingRuleEngine(
                                 actionId = "legacy_action_${rule.id}_$instId",
                                 channelType = "",
                                 instanceId = instId,
-                                renderedContent = textAfterRuleReplacements
+                                renderedContent = resolveContent(rule, ForwardingRuleAction(channelType = "", targetInstanceId = instId), textAfterRuleReplacements),
+                                allowSimLabelPrefix = rule.customTemplate.isBlank()
                             )
                         )
                     }
@@ -311,7 +314,8 @@ class ForwardingRuleEngine(
                                 actionId = "legacy_action_${rule.id}_$ch",
                                 channelType = ch,
                                 instanceId = "",
-                                renderedContent = textAfterRuleReplacements
+                                renderedContent = resolveContent(rule, ForwardingRuleAction(channelType = ch, targetInstanceId = ""), textAfterRuleReplacements),
+                                allowSimLabelPrefix = rule.customTemplate.isBlank()
                             )
                         )
                     }

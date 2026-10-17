@@ -417,6 +417,7 @@ open class IncomingSmsService : Service() {
                             ruleId = target.ruleId,
                             actionId = target.actionId,
                             bodyAlreadyRendered = true,
+                            allowSimLabelPrefix = target.allowSimLabelPrefix,
                             threadId = resolvedThreadId
                         )
                     }

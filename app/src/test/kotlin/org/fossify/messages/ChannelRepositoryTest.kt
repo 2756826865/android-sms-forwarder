@@ -23,6 +23,19 @@ import java.lang.reflect.Proxy
 
 class ChannelRepositoryTest {
     @Test
+    fun customSimLabelsAreTrimmedAndRemainBoundToPhysicalSlots() {
+        val prefs = createFakeSharedPrefs()
+        val config = MultiForwardConfig(customPrefs = prefs, cipher = PlaintextCipher)
+        config.simOneLabel = "  生活卡  "
+        config.simTwoLabel = " 工作卡 "
+        val reopened = MultiForwardConfig(customPrefs = prefs, cipher = PlaintextCipher)
+        assertEquals("生活卡", reopened.customSimLabel(0))
+        assertEquals("工作卡", reopened.customSimLabel(1))
+        assertEquals("", reopened.customSimLabel(-1))
+        assertEquals("", reopened.customSimLabel(42))
+    }
+
+    @Test
     fun onDemandIsDefaultAndExplicitCompatibilityChoiceSurvivesReopen() {
         val prefs = createFakeSharedPrefs()
         fun reopen() = MultiForwardConfig(customPrefs = prefs, cipher = PlaintextCipher)

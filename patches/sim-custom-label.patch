@@ -1,0 +1,396 @@
+--- a/.github/workflows/build-custom-apk.yml
++++ b/.github/workflows/build-custom-apk.yml
+@@ -52,7 +52,7 @@
+         run: |
+           python3 scripts/test_battery_queries.py
+           python3 scripts/test_forwarding_history_sql.py
+-          ./gradlew :app:testCoreDebugUnitTest --tests 'org.fossify.messages.remote.StreamReconnectBackoffTest' --tests 'org.fossify.messages.helpers.HomeRefreshGateTest' --tests 'org.fossify.messages.ChannelRepositoryTest' --tests 'org.fossify.messages.forwarding.ExecutionPolicyTest' --tests 'org.fossify.messages.updates.GitHubReleaseTest'
++          ./gradlew :app:testCoreDebugUnitTest --tests 'org.fossify.messages.remote.StreamReconnectBackoffTest' --tests 'org.fossify.messages.helpers.HomeRefreshGateTest' --tests 'org.fossify.messages.ChannelRepositoryTest' --tests 'org.fossify.messages.forwarding.ExecutionPolicyTest' --tests 'org.fossify.messages.updates.GitHubReleaseTest' --tests 'org.fossify.messages.forwarding.SimLabelPresentationTest' --tests 'org.fossify.messages.ForwardingRulesV2Test' --tests 'org.fossify.messages.PrivacyAndRulesTest'
+ 
+       - name: Build signed release APK
+         env:
+--- a/app/src/main/kotlin/org/fossify/messages/forwarding/ForwardingMessageFormatter.kt
++++ b/app/src/main/kotlin/org/fossify/messages/forwarding/ForwardingMessageFormatter.kt
+@@ -24,16 +24,12 @@
+         content: String,
+         snapshot: ForwardingSimSnapshot? = null,
+     ): String {
+-        if (subscriptionId < 0) return content
++        if (snapshot == null && subscriptionId < 0) return content
+         val label = snapshot?.customLabel ?: runCatching {
+             val slot = resolveSimInfo(context, subscriptionId)?.simSlotIndex
+             slot?.takeIf { it >= 0 }?.let(config::customSimLabel).orEmpty().trim()
+         }.getOrDefault("")
+-        if (label.isBlank()) return content
+-        val alreadyLabeled = content.lineSequence().any {
+-            it == "【$label】" || it == "卡槽：$label" || it == "📶卡槽：$label"
+-        }
+-        return if (alreadyLabeled) content else "【$label】\n$content"
++        return SimLabelPresentation.addLabel(content, label, config.enablePrivacyMask)
+     }
+ 
+     fun renderRuleTemplate(
+@@ -42,7 +38,8 @@
+         sender: String,
+         body: String,
+         receivedAt: Long,
+-        subscriptionId: Int
++        subscriptionId: Int,
++        simSnapshot: ForwardingSimSnapshot? = null,
+     ): String {
+         if (template.isBlank()) return body
+         val battery by lazy { TemplateDataRetriever.batterySnapshot(context) }
+@@ -53,7 +50,7 @@
+         val formattedTime by lazy { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date(receivedAt)) }
+         val dateOnly by lazy { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(receivedAt)) }
+         val timeOnly by lazy { SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(receivedAt)) }
+-        val receivedSim by lazy { if (subscriptionId >= 0) captureSim(context, subscriptionId) else null }
++        val receivedSim by lazy { simSnapshot ?: if (subscriptionId >= 0) captureSim(context, subscriptionId) else null }
+         val sim by lazy { receivedSim?.description.orEmpty() }
+         val receiverNumber by lazy { receivedSim?.receiverNumber.orEmpty() }
+         val simIndex by lazy { receivedSim?.slotIndex?.takeIf { it >= 0 }?.let { (it + 1).toString() }.orEmpty() }
+@@ -65,8 +62,15 @@
+             .replace("{{SMS}}", body).replace("{{BODY}}", body).replace("{{CONTENT}}", body)
+             .replaceWhenPresent("{{RECEIVE_TIME}}") { formattedTime }.replaceWhenPresent("{{DATE_YMD}}") { dateOnly }
+             .replaceWhenPresent("{{DATE_HMS}}") { timeOnly }.replace("{{TIMESTAMP}}", receivedAt.toString())
+-            .replaceWhenPresent("{{SIM_SLOT}}") { sim }.replaceWhenPresent("{{SIM_INDEX}}") { simIndex }
++            .replaceWhenPresent("{{SIM_SLOT}}") { sim }
++            .replaceWhenPresent("{{CARD_SLOT}}") { sim }.replaceWhenPresent("{{SIM}}") { sim }
++            .replaceWhenPresent("{{sim}}") { sim }.replaceWhenPresent("{sim}") { sim }
++            .replaceWhenPresent("{{卡槽}}") { sim }
++            .replaceWhenPresent("{{SIM_INDEX}}") { simIndex }
++            .replaceWhenPresent("{{SIM_ID}}") { simIndex }.replaceWhenPresent("{{卡槽序号}}") { simIndex }
+             .replaceWhenPresent("{{RECEIVER_NUMBER}}") { receiverNumber }
++            .replaceWhenPresent("{{RECEIVER}}") { receiverNumber }.replaceWhenPresent("{receiver}") { receiverNumber }
++            .replaceWhenPresent("{{接收号码}}") { receiverNumber }
+             .replaceWhenPresent("{{DEVICE_NAME}}") { TemplateDataRetriever.getDeviceName() }
+             .replaceWhenPresent("{{DEVICE_BRAND}}") { TemplateDataRetriever.getDeviceBrand() }
+             .replaceWhenPresent("{{DEVICE_MODEL}}") { TemplateDataRetriever.getDeviceModel() }
+@@ -97,13 +101,13 @@
+         }.getOrNull()?.takeIf { it.isNotBlank() && it != sender }
+         val senderTitle = contactName ?: sender.ifBlank { "新短信" }
+         
+-        val sim = if (includeSim && subscriptionId >= 0) {
++        val sim = if (includeSim && (subscriptionId >= 0 || simSnapshot?.slotIndex?.let { it >= 0 } == true)) {
+             simSnapshot?.description ?: getSimDescription(context, config, subscriptionId)
+         } else {
+             ""
+         }
+         
+-        val receiverNumber = if (subscriptionId >= 0) {
++        val receiverNumber = if (subscriptionId >= 0 || simSnapshot?.slotIndex?.let { it >= 0 } == true) {
+             simSnapshot?.receiverNumber ?: getReceiverNumber(context, config, subscriptionId)
+         } else {
+             ""
+@@ -251,6 +255,13 @@
+         return org.fossify.messages.messaging.SubscriptionResolver.findActiveInfo(context, subscriptionId)
+     }
+ 
++    fun previewSim(context: Context, slotIndex: Int?): ForwardingSimSnapshot? {
++        val slot = slotIndex?.takeIf { it in 0..1 } ?: return null
++        val config = MultiForwardConfig(context)
++        val label = config.customSimLabel(slot)
++        return ForwardingSimSnapshot(slot, label.ifBlank { "SIM${slot + 1}" }, config.customSimNumber(slot), label)
++    }
++
+     fun captureSim(context: Context, subscriptionId: Int): ForwardingSimSnapshot {
+         val config = MultiForwardConfig(context)
+         val info = resolveSimInfo(context, subscriptionId)
+--- a/app/src/main/kotlin/org/fossify/messages/forwarding/ForwardingRetry.kt
++++ b/app/src/main/kotlin/org/fossify/messages/forwarding/ForwardingRetry.kt
+@@ -24,6 +24,7 @@
+             isTest = record.isTest, targetInstanceId = payload.optString("instanceId"),
+             ruleId = payload.optString("ruleId"), actionId = payload.optString("actionId"),
+             bodyAlreadyRendered = payload.optBoolean("bodyAlreadyRendered"), threadId = payload.optLong("threadId"),
++            allowSimLabelPrefix = payload.optBoolean("allowSimLabelPrefix", false),
+             originalSim = ForwardingSimSnapshot(payload.optInt("slot", -1), payload.optString("sim"),
+                 payload.optString("receiver"), payload.optString("label")),
+         )
+--- a/app/src/main/kotlin/org/fossify/messages/forwarding/ForwardingRules.kt
++++ b/app/src/main/kotlin/org/fossify/messages/forwarding/ForwardingRules.kt
+@@ -128,7 +128,8 @@
+     val actionId: String,
+     val channelType: String,
+     val instanceId: String,
+-    val renderedContent: String
++    val renderedContent: String,
++    val allowSimLabelPrefix: Boolean = false
+ )
+ 
+ // ========================================================
+@@ -284,7 +285,8 @@
+                             actionId = action.id,
+                             channelType = action.channelType,
+                             instanceId = action.targetInstanceId,
+-                            renderedContent = rendered
++                            renderedContent = rendered,
++                            allowSimLabelPrefix = action.templateMode != RuleTemplateMode.CUSTOM && rule.customTemplate.isBlank()
+                         )
+                     )
+                 }
+@@ -299,7 +301,8 @@
+                                 actionId = "legacy_action_${rule.id}_$instId",
+                                 channelType = "",
+                                 instanceId = instId,
+-                                renderedContent = textAfterRuleReplacements
++                                renderedContent = resolveContent(rule, ForwardingRuleAction(channelType = "", targetInstanceId = instId), textAfterRuleReplacements),
++                                allowSimLabelPrefix = rule.customTemplate.isBlank()
+                             )
+                         )
+                     }
+@@ -311,7 +314,8 @@
+                                 actionId = "legacy_action_${rule.id}_$ch",
+                                 channelType = ch,
+                                 instanceId = "",
+-                                renderedContent = textAfterRuleReplacements
++                                renderedContent = resolveContent(rule, ForwardingRuleAction(channelType = ch, targetInstanceId = ""), textAfterRuleReplacements),
++                                allowSimLabelPrefix = rule.customTemplate.isBlank()
+                             )
+                         )
+                     }
+--- a/app/src/main/kotlin/org/fossify/messages/forwarding/MultiChannelForwardWorker.kt
++++ b/app/src/main/kotlin/org/fossify/messages/forwarding/MultiChannelForwardWorker.kt
+@@ -121,6 +121,7 @@
+             threadId = inputData.getLong(KEY_THREAD_ID, 0),
+             groupPlan = plan.toString(),
+             originalSim = receivedSimSnapshot(),
++            allowSimLabelPrefix = inputData.getBoolean(KEY_ALLOW_SIM_LABEL_PREFIX, false),
+         )
+     }
+ 
+@@ -192,8 +193,11 @@
+         // SIM name, which the common formatter places in the separate title field.
+         // Keep explicit global/rule templates intact and avoid adding any SIM when
+         // the exact subscription cannot be resolved.
+-        val textOnlyContent = if (inputData.getBoolean(KEY_BODY_ALREADY_RENDERED, false) ||
+-            (config.templateMode == MultiForwardConfig.TEMPLATE_CUSTOM && config.customTemplate.isNotBlank())) content
++        val textOnlyContent = if (SimLabelPresentation.preserveBody(
++                inputData.getBoolean(KEY_BODY_ALREADY_RENDERED, false),
++                inputData.getBoolean(KEY_ALLOW_SIM_LABEL_PREFIX, false),
++                config.templateMode == MultiForwardConfig.TEMPLATE_CUSTOM && config.customTemplate.isNotBlank()
++            )) content
+         else ForwardingMessageFormatter.withCustomSimLabel(
+             applicationContext, config, subscriptionId, content, receivedSimSnapshot()
+         )
+@@ -1374,6 +1378,7 @@
+         const val KEY_RULE_ID = "rule_id"
+         const val KEY_ACTION_ID = "action_id"
+         private const val KEY_BODY_ALREADY_RENDERED = "body_already_rendered"
++        private const val KEY_ALLOW_SIM_LABEL_PREFIX = "allow_sim_label_prefix"
+         private const val SMTP_TIMEOUT_MS = 12_000
+         /** 规则启用但无任何渠道命中时，与 null（未启用规则）区分 */
+         const val RULE_BLOCK_ALL = "__BLOCK_ALL__"
+@@ -1457,6 +1462,7 @@
+             threadId: Long = 0L,
+             groupPlan: String = "",
+             originalSim: ForwardingSimSnapshot? = null,
++            allowSimLabelPrefix: Boolean = false,
+         ) {
+             val multiConfig = MultiForwardConfig(context)
+             val requestedInstance = targetInstanceId.takeIf(String::isNotBlank)
+@@ -1521,7 +1527,7 @@
+                     enqueueSingle(context, sender, body, receivedAt, subscriptionId,
+                         "$uniqueId-step-0", first.channelType, setOf(first.id), isTest, operationId,
+                         first.id, ruleId, actionId, bodyAlreadyRendered, visitedGroupIds + groupIdentity,
+-                        threadId, plan.toString())
++                        threadId, plan.toString(), originalSim, allowSimLabelPrefix)
+                     return
+                 }
+                 members.forEach { member ->
+@@ -1546,6 +1552,7 @@
+                         groupPlan = if (requestedInstance != null) JSONObject()
+                             .put("mode", "parallel").put("groupId", groupIdentity).toString() else "",
+                         originalSim = originalSim,
++                        allowSimLabelPrefix = allowSimLabelPrefix,
+                     )
+                 }
+                 return
+@@ -1582,6 +1589,7 @@
+                 .put("subscriptionId", subscriptionId).put("channel", targetChannel)
+                 .put("instanceId", targetInstanceId).put("ruleId", ruleId).put("actionId", actionId)
+                 .put("bodyAlreadyRendered", bodyAlreadyRendered).put("threadId", threadId)
++                .put("allowSimLabelPrefix", allowSimLabelPrefix)
+                 .put("slot", capturedSim.slotIndex).put("sim", capturedSim.description)
+                 .put("receiver", capturedSim.receiverNumber).put("label", capturedSim.customLabel))
+             val requestBuilder = OneTimeWorkRequestBuilder<MultiChannelForwardWorker>()
+@@ -1605,6 +1613,7 @@
+                         KEY_RULE_ID to ruleId,
+                         KEY_ACTION_ID to actionId,
+                         KEY_BODY_ALREADY_RENDERED to bodyAlreadyRendered,
++                        KEY_ALLOW_SIM_LABEL_PREFIX to allowSimLabelPrefix,
+                         KEY_THREAD_ID to threadId,
+                         KEY_GROUP_PLAN to groupPlan,
+                     ) }.getOrElse { error ->
+--- /dev/null
++++ b/app/src/main/kotlin/org/fossify/messages/forwarding/SimLabelPresentation.kt
+@@ -0,0 +1,18 @@
++package org.fossify.messages.forwarding
++
++/** Body ownership is independent of whether formatting has already happened. */
++internal object SimLabelPresentation {
++    fun preserveBody(alreadyRendered: Boolean, allowPrefix: Boolean, explicitGlobalTemplate: Boolean): Boolean =
++        explicitGlobalTemplate || (alreadyRendered && !allowPrefix)
++
++    fun addLabel(content: String, label: String, privacyEnabled: Boolean): String {
++        if (label.isBlank()) return content
++        // Formatting masks the body before transport adaptation; never append a raw phone/card number.
++        val visibleLabel = if (privacyEnabled) PrivacyDataMasker.mask(label) else label
++        val alreadyLabeled = content.lineSequence().any {
++            val line = it.trim()
++            line == "【$visibleLabel】" || line == "卡槽：$visibleLabel" || line == "📶卡槽：$visibleLabel"
++        }
++        return if (alreadyLabeled) content else "【$visibleLabel】\n$content"
++    }
++}
+--- a/app/src/main/kotlin/org/fossify/messages/messaging/SmsRecoveryWorker.kt
++++ b/app/src/main/kotlin/org/fossify/messages/messaging/SmsRecoveryWorker.kt
+@@ -290,6 +290,7 @@
+                                     ruleId = target.ruleId,
+                                     actionId = target.actionId,
+                                     bodyAlreadyRendered = true,
++                                    allowSimLabelPrefix = target.allowSimLabelPrefix,
+                                 )
+                             }
+                         } else {
+--- a/app/src/main/kotlin/org/fossify/messages/services/IncomingSmsService.kt
++++ b/app/src/main/kotlin/org/fossify/messages/services/IncomingSmsService.kt
+@@ -417,6 +417,7 @@
+                             ruleId = target.ruleId,
+                             actionId = target.actionId,
+                             bodyAlreadyRendered = true,
++                            allowSimLabelPrefix = target.allowSimLabelPrefix,
+                             threadId = resolvedThreadId
+                         )
+                     }
+--- a/app/src/main/kotlin/org/fossify/messages/ui/compose/rules/RuleEditorViewModel.kt
++++ b/app/src/main/kotlin/org/fossify/messages/ui/compose/rules/RuleEditorViewModel.kt
+@@ -221,6 +221,7 @@
+         val state = _uiState.value
+         val draftRule = buildRuleFromState()
+ 
++        val previewSim = ForwardingMessageFormatter.previewSim(context, state.testSimSlot)
+         val engine = ForwardingRuleEngine(listOf(draftRule.copy(enabled = true)))
+         val candidates = channelRepository.getEnabledInstances(includeGroups = true)
+             .map { it.channelType }
+@@ -235,9 +236,9 @@
+                 val template = action.customTemplate.takeIf { action.templateMode == RuleTemplateMode.CUSTOM }
+                     ?: rule.customTemplate.takeIf(String::isNotBlank)
+                 if (template != null) {
+-                    ForwardingMessageFormatter.renderRuleTemplate(context, template, state.testSender, text, System.currentTimeMillis(), state.testSimSlot ?: -1)
++                    ForwardingMessageFormatter.renderRuleTemplate(context, template, state.testSender, text, System.currentTimeMillis(), -1, simSnapshot = previewSim)
+                 } else {
+-                    ForwardingMessageFormatter.format(context, state.testSender, text, System.currentTimeMillis(), state.testSimSlot ?: -1).content
++                    ForwardingMessageFormatter.format(context, state.testSender, text, System.currentTimeMillis(), -1, simSnapshot = previewSim).content
+                 }
+             }
+         )
+--- a/app/src/test/kotlin/org/fossify/messages/ChannelRepositoryTest.kt
++++ b/app/src/test/kotlin/org/fossify/messages/ChannelRepositoryTest.kt
+@@ -22,6 +22,19 @@
+ import java.lang.reflect.Proxy
+ 
+ class ChannelRepositoryTest {
++    @Test
++    fun customSimLabelsAreTrimmedAndRemainBoundToPhysicalSlots() {
++        val prefs = createFakeSharedPrefs()
++        val config = MultiForwardConfig(customPrefs = prefs, cipher = PlaintextCipher)
++        config.simOneLabel = "  生活卡  "
++        config.simTwoLabel = " 工作卡 "
++        val reopened = MultiForwardConfig(customPrefs = prefs, cipher = PlaintextCipher)
++        assertEquals("生活卡", reopened.customSimLabel(0))
++        assertEquals("工作卡", reopened.customSimLabel(1))
++        assertEquals("", reopened.customSimLabel(-1))
++        assertEquals("", reopened.customSimLabel(42))
++    }
++
+     @Test
+     fun onDemandIsDefaultAndExplicitCompatibilityChoiceSurvivesReopen() {
+         val prefs = createFakeSharedPrefs()
+--- /dev/null
++++ b/app/src/test/kotlin/org/fossify/messages/forwarding/SimLabelPresentationTest.kt
+@@ -0,0 +1,85 @@
++package org.fossify.messages.forwarding
++
++import org.junit.Assert.*
++import org.junit.Test
++
++class SimLabelPresentationTest {
++    @Test fun builtInBodyGetsOneLabel() {
++        val once = SimLabelPresentation.addLabel("验证码 1234", "工作卡", false)
++        assertEquals("【工作卡】\n验证码 1234", once)
++        assertEquals(once, SimLabelPresentation.addLabel(once, "工作卡", false))
++    }
++
++    @Test fun detailedAndEmojiTemplatesDoNotDuplicateTheirSimLine() {
++        for (body in listOf("内容\n卡槽：工作卡", "内容\n📶卡槽：工作卡", "内容\n 【工作卡】 ")) {
++            assertEquals(body, SimLabelPresentation.addLabel(body, "工作卡", false))
++        }
++    }
++
++    @Test fun explicitTemplatesRetainTheirExactBodyEvenWithoutASimTag() {
++        for (rendered in listOf(false, true)) {
++            for (allow in listOf(false, true)) {
++                assertTrue(SimLabelPresentation.preserveBody(rendered, allow, true))
++            }
++        }
++        assertTrue(SimLabelPresentation.preserveBody(true, false, false))
++    }
++
++    @Test fun renderedGlobalRuleIsDifferentFromAnExplicitTemplate() {
++        assertFalse(SimLabelPresentation.preserveBody(true, true, false))
++        assertFalse(SimLabelPresentation.preserveBody(false, false, false))
++    }
++
++    @Test fun noResolvedLabelNeverGuessesAnotherCard() {
++        assertEquals("内容", SimLabelPresentation.addLabel("内容", "", false))
++        assertEquals("内容", SimLabelPresentation.addLabel("内容", "  ", false))
++    }
++
++    @Test fun addedLabelHonorsPhoneMaskingAndDoesNotUnmaskTheBody() {
++        val body = "验证码 [******]，电话 139****1234"
++        val rendered = SimLabelPresentation.addLabel(body, "工作卡13800138000", true)
++        assertEquals("【工作卡138****8000】\n$body", rendered)
++        assertFalse(rendered.contains("13800138000"))
++        assertEquals(rendered, SimLabelPresentation.addLabel(rendered, "工作卡13800138000", true))
++    }
++
++    @Test fun privacyOffPreservesLabelExactly() {
++        assertEquals("【13800138000】\n内容", SimLabelPresentation.addLabel("内容", "13800138000", false))
++    }
++
++    private fun target(customMode: Boolean = false, inherited: String = ""): ForwardingTarget {
++        val action = ForwardingRuleAction(channelType = "dingtalk", targetInstanceId = "instance",
++            templateMode = if (customMode) RuleTemplateMode.CUSTOM else RuleTemplateMode.GLOBAL)
++        val rule = ForwardingRule(name = "test", enabled = true, customTemplate = inherited, actions = listOf(action),
++            conditions = listOf(ForwardingRuleCondition(field = RuleTargetField.BODY, operator = RuleOperator.CONTAINS, value = "hello")))
++        return ForwardingRuleEngine(listOf(rule)).evaluate("10086", "hello", 42,
++            setOf("dingtalk"), resolveContent = { _, _, _ -> "rendered" }).targets.single()
++    }
++
++    @Test fun ordinaryRuleOptsIntoTransportLabel() {
++        assertTrue(target().allowSimLabelPrefix)
++    }
++
++    @Test fun actionCustomEvenEmptyNeverOptsIntoTransportLabel() {
++        assertFalse(target(customMode = true).allowSimLabelPrefix)
++    }
++
++    @Test fun inheritedRuleTemplateNeverOptsIntoTransportLabel() {
++        assertFalse(target(inherited = "{{SMS}}").allowSimLabelPrefix)
++    }
++
++    @Test fun legacyChannelAndInstanceTargetsUseTheSameRenderer() {
++        for (instance in listOf(false, true)) {
++            var calls = 0
++            val rule = ForwardingRule(name = "legacy", enabled = true, customTemplate = "{{CARD_SLOT}}:{{SMS}}",
++                conditions = listOf(ForwardingRuleCondition(field = RuleTargetField.BODY, operator = RuleOperator.CONTAINS, value = "hello")),
++                channels = if (instance) emptyList() else listOf("dingtalk"),
++                targetInstanceIds = if (instance) listOf("instance") else emptyList())
++            val target = ForwardingRuleEngine(listOf(rule)).evaluate("10086", "hello", 42,
++                setOf("dingtalk"), resolveContent = { _, _, _ -> calls++; "工作卡:hello" }).targets.single()
++            assertEquals(1, calls)
++            assertEquals("工作卡:hello", target.renderedContent)
++            assertFalse(target.allowSimLabelPrefix)
++        }
++    }
++}
