@@ -103,6 +103,7 @@ import org.greenrobot.eventbus.Subscribe
 import org.greenrobot.eventbus.ThreadMode
 
 class MainActivity : SimpleActivity() {
+    private val homeRefreshGate = org.fossify.messages.helpers.HomeRefreshGate()
     override var isSearchBarEnabled = false
 
     private val SMS_DEFAULT_APPLICATION_KEY = "sms_default_application"
@@ -329,6 +330,7 @@ class MainActivity : SimpleActivity() {
 
     override fun onResume() {
         super.onResume()
+        val deferredHomeRefresh = homeRefreshGate.resume()
         // 回前台补偿同步必须在 UI 模式分流之前执行：开发者版 UI 是默认模式 (config.useGatewayDeveloperUi 默认 true)，
         // 若放在分流之后会因该分支的提前 return 而永不执行 (ISSUE-012 解锁后短信不同步的根因)。
         SmsRecoveryWorker.enqueueForegroundResync(this)
@@ -394,9 +396,11 @@ class MainActivity : SimpleActivity() {
         binding.conversationsProgressBar.setIndicatorColor(properPrimaryColor)
         binding.conversationsProgressBar.trackColor = properPrimaryColor.adjustAlpha(LOWER_ALPHA)
         checkShortcut()
+        if (deferredHomeRefresh) initMessenger()
     }
 
     override fun onPause() {
+        homeRefreshGate.pause()
         super.onPause()
         if (!config.useGatewayDeveloperUi) {
             storeStateVariables()
@@ -712,13 +716,13 @@ class MainActivity : SimpleActivity() {
                 }
             }
 
+            val providerThreadIds = conversations.mapTo(HashSet()) { it.threadId }
             cachedConversations.forEach { cachedConversation ->
                 val threadId = cachedConversation.threadId
 
                 val isTemporaryThread = cachedConversation.isScheduled
-                val isConversationDeleted = !conversations.map { it.threadId }.contains(threadId)
-                val hasLocalMessages = messagesDB.getThreadMessages(threadId).isNotEmpty()
-                if (isConversationDeleted && !isTemporaryThread && !hasLocalMessages) {
+                val isConversationDeleted = threadId !in providerThreadIds
+                if (isConversationDeleted && !isTemporaryThread && !messagesDB.hasThreadMessages(threadId)) {
                     conversationsDB.deleteThreadId(threadId)
                 }
 
@@ -755,7 +759,11 @@ class MainActivity : SimpleActivity() {
             try {
                 threadsToSync.forEach { conversation ->
                     try {
-                        syncThreadToLocal(conversation.threadId, loadAll = needsFullHistorySync)
+                        syncThreadToLocal(
+                            conversation.threadId,
+                            loadAll = needsFullHistorySync,
+                            refreshConversation = false,
+                        )
                     } catch (e: java.util.concurrent.CancellationException) {
                         throw e
                     } catch (_: Exception) { failed++ }
@@ -770,16 +778,9 @@ class MainActivity : SimpleActivity() {
             }
             }
 
-            messagesDB.getAll()
-                .filter { !it.isScheduled && it.threadId != 0L }
-                .groupBy { it.threadId }
-                .forEach { (threadId, threadMessages) ->
-                    if (conversationsDB.getConversationWithThreadId(threadId) == null) {
-                        threadMessages.maxByOrNull { it.date }
-                            ?.let(::createConversationFromMessage)
-                            ?.let(::insertOrUpdateConversation)
-                    }
-                }
+            messagesDB.getLatestMessagesWithoutConversation().forEach { message ->
+                createConversationFromMessage(message)?.let(::insertOrUpdateConversation)
+            }
 
             val allConversations = ArrayList(conversationsDB.getAllRegular())
             runOnUiThread {
@@ -1148,6 +1149,7 @@ class MainActivity : SimpleActivity() {
     private val eventSubscriber = object {
         @Subscribe(threadMode = ThreadMode.MAIN)
         fun refreshConversations(@Suppress("unused") event: Events.RefreshConversations) {
+            if (!homeRefreshGate.request()) return
             if (config.useGatewayDeveloperUi) {
                 conversationsViewModel?.refresh(isInitial = false)
                 dashboardViewModel?.refreshAfterChange()
@@ -1159,6 +1161,7 @@ class MainActivity : SimpleActivity() {
         @Subscribe(threadMode = ThreadMode.MAIN)
         fun refreshMessages(@Suppress("unused") event: Events.RefreshMessages) {
             if (config.useGatewayDeveloperUi) {
+                if (!homeRefreshGate.request()) return
                 conversationsViewModel?.refresh(isInitial = false)
                 dashboardViewModel?.refreshAfterChange()
             }
@@ -1167,6 +1170,7 @@ class MainActivity : SimpleActivity() {
         @Subscribe(threadMode = ThreadMode.MAIN)
         fun refreshDashboard(@Suppress("unused") event: Events.RefreshDashboard) {
             if (config.useGatewayDeveloperUi) {
+                if (!homeRefreshGate.request()) return
                 dashboardViewModel?.refreshAfterChange()
             }
         }
@@ -1174,6 +1178,7 @@ class MainActivity : SimpleActivity() {
         @Subscribe(threadMode = ThreadMode.MAIN)
         fun refreshSendHistory(@Suppress("unused") event: Events.RefreshSendHistory) {
             if (config.useGatewayDeveloperUi) {
+                if (!homeRefreshGate.request()) return
                 dashboardViewModel?.refreshAfterChange()
                 messageCenterViewModel?.refreshAfterChange()
             }

@@ -42,12 +42,12 @@ class DingTalkStreamClient(
 
     private fun connectLoop() {
         Thread {
-            var retryDelayMs = 5_000L
+            val backoff = StreamReconnectBackoff()
             while (running.get()) {
+                backoff.beginAttempt()
                 try {
                     onStatus("正在连接 DingTalk Stream…")
-                    openAndListen()
-                    retryDelayMs = 5_000L
+                    openAndListen(backoff)
                 } catch (error: Throwable) {
                     Log.e(TAG, "DingTalk stream connection failed", error)
                     if (running.get()) {
@@ -59,11 +59,10 @@ class DingTalkStreamClient(
                         }
                         onStatus(tip)
                     }
-                    retryDelayMs = (retryDelayMs * 2).coerceAtMost(30_000L)
                 }
                 if (running.get()) {
                     try {
-                        Thread.sleep(retryDelayMs)
+                        Thread.sleep(backoff.nextDelayMillis())
                     } catch (_: InterruptedException) {
                         break
                     }
@@ -76,7 +75,7 @@ class DingTalkStreamClient(
         }
     }
 
-    private fun openAndListen() {
+    private fun openAndListen(backoff: StreamReconnectBackoff) {
         webSocket?.close(1000, "reconnecting")
         webSocket = null
         val openResult = openConnection()
@@ -88,6 +87,7 @@ class DingTalkStreamClient(
         webSocket = http.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 if (running.get()) {
+                    backoff.onConnected()
                     onStatus("已连接 · 等待机器人消息")
                 }
             }
@@ -282,7 +282,6 @@ class DingTalkStreamClient(
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
         private const val OPEN_CONNECTION_URL = "https://api.dingtalk.com/v1.0/gateway/connections/open"
         private const val BOT_MESSAGE_TOPIC = "/v1.0/im/bot/messages/get"
-        private const val RECONNECT_DELAY_MS = 5_000L
     }
 }
 

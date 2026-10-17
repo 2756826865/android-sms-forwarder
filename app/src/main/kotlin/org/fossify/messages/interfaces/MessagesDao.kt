@@ -47,6 +47,13 @@ interface MessagesDao {
     @Query("SELECT messages.* FROM messages LEFT OUTER JOIN recycle_bin_messages ON messages.id = recycle_bin_messages.id WHERE recycle_bin_messages.id IS NOT NULL AND recycle_bin_messages.deleted_ts < :timestamp")
     fun getOldRecycleBinMessages(timestamp: Long): List<Message>
 
+    @Query("SELECT EXISTS(SELECT 1 FROM messages WHERE thread_id = :threadId)")
+    fun hasThreadMessages(threadId: Long): Boolean
+
+    // Load one latest message only for threads missing conversation metadata.
+    @Query("SELECT m.* FROM messages m WHERE m.is_scheduled = 0 AND m.thread_id != 0 AND NOT EXISTS (SELECT 1 FROM conversations c WHERE c.thread_id = m.thread_id) AND m.id = (SELECT latest.id FROM messages latest WHERE latest.thread_id = m.thread_id AND latest.is_scheduled = 0 ORDER BY latest.date DESC, latest.id DESC LIMIT 1)")
+    fun getLatestMessagesWithoutConversation(): List<Message>
+
     @Query("SELECT * FROM messages WHERE thread_id = :threadId")
     fun getThreadMessages(threadId: Long): List<Message>
 

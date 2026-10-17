@@ -48,6 +48,11 @@ jobs:
       - name: Fix gradlew permissions
         run: chmod +x gradlew
 
+      - name: Test power regressions
+        run: |
+          python3 scripts/test_battery_queries.py
+          ./gradlew :app:testCoreDebugUnitTest --tests 'org.fossify.messages.remote.StreamReconnectBackoffTest' --tests 'org.fossify.messages.helpers.HomeRefreshGateTest'
+
       - name: Build signed release APK
         env:
           SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
@@ -69,6 +74,10 @@ jobs:
             exit 1
           fi
           jarsigner -verify "$apk"
+          apksigner="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)"
+          test -n "$apksigner"
+          "$apksigner" verify --verbose --print-certs "$apk" | tee deliverables/signature.txt
+          grep -Fq '227d5ed7b74462e37d6e88c424eb0aad58a33acb1b6e193f2e2d08a650107c96' deliverables/signature.txt
           sha256sum "$apk" > "$apk.sha256"
 
       - name: Upload APK

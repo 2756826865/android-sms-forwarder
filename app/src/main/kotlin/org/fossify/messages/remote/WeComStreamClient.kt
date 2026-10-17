@@ -87,6 +87,7 @@ class WeComStreamClient(
         .readTimeout(0, TimeUnit.MILLISECONDS)
         .build()
 
+    private val reconnectBackoff = StreamReconnectBackoff()
     private val running = AtomicBoolean(false)
     private val isAuthenticated = AtomicBoolean(false)
     private val isKickedOff = AtomicBoolean(false)
@@ -128,25 +129,23 @@ class WeComStreamClient(
 
     private fun connectLoop() {
         Thread {
-            var retryDelayMs = 5_000L
             while (running.get() && !isKickedOff.get()) {
                 isAuthenticated.set(false)
+                reconnectBackoff.beginAttempt()
                 try {
                     onStatus("正在连接企业微信长连接…")
                     connectAndListen()
-                    retryDelayMs = 5_000L
                 } catch (error: Throwable) {
                     Log.e(TAG, "WeCom connection error", error)
                     if (running.get() && !isKickedOff.get()) {
                         val msg = error.message ?: error.javaClass.simpleName
                         onStatus("连接断开：$msg")
                     }
-                    retryDelayMs = (retryDelayMs * 2).coerceAtMost(60_000L)
                 }
 
                 if (running.get() && !isKickedOff.get()) {
                     try {
-                        Thread.sleep(retryDelayMs)
+                        Thread.sleep(reconnectBackoff.nextDelayMillis())
                     } catch (_: InterruptedException) {
                         break
                     }
@@ -244,6 +243,7 @@ class WeComStreamClient(
                 if (reqId.startsWith("aibot_subscribe_")) {
                     if (errCode == 0) {
                         isAuthenticated.set(true)
+                        reconnectBackoff.onConnected()
                         onStatus("已就绪 · 等待企业微信机器人指令")
                         startHeartbeat(ws)
                     } else {

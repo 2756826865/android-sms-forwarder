@@ -140,7 +140,7 @@ fun Context.getMessages(
     // 小米/HyperOS 兼容性兜底：
     // 修改策略：只有当主查询（按 ID）确实没有返回任何消息，且提供了号码时，才触发按号码的全库查询。
     // 这避免了短号码（服务号）每次查询都触发无意义的 fallback。
-    val targetAddress = address ?: if (threadId != 0L) getPhoneNumbersFromSmsTable(threadId).firstOrNull() else null
+    val targetAddress = if (messages.isNotEmpty()) null else address ?: if (threadId != 0L) getPhoneNumbersFromSmsTable(threadId).firstOrNull() else null
     if (messages.isEmpty() && !targetAddress.isNullOrBlank()) {
         val addrSelection = "${Sms.ADDRESS} = ? $rangeQuery"
         val addrArgs = arrayOf(targetAddress)
@@ -329,7 +329,7 @@ fun Context.getMMSSender(msgId: Long): String {
     return ""
 }
 
-fun Context.getUnreadCountsByThread(): Map<Long, Int> {
+fun Context.getUnreadCountsByThread(threadId: Long? = null): Map<Long, Int> {
     val result = HashMap<Long, Int>(128)
 
     fun bump(id: Long) {
@@ -340,8 +340,9 @@ fun Context.getUnreadCountsByThread(): Map<Long, Int> {
     queryCursor(
         uri = Sms.CONTENT_URI,
         projection = arrayOf(Sms.THREAD_ID),
-        selection = "${Sms.READ}=0 AND ${Sms.TYPE}=${Sms.MESSAGE_TYPE_INBOX}",
-        selectionArgs = null,
+        selection = "${Sms.READ}=0 AND ${Sms.TYPE}=${Sms.MESSAGE_TYPE_INBOX}" +
+            if (threadId != null) " AND ${Sms.THREAD_ID} = ?" else "",
+        selectionArgs = threadId?.let { arrayOf(it.toString()) },
         showErrors = false
     ) { bump(it.getLongValue(Sms.THREAD_ID)) }
 
@@ -349,8 +350,9 @@ fun Context.getUnreadCountsByThread(): Map<Long, Int> {
     queryCursor(
         uri = Mms.CONTENT_URI,
         projection = arrayOf(Mms.THREAD_ID),
-        selection = "${Mms.READ}=0 AND ${Mms.MESSAGE_BOX}=${Mms.MESSAGE_BOX_INBOX}",
-        selectionArgs = null,
+        selection = "${Mms.READ}=0 AND ${Mms.MESSAGE_BOX}=${Mms.MESSAGE_BOX_INBOX}" +
+            if (threadId != null) " AND ${Mms.THREAD_ID} = ?" else "",
+        selectionArgs = threadId?.let { arrayOf(it.toString()) },
         showErrors = false
     ) { bump(it.getLongValue(Mms.THREAD_ID)) }
 
@@ -414,7 +416,7 @@ fun Context.getConversations(
 
     val conversations = ArrayList<Conversation>()
     val simpleContactHelper = SimpleContactsHelper(this)
-    val unreadMap = getUnreadCountsByThread()
+    val unreadMap = getUnreadCountsByThread(threadId)
     val storedThreadDates = getStoredThreadDates(threadId)
     try {
         queryCursorUnsafe(
@@ -1345,13 +1347,17 @@ fun Context.createConversationFromMessage(message: Message): Conversation {
     )
 }
 
-fun Context.syncThreadToLocal(threadId: Long, address: String? = null, loadAll: Boolean = false): List<Message> {
+fun Context.syncThreadToLocal(
+    threadId: Long,
+    address: String? = null,
+    loadAll: Boolean = false,
+    refreshConversation: Boolean = true,
+): List<Message> {
     if (threadId == 0L) return emptyList()
     val limit = if (loadAll) Int.MAX_VALUE else MESSAGES_LIMIT
-    val targetAddress = address ?: getPhoneNumbersFromSmsTable(threadId).firstOrNull()
     val providerMessages = getMessages(
         threadId = threadId,
-        address = targetAddress,
+        address = address,
         includeScheduledMessages = false,
         limit = limit
     )
@@ -1360,6 +1366,9 @@ fun Context.syncThreadToLocal(threadId: Long, address: String? = null, loadAll: 
     }
 
     val localMessages = messagesDB.getNonRecycledThreadMessages(threadId)
+    // The conversation-list refresh has already loaded and saved provider metadata.
+    // Incoming-message/recovery callers keep the default and refresh their one thread.
+    if (!refreshConversation) return localMessages
     val providerConversation = getConversations(threadId).firstOrNull()
     val conversation = providerConversation ?: localMessages.filterNot { it.isScheduled }
         .maxByOrNull { it.date }
