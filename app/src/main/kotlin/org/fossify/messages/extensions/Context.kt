@@ -359,6 +359,27 @@ fun Context.getUnreadCountsByThread(threadId: Long? = null): Map<Long, Int> {
     return result
 }
 
+/** A null/failed cursor must not be mistaken for a successful zero-unread snapshot. */
+private fun Context.getUnreadCountsByThreadStrict(threadId: Long?): Map<Long, Int> {
+    val counts = HashMap<Long, Int>()
+    for ((uri, selection) in listOf(
+        Sms.CONTENT_URI to "${Sms.READ}=0 AND ${Sms.TYPE}=${Sms.MESSAGE_TYPE_INBOX}",
+        Mms.CONTENT_URI to "${Mms.READ}=0 AND ${Mms.MESSAGE_BOX}=${Mms.MESSAGE_BOX_INBOX}"
+    )) {
+        val filter = selection + if (threadId != null) " AND ${Sms.THREAD_ID}=?" else ""
+        val cursor = contentResolver.query(uri, arrayOf(Sms.THREAD_ID), filter,
+            threadId?.let { arrayOf(it.toString()) }, null)
+            ?: throw IllegalStateException("Unread query returned no cursor")
+        cursor.use {
+            while (it.moveToNext()) {
+                val id = it.getLong(0)
+                counts[id] = (counts[id] ?: 0) + 1
+            }
+        }
+    }
+    return counts
+}
+
 /** Read message timestamps in two batched queries rather than trusting OEM thread metadata. */
 private fun Context.getStoredThreadDates(threadId: Long?): Map<Long, Int> {
     val dates = HashMap<Long, Int>()
@@ -416,7 +437,7 @@ fun Context.getConversations(
 
     val conversations = ArrayList<Conversation>()
     val simpleContactHelper = SimpleContactsHelper(this)
-    val unreadMap = getUnreadCountsByThread(threadId)
+    val unreadMap = runCatching { getUnreadCountsByThreadStrict(threadId) }.getOrNull()
     val storedThreadDates = getStoredThreadDates(threadId)
     try {
         queryCursorUnsafe(
@@ -469,8 +490,8 @@ fun Context.getConversations(
                 ""
             }
             val isGroupConversation = phoneNumbers.size > 1
-            val read = cursor.getIntValue(Threads.READ) == 1
-            val unreadCount = if (!read) unreadMap[id] ?: 0 else 0
+            val unreadCount = unreadMap?.get(id) ?: 0
+            val read = if (unreadMap != null) unreadCount == 0 else cursor.getIntValue(Threads.READ) == 1
             val conversation = Conversation(
                 threadId = id,
                 snippet = snippet,
@@ -932,13 +953,14 @@ fun Context.getSmsThreadId(messageId: Long): Long {
     return result
 }
 
-fun Context.deleteConversation(threadId: Long) {
+fun Context.deleteConversation(threadId: Long, failOnError: Boolean = false) {
     var uri = Sms.CONTENT_URI
     val selection = "${Sms.THREAD_ID} = ?"
     val selectionArgs = arrayOf(threadId.toString())
     try {
         contentResolver.delete(uri, selection, selectionArgs)
     } catch (e: Exception) {
+        if (failOnError) throw e
         showErrorToast(e)
     }
 
@@ -946,6 +968,7 @@ fun Context.deleteConversation(threadId: Long) {
     try {
         contentResolver.delete(uri, selection, selectionArgs)
     } catch (e: Exception) {
+        if (failOnError) throw e
         android.util.Log.w("Context", "Error in getMessages: ${e.message}")
     }
 
@@ -1084,6 +1107,8 @@ fun Context.markThreadMessagesRead(threadId: Long) {
 
     messagesDB.markThreadRead(threadId)
     conversationsDB.markRead(threadId)
+    // Publish only after both provider and local writes have completed.
+    org.fossify.messages.helpers.refreshConversations()
 }
 
 fun Context.markThreadMessagesUnread(threadId: Long) {

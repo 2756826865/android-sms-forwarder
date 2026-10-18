@@ -6,6 +6,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -93,6 +95,7 @@ fun ConversationsScreen(
     val context = LocalContext.current
     val uiState by conversationsViewModel.uiState.collectAsState()
     var searchQuery by remember { mutableStateOf("") }
+    var deleteTarget by remember { mutableStateOf<Conversation?>(null) }
     var confirmSync by remember { mutableStateOf(false) }
     var showMoreOptions by remember { mutableStateOf(false) }
     val syncProgress by org.fossify.messages.helpers.SmsSyncProgress.state.collectAsState()
@@ -102,6 +105,24 @@ fun ConversationsScreen(
         text = { Text("读取系统短信并补齐本地会话记录，大量历史可能耗时。不会补转发历史短信。普通刷新只刷新会话列表。") },
         confirmButton = { androidx.compose.material3.TextButton(onClick = { confirmSync = false; conversationsViewModel.resyncAll() }) { Text("开始同步") } },
         dismissButton = { androidx.compose.material3.TextButton(onClick = { confirmSync = false }) { Text("取消") } })
+    deleteTarget?.let { target ->
+        val recycle = context.config.useRecycleBin
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { deleteTarget = null },
+            title = { Text(if (recycle) "删除会话" else "永久删除会话") },
+            text = { Text("将删除与“${target.title}”的整个会话及其中全部短信。" +
+                if (recycle) "内容将移入回收站，可在回收站恢复。" else "删除后无法恢复。") },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    deleteTarget = null
+                    conversationsViewModel.deleteConversation(target.threadId)
+                }) { Text(if (recycle) "移入回收站" else "永久删除") }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { deleteTarget = null }) { Text("取消") }
+            }
+        )
+    }
     val isDark = isSystemInDarkTheme()
 
     val pageBgColor = if (isDark) DarkBackground else AppBackground
@@ -397,6 +418,9 @@ fun ConversationsScreen(
                     items(filteredConversations, key = { it.threadId }) { conv ->
                         ConversationItem(
                             conversation = conv,
+                            onLongClick = {
+                                if (uiState.deletingThreadId == null) deleteTarget = conv
+                            },
                             onClick = {
                                 val intent = Intent(context, ThreadActivity::class.java).apply {
                                     putExtra(THREAD_ID, conv.threadId)
@@ -421,9 +445,11 @@ private val avatarLruCache = object : android.util.LruCache<String, Bitmap>(128)
     override fun sizeOf(key: String, value: Bitmap): Int = 1
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ConversationItem(
     conversation: Conversation,
+    onLongClick: () -> Unit = {},
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
@@ -469,7 +495,11 @@ fun ConversationItem(
         modifier = Modifier
             .fillMaxWidth()
             .defaultMinSize(minHeight = itemHeight)
-            .clickable(onClick = onClick),
+            .combinedClickable(
+                onClick = onClick,
+                onLongClickLabel = "删除会话",
+                onLongClick = onLongClick
+            ),
         shape = RoundedCornerShape(20.dp),
         color = if (isDark) DarkSurface else SurfaceCard,
         shadowElevation = 2.dp,

@@ -121,6 +121,7 @@ class MultiChannelForwardWorker(
             threadId = inputData.getLong(KEY_THREAD_ID, 0),
             groupPlan = plan.toString(),
             originalSim = receivedSimSnapshot(),
+            allowSimLabelPrefix = inputData.getBoolean(KEY_ALLOW_SIM_LABEL_PREFIX, false),
         )
     }
 
@@ -192,8 +193,11 @@ class MultiChannelForwardWorker(
         // SIM name, which the common formatter places in the separate title field.
         // Keep explicit global/rule templates intact and avoid adding any SIM when
         // the exact subscription cannot be resolved.
-        val textOnlyContent = if (inputData.getBoolean(KEY_BODY_ALREADY_RENDERED, false) ||
-            (config.templateMode == MultiForwardConfig.TEMPLATE_CUSTOM && config.customTemplate.isNotBlank())) content
+        val textOnlyContent = if (SimLabelPresentation.preserveBody(
+                inputData.getBoolean(KEY_BODY_ALREADY_RENDERED, false),
+                inputData.getBoolean(KEY_ALLOW_SIM_LABEL_PREFIX, false),
+                config.templateMode == MultiForwardConfig.TEMPLATE_CUSTOM && config.customTemplate.isNotBlank()
+            )) content
         else ForwardingMessageFormatter.withCustomSimLabel(
             applicationContext, config, subscriptionId, content, receivedSimSnapshot()
         )
@@ -1239,7 +1243,7 @@ class MultiChannelForwardWorker(
         val contentType = contentTypeValue.trim().ifBlank { "application/json" }
         val time = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date(receivedAt))
         val sim = if (subscriptionId >= 0) {
-            receivedSimSnapshot()?.description ?: ForwardingMessageFormatter.getSimDescription(applicationContext, MultiForwardConfig(applicationContext), subscriptionId)
+            receivedSimSnapshot()?.let(ForwardingMessageFormatter::describeSim) ?: ForwardingMessageFormatter.getSimDescription(applicationContext, MultiForwardConfig(applicationContext), subscriptionId)
         } else ""
         val simSlot = if (subscriptionId >= 0) {
             receivedSimSnapshot()?.let { if (it.slotIndex >= 0) "SIM${it.slotIndex + 1}" else "未知接收卡" }
@@ -1374,6 +1378,7 @@ class MultiChannelForwardWorker(
         const val KEY_RULE_ID = "rule_id"
         const val KEY_ACTION_ID = "action_id"
         private const val KEY_BODY_ALREADY_RENDERED = "body_already_rendered"
+        private const val KEY_ALLOW_SIM_LABEL_PREFIX = "allow_sim_label_prefix"
         private const val SMTP_TIMEOUT_MS = 12_000
         /** 规则启用但无任何渠道命中时，与 null（未启用规则）区分 */
         const val RULE_BLOCK_ALL = "__BLOCK_ALL__"
@@ -1457,6 +1462,7 @@ class MultiChannelForwardWorker(
             threadId: Long = 0L,
             groupPlan: String = "",
             originalSim: ForwardingSimSnapshot? = null,
+            allowSimLabelPrefix: Boolean = false,
         ) {
             val multiConfig = MultiForwardConfig(context)
             val requestedInstance = targetInstanceId.takeIf(String::isNotBlank)
@@ -1521,7 +1527,7 @@ class MultiChannelForwardWorker(
                     enqueueSingle(context, sender, body, receivedAt, subscriptionId,
                         "$uniqueId-step-0", first.channelType, setOf(first.id), isTest, operationId,
                         first.id, ruleId, actionId, bodyAlreadyRendered, visitedGroupIds + groupIdentity,
-                        threadId, plan.toString())
+                        threadId, plan.toString(), originalSim, allowSimLabelPrefix)
                     return
                 }
                 members.forEach { member ->
@@ -1546,6 +1552,7 @@ class MultiChannelForwardWorker(
                         groupPlan = if (requestedInstance != null) JSONObject()
                             .put("mode", "parallel").put("groupId", groupIdentity).toString() else "",
                         originalSim = originalSim,
+                        allowSimLabelPrefix = allowSimLabelPrefix,
                     )
                 }
                 return
@@ -1582,6 +1589,7 @@ class MultiChannelForwardWorker(
                 .put("subscriptionId", subscriptionId).put("channel", targetChannel)
                 .put("instanceId", targetInstanceId).put("ruleId", ruleId).put("actionId", actionId)
                 .put("bodyAlreadyRendered", bodyAlreadyRendered).put("threadId", threadId)
+                .put("allowSimLabelPrefix", allowSimLabelPrefix)
                 .put("slot", capturedSim.slotIndex).put("sim", capturedSim.description)
                 .put("receiver", capturedSim.receiverNumber).put("label", capturedSim.customLabel))
             val requestBuilder = OneTimeWorkRequestBuilder<MultiChannelForwardWorker>()
@@ -1605,6 +1613,7 @@ class MultiChannelForwardWorker(
                         KEY_RULE_ID to ruleId,
                         KEY_ACTION_ID to actionId,
                         KEY_BODY_ALREADY_RENDERED to bodyAlreadyRendered,
+                        KEY_ALLOW_SIM_LABEL_PREFIX to allowSimLabelPrefix,
                         KEY_THREAD_ID to threadId,
                         KEY_GROUP_PLAN to groupPlan,
                     ) }.getOrElse { error ->

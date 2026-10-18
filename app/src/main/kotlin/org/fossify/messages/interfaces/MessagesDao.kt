@@ -11,6 +11,9 @@ import org.fossify.messages.models.RecycleBinMessage
 
 @Dao
 interface MessagesDao {
+    @Query("SELECT DISTINCT m.thread_id FROM messages m INNER JOIN recycle_bin_messages r ON r.id = m.id WHERE NOT EXISTS (SELECT 1 FROM messages visible LEFT JOIN recycle_bin_messages removed ON removed.id = visible.id WHERE visible.thread_id = m.thread_id AND removed.id IS NULL)")
+    fun getFullyRecycledThreadIds(): List<Long>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun insertOrUpdate(message: Message)
 

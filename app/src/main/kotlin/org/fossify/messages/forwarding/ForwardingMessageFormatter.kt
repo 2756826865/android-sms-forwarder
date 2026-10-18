@@ -24,16 +24,17 @@ object ForwardingMessageFormatter {
         content: String,
         snapshot: ForwardingSimSnapshot? = null,
     ): String {
-        if (subscriptionId < 0) return content
-        val label = snapshot?.customLabel ?: runCatching {
-            val slot = resolveSimInfo(context, subscriptionId)?.simSlotIndex
-            slot?.takeIf { it >= 0 }?.let(config::customSimLabel).orEmpty().trim()
-        }.getOrDefault("")
-        if (label.isBlank()) return content
-        val alreadyLabeled = content.lineSequence().any {
-            it == "【$label】" || it == "卡槽：$label" || it == "📶卡槽：$label"
+        val description = if (snapshot != null) {
+            if (snapshot.customLabel.isBlank() || snapshot.slotIndex < 0) return content
+            describeSim(snapshot)
+        } else {
+            if (subscriptionId < 0) return content
+            val slot = resolveSimInfo(context, subscriptionId)?.simSlotIndex ?: return content
+            val label = config.customSimLabel(slot)
+            if (label.isBlank()) return content
+            SimLabelPresentation.describeSlot(slot, label)
         }
-        return if (alreadyLabeled) content else "【$label】\n$content"
+        return SimLabelPresentation.addLabel(content, description, config.enablePrivacyMask)
     }
 
     fun renderRuleTemplate(
@@ -42,7 +43,8 @@ object ForwardingMessageFormatter {
         sender: String,
         body: String,
         receivedAt: Long,
-        subscriptionId: Int
+        subscriptionId: Int,
+        simSnapshot: ForwardingSimSnapshot? = null,
     ): String {
         if (template.isBlank()) return body
         val battery by lazy { TemplateDataRetriever.batterySnapshot(context) }
@@ -53,8 +55,8 @@ object ForwardingMessageFormatter {
         val formattedTime by lazy { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date(receivedAt)) }
         val dateOnly by lazy { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(receivedAt)) }
         val timeOnly by lazy { SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(receivedAt)) }
-        val receivedSim by lazy { if (subscriptionId >= 0) captureSim(context, subscriptionId) else null }
-        val sim by lazy { receivedSim?.description.orEmpty() }
+        val receivedSim by lazy { simSnapshot ?: if (subscriptionId >= 0) captureSim(context, subscriptionId) else null }
+        val sim by lazy { receivedSim?.let(::describeSim).orEmpty() }
         val receiverNumber by lazy { receivedSim?.receiverNumber.orEmpty() }
         val simIndex by lazy { receivedSim?.slotIndex?.takeIf { it >= 0 }?.let { (it + 1).toString() }.orEmpty() }
         val code by lazy { org.fossify.messages.rule.template.TemplateRenderer.extractVerificationCode(body) }
@@ -65,8 +67,15 @@ object ForwardingMessageFormatter {
             .replace("{{SMS}}", body).replace("{{BODY}}", body).replace("{{CONTENT}}", body)
             .replaceWhenPresent("{{RECEIVE_TIME}}") { formattedTime }.replaceWhenPresent("{{DATE_YMD}}") { dateOnly }
             .replaceWhenPresent("{{DATE_HMS}}") { timeOnly }.replace("{{TIMESTAMP}}", receivedAt.toString())
-            .replaceWhenPresent("{{SIM_SLOT}}") { sim }.replaceWhenPresent("{{SIM_INDEX}}") { simIndex }
+            .replaceWhenPresent("{{SIM_SLOT}}") { sim }
+            .replaceWhenPresent("{{CARD_SLOT}}") { sim }.replaceWhenPresent("{{SIM}}") { sim }
+            .replaceWhenPresent("{{sim}}") { sim }.replaceWhenPresent("{sim}") { sim }
+            .replaceWhenPresent("{{卡槽}}") { sim }
+            .replaceWhenPresent("{{SIM_INDEX}}") { simIndex }
+            .replaceWhenPresent("{{SIM_ID}}") { simIndex }.replaceWhenPresent("{{卡槽序号}}") { simIndex }
             .replaceWhenPresent("{{RECEIVER_NUMBER}}") { receiverNumber }
+            .replaceWhenPresent("{{RECEIVER}}") { receiverNumber }.replaceWhenPresent("{receiver}") { receiverNumber }
+            .replaceWhenPresent("{{接收号码}}") { receiverNumber }
             .replaceWhenPresent("{{DEVICE_NAME}}") { TemplateDataRetriever.getDeviceName() }
             .replaceWhenPresent("{{DEVICE_BRAND}}") { TemplateDataRetriever.getDeviceBrand() }
             .replaceWhenPresent("{{DEVICE_MODEL}}") { TemplateDataRetriever.getDeviceModel() }
@@ -97,13 +106,13 @@ object ForwardingMessageFormatter {
         }.getOrNull()?.takeIf { it.isNotBlank() && it != sender }
         val senderTitle = contactName ?: sender.ifBlank { "新短信" }
         
-        val sim = if (includeSim && subscriptionId >= 0) {
-            simSnapshot?.description ?: getSimDescription(context, config, subscriptionId)
+        val sim = if (includeSim && (subscriptionId >= 0 || simSnapshot?.slotIndex?.let { it >= 0 } == true)) {
+            simSnapshot?.let(::describeSim) ?: getSimDescription(context, config, subscriptionId)
         } else {
             ""
         }
         
-        val receiverNumber = if (subscriptionId >= 0) {
+        val receiverNumber = if (subscriptionId >= 0 || simSnapshot?.slotIndex?.let { it >= 0 } == true) {
             simSnapshot?.receiverNumber ?: getReceiverNumber(context, config, subscriptionId)
         } else {
             ""
@@ -251,15 +260,25 @@ object ForwardingMessageFormatter {
         return org.fossify.messages.messaging.SubscriptionResolver.findActiveInfo(context, subscriptionId)
     }
 
+    /** Old queued snapshots also use the same display format, without changing their receive slot. */
+    fun describeSim(snapshot: ForwardingSimSnapshot): String =
+        if (snapshot.customLabel.isBlank()) snapshot.description
+        else SimLabelPresentation.describeSlot(snapshot.slotIndex, snapshot.customLabel)
+
+    fun previewSim(context: Context, slotIndex: Int?): ForwardingSimSnapshot? {
+        val slot = slotIndex?.takeIf { it in 0..1 } ?: return null
+        val config = MultiForwardConfig(context)
+        val label = config.customSimLabel(slot)
+        return ForwardingSimSnapshot(slot, SimLabelPresentation.describeSlot(slot, label), config.customSimNumber(slot), label)
+    }
+
     fun captureSim(context: Context, subscriptionId: Int): ForwardingSimSnapshot {
         val config = MultiForwardConfig(context)
         val info = resolveSimInfo(context, subscriptionId)
         val slot = info?.simSlotIndex?.takeIf { it >= 0 } ?: -1
         val custom = config.customSimLabel(slot)
         val carrier = info?.carrierName?.toString()?.takeIf(String::isNotBlank) ?: info?.displayName?.toString().orEmpty()
-        val description = if (slot < 0) "未知接收卡" else custom.ifBlank {
-            if (carrier.isBlank()) "SIM${slot + 1}" else "SIM${slot + 1} · $carrier"
-        }
+        val description = SimLabelPresentation.describeSlot(slot, custom, carrier)
         @Suppress("DEPRECATION")
         val number = config.customSimNumber(slot).ifBlank { info?.number.orEmpty() }
         return ForwardingSimSnapshot(slot, description, number, custom)
@@ -270,10 +289,9 @@ object ForwardingMessageFormatter {
         val info = resolveSimInfo(context, subscriptionId) ?: return "未知接收卡"
         val slot = info.simSlotIndex.takeIf { it >= 0 } ?: return "未知接收卡"
         val custom = config.customSimLabel(slot)
-        if (custom.isNotBlank()) return custom
         val carrier = info.carrierName?.toString()?.takeIf { it.isNotBlank() }
             ?: info.displayName?.toString().orEmpty()
-        return if (carrier.isNotBlank()) "SIM${slot + 1} · $carrier" else "SIM${slot + 1}"
+        return SimLabelPresentation.describeSlot(slot, custom, carrier)
     }
 
     @SuppressLint("MissingPermission", "HardwareIds")

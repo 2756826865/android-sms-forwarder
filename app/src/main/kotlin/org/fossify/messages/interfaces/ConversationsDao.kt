@@ -38,7 +38,7 @@ interface ConversationsDao {
     @Query("SELECT * FROM conversations WHERE title LIKE :text")
     fun getConversationsWithText(text: String): List<Conversation>
 
-    @Query("UPDATE conversations SET read = 1 WHERE thread_id = :threadId")
+    @Query("UPDATE conversations SET read = 1, unread_count = 0 WHERE thread_id = :threadId")
     fun markRead(threadId: Long)
 
     @Query("UPDATE conversations SET read = 0 WHERE thread_id = :threadId")

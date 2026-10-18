@@ -24,6 +24,7 @@ object ForwardingRetry {
             isTest = record.isTest, targetInstanceId = payload.optString("instanceId"),
             ruleId = payload.optString("ruleId"), actionId = payload.optString("actionId"),
             bodyAlreadyRendered = payload.optBoolean("bodyAlreadyRendered"), threadId = payload.optLong("threadId"),
+            allowSimLabelPrefix = payload.optBoolean("allowSimLabelPrefix", false),
             originalSim = ForwardingSimSnapshot(payload.optInt("slot", -1), payload.optString("sim"),
                 payload.optString("receiver"), payload.optString("label")),
         )

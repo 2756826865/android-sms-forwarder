@@ -16,6 +16,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.fossify.messages.extensions.deleteConversation
+import org.fossify.messages.extensions.moveConversationToRecycleBin
+import org.fossify.messages.messaging.cancelScheduleSendPendingIntent
+import org.fossify.commons.extensions.notificationManager
 import org.fossify.messages.extensions.getConversations
 import org.fossify.messages.models.Conversation
 import org.fossify.messages.extensions.messagesDB
@@ -31,6 +35,7 @@ data class ConversationsUiState(
     val searchThreadIds: Set<Long> = emptySet(),
     val searchStatus: String = "搜索联系人/号码及已同步短信正文",
     val initialLoaded: Boolean = false,
+    val deletingThreadId: Long? = null,
     val loadError: String = ""
 )
 
@@ -53,6 +58,49 @@ class ConversationsViewModel(application: Application) : AndroidViewModel(applic
                     searchStatus = if (ids.size > 500) "正文结果仅展示最近500个会话；可缩小关键词范围" else "已搜索本地同步正文；未同步历史需先全量同步")
             } catch (e: CancellationException) { throw e }
             catch (_: Exception) { _uiState.value = _uiState.value.copy(searchThreadIds = emptySet(), searchStatus = "正文搜索失败，仍展示联系人/号码匹配") }
+        }
+    }
+
+    fun deleteConversation(threadId: Long) {
+        if (_uiState.value.deletingThreadId != null) return
+        refreshJob?.cancel()
+        _uiState.value = _uiState.value.copy(deletingThreadId = threadId, loadError = "")
+        viewModelScope.launch {
+            val context = getApplication<Application>()
+            try {
+                withContext(Dispatchers.IO) {
+                    check(org.fossify.messages.helpers.DeviceCompatHelper.isDefaultSmsApp(context)) {
+                        "请先设为默认短信应用，再删除会话"
+                    }
+                    if (context.config.useRecycleBin) {
+                        // Include unsynced history, so moving a thread does not remove only its cached page.
+                        context.syncThreadToLocal(threadId, loadAll = true)
+                        context.moveConversationToRecycleBin(threadId)
+                        check(context.messagesDB.getNonRecycledThreadMessages(threadId).isEmpty()) {
+                            "部分短信未能移入回收站，请刷新后重试"
+                        }
+                    } else {
+                        context.messagesDB.getNonRecycledThreadMessages(threadId)
+                            .filter { it.isScheduled }
+                            .forEach { context.cancelScheduleSendPendingIntent(it.id) }
+                        context.deleteConversation(threadId, failOnError = true)
+                    }
+                    context.notificationManager.cancel(threadId.hashCode())
+                }
+                _uiState.value = _uiState.value.copy(
+                    conversations = _uiState.value.conversations.filterNot { it.threadId == threadId },
+                    searchThreadIds = _uiState.value.searchThreadIds - threadId
+                )
+                org.fossify.messages.helpers.refreshConversations()
+                org.fossify.messages.helpers.refreshMessages()
+                refresh()
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                _uiState.value = _uiState.value.copy(loadError = error.message ?: "删除失败，请检查短信权限后重试")
+            } finally {
+                _uiState.value = _uiState.value.copy(deletingThreadId = null)
+            }
         }
     }
 
@@ -155,8 +203,12 @@ class ConversationsViewModel(application: Application) : AndroidViewModel(applic
                 loadingWatchdog.cancel()
             }
 
+            val recycledThreads = withContext(Dispatchers.IO) {
+                context.messagesDB.getFullyRecycledThreadIds().toHashSet()
+            }
             val list = org.fossify.messages.helpers.sortConversations(
-                org.fossify.messages.helpers.mergeConversationSources(provider, cached),
+                org.fossify.messages.helpers.mergeConversationSources(provider, cached)
+                    .filterNot { it.threadId in recycledThreads },
                 context.config.pinnedConversations
             )
             _uiState.value = _uiState.value.copy(

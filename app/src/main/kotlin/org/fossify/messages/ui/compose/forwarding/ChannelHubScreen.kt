@@ -2148,7 +2148,7 @@ fun ForwardSettingsDialog(onDismiss: () -> Unit) {
                 ) {
                     Text("双卡显示名称", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
                     Text(
-                        "用于转发内容、卡槽选择和状态显示；留空时跟随系统 SIM 与运营商名称",
+                        "转发模板使用此处名称，例如 SIM1 · 工作号1234；留空时显示 SIM 与运营商名称",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -2156,7 +2156,7 @@ fun ForwardSettingsDialog(onDismiss: () -> Unit) {
                         value = simOneLabel,
                         onValueChange = { simOneLabel = it.take(24) },
                         label = { Text("卡一名称") },
-                        placeholder = { Text("例如：工作主卡") },
+                        placeholder = { Text("例如：工作号1234") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -2164,7 +2164,7 @@ fun ForwardSettingsDialog(onDismiss: () -> Unit) {
                         value = simTwoLabel,
                         onValueChange = { simTwoLabel = it.take(24) },
                         label = { Text("卡二名称") },
-                        placeholder = { Text("例如：生活副卡") },
+                        placeholder = { Text("例如：家人号1234") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )

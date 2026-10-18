@@ -1553,7 +1553,7 @@ class ThreadActivity : SimpleActivity() {
         var prevMessage: Message? = null
         var prevDateTime = 0
         var prevSIMId = -2
-        var hadUnreadItems = false
+        val unreadItems = ArrayList<Message>()
         val cnt = messageSnapshot.size
         for (i in 0 until cnt) {
             val message = messageSnapshot.getOrNull(i) ?: continue
@@ -1576,11 +1576,7 @@ class ThreadActivity : SimpleActivity() {
             }
 
             if (!message.read) {
-                hadUnreadItems = true
-                ensureBackgroundThread {
-                    markMessageRead(message.id, message.isMMS)
-                    conversationsDB.markRead(threadId)
-                }
+                unreadItems.add(message)
             }
 
             if (i == cnt - 1 && (message.type == Telephony.Sms.MESSAGE_TYPE_SENT)) {
@@ -1594,8 +1590,18 @@ class ThreadActivity : SimpleActivity() {
             prevSIMId = message.subscriptionId
         }
 
-        if (hadUnreadItems) {
-            bus?.post(Events.RefreshConversations())
+        if (unreadItems.isNotEmpty()) {
+            ensureBackgroundThread {
+                try {
+                    unreadItems.forEach { markMessageRead(it.id, it.isMMS) }
+                    conversationsDB.markRead(threadId)
+                } catch (error: Exception) {
+                    android.util.Log.w("ThreadActivity", "Mark-read failed", error)
+                } finally {
+                    // Refresh after the writes, including partial completion on provider failure.
+                    bus?.post(Events.RefreshConversations())
+                }
+            }
         }
 
         return items

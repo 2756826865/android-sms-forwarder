@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.4(101801)] - 2026-10-18
+
+- 修复开发模式中，读过短信后未读绿点不消失的问题。
+- 开发模式支持长按会话删除，删除前会确认。
+- 转发模板统一使用双卡名称，例如“SIM1 · 工作号1234”，修复规则模板及预览显示。
+- 兼容保活默认关闭，锁屏转发延迟或排队时可尝试开启。
+
+[完整说明](docs/release-1.2.4%28101801%29.md)
+
 ## [1.2.4] - 2026-10-17
 
 ### 新增与优化
