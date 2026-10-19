@@ -737,7 +737,9 @@ open class IncomingSmsService : Service() {
                             body = body,
                             receivedAt = receivedAt,
                             subscriptionId = subscriptionId,
-                            uniqueId = "sms-minimal-$receivedAt-${body.hashCode()}",
+                            uniqueId = org.fossify.messages.forwarding.SmsDirectBillingPolicy.degradedWorkId(
+                                fingerprint(address, body,
+                                    parts.minOf { it.timestampMillis }.coerceAtLeast(0L), subscriptionId)),
                             operationId = null,
                             ruleDecision = evaluateCheapRules(appContext, address, body, subscriptionId),
                         )

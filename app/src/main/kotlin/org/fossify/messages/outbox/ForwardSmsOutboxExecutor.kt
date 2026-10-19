@@ -10,6 +10,8 @@ import org.fossify.messages.models.OutboxTaskType
 import org.fossify.messages.models.SmsSendState
 import org.fossify.messages.models.SmsSendTriggerType
 import org.json.JSONObject
+import org.fossify.messages.forwarding.SmsDirectSendGuard
+import org.fossify.messages.forwarding.SmsDirectBillingPolicy
 
 /**
  * 短信直发转发渠道 Outbox 执行器
@@ -48,6 +50,9 @@ class ForwardSmsOutboxExecutor : OutboxExecutor {
                 errorMessage = "Target phone or content is blank"
             )
         }
+        if (task.attemptCount > 0) return OutboxExecutionResult.FatalFailure(
+            "SmsDirectRetryBlocked", "旧短信直发任务结果未确认，已阻止自动重发，请核对收件端"
+        )
 
         // 1. 重复发信保护检查
         if (deliveryId.isNotBlank()) {
@@ -66,26 +71,28 @@ class ForwardSmsOutboxExecutor : OutboxExecutor {
         }
 
         return try {
-            context.sendMessageCompat(
-                text = content,
-                addresses = listOf(phone),
-                subId = subId.takeIf { it >= 0 },
-                attachments = emptyList(),
-                propagateErrors = true,
-                triggerType = triggerType
-            )
+            SmsDirectSendGuard.sendOnce(context, SmsDirectBillingPolicy.outboxSource(task.taskId, deliveryId), phone) {
+                context.sendMessageCompat(
+                    text = content,
+                    addresses = listOf(phone),
+                    subId = subId.takeIf { it >= 0 },
+                    attachments = emptyList(),
+                    propagateErrors = true,
+                    triggerType = triggerType
+                )
+            }
 
             if (deliveryId.isNotBlank()) {
-                ShadowRepository.recordForwardingDeliveryState(context, deliveryId, "DELIVERED")
+                ShadowRepository.recordForwardingDeliveryState(context, deliveryId, "SUBMITTED")
             }
 
             OutboxExecutionResult.Success
         } catch (e: Exception) {
             Log.w(TAG, "Failed to send forward SMS for task ${task.taskId}: ${e.message}")
             if (deliveryId.isNotBlank()) {
-                ShadowRepository.recordForwardingDeliveryState(context, deliveryId, "FAILED")
+                ShadowRepository.recordForwardingDeliveryState(context, deliveryId, "UNKNOWN")
             }
-            OutboxExecutionResult.Retry(
+            OutboxExecutionResult.FatalFailure(
                 errorClass = e.javaClass.name,
                 errorMessage = e.message
             )

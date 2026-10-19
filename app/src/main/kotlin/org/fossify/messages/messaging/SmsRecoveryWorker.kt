@@ -50,6 +50,9 @@ class SmsRecoveryWorker(
             PackageManager.PERMISSION_GRANTED
         ) return Result.success()
 
+        // Reconcile original channel tasks before history-based SMS dedupe. Never re-route old SMS.
+        org.fossify.messages.forwarding.ForwardingQueueReconciler.run(applicationContext, allowRepair = true)
+
         val prefs = applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val now = System.currentTimeMillis()
         // 首次安装（水位不存在）时只登记水位、不回溯：否则新装用户第一次扫描就会把过去 N 天的
@@ -74,8 +77,8 @@ class SmsRecoveryWorker(
         // 降级路径的步骤 3（写 Room）与步骤 4（入队转发）各有独立的预算闸门：步骤 3 成功、步骤 4
         // 被闸门拦掉时，消息已经在 Room 里却**从未入队转发**。此时只用 id 判重会让恢复扫描永远
         // 跳过它 → 短信入库但永不转发（两个机制各自正确、合起来却是新洞）。
-        // MultiChannelForwardWorker.enqueueSingle 在**入队时**就调用 ForwardingHistoryStore.registerQueued
-        // (workId = uniqueId)，因此"历史里存在 sms-<id> 前缀的记录"等价于"这条短信已经进过转发队列"。
+        // 既有转发记录由上面的任务核对器按原目标处理；这里继续禁止重新匹配规则、整条短信重放。
+        // 排队记录只证明已登记，不能证明已送达；无法证明安全的旧任务会标记未知，等待用户核实。
         // 扫描开始时读一次即可：扫描中自己新产生的记录不需要在本次扫描内立刻可见（每行只处理一次）。
         val forwardedMessageIds by lazy { readForwardedMessageIds() }
         var newestSeen = lastChecked

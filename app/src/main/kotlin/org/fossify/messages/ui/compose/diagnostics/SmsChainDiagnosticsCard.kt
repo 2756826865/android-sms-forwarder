@@ -62,8 +62,9 @@ fun SmsChainDiagnosticsCard() {
                         val issues = org.fossify.messages.forwarding.ForwardingConfigAudit.inspect(
                             forwardingConfig.channelInstances(), org.fossify.messages.forwarding.ForwardingRulesConfig(context).rules)
                         val works = androidx.work.WorkManager.getInstance(context)
-                            .getWorkInfosByTag(org.fossify.messages.forwarding.MultiChannelForwardWorker::class.java.name).get()
-                        val queueReport = "实际待调度：${works.count { it.state == androidx.work.WorkInfo.State.ENQUEUED }}；运行：${works.count { it.state == androidx.work.WorkInfo.State.RUNNING }}\n网络恢复后由原WorkManager约束调度；待调度也可能是延迟或重试。"
+                            .getWorkInfosByTag(org.fossify.messages.forwarding.MultiChannelForwardWorker::class.java.name)
+                            .get(5, java.util.concurrent.TimeUnit.SECONDS)
+                        val queueReport = org.fossify.messages.forwarding.ForwardingQueueDiagnostics.summary(context, works)
                         val auditReport = issues.joinToString("\n").ifBlank { "未发现本次检查范围内的问题" }
 
                         val attempts = dao.getRecentAttempts(10)

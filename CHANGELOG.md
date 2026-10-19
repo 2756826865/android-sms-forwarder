@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.4(101901)] - 2026-10-19
+
+- 修复超长会话地址 ID 报错，补充号码兜底，避免联系人 ID 与号码错位。
+- 加强短信直发防重复保护，减少异常重试造成的重复扣费风险。
+- 重试前核对原任务，防止重复点击及与自动补偿重复提交。
+- 保留具体失败原因，支持查看实际排队原因。
+
+[完整说明](docs/release-1.2.4%28101901%29.md)
+
 ## [1.2.4(101801)] - 2026-10-18
 
 - 修复开发模式中，读过短信后未读绿点不消失的问题。

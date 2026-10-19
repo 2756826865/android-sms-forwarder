@@ -7,6 +7,7 @@ import org.fossify.messages.forwarding.plugin.model.ForwardPayload
 import org.fossify.messages.models.OutboxTaskEntity
 import org.fossify.messages.models.OutboxTaskType
 import org.json.JSONObject
+import org.fossify.messages.forwarding.SmsDirectBillingPolicy
 
 /**
  * 插件化转发 Outbox 任务执行器
@@ -51,6 +52,10 @@ class ForwardPluginOutboxExecutor : OutboxExecutor {
             metadataMap[key] = metaObj.optString(key)
         }
         if (payloadJson.has("send_operation_id")) metadataMap["send_operation_id"] = payloadJson.optString("send_operation_id")
+        // Overwrite payload metadata: the dispatcher owns the stable task identity.
+        metadataMap["outbox_task_id"] = task.taskId
+        metadataMap["outbox_attempt_count"] = task.attemptCount.toString()
+        metadataMap["sms_direct_source"] = SmsDirectBillingPolicy.outboxSource(task.taskId, payloadJson.optString("deliveryId"))
 
         val forwardPayload = ForwardPayload(
             sourceMessageId = task.sourceId,

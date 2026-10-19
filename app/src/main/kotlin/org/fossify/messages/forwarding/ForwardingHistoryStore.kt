@@ -45,6 +45,85 @@ class ForwardingHistoryStore(context: Context) {
         readRecord(database, id)
     }
 
+    fun pendingQueueRecords(limit: Int): List<ForwardingHistoryRecord> = synchronized(lock) {
+        database.rawQuery("SELECT payload FROM history WHERE is_test = 0 AND status IN ('queued','waiting_network','retry','running','unknown') AND NOT EXISTS (SELECT 1 FROM queue_manual_retry_guard WHERE queue_manual_retry_guard.record_id = history.record_id) ORDER BY queue_checked_at ASC, updated_at ASC LIMIT ?",
+            arrayOf(limit.coerceIn(1, 100).toString())).use { cursor -> buildList {
+            while (cursor.moveToNext()) addAll(decode("[${cursor.getString(0)}]"))
+        } }
+    }
+
+    /** Compare against the snapshot: a concurrent worker result always wins. */
+    fun observeQueue(expected: ForwardingHistoryRecord, status: String, detail: String) = synchronized(lock) {
+        val db = database
+        db.beginTransaction()
+        var changed = false
+        try {
+            val current = readRecord(db, expected.recordId)
+            if (current != null && current == expected) {
+                if (current.status != status || queueObservation(expected.recordId) != detail) {
+                    // Scheduling observations are not delivery errors. Keep the original error intact.
+                    writeRecord(db, current.copy(status = status, updatedAt = System.currentTimeMillis()))
+                    changed = true
+                }
+                db.update("history", ContentValues().apply {
+                    put("queue_checked_at", System.currentTimeMillis()); put("queue_detail", detail)
+                },
+                    "record_id = ?", arrayOf(expected.recordId))
+            }
+            db.setTransactionSuccessful()
+        } finally { db.endTransaction() }
+        if (changed) notifyChanged()
+    }
+
+    fun queueObservation(recordId: String): String = synchronized(lock) {
+        database.rawQuery("SELECT queue_detail FROM history WHERE record_id = ?", arrayOf(recordId))
+            .use { if (it.moveToFirst()) it.getString(0).orEmpty() else "" }
+    }
+
+    /** Compare-and-reserve also arbitrates against an automatic repair of this record. */
+    fun claimManualRetry(expected: ForwardingHistoryRecord): Boolean = synchronized(lock) {
+        val db = database
+        db.beginTransaction()
+        var claimed = false
+        try {
+            val current = readRecord(db, expected.recordId)
+            if (current != null && current == expected && current.status in setOf(STATUS_FAILED, STATUS_UNKNOWN)) {
+                claimed = db.insertWithOnConflict("queue_manual_retry_guard", null,
+                    ContentValues().apply { put("record_id", current.recordId) }, SQLiteDatabase.CONFLICT_IGNORE) >= 0
+                if (claimed) writeRecord(db, current.copy(
+                    detail = current.detail + "；已安排此通道的手动重试，请查看重试记录",
+                    updatedAt = System.currentTimeMillis()))
+            }
+            db.setTransactionSuccessful()
+        } finally { db.endTransaction() }
+        if (claimed) notifyChanged()
+        claimed
+    }
+
+    fun queueRepairClaimed(recordId: String): Boolean = synchronized(lock) {
+        database.rawQuery("SELECT record_id FROM queue_repair_guard WHERE record_id = ?", arrayOf(recordId))
+            .use { it.moveToFirst() }
+    }
+
+    /** Durable, at most one automatic repair. Clearing display history does not clear this guard. */
+    fun claimQueueRepair(expected: ForwardingHistoryRecord): Boolean = synchronized(lock) {
+        val db = database
+        db.beginTransaction()
+        var claimed = false
+        try {
+            val current = readRecord(db, expected.recordId)
+            if (current != null && current == expected && current.status in ForwardingReconcilePolicy.pending && current.attempts == 0) {
+                claimed = db.insertWithOnConflict("queue_repair_guard", null,
+                    ContentValues().apply { put("record_id", current.recordId) }, SQLiteDatabase.CONFLICT_IGNORE) >= 0
+                if (claimed) writeRecord(db, current.copy(status = STATUS_RETRY,
+                    detail = "原任务未启动，已安排一次安全补偿", updatedAt = System.currentTimeMillis()))
+            }
+            db.setTransactionSuccessful()
+        } finally { db.endTransaction() }
+        if (claimed) notifyChanged()
+        claimed
+    }
+
     // Execution guards are deliberately separate from user-clearable display history.
     fun groupStatus(recordId: String): String? = synchronized(lock) {
         database.rawQuery("SELECT status FROM group_execution WHERE record_id = ?", arrayOf(recordId)).use {
@@ -89,6 +168,9 @@ class ForwardingHistoryStore(context: Context) {
         val recordId = recordId(workId, channel)
         val db = database
         val existing = readRecord(db, recordId)
+        // KEEP may retain an older WorkRequest. A duplicate event must not reset
+        // its attempts, result, error or retry payload before enqueue completes.
+        if (existing != null) return@synchronized recordId
         val record = ForwardingHistoryRecord(
             recordId = recordId,
             workId = workId,
@@ -102,7 +184,7 @@ class ForwardingHistoryStore(context: Context) {
             // a long-lived "waiting" state before the worker starts.
             status = STATUS_QUEUED,
             attempts = existing?.attempts ?: 0,
-            detail = "已加入发送队列",
+            detail = "正在提交发送任务",
             updatedAt = System.currentTimeMillis(),
             isTest = isTest,
         )
@@ -145,6 +227,19 @@ class ForwardingHistoryStore(context: Context) {
             detail = "正在发送",
             updatedAt = System.currentTimeMillis(),
         )
+    }
+
+    fun markEnqueued(recordId: String) = update(recordId) {
+        if (ForwardingQueuePolicy.canUpdateSubmission(it.status, it.attempts))
+            it.copy(detail = "已提交系统调度；点击查看排队原因", updatedAt = System.currentTimeMillis())
+        else it
+    }
+
+    fun markEnqueueFailed(recordId: String) = update(recordId) {
+        if (ForwardingQueuePolicy.canUpdateSubmission(it.status, it.attempts))
+            it.copy(status = STATUS_UNKNOWN, detail = "任务提交异常，可能已保存；请先查看排队原因，避免重复发送",
+                updatedAt = System.currentTimeMillis())
+        else it
     }
 
     fun markSuccess(recordId: String, detail: String) = update(recordId) {
@@ -207,9 +302,19 @@ class ForwardingHistoryStore(context: Context) {
         }
     }
 
-    fun saveRetryPayload(recordId: String, payload: JSONObject) = synchronized(lock) {
-        database.update("history", ContentValues().apply { put("retry_payload", payload.toString()) },
-            "record_id = ?", arrayOf(recordId))
+    /** Called only after WorkManager confirms this exact request UUID was persisted. */
+    fun bindQueueSnapshot(recordId: String, payload: JSONObject, expectedRequestId: String? = null): Int = synchronized(lock) {
+        val db = database
+        val values = ContentValues().apply { put("retry_payload", payload.toString()) }
+        if (expectedRequestId == null) return@synchronized db.update("history", values,
+            "record_id = ? AND retry_payload IS NULL", arrayOf(recordId))
+        // Only a verified one-shot repair may replace its original snapshot.
+        // Compare the raw stored value so concurrent callbacks cannot replace a newer owner.
+        val previous = db.rawQuery("SELECT retry_payload FROM history WHERE record_id = ?", arrayOf(recordId))
+            .use { if (it.moveToFirst() && !it.isNull(0)) it.getString(0) else null }
+            ?: return@synchronized 0
+        if (JSONObject(previous).optString("queueRequestId") != expectedRequestId) return@synchronized 0
+        db.update("history", values, "record_id = ? AND retry_payload = ?", arrayOf(recordId, previous))
     }
 
     fun retryPayload(recordId: String): JSONObject? = synchronized(lock) {

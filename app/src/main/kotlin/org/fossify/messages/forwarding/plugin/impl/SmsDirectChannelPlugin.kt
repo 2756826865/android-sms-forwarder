@@ -10,6 +10,7 @@ import org.fossify.messages.forwarding.plugin.model.ChannelResult
 import org.fossify.messages.forwarding.plugin.model.ForwardPayload
 import org.fossify.messages.models.SmsSendState
 import org.fossify.messages.models.SmsSendTriggerType
+import org.fossify.messages.forwarding.SmsDirectSendGuard
 
 /**
  * 短信直发转发插件 (SMS_DIRECT)
@@ -37,6 +38,13 @@ class SmsDirectChannelPlugin(
                 errorMessage = "Destination phone number is missing in targetConfig"
             )
         }
+        if ((payload.metadata["outbox_attempt_count"]?.toIntOrNull() ?: 0) > 0) {
+            return@withContext ChannelResult.Failed("SmsDirectRetryBlocked", "旧短信直发任务结果未确认，已阻止自动重发")
+        }
+        val source = payload.metadata["sms_direct_source"]?.takeIf(String::isNotBlank)
+            ?: payload.metadata["outbox_task_id"]?.takeIf(String::isNotBlank)?.let { "outbox:$it" }
+            ?: payload.sourceMessageId.takeIf(String::isNotBlank)?.let { "plugin:$it" }
+            ?: return@withContext ChannelResult.Failed("MissingSendIdentity", "短信直发缺少稳定任务标识，未发送")
 
         val text = payload.rawContentForTransmission ?: ""
         val subId = payload.targetConfig["subscription_id"]?.toIntOrNull() ?: -1
@@ -47,17 +55,24 @@ class SmsDirectChannelPlugin(
             if (existingOp != null && (existingOp.state == SmsSendState.SENT.name || existingOp.state == SmsSendState.DELIVERED.name)) {
                 return@withContext ChannelResult.Success
             }
+            if (existingOp != null) {
+                return@withContext ChannelResult.Failed("ExistingSmsOperation", "已有短信发送记录，结果未确认；未再次提交，请先核对收件端")
+            }
         }
 
         try {
-            val uris = context.messagingUtils.sendSmsMessage(
-                text = text,
-                addresses = setOf(destination),
-                subId = subId,
-                requireDeliveryReport = false,
-                triggerType = SmsSendTriggerType.FORWARDING_SMS_DIRECT
-            )
-            if (uris.isNotEmpty()) {
+            var submitted = false
+            SmsDirectSendGuard.sendOnce(context, source, destination) {
+                val uris = context.messagingUtils.sendSmsMessage(
+                    text = text,
+                    addresses = setOf(destination),
+                    subId = subId,
+                    requireDeliveryReport = false,
+                    triggerType = SmsSendTriggerType.FORWARDING_SMS_DIRECT
+                )
+                submitted = uris.isNotEmpty()
+            }
+            if (submitted) {
                 ChannelResult.Success
             } else {
                 ChannelResult.Failed("SendFailed", "No message URI returned from sendSmsMessage")

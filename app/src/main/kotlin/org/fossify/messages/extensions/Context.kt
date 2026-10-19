@@ -25,7 +25,6 @@ import com.bumptech.glide.Glide
 import com.bumptech.glide.load.engine.DiskCacheStrategy
 import com.bumptech.glide.request.RequestOptions
 import com.google.android.mms.pdu_alt.PduHeaders
-import org.fossify.commons.extensions.areDigitsOnly
 import org.fossify.commons.extensions.getBlockedNumbers
 import org.fossify.commons.extensions.getIntValue
 import org.fossify.commons.extensions.getIntValueOr
@@ -59,6 +58,9 @@ import org.fossify.messages.helpers.MESSAGES_LIMIT
 import org.fossify.messages.helpers.MessagingCache
 import org.fossify.messages.helpers.NotificationHelper
 import org.fossify.messages.helpers.ShortcutHelper
+import org.fossify.messages.helpers.ThreadRecipient
+import org.fossify.messages.helpers.parseThreadRecipientIds
+import org.fossify.messages.helpers.resolveThreadRecipients
 import org.fossify.messages.helpers.generateRandomId
 import org.fossify.messages.interfaces.AttachmentsDao
 import org.fossify.messages.interfaces.ConversationsDao
@@ -256,7 +258,13 @@ fun Context.getMMS(
         val threadId = cursor.getLongValue(Mms.THREAD_ID)
         val subscriptionId = cursor.getIntValue(Mms.SUBSCRIPTION_ID)
         val status = cursor.getIntValue(Mms.STATUS)
-        val participants = getThreadParticipants(threadId, contactsMap)
+        val participants = getThreadParticipants(threadId, contactsMap).ifEmpty {
+            // Do not overwrite a stored MMS's known participants with an empty
+            // result when the provider temporarily cannot resolve its keys.
+            messagesDB.getMessageWithId(mmsId)
+                ?.takeIf { it.isMMS && !it.isScheduled && it.threadId == threadId }
+                ?.participants ?: arrayListOf()
+        }
 
         val isMMS = true
         val attachment = try {
@@ -466,17 +474,17 @@ fun Context.getConversations(
             }
 
             val rawIds = cursor.getStringValue(Threads.RECIPIENT_IDS)
-            val recipientIds =
-                rawIds.split(" ").filter { it.areDigitsOnly() }.map { it.toInt() }.toMutableList()
-            var phoneNumbers = getThreadPhoneNumbers(recipientIds)
-
-            // Fallback: on some OEMs (Xiaomi/HyperOS) RECIPIENT_IDS is empty for short codes
-            if (phoneNumbers.isEmpty()) {
-                phoneNumbers = getPhoneNumbersFromSmsTable(id)
-            }
+            val recipients = resolveThreadRecipients(
+                parseThreadRecipientIds(rawIds),
+                lookup = { getPhoneNumberFromAddressId(it) },
+                fallback = { getPhoneNumbersFromSmsTable(id) }
+            )
+            val phoneNumbers = recipients.map { it.number }
 
             // A system blocklist entry must not hide an existing conversation.
             if (phoneNumbers.isEmpty()) {
+                // An unresolved provider key does not prove that a thread was deleted.
+                conversationsDB.getConversationWithThreadId(id)?.let(conversations::add)
                 return@queryCursorUnsafe
             }
 
@@ -686,15 +694,17 @@ fun Context.getThreadParticipants(
     threadId: Long,
     contactsMap: HashMap<Int, SimpleContact>?,
 ): ArrayList<SimpleContact> {
-    val recipientIds = getThreadRecipientIds(threadId)
-    val phoneNumbers = getThreadPhoneNumbers(recipientIds)
+    val recipients = getThreadRecipients(threadId)
+    val phoneNumbers = recipients.map { it.number }
     MessagingCache.participantsCache.get(threadId, phoneNumbers)?.let {
         return it
     }
 
     val participants = ArrayList<SimpleContact>()
-    recipientIds.zip(phoneNumbers).forEach { (addressId, number) ->
-        val cachedContact = contactsMap?.get(addressId)
+    recipients.forEach { recipient ->
+        val number = recipient.number
+        val contactId = recipient.contactId
+        val cachedContact = contactId?.let { contactsMap?.get(it) }
         val threadPhoneNumber = cachedContact
             ?.phoneNumbers
             ?.firstOrNull { it.normalizedNumber == number }
@@ -714,8 +724,8 @@ fun Context.getThreadParticipants(
         val photoUri = namePhoto.photoUri ?: ""
         val phoneNumber = PhoneNumber(number, 0, "", number)
         val contact = SimpleContact(
-            rawId = addressId,
-            contactId = addressId,
+            rawId = contactId ?: 0,
+            contactId = contactId ?: 0,
             name = name,
             photoUri = photoUri,
             phoneNumbers = arrayListOf(phoneNumber),
@@ -729,8 +739,8 @@ fun Context.getThreadParticipants(
     return participants
 }
 
-private fun Context.getThreadRecipientIds(threadId: Long): List<Int> {
-    val recipientIds = ArrayList<Int>()
+private fun Context.getThreadRecipients(threadId: Long): List<ThreadRecipient> {
+    var recipientIds = emptyList<String>()
     queryCursor(
         uri = "${MmsSms.CONTENT_CONVERSATIONS_URI}?simple=true".toUri(),
         projection = arrayOf(ThreadsColumns.RECIPIENT_IDS),
@@ -738,21 +748,14 @@ private fun Context.getThreadRecipientIds(threadId: Long): List<Int> {
         selectionArgs = arrayOf(threadId.toString()),
         showErrors = true
     ) { cursor ->
-        cursor.getStringValue(ThreadsColumns.RECIPIENT_IDS)
-            .split(" ")
-            .filter { it.areDigitsOnly() }
-            .forEach { recipientIds.add(it.toInt()) }
+        recipientIds = parseThreadRecipientIds(cursor.getStringValue(ThreadsColumns.RECIPIENT_IDS))
     }
 
-    return recipientIds
-}
-
-fun Context.getThreadPhoneNumbers(recipientIds: List<Int>): ArrayList<String> {
-    val numbers = ArrayList<String>()
-    recipientIds.forEach {
-        numbers.add(getPhoneNumberFromAddressId(it))
-    }
-    return numbers
+    return resolveThreadRecipients(
+        recipientIds,
+        lookup = { getPhoneNumberFromAddressId(it) },
+        fallback = { getPhoneNumbersFromSmsTable(threadId) }
+    )
 }
 
 /**
@@ -803,20 +806,23 @@ fun Context.getThreadContactNames(
     return names
 }
 
-fun Context.getPhoneNumberFromAddressId(canonicalAddressId: Int): String {
+private fun Context.getPhoneNumberFromAddressId(canonicalAddressId: String): String {
     val uri = Uri.withAppendedPath(MmsSms.CONTENT_URI, "canonical-addresses")
     val projection = arrayOf(
         Mms.Addr.ADDRESS
     )
 
     val selection = "${Mms._ID} = ?"
-    val selectionArgs = arrayOf(canonicalAddressId.toString())
+    val selectionArgs = arrayOf(canonicalAddressId)
     try {
         contentResolver.query(uri, projection, selection, selectionArgs, null)?.use { cursor ->
             if (cursor.moveToFirst()) {
                 return cursor.getStringValue(Mms.Addr.ADDRESS)
             }
         }
+    } catch (_: NumberFormatException) {
+        // Some providers still narrow their keys internally. Treat this lookup as
+        // unresolved so the caller can use the real SMS address or cached thread.
     } catch (e: Exception) {
         showErrorToast(e)
     }

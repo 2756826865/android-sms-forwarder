@@ -53,7 +53,9 @@ jobs:
           python3 scripts/test_battery_queries.py
           python3 scripts/test_forwarding_history_sql.py
           python3 scripts/test_conversation_feedback_sql.py
-          ./gradlew :app:testCoreDebugUnitTest --tests 'org.fossify.messages.remote.StreamReconnectBackoffTest' --tests 'org.fossify.messages.helpers.HomeRefreshGateTest' --tests 'org.fossify.messages.ChannelRepositoryTest' --tests 'org.fossify.messages.forwarding.ExecutionPolicyTest' --tests 'org.fossify.messages.updates.GitHubReleaseTest' --tests 'org.fossify.messages.forwarding.SimLabelPresentationTest' --tests 'org.fossify.messages.ForwardingRulesV2Test' --tests 'org.fossify.messages.PrivacyAndRulesTest'
+          python3 scripts/test_sms_direct_guard_sql.py
+          python3 scripts/test_queue_repair_sql.py
+          ./gradlew :app:testCoreDebugUnitTest --tests 'org.fossify.messages.remote.StreamReconnectBackoffTest' --tests 'org.fossify.messages.helpers.HomeRefreshGateTest' --tests 'org.fossify.messages.helpers.ThreadRecipientsTest' --tests 'org.fossify.messages.ChannelRepositoryTest' --tests 'org.fossify.messages.forwarding.SmsDirectBillingPolicyTest' --tests 'org.fossify.messages.forwarding.ForwardingQueuePolicyTest' --tests 'org.fossify.messages.forwarding.ForwardingSubmissionObserverTest' --tests 'org.fossify.messages.forwarding.ForwardingReconcilePolicyTest' --tests 'org.fossify.messages.forwarding.ForwardingQueueSnapshotTest' --tests 'org.fossify.messages.forwarding.ExecutionPolicyTest' --tests 'org.fossify.messages.updates.GitHubReleaseTest' --tests 'org.fossify.messages.forwarding.SimLabelPresentationTest' --tests 'org.fossify.messages.ForwardingRulesV2Test' --tests 'org.fossify.messages.PrivacyAndRulesTest'
 
       - name: Build signed release APK
         env:

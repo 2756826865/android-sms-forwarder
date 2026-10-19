@@ -34,6 +34,7 @@ class ForwardingHistoryActivity : SimpleActivity() {
     private var lastRenderedSignature: String? = null
     private var visibleLimit = 50
     private var refreshJob: Job? = null
+    private var diagnosticsJob: Job? = null
 
     @Subscribe(threadMode = ThreadMode.MAIN)
     fun onHistoryChanged(event: Events.RefreshDashboard) {
@@ -59,12 +60,18 @@ class ForwardingHistoryActivity : SimpleActivity() {
         super.onResume()
         applyMiuiTopAppBarChrome(binding.forwardingHistoryAppbar, binding.forwardingHistoryToolbar)
         EventBus.getDefault().register(this)
-        refreshJob = lifecycleScope.launch { renderRecords() }
+        refreshJob = lifecycleScope.launch {
+            withContext(Dispatchers.IO) {
+                org.fossify.messages.forwarding.ForwardingQueueReconciler.run(applicationContext, allowRepair = false)
+            }
+            renderRecords()
+        }
     }
 
     override fun onPause() {
         EventBus.getDefault().unregister(this)
         refreshJob?.cancel()
+        diagnosticsJob?.cancel()
         super.onPause()
     }
 
@@ -169,6 +176,17 @@ class ForwardingHistoryActivity : SimpleActivity() {
                             setPadding(dp(12), 0, 0, 0)
                         })
                     })
+                    if (!record.isTest && record.status in setOf(ForwardingHistoryStore.STATUS_QUEUED,
+                            ForwardingHistoryStore.STATUS_WAITING_NETWORK, ForwardingHistoryStore.STATUS_RETRY,
+                            ForwardingHistoryStore.STATUS_RUNNING, ForwardingHistoryStore.STATUS_UNKNOWN,
+                            ForwardingHistoryStore.STATUS_FAILED)) {
+                        addView(TextView(context).apply {
+                            text = "查看排队原因"
+                            setPadding(0, dp(10), 0, dp(10))
+                            setTextColor(ContextCompat.getColor(context, R.color.miui_action_blue))
+                            setOnClickListener { showQueueDiagnostics(record) }
+                        })
+                    }
                     if (record.status in setOf(ForwardingHistoryStore.STATUS_FAILED, ForwardingHistoryStore.STATUS_UNKNOWN)) {
                         addView(TextView(context).apply {
                             text = "仅重试此通道"
@@ -192,10 +210,29 @@ class ForwardingHistoryActivity : SimpleActivity() {
         }
     }
 
+    private fun showQueueDiagnostics(record: ForwardingHistoryRecord) {
+        if (diagnosticsJob?.isActive == true) return
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("排队原因")
+            .setMessage("正在读取系统任务状态…")
+            .setPositiveButton("关闭", null).create()
+        dialog.showSmsStyled()
+        diagnosticsJob = lifecycleScope.launch {
+            val message = withContext(Dispatchers.IO) {
+                try {
+                    org.fossify.messages.forwarding.ForwardingQueueDiagnostics.forRecord(applicationContext, record)
+                } catch (e: CancellationException) { throw e }
+                catch (_: Exception) { "读取任务状态失败或超时，请稍后重试；此检查没有重新发送短信。" }
+            }
+            if (dialog.isShowing) dialog.setMessage(message)
+        }
+        dialog.setOnDismissListener { diagnosticsJob?.cancel() }
+    }
+
     private fun confirmRetry(record: ForwardingHistoryRecord) {
         AlertDialog.Builder(this)
             .setTitle("仅重试此通道")
-            .setMessage("只向原目标重新提交一次，不重新匹配规则，也不重新执行整个通道组。结果未知的请求可能已经送达，继续可能重复。短信直发可能产生运营商费用。")
+            .setMessage("先核对原任务已失败或取消，再仅重试此通道一次，不重新匹配规则或执行整个通道组。已尝试发送的收费短信禁止从日志重试。失败记录也可能已经送达，请先核对接收端。")
             .setPositiveButton("确认重试") { _, _ ->
                 lifecycleScope.launch {
                     val result = withContext(Dispatchers.IO) {
@@ -232,6 +269,7 @@ class ForwardingHistoryActivity : SimpleActivity() {
         ForwardingHistoryStore.STATUS_RUNNING -> "发送中"
         ForwardingHistoryStore.STATUS_SUCCESS -> "成功"
         ForwardingHistoryStore.STATUS_RETRY -> "等待重试"
+        ForwardingHistoryStore.STATUS_UNKNOWN -> "结果未知"
         ForwardingHistoryStore.STATUS_SKIPPED -> "已跳过"
         else -> "失败"
     }

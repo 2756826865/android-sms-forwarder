@@ -16,7 +16,10 @@ fastlane/report.xml
 logcat*.txt
 *.log
 *.py
+!scripts/test_sms_direct_guard_sql.py
 .workbuddy-ai/
 *.rar
 *.zip
 outputs/
+
+!scripts/test_queue_repair_sql.py
