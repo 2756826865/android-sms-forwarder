@@ -26,6 +26,7 @@ import org.fossify.messages.extensions.messagesDB
 import org.fossify.messages.extensions.conversationsDB
 import org.fossify.messages.extensions.config
 import org.fossify.messages.extensions.syncThreadToLocal
+import org.fossify.messages.helpers.syncSmsHistory
 import org.fossify.messages.helpers.SmsSyncProgress
 
 data class ConversationsUiState(
@@ -108,39 +109,31 @@ class ConversationsViewModel(application: Application) : AndroidViewModel(applic
         if (syncJob?.isActive == true || !SmsSyncProgress.tryStart()) return
         syncJob = viewModelScope.launch {
             val context = getApplication<Application>()
-            var done = 0
-            var failed = 0
-            var total = 0
             try {
                 _uiState.value = _uiState.value.copy(loadError = "")
                 withContext(Dispatchers.IO) {
                     require(androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.READ_SMS) == android.content.pm.PackageManager.PERMISSION_GRANTED)
                     context.config.fullHistorySyncedV2 = false
-                    val threads = context.getConversations()
-                    if (threads.isEmpty() && context.conversationsDB.getAllRegular().isNotEmpty()) {
+                    val syncResult = context.syncSmsHistory("compose_resync_all", strict = true)
+                    if (!syncResult.success) {
+                        throw IllegalStateException("全量同步未成功: ${syncResult.outcome}")
+                    }
+                    if (syncResult.readCount == 0 && context.conversationsDB.getAllRegular().isNotEmpty()) {
                         throw IllegalStateException("系统短信列表暂时为空，请检查短信权限及默认短信应用后重试")
                     }
-                    total = threads.size
-                    SmsSyncProgress.update(SmsSyncProgress.State(true, 0, total, 0))
-                    for (thread in threads) {
-                        kotlinx.coroutines.currentCoroutineContext().ensureActive()
-                        try { context.syncThreadToLocal(thread.threadId, loadAll = true) }
-                        catch (e: CancellationException) { throw e }
-                        catch (_: Exception) { failed++ }
-                        done++
-                        SmsSyncProgress.update(SmsSyncProgress.State(true, done, total, failed))
-                    }
-                    if (failed == 0) context.config.fullHistorySyncedV2 = true
+                    context.config.fullHistorySyncedV2 = true
                 }
                 refresh()
             } catch (e: CancellationException) { throw e }
             catch (error: Exception) {
-                failed++
                 _uiState.value = _uiState.value.copy(loadError =
-                    error.message?.takeIf { it.contains("系统短信列表") }
+                    error.message?.takeIf { it.contains("系统短信列表") || it.contains("全量同步未成功") }
                         ?: "全量同步失败，请检查短信读取权限后重试")
             }
-            finally { SmsSyncProgress.update(SmsSyncProgress.State(false, done, total, failed)) }
+            finally {
+                val current = SmsSyncProgress.state.value
+                SmsSyncProgress.update(current.copy(running = false))
+            }
         }
     }
 
@@ -189,7 +182,17 @@ class ConversationsViewModel(application: Application) : AndroidViewModel(applic
                 }
             }
             val provider = try {
-                withContext(Dispatchers.IO) { context.getConversations() }
+                withContext(Dispatchers.IO) {
+                    val threads = context.getConversations(strict = false)
+                    // If local DB is empty, run history sync to populate local messages and threads
+                    if (cached.isEmpty() && threads.isNotEmpty()) {
+                        context.syncSmsHistory("compose_initial_sync")
+                    }
+                    for (thread in threads) {
+                        context.conversationsDB.insertOrUpdate(thread)
+                    }
+                    threads
+                }
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {

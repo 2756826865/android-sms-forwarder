@@ -72,7 +72,7 @@ class MultiForwardConfig(
     // Event-driven by default; retain an explicitly saved compatibility-mode choice.
     // IncomingSmsService is a separate, short-lived owner and does not depend on this flag.
     var keepAliveServiceEnabled: Boolean
-        get() = prefs.getBoolean(KEY_KEEP_ALIVE_SERVICE_ENABLED, false)
+        get() = prefs.getBoolean(KEY_KEEP_ALIVE_SERVICE_ENABLED, true)
         set(value) = prefs.edit().putBoolean(KEY_KEEP_ALIVE_SERVICE_ENABLED, value).apply()
 
     var dingTalkRemoteSendSimMode: Int

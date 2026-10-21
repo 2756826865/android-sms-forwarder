@@ -579,7 +579,12 @@ class ThreadActivity : SimpleActivity() {
             val cachedMessagesCode = messages.hashCode()
             if (!isRecycleBin) {
                 val number = participants.firstOrNull()?.phoneNumbers?.firstOrNull()?.normalizedNumber
-                val providerMessages = getMessages(threadId, address = number)
+                val providerMessages = try {
+                    getMessages(threadId, address = number)
+                } catch (e: SecurityException) {
+                    android.util.Log.w("ThreadActivity", "READ_SMS not granted, using cached messages only")
+                    ArrayList()
+                }
                 messages = (messages + providerMessages)
                     .associateBy { it.getStableId() }
                     .values
@@ -909,7 +914,9 @@ class ThreadActivity : SimpleActivity() {
 
     private fun fetchOlderMessages(cutoff: Int): List<Message> {
         val number = participants.firstOrNull()?.phoneNumbers?.firstOrNull()?.normalizedNumber
-        val olderFromProvider = getMessages(threadId, address = number, dateFrom = cutoff)
+        val olderFromProvider = try {
+            getMessages(threadId, address = number, dateFrom = cutoff)
+        } catch (_: SecurityException) { ArrayList() }
         val olderFromLocal = messagesDB.getOlderThreadMessages(threadId, cutoff, MESSAGES_LIMIT)
         val messageSnapshot = messages.toSortedMessages()
         val older = (olderFromLocal + olderFromProvider)
@@ -1546,9 +1553,13 @@ class ThreadActivity : SimpleActivity() {
 
         val subscriptionIdToSimId = HashMap<Int, String>()
         subscriptionIdToSimId[-1] = "?"
-        subscriptionManagerCompat().activeSubscriptionInfoList?.forEachIndexed { index, subscriptionInfo ->
-            subscriptionIdToSimId[subscriptionInfo.subscriptionId] = "${index + 1}"
-        }
+        runCatching { subscriptionManagerCompat().activeSubscriptionInfoList }.getOrNull()
+            ?.forEach { subscriptionInfo ->
+                val slot = subscriptionInfo.simSlotIndex
+                if (slot >= 0) {
+                    subscriptionIdToSimId[subscriptionInfo.subscriptionId] = "${slot + 1}"
+                }
+            }
 
         var prevMessage: Message? = null
         var prevDateTime = 0
@@ -2166,7 +2177,9 @@ class ThreadActivity : SimpleActivity() {
             val providerParticipantsChanged = reconcileProviderParticipants()
             val newThreadId = getThreadId(participants.getAddresses().toSet())
             val number = participants.firstOrNull()?.phoneNumbers?.firstOrNull()?.normalizedNumber
-            val newMessages = getMessages(newThreadId, address = number, includeScheduledMessages = false)
+            val newMessages = try {
+                getMessages(newThreadId, address = number, includeScheduledMessages = false)
+            } catch (_: SecurityException) { ArrayList() }
             if (messageSnapshot.isNotEmpty() && messageSnapshot.all { it.isScheduled } && newMessages.isNotEmpty()) {
                 // update scheduled messages with real thread id
                 threadId = newThreadId

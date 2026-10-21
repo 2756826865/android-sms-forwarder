@@ -334,8 +334,12 @@ fun ConversationsScreen(
                         Text(uiState.searchStatus, style = MaterialTheme.typography.bodySmall, color = secondaryTextColor)
                     }
                     if (syncProgress.running) {
-                        Text("全量同步 ${syncProgress.completed}/${syncProgress.total} · 失败${syncProgress.failed}",
-                            style = MaterialTheme.typography.bodySmall, color = secondaryTextColor)
+                        val progressText = if (syncProgress.total > 0) {
+                            "全量同步 ${syncProgress.completed}/${syncProgress.total} · 失败${syncProgress.failed}"
+                        } else {
+                            "正在准备全量同步..."
+                        }
+                        Text(progressText, style = MaterialTheme.typography.bodySmall, color = secondaryTextColor)
                     }
                 }
             }

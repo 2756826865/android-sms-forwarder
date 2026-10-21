@@ -223,24 +223,31 @@ open class IncomingSmsService : Service() {
             ShadowRepository.recordStep(this, operationId, "FILTER_MATCHED", "OBSERVED")
         }
 
-        val requestedThreadId = getThreadId(address)
+        val isDefaultRole = org.fossify.messages.helpers.DeviceCompatHelper.isDefaultSmsApp(this)
+        val requestedThreadId = if (isDefaultRole) getThreadId(address) else 0L
         ShadowRepository.recordStep(this, operationId, "PROVIDER_INSERT", "STARTED")
-        val insertedMessageId = try {
-            val id = persistWithRetry(
-                context = this,
-                address = address,
-                subject = parts.last().pseudoSubject.orEmpty(),
-                body = body,
-                receivedAt = receivedAt,
-                sentAt = sentAt,
-                threadId = requestedThreadId,
-                subscriptionId = subscriptionId,
-            )
-            ShadowRepository.recordStep(this, operationId, "PROVIDER_INSERT", "SUCCEEDED", "msgId=$id")
-            id
-        } catch (e: Exception) {
-            ShadowRepository.recordStep(this, operationId, "PROVIDER_INSERT", "FAILED", e.message)
-            throw e
+        val insertedMessageId = if (isDefaultRole) {
+            try {
+                val id = persistWithRetry(
+                    context = this,
+                    address = address,
+                    subject = parts.last().pseudoSubject.orEmpty(),
+                    body = body,
+                    receivedAt = receivedAt,
+                    sentAt = sentAt,
+                    threadId = requestedThreadId,
+                    subscriptionId = subscriptionId,
+                )
+                ShadowRepository.recordStep(this, operationId, "PROVIDER_INSERT", "SUCCEEDED", "msgId=$id")
+                id
+            } catch (e: Exception) {
+                ShadowRepository.recordStep(this, operationId, "PROVIDER_INSERT", "FAILED", e.message)
+                throw e
+            }
+        } else {
+            // Non-default mode: Do not perform default SMS app system provider writes.
+            ShadowRepository.recordStep(this, operationId, "PROVIDER_INSERT", "SKIPPED", "non_default_role")
+            0L
         }
 
         val resolvedThreadId = getSmsThreadId(insertedMessageId)
@@ -707,7 +714,7 @@ open class IncomingSmsService : Service() {
                 }
 
                 // 1. 写系统短信库
-                val requestedThreadId = appContext.getThreadId(address)
+                val requestedThreadId = if (org.fossify.messages.helpers.DeviceCompatHelper.isDefaultSmsApp(appContext)) appContext.getThreadId(address) else 0L
                 val insertedMessageId = try {
                     persistWithRetry(
                         context = appContext,
@@ -1065,6 +1072,9 @@ open class IncomingSmsService : Service() {
             threadId: Long,
             subscriptionId: Int,
         ): Long {
+            if (!org.fossify.messages.helpers.DeviceCompatHelper.isDefaultSmsApp(context)) {
+                throw SecurityException("SMS_WRITE_REQUIRES_DEFAULT_ROLE")
+            }
             var lastError: Throwable? = null
             repeat(PROVIDER_ATTEMPTS) { attempt ->
                 try {

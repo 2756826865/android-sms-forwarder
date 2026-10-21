@@ -87,6 +87,10 @@ class MessagingUtils(val context: Context) {
                 response = context.contentResolver.insert(Sms.CONTENT_URI, values)
             }
             val inserted = response ?: throw SmsException(ERROR_PERSISTING_MESSAGE)
+            val insertedId = inserted.lastPathSegment?.toLongOrNull() ?: 0L
+            if (insertedId <= 0L) {
+                throw SmsException(ERROR_PERSISTING_MESSAGE)
+            }
             runCatching {
                 context.contentResolver.notifyChange(Telephony.MmsSms.CONTENT_CONVERSATIONS_URI, null)
             }

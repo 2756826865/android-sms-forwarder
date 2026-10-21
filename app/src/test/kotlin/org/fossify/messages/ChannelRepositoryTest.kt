@@ -36,14 +36,14 @@ class ChannelRepositoryTest {
     }
 
     @Test
-    fun onDemandIsDefaultAndExplicitCompatibilityChoiceSurvivesReopen() {
+    fun keepAliveIsDefaultAndExplicitCompatibilityChoiceSurvivesReopen() {
         val prefs = createFakeSharedPrefs()
         fun reopen() = MultiForwardConfig(customPrefs = prefs, cipher = PlaintextCipher)
-        assertFalse(reopen().keepAliveServiceEnabled)
-        reopen().keepAliveServiceEnabled = true
         assertTrue(reopen().keepAliveServiceEnabled)
         reopen().keepAliveServiceEnabled = false
         assertFalse(reopen().keepAliveServiceEnabled)
+        reopen().keepAliveServiceEnabled = true
+        assertTrue(reopen().keepAliveServiceEnabled)
     }
 
     @Test

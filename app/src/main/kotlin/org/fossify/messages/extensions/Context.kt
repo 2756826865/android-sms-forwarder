@@ -43,6 +43,7 @@ import org.fossify.commons.helpers.DAY_SECONDS
 import org.fossify.commons.helpers.MONTH_SECONDS
 import org.fossify.commons.helpers.MyContactsContentProvider
 import org.fossify.commons.helpers.PERMISSION_READ_CONTACTS
+import org.fossify.commons.helpers.PERMISSION_READ_SMS
 import org.fossify.commons.helpers.SimpleContactsHelper
 import org.fossify.commons.helpers.ensureBackgroundThread
 import org.fossify.commons.helpers.isQPlus
@@ -120,6 +121,8 @@ fun Context.getMessages(
     dateFrom: Int = -1,
     includeScheduledMessages: Boolean = true,
     limit: Int = MESSAGES_LIMIT,
+    strict: Boolean = false,
+    traceId: String? = null,
 ): ArrayList<Message> {
     val uri = Sms.CONTENT_URI
     val projection = arrayOf(
@@ -134,32 +137,44 @@ fun Context.getMessages(
 
     val messages = ArrayList<Message>()
 
-    // 优先尝试按 threadId 查询
-    queryCursor(uri, projection, selection, selectionArgs, sortOrder, showErrors = true) { cursor ->
-        parseSmsFromCursor(cursor, messages)
-    }
+    try {
+        if (!hasPermission(PERMISSION_READ_SMS)) {
+            if (strict) throw SecurityException("SMS_PERMISSION_DENIED")
+            return ArrayList(messagesDB.getNonRecycledThreadMessages(threadId))
+        }
 
-    // 小米/HyperOS 兼容性兜底：
-    // 修改策略：只有当主查询（按 ID）确实没有返回任何消息，且提供了号码时，才触发按号码的全库查询。
-    // 这避免了短号码（服务号）每次查询都触发无意义的 fallback。
-    val targetAddress = if (messages.isNotEmpty()) null else address ?: if (threadId != 0L) getPhoneNumbersFromSmsTable(threadId).firstOrNull() else null
-    if (messages.isEmpty() && !targetAddress.isNullOrBlank()) {
-        val addrSelection = "${Sms.ADDRESS} = ? $rangeQuery"
-        val addrArgs = arrayOf(targetAddress)
-        contentResolver.query(uri, projection, addrSelection, addrArgs, sortOrder)?.use { cursor ->
-            if (cursor.moveToFirst()) {
-                val existingIds = messages.map { it.id }.toSet()
-                do {
-                    val id = cursor.getLongValue(Sms._ID)
-                    if (!existingIds.contains(id)) {
-                        parseSmsFromCursor(cursor, messages, forceThreadId = threadId)
-                    }
-                } while (cursor.moveToNext())
+        // 优先尝试按 threadId 查询
+        queryCursor(uri, projection, selection, selectionArgs, sortOrder, showErrors = true) { cursor ->
+            parseSmsFromCursor(cursor, messages)
+        }
+
+        // 小米/HyperOS 兼容性兜底：
+        // 修改策略：只有当主查询（按 ID）确实没有返回任何消息，且提供了号码时，才触发按号码的全库查询。
+        // 这避免了短号码（服务号）每次查询都触发无意义的 fallback。
+        val targetAddress = if (messages.isNotEmpty()) null else address ?: if (threadId != 0L) getPhoneNumbersFromSmsTable(threadId).firstOrNull() else null
+        if (messages.isEmpty() && !targetAddress.isNullOrBlank()) {
+            val addrSelection = "${Sms.ADDRESS} = ? $rangeQuery"
+            val addrArgs = arrayOf(targetAddress)
+            contentResolver.query(uri, projection, addrSelection, addrArgs, sortOrder)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val existingIds = messages.map { it.id }.toSet()
+                    do {
+                        val id = cursor.getLongValue(Sms._ID)
+                        if (!existingIds.contains(id)) {
+                            parseSmsFromCursor(cursor, messages, forceThreadId = threadId)
+                        }
+                    } while (cursor.moveToNext())
+                }
             }
         }
-    }
 
-    messages.addAll(getMMS(threadId, sortOrder, dateFrom))
+        messages.addAll(getMMS(threadId, sortOrder, dateFrom))
+    } catch (error: Exception) {
+        if (error is java.util.concurrent.CancellationException) throw error
+        android.util.Log.w("SmsSync", "trace=$traceId getMessages_failed kind=${error.javaClass.simpleName}")
+        if (strict) throw error
+        messages.clear()
+    }
 
     // Cached messages provide a fallback, while current provider values remain authoritative.
     val localMessages = try {
@@ -193,10 +208,14 @@ private fun Context.parseSmsFromCursor(
     val body = cursor.getStringValue(Sms.BODY) ?: ""
     val type = cursor.getIntValue(Sms.TYPE)
     val namePhoto = getNameAndPhotoFromPhoneNumber(senderNumber)
-    val date = (cursor.getLongValue(Sms.DATE) / 1000).toInt()
+    val rawDate = cursor.getLongValue(Sms.DATE)
+    val date = if (rawDate > 9999999999L) (rawDate / 1000L).toInt() else rawDate.toInt()
     val read = cursor.getIntValue(Sms.READ) == 1
     val thread = forceThreadId ?: cursor.getLongValue(Sms.THREAD_ID)
-    val subscriptionId = cursor.getIntValueOr(Sms.SUBSCRIPTION_ID, SubscriptionManager.INVALID_SUBSCRIPTION_ID)
+    var subscriptionId = cursor.getIntValueOr(Sms.SUBSCRIPTION_ID, SubscriptionManager.INVALID_SUBSCRIPTION_ID)
+    if (subscriptionId == SubscriptionManager.INVALID_SUBSCRIPTION_ID) {
+        subscriptionId = cursor.getIntValueOr("sim_id", SubscriptionManager.INVALID_SUBSCRIPTION_ID)
+    }
     val status = cursor.getIntValue(Sms.STATUS)
 
     val participants = senderNumber.split(ADDRESS_SEPARATOR).map { number ->
@@ -424,6 +443,7 @@ private data class StoredThreadDateSource(
 fun Context.getConversations(
     threadId: Long? = null,
     privateContacts: ArrayList<SimpleContact> = ArrayList(),
+    strict: Boolean = false,
 ): ArrayList<Conversation> {
     val uri = "${Threads.CONTENT_URI}?simple=true".toUri()
     val projection = mutableListOf(
@@ -434,17 +454,21 @@ fun Context.getConversations(
         Threads.RECIPIENT_IDS,
     )
 
-    var selection = "${Threads.MESSAGE_COUNT} > 0"
+    var selection: String? = null
     var selectionArgs = arrayOf<String>()
     if (threadId != null) {
-        selection += " AND ${Threads._ID} = ?"
-        selectionArgs += threadId.toString()
+        selection = "${Threads._ID} = ?"
+        selectionArgs = arrayOf(threadId.toString())
     }
 
     val sortOrder = "${Threads.DATE} DESC"
 
     val conversations = ArrayList<Conversation>()
     val simpleContactHelper = SimpleContactsHelper(this)
+    if (!hasPermission(PERMISSION_READ_SMS)) {
+        if (strict) throw SecurityException("SMS_PERMISSION_DENIED")
+        return ArrayList(conversationsDB.getAllRegular())
+    }
     val unreadMap = runCatching { getUnreadCountsByThreadStrict(threadId) }.getOrNull()
     val storedThreadDates = getStoredThreadDates(threadId)
     try {
@@ -514,13 +538,15 @@ fun Context.getConversations(
             )
             conversations.add(conversation)
         }
-    } catch (_: SecurityException) {
-        // Contacts permission is optional and provider access can also be restricted by the OEM.
-        // Keep cached conversations instead of exposing a raw provider exception to the user.
+    } catch (error: SecurityException) {
+        if (strict) throw error
+        return ArrayList(conversationsDB.getAllRegular())
     } catch (sqliteException: SQLiteException) {
-        showErrorToast(sqliteException)
+        if (strict) throw sqliteException
+        return ArrayList(conversationsDB.getAllRegular())
     } catch (e: Exception) {
-        showErrorToast(e)
+        if (e is java.util.concurrent.CancellationException || strict) throw e
+        return ArrayList(conversationsDB.getAllRegular())
     }
 
     conversations.sortByDescending { it.date }
@@ -1383,6 +1409,7 @@ fun Context.syncThreadToLocal(
     address: String? = null,
     loadAll: Boolean = false,
     refreshConversation: Boolean = true,
+    traceId: String? = null,
 ): List<Message> {
     if (threadId == 0L) return emptyList()
     val limit = if (loadAll) Int.MAX_VALUE else MESSAGES_LIMIT
@@ -1390,7 +1417,9 @@ fun Context.syncThreadToLocal(
         threadId = threadId,
         address = address,
         includeScheduledMessages = false,
-        limit = limit
+        limit = limit,
+        strict = false,
+        traceId = traceId
     )
     providerMessages.chunked(100).forEach { batch ->
         messagesDB.insertMessages(*batch.toTypedArray())

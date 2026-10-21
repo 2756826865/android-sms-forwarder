@@ -135,9 +135,9 @@ class NumberMatcherWhitelistTest {
 
     @Test
     fun r18NewSourceEnablesWhitelistByDefault() {
-        // 路径 A：新建来源默认必须开启白名单，否则 equivalent 再严也拦不住
+        // 1effeb2f 将白名单改为 opt-in（默认 false）；用户开启后必须填写授权用户。
         val instance = RemoteSourceInstance(name = "test", type = RemoteSourceType.SMS)
-        assertTrue("新建来源 whitelistEnabled 必须为 true", instance.whitelistEnabled)
+        assertFalse("新建来源 whitelistEnabled 默认已改为 false (opt-in)", instance.whitelistEnabled)
         // 空白名单归一化后仍为空 → 运行时走 AUTHORIZED_USERS_REQUIRED 拒绝
         assertEquals(emptySet<String>(), NumberMatcher.normalizeWhitelist(emptyList()))
     }

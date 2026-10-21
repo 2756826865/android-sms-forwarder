@@ -45,6 +45,7 @@ import org.fossify.commons.extensions.getProperTextColor
 import org.fossify.commons.extensions.hideKeyboard
 import org.fossify.commons.extensions.onTextChangeListener
 import org.fossify.commons.extensions.openNotificationSettings
+import org.fossify.commons.extensions.hasPermission
 import org.fossify.commons.extensions.toast
 import org.fossify.commons.extensions.underlineText
 import org.fossify.commons.extensions.updateSDCardPath
@@ -76,6 +77,7 @@ import org.fossify.messages.extensions.markThreadMessagesRead
 import org.fossify.messages.extensions.messagesDB
 import org.fossify.messages.extensions.showSmsStyled
 import org.fossify.messages.extensions.syncThreadToLocal
+import org.fossify.messages.helpers.syncSmsHistory
 import org.fossify.messages.helpers.SEARCHED_MESSAGE_ID
 import org.fossify.messages.helpers.THREAD_ID
 import org.fossify.messages.helpers.THREAD_TITLE
@@ -338,7 +340,16 @@ class MainActivity : SimpleActivity() {
             dashboardViewModel?.loadStats()
             messageCenterViewModel?.loadMessageHistory()
             diagnosticsViewModel?.loadDiagnostics()
-            conversationsViewModel?.refresh(isInitial = false)
+            if (hasPermission(PERMISSION_READ_SMS)) {
+                ensureBackgroundThread {
+                    if (conversationsDB.getAllRegular().isEmpty()) {
+                        syncSmsHistory("resume_initial_sync")
+                    }
+                    conversationsViewModel?.refresh(isInitial = false)
+                }
+            } else {
+                conversationsViewModel?.refresh(isInitial = false)
+            }
             return
         }
 
@@ -613,15 +624,29 @@ class MainActivity : SimpleActivity() {
     }.getOrDefault(false)
 
     private fun handleDefaultSmsRoleResult(resultCode: Int) {
+        val onRoleSettled = {
+            if (config.useGatewayDeveloperUi) {
+                ensureGatewaySmsPermissions()
+                ensureBackgroundThread {
+                    syncSmsHistory("default_sms_role_result")
+                    conversationsViewModel?.refresh(isInitial = false)
+                }
+            } else {
+                askPermissions()
+                ensureBackgroundThread {
+                    syncSmsHistory("default_sms_role_result")
+                }
+            }
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             window.decorView.postDelayed({
                 if (!isSmsChainReady() && launchLegacyDefaultSmsRequest()) {
                     return@postDelayed
                 }
-                if (config.useGatewayDeveloperUi) ensureGatewaySmsPermissions() else askPermissions()
+                onRoleSettled()
             }, ROLE_STATE_SETTLE_DELAY_MS)
         } else {
-            if (config.useGatewayDeveloperUi) ensureGatewaySmsPermissions() else askPermissions()
+            onRoleSettled()
         }
     }
 
@@ -752,30 +777,22 @@ class MainActivity : SimpleActivity() {
             }
 
             val needsFullHistorySync = !config.fullHistorySyncedV2
-            val threadsToSync = conversations.distinctBy { it.threadId }
-            var completed = 0
-            var failed = 0
-            if (org.fossify.messages.helpers.SmsSyncProgress.tryStart(threadsToSync.size)) {
-            try {
+            if (needsFullHistorySync) {
+                syncSmsHistory("main_activity_init")
+                config.fullHistorySyncedV2 = true
+            } else {
+                val threadsToSync = conversations.distinctBy { it.threadId }.take(30)
                 threadsToSync.forEach { conversation ->
                     try {
                         syncThreadToLocal(
                             conversation.threadId,
-                            loadAll = needsFullHistorySync,
+                            loadAll = false,
                             refreshConversation = false,
                         )
                     } catch (e: java.util.concurrent.CancellationException) {
                         throw e
-                    } catch (_: Exception) { failed++ }
-                    completed++
-                    org.fossify.messages.helpers.SmsSyncProgress.update(
-                        org.fossify.messages.helpers.SmsSyncProgress.State(true, completed, threadsToSync.size, failed))
+                    } catch (_: Exception) { }
                 }
-                if (needsFullHistorySync && failed == 0) config.fullHistorySyncedV2 = true
-            } finally {
-                org.fossify.messages.helpers.SmsSyncProgress.update(
-                    org.fossify.messages.helpers.SmsSyncProgress.State(false, completed, threadsToSync.size, failed))
-            }
             }
 
             messagesDB.getLatestMessagesWithoutConversation().forEach { message ->
@@ -1139,7 +1156,10 @@ class MainActivity : SimpleActivity() {
     private fun resyncAllMessages() {
         config.fullHistorySyncedV2 = false
         toast(R.string.resync_started)
-        getCachedConversations()
+        ensureBackgroundThread {
+            syncSmsHistory("classic_resync_all")
+            getCachedConversations()
+        }
     }
 
     private fun launchAbout() {
