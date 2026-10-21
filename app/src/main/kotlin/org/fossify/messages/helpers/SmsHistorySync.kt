@@ -100,13 +100,16 @@ fun Context.syncSmsHistory(source: String, strict: Boolean = false): SmsSyncResu
             return SmsSyncResult(traceId, false, 0, 0, 0, 0, elapsed, "null_cursor")
         }
 
-        val totalSms = cursor.count
-        SmsSyncProgress.update(SmsSyncProgress.State(running = true, completed = 0, total = totalSms, failed = 0))
+        var totalSms = 0
 
         val contactCache = HashMap<String, NamePhoto>()
         val batch = ArrayList<Message>(500)
 
         cursor.use { c ->
+            // count can perform a Provider IPC and throw if permission changes.
+            // Establish ownership before the first operation on the cursor.
+            totalSms = c.count
+            SmsSyncProgress.update(SmsSyncProgress.State(running = true, completed = 0, total = totalSms, failed = 0))
             val idCol = c.getColumnIndex(Telephony.Sms._ID)
             val threadCol = c.getColumnIndex(Telephony.Sms.THREAD_ID)
             val addrCol = c.getColumnIndex(Telephony.Sms.ADDRESS)
@@ -275,7 +278,8 @@ fun Context.syncSmsHistory(source: String, strict: Boolean = false): SmsSyncResu
         if (strict) throw error
         return SmsSyncResult(traceId, false, readCount, parseFailedCount, writtenCount, threadsUpdatedCount, elapsed, outcome)
     } finally {
-        historySyncRunning.set(false)
+        // Finish this owner's progress before allowing a new owner to start.
         SmsSyncProgress.update(SmsSyncProgress.state.value.copy(running = false))
+        historySyncRunning.set(false)
     }
 }
