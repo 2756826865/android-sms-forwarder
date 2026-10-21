@@ -57,7 +57,7 @@ internal class SmsIngressIdentity(context: Context) {
                 val owner = if (find("SELECT work_id, received_at FROM ingress WHERE work_id=?", arrayOf(base)).isEmpty()) base
                     else "$base-${hash("$hash:$receivedAt:$sub").take(16)}"
                 db.execSQL("INSERT INTO ingress VALUES(?,?,?,?,?,?,?,?)",
-                    arrayOf(owner, fingerprint, providerId.takeIf { it > 0 }, hash, sentAt, receivedAt, sub,
+                    arrayOf<Any?>(owner, fingerprint, providerId.takeIf { it > 0 }, hash, sentAt, receivedAt, sub,
                         receivedAt.takeIf { providerId > 0 }))
                 identity = Identity(owner, receivedAt)
             } else {
@@ -65,7 +65,7 @@ internal class SmsIngressIdentity(context: Context) {
                     "UPDATE ingress SET fingerprint=? WHERE work_id=? AND fingerprint IS NULL", arrayOf(fingerprint, identity.workId))
                 if (providerId > 0 && byProvider == null) db.execSQL(
                     "UPDATE ingress SET provider_id=?,provider_date=? WHERE work_id=? AND provider_id IS NULL",
-                    arrayOf(providerId, receivedAt, identity.workId))
+                    arrayOf<Any?>(providerId, receivedAt, identity.workId))
             }
             db.setTransactionSuccessful()
             return identity
