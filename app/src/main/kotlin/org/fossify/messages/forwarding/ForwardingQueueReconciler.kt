@@ -17,6 +17,7 @@ internal object ForwardingQueueReconciler {
     }
 
     private fun reconcile(context: Context, allowRepair: Boolean, limit: Int) {
+        if (allowRepair) ForwardingResubmission.resume(context)
         val store = ForwardingHistoryStore(context)
         val manager = WorkManager.getInstance(context)
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
@@ -83,12 +84,11 @@ internal object ForwardingQueueReconciler {
                                 continue
                             }
                             // Persist the reservation before submitting. A crash cannot cause repeated repairs.
-                            if (store.claimQueueRepair(record))
-                                ForwardingWorkScheduler.enqueue(context, name, request, record.recordId,
+                            ForwardingWorkScheduler.enqueue(context, name, request, record.recordId,
                                     input = Data.Builder().putAll(Data.fromByteArray(Base64.getDecoder().decode(payload!!.getString("queueData"))))
                                         .putBoolean("queue_repair", true).build(),
                                     retryPayload = payload, notBefore = payload.getLong("queueNotBefore"),
-                                    replacesRequestId = payload.getString("queueRequestId"))
+                                    replacesRequestId = payload.getString("queueRequestId"), repairOf = record)
                         } else store.observeQueue(record, "failed",
                             "任务未启动即失败或取消；未自动补发，可确认后仅重试此通道")
                     }

@@ -33,7 +33,9 @@ internal object ForwardingQueueDiagnostics {
             appendLine(network.text)
             appendLine(backgroundStatus(context))
             appendLine("日志状态：${record.status}；记录尝试次数：${record.attempts}")
-            val observed = ForwardingHistoryStore(context).queueObservation(record.recordId)
+            val history = ForwardingHistoryStore(context)
+            if (history.hasPendingManualSubmission(record.recordId)) appendLine("重试请求已保存；等待按原任务 ID 恢复提交")
+            val observed = history.queueObservation(record.recordId)
             if (observed.isNotBlank()) appendLine("队列核对：$observed")
             if (works.isEmpty()) append(ForwardingQueuePolicy.describe(null, 0, 0, 0, false, null))
             else works.takeLast(5).forEach { appendLine(); append(describe(it, network.ready)) }

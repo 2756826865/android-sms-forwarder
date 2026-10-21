@@ -62,13 +62,14 @@ class SmsDirectChannelPlugin(
 
         try {
             var submitted = false
-            SmsDirectSendGuard.sendOnce(context, source, destination) {
+            SmsDirectSendGuard.sendPrepared(context, source, destination) { before ->
                 val uris = context.messagingUtils.sendSmsMessage(
                     text = text,
                     addresses = setOf(destination),
                     subId = subId,
                     requireDeliveryReport = false,
-                    triggerType = SmsSendTriggerType.FORWARDING_SMS_DIRECT
+                    triggerType = SmsSendTriggerType.FORWARDING_SMS_DIRECT,
+                    beforeBillableSubmit = before
                 )
                 submitted = uris.isNotEmpty()
             }

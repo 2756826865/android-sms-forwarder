@@ -29,7 +29,7 @@ import org.fossify.commons.extensions.getBlockedNumbers
 import org.fossify.commons.extensions.getIntValue
 import org.fossify.commons.extensions.getIntValueOr
 import org.fossify.commons.extensions.getLongValue
-import org.fossify.commons.extensions.getMyContactsCursor
+import org.fossify.messages.extensions.getOptionalPrivateContactsCursor as getMyContactsCursor
 import org.fossify.commons.extensions.getStringValue
 import org.fossify.commons.extensions.hasPermission
 import org.fossify.commons.extensions.isNumberBlocked
@@ -242,6 +242,7 @@ fun Context.getMMS(
     sortOrder: String? = null,
     dateFrom: Int = -1,
     uri: Uri = Mms.CONTENT_URI,
+    strict: Boolean = false,
 ): ArrayList<Message> {
     val projection = arrayOf(
         Mms._ID,
@@ -269,7 +270,7 @@ fun Context.getMMS(
 
     val messages = ArrayList<Message>()
     val contactsMap = HashMap<Int, SimpleContact>()
-    queryCursor(uri, projection, selection, selectionArgs, sortOrder, showErrors = true) { cursor ->
+    val consume: (Cursor) -> Unit = { cursor ->
         val mmsId = cursor.getLongValue(Mms._ID)
         val type = cursor.getIntValue(Mms.MESSAGE_BOX)
         val date = cursor.getLongValue(Mms.DATE).toInt()
@@ -289,6 +290,7 @@ fun Context.getMMS(
         val attachment = try {
             getMmsAttachment(mmsId)
         } catch (e: Exception) {
+            if (strict) throw e
             e.printStackTrace()
             MessageAttachment(mmsId, "", arrayListOf())
         }
@@ -301,6 +303,7 @@ fun Context.getMMS(
             senderNumber = try {
                 getMMSSender(mmsId)
             } catch (e: Exception) {
+                if (strict) throw e
                 e.printStackTrace()
                 ""
             }
@@ -333,6 +336,13 @@ fun Context.getMMS(
         }
     }
 
+    if (strict) {
+        val cursor = contentResolver.query(uri, projection, selection, selectionArgs, sortOrder)
+            ?: error("MMS_NULL_CURSOR")
+        cursor.use { while (it.moveToNext()) consume(it) }
+    } else {
+        queryCursor(uri, projection, selection, selectionArgs, sortOrder, showErrors = true) { consume(it) }
+    }
     return messages
 }
 

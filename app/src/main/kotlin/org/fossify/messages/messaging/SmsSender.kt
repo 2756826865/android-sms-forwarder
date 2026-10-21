@@ -22,7 +22,8 @@ class SmsSender(val app: Application) {
     fun sendMessage(
         subId: Int, destination: String, body: String, serviceCenter: String?,
         requireDeliveryReport: Boolean, messageUri: Uri, threadId: Long = 0L,
-        sendOperationId: String? = null
+        sendOperationId: String? = null,
+        beforeBillableSubmit: ((String) -> Unit)? = null,
     ) {
         var dest = destination
         if (body.isEmpty()) {
@@ -43,7 +44,7 @@ class SmsSender(val app: Application) {
         // Actually send the sms
         sendInternal(
             subId, dest, messages, serviceCenter, requireDeliveryReport, messageUri, threadId,
-            sendOperationId
+            sendOperationId, beforeBillableSubmit
         )
     }
 
@@ -52,7 +53,7 @@ class SmsSender(val app: Application) {
         subId: Int, dest: String,
         messages: ArrayList<String>, serviceCenter: String?,
         requireDeliveryReport: Boolean, messageUri: Uri, threadId: Long,
-        sendOperationId: String?
+        sendOperationId: String?, beforeBillableSubmit: ((String) -> Unit)?
     ) {
         val smsManager = getSmsManager(app, subId)
         val callbackOperationId = sendOperationId ?: java.util.UUID.randomUUID().toString()
@@ -116,6 +117,7 @@ class SmsSender(val app: Application) {
                     )
                 )
             }
+            beforeBillableSubmit?.invoke(callbackOperationId)
             if (messageCount == 1) {
                 smsManager.sendTextMessage(
                     dest,

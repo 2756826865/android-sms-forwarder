@@ -16,7 +16,7 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import org.fossify.commons.extensions.baseConfig
-import org.fossify.commons.extensions.getMyContactsCursor
+import org.fossify.messages.extensions.getOptionalPrivateContactsCursor as getMyContactsCursor
 import org.fossify.commons.extensions.isNumberBlocked
 import org.fossify.commons.helpers.ContactLookupResult
 import org.fossify.commons.helpers.SimpleContactsHelper
@@ -52,6 +52,8 @@ import org.fossify.messages.helpers.ReceiverUtils.isMessageFilteredOut
 import org.fossify.messages.helpers.refreshConversations
 import org.fossify.messages.helpers.refreshMessages
 import org.fossify.messages.messaging.SmsRecoveryWorker
+import org.fossify.messages.messaging.SmsIngressIdentity
+import org.fossify.messages.messaging.SmsRoleDiagnostics
 import org.fossify.messages.models.Message
 import org.json.JSONArray
 import org.json.JSONObject
@@ -151,6 +153,10 @@ open class IncomingSmsService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     private fun processIncoming(intent: Intent) {
+        if (!SmsRoleDiagnostics.observe(this, "receive:${intent.action}")) {
+            processMinimal(this, intent)
+            return
+        }
         val parts = Telephony.Sms.Intents.getMessagesFromIntent(intent)
         if (parts.isEmpty()) {
             Log.w(TAG, "${intent.action} contained no SMS parts")
@@ -223,32 +229,10 @@ open class IncomingSmsService : Service() {
             ShadowRepository.recordStep(this, operationId, "FILTER_MATCHED", "OBSERVED")
         }
 
-        val isDefaultRole = org.fossify.messages.helpers.DeviceCompatHelper.isDefaultSmsApp(this)
-        val requestedThreadId = if (isDefaultRole) getThreadId(address) else 0L
-        ShadowRepository.recordStep(this, operationId, "PROVIDER_INSERT", "STARTED")
-        val insertedMessageId = if (isDefaultRole) {
-            try {
-                val id = persistWithRetry(
-                    context = this,
-                    address = address,
-                    subject = parts.last().pseudoSubject.orEmpty(),
-                    body = body,
-                    receivedAt = receivedAt,
-                    sentAt = sentAt,
-                    threadId = requestedThreadId,
-                    subscriptionId = subscriptionId,
-                )
-                ShadowRepository.recordStep(this, operationId, "PROVIDER_INSERT", "SUCCEEDED", "msgId=$id")
-                id
-            } catch (e: Exception) {
-                ShadowRepository.recordStep(this, operationId, "PROVIDER_INSERT", "FAILED", e.message)
-                throw e
-            }
-        } else {
-            // Non-default mode: Do not perform default SMS app system provider writes.
-            ShadowRepository.recordStep(this, operationId, "PROVIDER_INSERT", "SKIPPED", "non_default_role")
-            0L
-        }
+        val requestedThreadId = getThreadId(address)
+        val insertedMessageId = persistWithRetry(this, address, parts.last().pseudoSubject.orEmpty(),
+            body, receivedAt, sentAt, requestedThreadId, subscriptionId)
+        check(insertedMessageId > 0L) { "默认短信身份已变化，改用只读接收" }
 
         val resolvedThreadId = getSmsThreadId(insertedMessageId)
             .takeIf { it > 0L }
@@ -290,7 +274,9 @@ open class IncomingSmsService : Service() {
             SmsRecoveryWorker.enqueueNow(applicationContext)
         }
 
-        val uniqueId = "sms-$insertedMessageId"
+        val ingress = SmsIngressIdentity(this).broadcast(address, body, sentAt, receivedAt,
+            subscriptionId, fingerprint, insertedMessageId)
+        val uniqueId = ingress.workId
         if (filteredOut) {
             // 关键：命中过滤时在转发历史中登记为 skipped。
             // 这样 SmsRecoveryWorker 扫描到此消息时（已经在 Room 里），
@@ -668,13 +654,13 @@ open class IncomingSmsService : Service() {
          * 2. [wasPersisted] / [markPersisted] 幂等去重（SMS_DELIVER 与 SMS_RECEIVED 双发时防重复入库）
          * 3. 写本地 Room + [org.fossify.messages.extensions.syncThreadToLocal]（失败只记日志，不阻塞）
          * 4. 入队转发 [MultiChannelForwardWorker.enqueueSingle]，并应用**廉价规则子集**
-         *    （渠道/实例白名单，见 [evaluateCheapRules]；不做模板渲染）
+         *    （渠道/实例与规则模板，见 [evaluateCheapRules]）
          *
          * 第 3、4 步各自前置 [MINIMAL_BUDGET_MS] 闸门；被闸门拦下时入队 [SmsRecoveryWorker] 补偿，
          * 由恢复路径补转发（恢复路径用"是否登记过转发"而非"是否入过库"判重，见 SmsRecoveryWorker）。
          *
          * 明确不做（会 ANR，留给 SmsRecoveryWorker 补做）：联系人查询（含 blockUnknownNumbers）、
-         * 通知、自动回复、远程指令消费、验证码提取、悬浮胶囊、**模板渲染**。
+         * 通知、自动回复、远程指令消费、验证码提取、悬浮胶囊。
          *
          * 本函数不会向调用方抛异常：任何失败都会记日志并触发补偿，避免异常穿透 onReceive
          * 导致 SMS_DELIVER 广播未被消费、短信彻底丢失。
@@ -714,7 +700,8 @@ open class IncomingSmsService : Service() {
                 }
 
                 // 1. 写系统短信库
-                val requestedThreadId = if (org.fossify.messages.helpers.DeviceCompatHelper.isDefaultSmsApp(appContext)) appContext.getThreadId(address) else 0L
+                val ownsSms = SmsRoleDiagnostics.observe(appContext, "minimal:${source.action}")
+                val requestedThreadId = if (ownsSms) appContext.getThreadId(address) else 0L
                 val insertedMessageId = try {
                     persistWithRetry(
                         context = appContext,
@@ -734,6 +721,13 @@ open class IncomingSmsService : Service() {
                     -1L
                 }
 
+                val ingress = SmsIngressIdentity(appContext).broadcast(address, body,
+                    parts.minOf { it.timestampMillis }.coerceAtLeast(0L), receivedAt, subscriptionId,
+                    fingerprint, insertedMessageId)
+                if (!ownsSms) {
+                    PushPlusConfig(appContext).lastReceiverStatus = "非默认短信模式：跳过系统写库，按广播转发"
+                    SmsRecoveryWorker.enqueueNow(appContext)
+                }
                 if (insertedMessageId < 0L) {
                     // Provider 写入失败时转发是最后一份拷贝：SmsRecoveryWorker 扫的是 Provider，
                     // 没写进去的消息它不会发现，因此这里仍然必须入队转发（除非被用户规则拦截）。
@@ -742,13 +736,11 @@ open class IncomingSmsService : Service() {
                             context = appContext,
                             address = address,
                             body = body,
-                            receivedAt = receivedAt,
+                            receivedAt = ingress.receivedAt,
                             subscriptionId = subscriptionId,
-                            uniqueId = org.fossify.messages.forwarding.SmsDirectBillingPolicy.degradedWorkId(
-                                fingerprint(address, body,
-                                    parts.minOf { it.timestampMillis }.coerceAtLeast(0L), subscriptionId)),
+                            uniqueId = ingress.workId,
                             operationId = null,
-                            ruleDecision = evaluateCheapRules(appContext, address, body, subscriptionId),
+                            ruleDecision = evaluateCheapRules(appContext, address, body, subscriptionId, ingress.receivedAt),
                         )
                     }
                     return
@@ -807,12 +799,12 @@ open class IncomingSmsService : Service() {
                         context = appContext,
                         address = address,
                         body = body,
-                        receivedAt = receivedAt,
+                        receivedAt = ingress.receivedAt,
                         subscriptionId = subscriptionId,
-                        uniqueId = "sms-$insertedMessageId",
+                        uniqueId = ingress.workId,
                         operationId = null,
                         // P1-B：降级期间也必须应用用户的渠道白名单，否则"屏蔽某渠道"会失效。
-                        ruleDecision = evaluateCheapRules(appContext, address, body, subscriptionId),
+                        ruleDecision = evaluateCheapRules(appContext, address, body, subscriptionId, ingress.receivedAt),
                         threadId = resolvedMinimalThreadId,
                     )
                 }
@@ -880,6 +872,7 @@ open class IncomingSmsService : Service() {
             address: String,
             body: String,
             subscriptionId: Int,
+            receivedAt: Long = System.currentTimeMillis(),
         ): ForwardingRuleDecision? {
             val rulesConfig = runCatching { ForwardingRulesConfig(context) }.getOrNull() ?: return null
             if (!rulesConfig.enabled) return null
@@ -905,6 +898,14 @@ open class IncomingSmsService : Service() {
                     subscriptionId = subscriptionId,
                     channelCandidates = rulesConfig.channelCandidatesForScope(enabledChannels),
                     simSlotIndex = simSlotIndex,
+                    resolveContent = { rule, action, text ->
+                        val template = action.customTemplate
+                            .takeIf { action.templateMode == org.fossify.messages.forwarding.RuleTemplateMode.CUSTOM }
+                            ?: rule.customTemplate.takeIf(String::isNotBlank)
+                        if (template != null) ForwardingMessageFormatter.renderRuleTemplate(
+                            context, template, address, text, receivedAt, subscriptionId)
+                        else ForwardingMessageFormatter.format(context, address, text, receivedAt, subscriptionId).content
+                    },
                 )
             }.onFailure { error ->
                 Log.e(TAG, "minimal: cheap rule subset evaluation failed", error)
@@ -932,6 +933,19 @@ open class IncomingSmsService : Service() {
             ruleDecision: ForwardingRuleDecision? = null,
             threadId: Long = 0L,
         ) {
+            if (ruleDecision != null) {
+                ruleDecision.targets.forEach { target ->
+                    MultiChannelForwardWorker.enqueueSingle(context = context, sender = address,
+                        body = target.renderedContent, receivedAt = receivedAt, subscriptionId = subscriptionId,
+                        uniqueId = "$uniqueId-${target.ruleId.take(8)}-${target.actionId.take(8)}",
+                        targetChannel = target.channelType,
+                        allowedChannels = setOf(target.instanceId.ifBlank { target.channelType }),
+                        isTest = false, operationId = operationId, targetInstanceId = target.instanceId,
+                        ruleId = target.ruleId, actionId = target.actionId, bodyAlreadyRendered = true,
+                        allowSimLabelPrefix = target.allowSimLabelPrefix, threadId = threadId)
+                }
+                return
+            }
             val multiConfig = MultiForwardConfig(context)
             val pushPlusEnabled = PushPlusConfig(context).enabled
             val enabledInstances: List<ForwardingChannelInstance> = runCatching {
@@ -1072,12 +1086,10 @@ open class IncomingSmsService : Service() {
             threadId: Long,
             subscriptionId: Int,
         ): Long {
-            if (!org.fossify.messages.helpers.DeviceCompatHelper.isDefaultSmsApp(context)) {
-                throw SecurityException("SMS_WRITE_REQUIRES_DEFAULT_ROLE")
-            }
             var lastError: Throwable? = null
             repeat(PROVIDER_ATTEMPTS) { attempt ->
                 try {
+                    if (!SmsRoleDiagnostics.observe(context, "provider-attempt:${attempt + 1}")) return -1L
                     return context.insertNewSMS(
                         address = address,
                         subject = subject,

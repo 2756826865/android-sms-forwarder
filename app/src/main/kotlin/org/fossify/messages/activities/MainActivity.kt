@@ -39,7 +39,7 @@ import org.fossify.commons.extensions.beVisible
 import org.fossify.commons.extensions.beVisibleIf
 import org.fossify.commons.extensions.convertToBitmap
 import org.fossify.commons.extensions.getInternalStoragePath
-import org.fossify.commons.extensions.getMyContactsCursor
+import org.fossify.messages.extensions.getOptionalPrivateContactsCursor as getMyContactsCursor
 import org.fossify.commons.extensions.getProperPrimaryColor
 import org.fossify.commons.extensions.getProperTextColor
 import org.fossify.commons.extensions.hideKeyboard
@@ -332,6 +332,7 @@ class MainActivity : SimpleActivity() {
 
     override fun onResume() {
         super.onResume()
+        org.fossify.messages.messaging.SmsRoleDiagnostics.observe(this, "home-resume")
         val deferredHomeRefresh = homeRefreshGate.resume()
         // 回前台补偿同步必须在 UI 模式分流之前执行：开发者版 UI 是默认模式 (config.useGatewayDeveloperUi 默认 true)，
         // 若放在分流之后会因该分支的提前 return 而永不执行 (ISSUE-012 解锁后短信不同步的根因)。
@@ -778,8 +779,9 @@ class MainActivity : SimpleActivity() {
 
             val needsFullHistorySync = !config.fullHistorySyncedV2
             if (needsFullHistorySync) {
-                syncSmsHistory("main_activity_init")
-                config.fullHistorySyncedV2 = true
+                val result = syncSmsHistory("main_activity_init")
+                if (result.success && result.parseFailedCount == 0 && result.readCount > 0)
+                    config.fullHistorySyncedV2 = true
             } else {
                 val threadsToSync = conversations.distinctBy { it.threadId }.take(30)
                 threadsToSync.forEach { conversation ->

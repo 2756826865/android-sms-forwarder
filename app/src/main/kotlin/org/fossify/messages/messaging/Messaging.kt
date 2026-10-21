@@ -48,6 +48,7 @@ fun Context.sendMessageCompat(
     messageId: Long? = null,
     propagateErrors: Boolean = false,
     triggerType: SmsSendTriggerType = SmsSendTriggerType.LEGACY_UNKNOWN,
+    beforeBillableSubmit: ((String) -> Unit)? = null,
 ) {
     val settings = getSendMessageSettings()
     if (subId != null) {
@@ -59,6 +60,8 @@ fun Context.sendMessageCompat(
             || addresses.size > 1 && settings.group
 
     if (isMms) {
+        // MMS uses a different sender: retain conservative one-submit protection.
+        beforeBillableSubmit?.invoke("")
         if (attachments.isNotEmpty()) {
             val lastIndex = attachments.lastIndex
             if (attachments.size > 1) {
@@ -81,7 +84,8 @@ fun Context.sendMessageCompat(
                 subId = settings.subscriptionId,
                 requireDeliveryReport = settings.deliveryReports,
                 messageId = messageId,
-                triggerType = triggerType
+                triggerType = triggerType,
+                beforeBillableSubmit = beforeBillableSubmit
             )
         } catch (e: SmsException) {
             if (propagateErrors) throw e

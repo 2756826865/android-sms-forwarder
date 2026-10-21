@@ -124,6 +124,100 @@ class ForwardingHistoryStore(context: Context) {
         claimed
     }
 
+    /** Reserve the full request before WorkManager is called. Old guards remain closed. */
+    fun reserveSubmission(parent: ForwardingHistoryRecord, kind: String, recordId: String, payload: JSONObject): Boolean = synchronized(lock) {
+        require(kind in setOf("manual", "repair"))
+        val db = database
+        db.beginTransaction()
+        var reserved = false
+        try {
+            val current = readRecord(db, parent.recordId)
+            val eligible = current == parent && if (kind == "manual")
+                parent.status in setOf(STATUS_FAILED, STATUS_UNKNOWN)
+                else parent.status in ForwardingReconcilePolicy.pending && parent.attempts == 0
+            val guard = if (kind == "manual") "queue_manual_retry_guard" else "queue_repair_guard"
+            val otherPending = db.rawQuery("SELECT request_id FROM queue_submissions WHERE parent_id=? AND accepted=0",
+                arrayOf(parent.recordId)).use { it.moveToFirst() }
+            val manualGuard = kind == "repair" && db.rawQuery("SELECT record_id FROM queue_manual_retry_guard WHERE record_id=?",
+                arrayOf(parent.recordId)).use { it.moveToFirst() }
+            if (eligible && !otherPending && !manualGuard) {
+                reserved = db.insertWithOnConflict(guard, null, ContentValues().apply {
+                    put("record_id", parent.recordId)
+                }, SQLiteDatabase.CONFLICT_IGNORE) >= 0
+                if (reserved) {
+                    db.insertWithOnConflict("queue_submissions", null, ContentValues().apply {
+                        put("parent_id", parent.recordId); put("kind", kind)
+                        put("request_id", payload.getString("queueRequestId")); put("record_id", recordId)
+                        put("payload", payload.toString()); put("accepted", 0); put("worker_started", 0)
+                    }, SQLiteDatabase.CONFLICT_ABORT)
+                    writeRecord(db, current!!.copy(detail = current.detail + "；已保存重试请求，等待系统调度",
+                        updatedAt = System.currentTimeMillis()))
+                }
+            }
+            db.setTransactionSuccessful()
+        } finally { db.endTransaction() }
+        reserved
+    }
+
+    fun pendingSubmissions(): List<JSONObject> = synchronized(lock) {
+        database.rawQuery("SELECT payload FROM queue_submissions WHERE accepted=0 LIMIT 30", null).use { c ->
+            buildList { while (c.moveToNext()) add(JSONObject(c.getString(0))) }
+        }
+    }
+
+    fun hasPendingManualSubmission(id: String): Boolean = synchronized(lock) {
+        database.rawQuery("SELECT request_id FROM queue_submissions WHERE parent_id=? AND kind='manual' AND accepted=0",
+            arrayOf(id)).use { it.moveToFirst() }
+    }
+
+    fun settleSubmission(requestId: String) = synchronized(lock) {
+        database.execSQL("UPDATE queue_submissions SET accepted=1,payload='{}' WHERE request_id=?", arrayOf(requestId))
+    }
+
+    /** A queue reservation is not a delivery. Worker execution gets its own durable claim. */
+    fun claimSubmissionExecution(requestId: String, safeRetry: Boolean): Boolean = synchronized(lock) {
+        val db = database
+        db.beginTransaction()
+        try {
+            val started = db.rawQuery("SELECT worker_started,record_id,payload FROM queue_submissions WHERE request_id=?", arrayOf(requestId)).use { c ->
+                if (!c.moveToFirst()) null else Triple(c.getInt(0), c.getString(1), c.getString(2))
+            }
+            if (started != null) {
+                if (started.first != 0 && !safeRetry) return@synchronized false
+                val snapshot = JSONObject(started.third)
+                if (snapshot.has("queueData")) db.execSQL("UPDATE history SET retry_payload=? WHERE record_id=?",
+                    arrayOf(snapshot.toString(), started.second))
+                db.execSQL("UPDATE queue_submissions SET worker_started=1,accepted=1,payload='{}' WHERE request_id=?", arrayOf(requestId))
+            }
+            db.setTransactionSuccessful()
+            true
+        } finally { db.endTransaction() }
+    }
+
+    fun smsPhase(id: String): String = synchronized(lock) {
+        database.rawQuery("SELECT sms_phase FROM history WHERE record_id=?", arrayOf(id))
+            .use { if (it.moveToFirst()) it.getString(0).orEmpty() else "" }
+    }
+
+    fun setSmsPhase(id: String, phase: String) = synchronized(lock) {
+        database.execSQL("UPDATE history SET sms_phase=? WHERE record_id=? AND sms_phase NOT IN ('sent','failed') AND (? NOT IN ('preparing','pre_submit_failed') OR sms_phase IN ('','preparing','pre_submit_failed'))", arrayOf(phase, id, phase))
+    }
+
+    fun recordSmsResult(id: String, success: Boolean) = synchronized(lock) {
+        val db = database
+        db.beginTransaction()
+        try {
+            val current = readRecord(db, id)
+            val failed = !success || smsPhase(id) == "failed"
+            db.execSQL("UPDATE history SET sms_phase=? WHERE record_id=?", arrayOf(if (failed) "failed" else "sent", id))
+            if (current != null) writeRecord(db, current.copy(status = if (failed) STATUS_FAILED else STATUS_SUCCESS,
+                detail = if (failed) "系统短信发送回执失败；停止自动重发" else "系统短信发送回执成功",
+                updatedAt = System.currentTimeMillis()))
+            db.setTransactionSuccessful()
+        } finally { db.endTransaction() }
+        notifyChanged()
+    }
+
     // Execution guards are deliberately separate from user-clearable display history.
     fun groupStatus(recordId: String): String? = synchronized(lock) {
         database.rawQuery("SELECT status FROM group_execution WHERE record_id = ?", arrayOf(recordId)).use {
@@ -221,7 +315,7 @@ class ForwardingHistoryStore(context: Context) {
     }
 
     fun markRunning(recordId: String) = update(recordId) {
-        it.copy(
+        if (smsPhase(recordId) in setOf("sent", "failed")) it else it.copy(
             status = STATUS_RUNNING,
             attempts = it.attempts + 1,
             detail = "正在发送",
@@ -243,7 +337,8 @@ class ForwardingHistoryStore(context: Context) {
     }
 
     fun markSuccess(recordId: String, detail: String) = update(recordId) {
-        it.copy(status = STATUS_SUCCESS, detail = detail, updatedAt = System.currentTimeMillis())
+        if (smsPhase(recordId) in setOf("sent", "failed")) it
+        else it.copy(status = STATUS_SUCCESS, detail = detail, updatedAt = System.currentTimeMillis())
     }
 
     fun markRetry(recordId: String, detail: String) = update(recordId) {
@@ -251,11 +346,13 @@ class ForwardingHistoryStore(context: Context) {
     }
 
     fun markUnknown(recordId: String, detail: String) = update(recordId) {
-        it.copy(status = STATUS_UNKNOWN, detail = detail, updatedAt = System.currentTimeMillis())
+        if (smsPhase(recordId) in setOf("sent", "failed")) it
+        else it.copy(status = STATUS_UNKNOWN, detail = detail, updatedAt = System.currentTimeMillis())
     }
 
     fun markFailed(recordId: String, detail: String) = update(recordId) {
-        it.copy(status = STATUS_FAILED, detail = detail, updatedAt = System.currentTimeMillis())
+        if (smsPhase(recordId) in setOf("sent", "failed")) it
+        else it.copy(status = STATUS_FAILED, detail = detail, updatedAt = System.currentTimeMillis())
     }
 
     fun markSkipped(recordId: String, detail: String) = update(recordId) {

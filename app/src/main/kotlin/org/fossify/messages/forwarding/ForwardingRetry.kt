@@ -7,8 +7,22 @@ import java.util.concurrent.TimeUnit
 
 /** Replays only the original target, never re-matches rules or restarts a channel group. */
 object ForwardingRetry {
+    fun unavailableReason(context: Context, record: ForwardingHistoryRecord): String? {
+        val store = ForwardingHistoryStore(context)
+        if (store.hasPendingManualSubmission(record.recordId)) return null
+        val payload = store.retryPayload(record.recordId) ?: return "旧记录没有完整发送内容，无法安全重试"
+        val channel = payload.optString("channel")
+        if (channel == ForwardingChannels.CHANNEL_GROUP) return "请重试组内具体通道"
+        val sms = channel == ForwardingChannels.SMS_DIRECT ||
+            (channel in setOf("", ForwardingChannels.ALL) && MultiForwardConfig(context).smsDirectEnabled)
+        if (sms && record.attempts > 0 && !(channel == ForwardingChannels.SMS_DIRECT &&
+            SmsDirectBillingPolicy.canResumePreparation(store.smsPhase(record.recordId))))
+            return "已尝试收费发送，结果需核实，不能从日志重复提交"
+        return null
+    }
     fun enqueue(context: Context, recordId: String) {
         val store = ForwardingHistoryStore(context)
+        if (store.hasPendingManualSubmission(recordId)) { ForwardingResubmission.resume(context); return }
         val record = store.record(recordId) ?: error("记录已不存在")
         require(record.status in setOf(ForwardingHistoryStore.STATUS_FAILED, ForwardingHistoryStore.STATUS_UNKNOWN)) {
             "仅失败或结果未知的记录可手动重试"
@@ -28,7 +42,8 @@ object ForwardingRetry {
         val includesSmsDirect = channel == ForwardingChannels.SMS_DIRECT ||
             currentInstance?.channelType == ForwardingChannels.SMS_DIRECT ||
             (channel in setOf("", ForwardingChannels.ALL) && ForwardingChannels.SMS_DIRECT in config.enabledChannelIds())
-        require(SmsDirectBillingPolicy.canRetryManually(includesSmsDirect, record.attempts)) {
+        require(SmsDirectBillingPolicy.canRetryManually(includesSmsDirect, record.attempts) ||
+            (channel == ForwardingChannels.SMS_DIRECT && SmsDirectBillingPolicy.canResumePreparation(store.smsPhase(recordId)))) {
             "此记录已尝试过收费短信发送，不能从日志再次提交；请先核对收件端，确需重发请手动发送短信"
         }
         val key = MessageDigest.getInstance("SHA-256").digest(recordId.toByteArray())
@@ -57,7 +72,6 @@ object ForwardingRetry {
         } catch (error: Exception) {
             throw IllegalStateException("任务状态查询失败或超时，未重新提交，请稍后再试", error)
         }
-        require(store.claimManualRetry(record)) { "此记录状态已改变或已经安排重试，请刷新日志查看；未重复提交" }
         MultiChannelForwardWorker.enqueueSingle(
             context = context, sender = payload.getString("sender"), body = payload.getString("body"),
             receivedAt = payload.getLong("receivedAt"), subscriptionId = payload.getInt("subscriptionId"),
@@ -67,6 +81,7 @@ object ForwardingRetry {
             ruleId = payload.optString("ruleId"), actionId = payload.optString("actionId"),
             bodyAlreadyRendered = payload.optBoolean("bodyAlreadyRendered"), threadId = payload.optLong("threadId"),
             allowSimLabelPrefix = payload.optBoolean("allowSimLabelPrefix", false),
+            retryOf = record,
             originalSim = ForwardingSimSnapshot(payload.optInt("slot", -1), payload.optString("sim"),
                 payload.optString("receiver"), payload.optString("label")),
             originalSmsDirectSource = payload.optString("smsDirectSource").ifBlank {

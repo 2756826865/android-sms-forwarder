@@ -70,7 +70,7 @@ import org.fossify.commons.extensions.getBottomNavigationBackgroundColor
 import org.fossify.commons.extensions.getContrastColor
 import org.fossify.commons.extensions.getFilenameFromPath
 import org.fossify.commons.extensions.getFilenameFromUri
-import org.fossify.commons.extensions.getMyContactsCursor
+import org.fossify.messages.extensions.getOptionalPrivateContactsCursor as getMyContactsCursor
 import org.fossify.commons.extensions.getMyFileUri
 import org.fossify.commons.extensions.getProperBackgroundColor
 import org.fossify.commons.extensions.getProperPrimaryColor

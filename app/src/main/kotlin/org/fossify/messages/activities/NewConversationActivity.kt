@@ -25,7 +25,7 @@ import org.fossify.commons.extensions.beVisible
 import org.fossify.commons.extensions.beVisibleIf
 import org.fossify.commons.extensions.getColorStateList
 import org.fossify.commons.extensions.getContrastColor
-import org.fossify.commons.extensions.getMyContactsCursor
+import org.fossify.messages.extensions.getOptionalPrivateContactsCursor as getMyContactsCursor
 import org.fossify.commons.extensions.getProperPrimaryColor
 import org.fossify.commons.extensions.getProperTextColor
 import org.fossify.commons.extensions.hasPermission

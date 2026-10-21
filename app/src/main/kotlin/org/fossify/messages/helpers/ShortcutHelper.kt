@@ -8,7 +8,7 @@ import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
 import androidx.core.graphics.drawable.toBitmap
 import androidx.core.text.isDigitsOnly
-import org.fossify.commons.extensions.getMyContactsCursor
+import org.fossify.messages.extensions.getOptionalPrivateContactsCursor as getMyContactsCursor
 import org.fossify.commons.helpers.MyContactsContentProvider
 import org.fossify.commons.helpers.SimpleContactsHelper
 import org.fossify.commons.helpers.isOnMainThread

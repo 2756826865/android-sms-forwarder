@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 待发布（10210zx 整合）
+
+- 保留批量历史同步优化，补充同步互斥、失败状态与完成标记保护。
+- 修正非默认短信接收路径，统一广播兜底和恢复扫描的任务身份及通道实例。
+- 企业微信确认超时停止自动重发；重试与补偿请求保存后按固定任务 ID 恢复。
+- 短信直发区分准备失败与提交结果未知，发送回执不再被迟到状态覆盖。
+- 兼容保活默认开启，保留用户已保存的关闭设置。
+
+整合范围、验证结果与真机待验项见 [整合说明](docs/integration-10210zx-2026-10-21.md)。
+
 ## [1.2.4(101901)] - 2026-10-19
 
 - 修复超长会话地址 ID 报错，补充号码兜底，避免联系人 ID 与号码错位。

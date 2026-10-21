@@ -26,7 +26,8 @@ class QueueRepairSqlTest(unittest.TestCase):
 
     def test_upgrade_preserves_original_logs_and_retry_payload(self):
         self.db.execute(SCHEMA.replace(', queue_checked_at INTEGER NOT NULL DEFAULT 0', '')
-                        .replace(", queue_detail TEXT NOT NULL DEFAULT ''", ''))
+                        .replace(", queue_detail TEXT NOT NULL DEFAULT ''", '')
+                        .replace(", sms_phase TEXT NOT NULL DEFAULT ''", ''))
         self.db.execute("INSERT INTO history VALUES('id','sms-1','original log','queued',10,20,0,'original task')")
         for alter in ALTERS:
             self.db.execute(alter)
@@ -67,9 +68,9 @@ class QueueRepairSqlTest(unittest.TestCase):
         self.assertEqual(self.db.execute(SCAN, (1,)).fetchone()[0], '1')
 
     def test_v2_upgrade_preserves_specific_errors_and_original_work_snapshot(self):
-        self.db.execute(SCHEMA.replace(", queue_detail TEXT NOT NULL DEFAULT ''", ''))
+        self.db.execute(SCHEMA.replace(", queue_detail TEXT NOT NULL DEFAULT ''", '').replace(", sms_phase TEXT NOT NULL DEFAULT ''", ''))
         self.db.execute("INSERT INTO history VALUES('id','sms-1','socket timeout','retry',10,20,0,'original task',42)")
-        self.db.execute(ALTERS[-1])
+        self.db.execute(next(sql for sql in ALTERS if 'queue_detail' in sql))
         self.assertEqual(self.db.execute('SELECT payload,retry_payload,queue_checked_at,queue_detail FROM history').fetchone(),
                          ('socket timeout', 'original task', 42, ''))
 

@@ -71,14 +71,15 @@ class ForwardSmsOutboxExecutor : OutboxExecutor {
         }
 
         return try {
-            SmsDirectSendGuard.sendOnce(context, SmsDirectBillingPolicy.outboxSource(task.taskId, deliveryId), phone) {
+            SmsDirectSendGuard.sendPrepared(context, SmsDirectBillingPolicy.outboxSource(task.taskId, deliveryId), phone) { before ->
                 context.sendMessageCompat(
                     text = content,
                     addresses = listOf(phone),
                     subId = subId.takeIf { it >= 0 },
                     attachments = emptyList(),
                     propagateErrors = true,
-                    triggerType = triggerType
+                    triggerType = triggerType,
+                    beforeBillableSubmit = before
                 )
             }
 

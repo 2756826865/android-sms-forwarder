@@ -81,7 +81,6 @@ class SmsRecoveryWorker(
         // 排队记录只证明已登记，不能证明已送达；无法证明安全的旧任务会标记未知，等待用户核实。
         // 扫描开始时读一次即可：扫描中自己新产生的记录不需要在本次扫描内立刻可见（每行只处理一次）。
         val forwardedMessageIds by lazy { readForwardedMessageIds() }
-        val forwardedFingerprints by lazy { readForwardedFingerprints() }
         var newestSeen = lastChecked
         var repairedAny = false
 
@@ -90,6 +89,7 @@ class SmsRecoveryWorker(
             Telephony.Sms.ADDRESS,
             Telephony.Sms.BODY,
             Telephony.Sms.DATE,
+            Telephony.Sms.DATE_SENT,
             Telephony.Sms.THREAD_ID,
             Telephony.Sms.SUBSCRIPTION_ID,
             Telephony.Sms.READ,
@@ -111,6 +111,7 @@ class SmsRecoveryWorker(
                 val addressIndex = cursor.getColumnIndexOrThrow(Telephony.Sms.ADDRESS)
                 val bodyIndex = cursor.getColumnIndexOrThrow(Telephony.Sms.BODY)
                 val dateIndex = cursor.getColumnIndexOrThrow(Telephony.Sms.DATE)
+                val sentIndex = cursor.getColumnIndex(Telephony.Sms.DATE_SENT)
                 val threadIndex = cursor.getColumnIndexOrThrow(Telephony.Sms.THREAD_ID)
                 val subIndex = cursor.getColumnIndex(Telephony.Sms.SUBSCRIPTION_ID)
                 val readIndex = cursor.getColumnIndexOrThrow(Telephony.Sms.READ)
@@ -137,7 +138,9 @@ class SmsRecoveryWorker(
                         continue
                     }
 
-                    val uniqueId = "sms-$id"
+                    val ingress = SmsIngressIdentity(applicationContext).provider(address, body,
+                        if (sentIndex >= 0) cursor.getLong(sentIndex) else 0L, date, subscriptionId, id)
+                    val uniqueId = ingress.workId
                     val alreadyLocal = id in localIds
                     // 与 FULL / MINIMAL 两条链路保持一致的过滤：白名单优先 → 应用黑名单 →
                     // 关键词 → 系统屏蔽号（微秒级，不查联系人；blockUnknownNumbers 是已知差异，
@@ -158,10 +161,8 @@ class SmsRecoveryWorker(
                         continue
                     }
 
-                    // P1-A：已入 Room **且** 已登记过转发（支持 sms-ID 与 sms-minimal-fingerprint）→ 真正"处理过"，跳过。
-                    val itemFingerprint = IncomingSmsService.fingerprint(address, body, date, subscriptionId)
-                    val isAlreadyForwarded = (id in forwardedMessageIds) || (itemFingerprint in forwardedFingerprints)
-                    if (alreadyLocal && isAlreadyForwarded) {
+                    if (uniqueId == "sms-$id" && id in forwardedMessageIds) {
+                        if (!alreadyLocal) { threadIdsToSync.add(threadId); repairedAny = true }
                         ShadowRepository.incrementCounter(applicationContext, "RECOVERY_ITEM_SKIPPED")
                         continue
                     }
@@ -170,7 +171,7 @@ class SmsRecoveryWorker(
                     // 这种情形只补转发，**不重复通知、不消费远程指令**：降级路径本来就把这两件事
                     // 列为"明确不做"，恢复路径无权替它补做决定——远程指令会真的发出短信，是风险
                     // 最高的操作，宁可不执行（缺一次指令是 fail-safe，误执行不是）。
-                    val backfillForwardingOnly = alreadyLocal
+                    val backfillForwardingOnly = alreadyLocal || ingress.workId.startsWith("sms-minimal-")
                     if (backfillForwardingOnly) {
                         ShadowRepository.incrementCounter(applicationContext, "RECOVERY_FORWARD_BACKFILLED")
                     } else {
@@ -279,7 +280,7 @@ class SmsRecoveryWorker(
                                     context = applicationContext,
                                     sender = address,
                                     body = target.renderedContent,
-                                    receivedAt = date,
+                                    receivedAt = ingress.receivedAt,
                                     subscriptionId = subscriptionId,
                                     uniqueId = "$uniqueId-${target.ruleId.take(8)}-${target.actionId.take(8)}",
                                     targetChannel = target.channelType,
@@ -298,14 +299,11 @@ class SmsRecoveryWorker(
                                 )
                             }
                         } else {
-                            MultiChannelForwardWorker.enqueue(
-                                context = applicationContext,
-                                sender = address,
-                                body = body,
-                                receivedAt = date,
-                                subscriptionId = subscriptionId,
-                                uniqueId = uniqueId,
-                                allowedChannels = buildMultiChannelAllowedChannels(rulesConfig, allowedForwardChannels, multiConfig),
+                            IncomingSmsService.enqueueForwardingFallback(
+                                context = applicationContext, address = address, body = body,
+                                receivedAt = ingress.receivedAt, subscriptionId = subscriptionId,
+                                uniqueId = uniqueId, operationId = null, ruleDecision = ruleDecision,
+                                threadId = threadId,
                             )
                         }
                     }
@@ -380,22 +378,6 @@ class SmsRecoveryWorker(
                 .mapNotNull(::parseSmsWorkId)
                 .toSet()
         }.getOrDefault(emptySet())
-    }
-
-    private fun readForwardedFingerprints(): Set<String> {
-        return runCatching {
-            ForwardingHistoryStore(applicationContext).workIds()
-                .mapNotNull(::parseMinimalWorkFingerprint)
-                .toSet()
-        }.getOrDefault(emptySet())
-    }
-
-    private fun parseMinimalWorkFingerprint(workId: String): String? {
-        val prefix = "sms-minimal-"
-        if (!workId.startsWith(prefix)) return null
-        val rest = workId.removePrefix(prefix)
-        val fp = rest.takeWhile { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' }
-        return if (fp.length == 64) fp.lowercase() else null
     }
 
     /**

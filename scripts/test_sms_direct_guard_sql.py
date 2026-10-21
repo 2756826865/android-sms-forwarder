@@ -23,7 +23,7 @@ class SmsDirectGuardSqlTest(unittest.TestCase):
     def claim(self, key):
         with sqlite3.connect(self.path, timeout=10) as db:
             db.execute("BEGIN IMMEDIATE")
-            row = db.execute("INSERT OR IGNORE INTO sms_direct_claims VALUES (?, ?)", (key, 123))
+            row = db.execute("INSERT OR IGNORE INTO sms_direct_claims(claim_key,claimed_at) VALUES (?, ?)", (key, 123))
             return row.rowcount == 1
 
     def test_concurrent_claims_allow_one_submission(self):
@@ -38,7 +38,7 @@ class SmsDirectGuardSqlTest(unittest.TestCase):
     def test_rolled_back_claim_never_authorizes_a_send(self):
         db = sqlite3.connect(self.path)
         db.execute("BEGIN IMMEDIATE")
-        db.execute("INSERT INTO sms_direct_claims VALUES ('task', 123)")
+        db.execute("INSERT INTO sms_direct_claims(claim_key,claimed_at) VALUES ('task', 123)")
         db.rollback()
         db.close()
         self.assertTrue(self.claim("task"))

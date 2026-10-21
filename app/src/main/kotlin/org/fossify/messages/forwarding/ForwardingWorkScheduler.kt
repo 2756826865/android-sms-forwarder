@@ -19,19 +19,30 @@ internal object ForwardingWorkScheduler {
                 input: Data? = null, retryPayload: JSONObject? = null,
                 notBefore: Long = 0L, repairAllowed: Boolean = false,
                 replacesRequestId: String? = null,
+                retryOf: ForwardingHistoryRecord? = null, repairOf: ForwardingHistoryRecord? = null,
+                reservedRequest: Boolean = false,
                 observerExecutor: Executor = Dispatchers.IO.asExecutor()) {
         val history = ForwardingHistoryStore(context.applicationContext)
         try {
             // A duplicate event cannot start a new request for an already-bound delivery.
             // An explicitly reserved repair is the sole exception.
-            if (replacesRequestId == null && history.retryPayload(recordId) != null) return
+            if (!reservedRequest && retryOf == null && repairOf == null && replacesRequestId == null && history.retryPayload(recordId) != null) return
             // Stage in memory only. KEEP can ignore this request: it must never
             // replace the payload belonging to the older request that actually runs.
             val snapshot = if (input == null || retryPayload == null) null else JSONObject(retryPayload.toString())
                 .put("queueSnapshotVersion", 1).put("queueRequestId", request.id.toString())
                 .put("queueRepairAllowed", repairAllowed).put("queueWorkName", name)
-                .put("queueNotBefore", notBefore)
+                .put("queueNotBefore", notBefore).put("queueRecordId", recordId)
+                .put("queueReplacesRequestId", replacesRequestId.orEmpty())
                 .put("queueData", Base64.getEncoder().encodeToString(input.toByteArray()))
+            val parent = retryOf ?: repairOf
+            if (parent != null) {
+                check(snapshot != null)
+                if (!history.reserveSubmission(parent, if (retryOf != null) "manual" else "repair", recordId, snapshot)) {
+                    ForwardingResubmission.resume(context)
+                    return
+                }
+            }
             val manager = WorkManager.getInstance(context.applicationContext)
             val result = manager
                 .enqueueUniqueWork(name, ExistingWorkPolicy.KEEP, request).result
@@ -60,7 +71,11 @@ internal object ForwardingWorkScheduler {
         if (works.any { it.id.toString() == requestId }) {
             // Even a failed Operation can have committed its WorkSpec already.
             // Bind only this verified UUID and never replace an existing snapshot.
-            if (snapshot != null) history.bindQueueSnapshot(recordId, snapshot, replacesRequestId)
+            if (snapshot != null) {
+                history.bindQueueSnapshot(recordId, snapshot, replacesRequestId)
+                if (history.retryPayload(recordId)?.optString("queueRequestId") != requestId) return
+            }
+            history.settleSubmission(requestId)
             if (accepted) history.markEnqueued(recordId) else history.markEnqueueFailed(recordId)
         } else if (works.isEmpty()) {
             history.markEnqueueFailed(recordId)

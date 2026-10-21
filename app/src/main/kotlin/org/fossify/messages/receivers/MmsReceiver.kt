@@ -5,7 +5,7 @@ import android.net.Uri
 import com.bumptech.glide.Glide
 import com.klinker.android.send_message.MmsReceivedReceiver
 import org.fossify.commons.extensions.baseConfig
-import org.fossify.commons.extensions.getMyContactsCursor
+import org.fossify.messages.extensions.getOptionalPrivateContactsCursor as getMyContactsCursor
 import org.fossify.commons.extensions.isNumberBlocked
 import org.fossify.commons.extensions.showErrorToast
 import org.fossify.commons.helpers.ContactLookupResult

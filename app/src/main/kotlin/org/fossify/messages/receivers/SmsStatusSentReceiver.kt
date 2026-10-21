@@ -10,7 +10,7 @@ import android.provider.Telephony.Sms
 import android.util.Log
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ProcessLifecycleOwner
-import org.fossify.commons.extensions.getMyContactsCursor
+import org.fossify.messages.extensions.getOptionalPrivateContactsCursor as getMyContactsCursor
 import org.fossify.commons.helpers.ensureBackgroundThread
 import org.fossify.messages.extensions.getMessageRecipientAddress
 import org.fossify.messages.extensions.getNameFromAddress
@@ -80,6 +80,11 @@ class SmsStatusSentReceiver : SendStatusReceiver() {
         if (intent.getBooleanExtra(MultipartSendResults.EXTRA_PENDING, false)) return
         val effectiveResultCode = intent.getIntExtra(MultipartSendResults.EXTRA_RESULT, receiverResultCode)
 
+        runCatching {
+            org.fossify.messages.forwarding.SmsDirectSendGuard.recordSentResult(context,
+                if (messageUri != null && !sendOperationId.isNullOrBlank()) "$messageUri#$sendOperationId" else "",
+                effectiveResultCode == Activity.RESULT_OK)
+        }
         Log.i(TAG, "updateAppDatabase: uri=$messageUri, resultCode=$receiverResultCode, opId=$sendOperationId, part=$partIndex")
         if (messageUri != null) {
             val messageId = messageUri.lastPathSegment?.toLongOrNull() ?: 0L

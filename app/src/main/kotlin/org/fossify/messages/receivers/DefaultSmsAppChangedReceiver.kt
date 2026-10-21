@@ -22,6 +22,7 @@ class DefaultSmsAppChangedReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Telephony.Sms.Intents.ACTION_DEFAULT_SMS_PACKAGE_CHANGED) return
 
+        org.fossify.messages.messaging.SmsRoleDiagnostics.observe(context, "role-broadcast")
         val isDefault = intent.getBooleanExtra(
             Telephony.Sms.Intents.EXTRA_IS_DEFAULT_SMS_APP,
             org.fossify.messages.helpers.DeviceCompatHelper.isDefaultSmsApp(context),

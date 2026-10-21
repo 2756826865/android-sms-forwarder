@@ -109,6 +109,7 @@ class MessagingUtils(val context: Context) {
         messageId: Long? = null,
         triggerType: SmsSendTriggerType = SmsSendTriggerType.LEGACY_UNKNOWN,
         beforeSubmit: ((Uri) -> Unit)? = null,
+        beforeBillableSubmit: ((String) -> Unit)? = null,
     ): List<Uri> {
         val sentUris = mutableListOf<Uri>()
         if (addresses.size > 1) {
@@ -174,7 +175,10 @@ class MessagingUtils(val context: Context) {
                 context.smsSender.sendMessage(
                     subId = subId, destination = address, body = text, serviceCenter = null,
                     requireDeliveryReport = requireDeliveryReport, messageUri = messageUri, threadId = threadId,
-                    sendOperationId = sendOperationId
+                    sendOperationId = sendOperationId,
+                    beforeBillableSubmit = beforeBillableSubmit?.let { before ->
+                        { callbackId -> before("$messageUri#$callbackId") }
+                    }
                 )
                 sentUris += messageUri
             } catch (e: Exception) {

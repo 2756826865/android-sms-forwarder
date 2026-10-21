@@ -9,6 +9,7 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import org.fossify.commons.models.PhoneNumber
 import org.fossify.commons.models.SimpleContact
+import org.fossify.messages.extensions.config
 import org.fossify.messages.extensions.conversationsDB
 import org.fossify.messages.extensions.createConversationFromMessage
 import org.fossify.messages.extensions.getConversations
@@ -36,6 +37,8 @@ data class SmsSyncResult(
     val outcome: String,
 )
 
+private val historySyncRunning = java.util.concurrent.atomic.AtomicBoolean(false)
+
 fun Context.syncSmsHistory(source: String, strict: Boolean = false): SmsSyncResult {
     val traceId = UUID.randomUUID().toString().take(8)
     val startTime = System.currentTimeMillis()
@@ -56,6 +59,10 @@ fun Context.syncSmsHistory(source: String, strict: Boolean = false): SmsSyncResu
         if (strict) throw SecurityException("SMS_PERMISSION_DENIED")
         return SmsSyncResult(traceId, false, 0, 0, 0, 0, elapsed, "permission_denied")
     }
+
+    if (!historySyncRunning.compareAndSet(false, true))
+        return SmsSyncResult(traceId, false, 0, 0, 0, 0, 0, "already_running")
+    SmsSyncProgress.update(SmsSyncProgress.State(running = true))
 
     var readCount = 0
     var parseFailedCount = 0
@@ -98,7 +105,6 @@ fun Context.syncSmsHistory(source: String, strict: Boolean = false): SmsSyncResu
 
         val contactCache = HashMap<String, NamePhoto>()
         val batch = ArrayList<Message>(500)
-        val threadIdMap = HashMap<String, Long>()
 
         cursor.use { c ->
             val idCol = c.getColumnIndex(Telephony.Sms._ID)
@@ -117,13 +123,7 @@ fun Context.syncSmsHistory(source: String, strict: Boolean = false): SmsSyncResu
                 var threadId = if (threadCol >= 0) c.getLong(threadCol) else 0L
                 val address = if (addrCol >= 0) c.getString(addrCol) else null
 
-                if (threadId <= 0L && !address.isNullOrBlank()) {
-                    threadId = threadIdMap.getOrPut(address) {
-                        runCatching { Telephony.Threads.getOrCreateThreadId(this, address) }.getOrDefault(0L)
-                    }
-                }
-
-                if (id <= 0L || (threadId <= 0L && address.isNullOrBlank())) {
+                if (id <= 0L || threadId <= 0L) {
                     parseFailedCount++
                     continue
                 }
@@ -203,7 +203,7 @@ fun Context.syncSmsHistory(source: String, strict: Boolean = false): SmsSyncResu
         }
 
         // 2. Sync MMS messages if any
-        val mmsMessages = runCatching { getMMS(threadId = null) }.getOrDefault(emptyList())
+        val mmsMessages = getMMS(threadId = null, strict = true)
         if (mmsMessages.isNotEmpty()) {
             mmsMessages.chunked(200).forEach { mmsBatch ->
                 messagesDB.insertMessages(*mmsBatch.toTypedArray())
@@ -212,7 +212,7 @@ fun Context.syncSmsHistory(source: String, strict: Boolean = false): SmsSyncResu
         }
 
         // 3. Update conversations table
-        val conversations = runCatching { getConversations(threadId = null, strict = false) }.getOrDefault(emptyList())
+        val conversations = getConversations(threadId = null, strict = true)
         conversations.chunked(200).forEach { convBatch ->
             convBatch.forEach { conv ->
                 insertOrUpdateConversation(conv)
@@ -228,10 +228,12 @@ fun Context.syncSmsHistory(source: String, strict: Boolean = false): SmsSyncResu
             }
         }
 
+        check(parseFailedCount == 0) { "SMS_SYNC_PARTIAL_PARSE_FAILURE" }
+        if (readCount > 0) config.fullHistorySyncedV2 = true
         val elapsed = System.currentTimeMillis() - startTime
         Log.i(
             "SmsSync",
-            "trace=$traceId event=end outcome=success read=$readCount parseFailed=$parseFailedCount added=$writtenCount threadsUpdated=$threadsUpdatedCount elapsedMs=$elapsed watermark=updated"
+            "trace=$traceId event=end outcome=success read=$readCount parseFailed=$parseFailedCount added=$writtenCount threadsUpdated=$threadsUpdatedCount elapsedMs=$elapsed watermark=success_only"
         )
         SmsSyncProgress.update(
             SmsSyncProgress.State(
@@ -272,5 +274,8 @@ fun Context.syncSmsHistory(source: String, strict: Boolean = false): SmsSyncResu
         )
         if (strict) throw error
         return SmsSyncResult(traceId, false, readCount, parseFailedCount, writtenCount, threadsUpdatedCount, elapsed, outcome)
+    } finally {
+        historySyncRunning.set(false)
+        SmsSyncProgress.update(SmsSyncProgress.state.value.copy(running = false))
     }
 }

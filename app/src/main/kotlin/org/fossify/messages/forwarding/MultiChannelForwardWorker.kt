@@ -60,6 +60,17 @@ class MultiChannelForwardWorker(
     override suspend fun getForegroundInfo() = ForwardingForegroundInfo.create(applicationContext)
 
     override suspend fun doWork(): Result {
+        val store = ForwardingHistoryStore(applicationContext)
+        val historyId = inputData.getString(KEY_HISTORY_RECORD_ID).orEmpty()
+        val safeRetry = runAttemptCount > 0 && (store.record(historyId)?.status == ForwardingHistoryStore.STATUS_RETRY ||
+            (inputData.getString(KEY_TARGET_CHANNEL) == ForwardingChannels.SMS_DIRECT &&
+                SmsDirectBillingPolicy.canResumePreparation(store.smsPhase(historyId))))
+        if (!store.claimSubmissionExecution(id.toString(), safeRetry)) {
+            if (store.record(historyId)?.status !in setOf(ForwardingHistoryStore.STATUS_SUCCESS,
+                    ForwardingHistoryStore.STATUS_FAILED, ForwardingHistoryStore.STATUS_SKIPPED))
+                store.markUnknown(historyId, "重试请求已经开始过执行，未再次提交；请核对接收端")
+            return Result.success()
+        }
         val planText = inputData.getString(KEY_GROUP_PLAN).orEmpty()
         if (planText.isBlank()) return performWork()
         val history = ForwardingHistoryStore(applicationContext)
@@ -337,9 +348,8 @@ class MultiChannelForwardWorker(
                         val result = org.fossify.messages.remote.runtime.RemoteSourceRuntimeManager
                             .getInstance(applicationContext)
                             .sendWeComPush(sourceInstanceId, chatId, "$title\n$content")
-                        check(result.isSuccess) {
-                            result.weComErrorCode?.let { "${result.message}（错误码 $it）" } ?: result.message
-                        }
+                        DeliveryFailurePolicy.requireRemoteAccepted(result.isSuccess, result.code,
+                            result.message, result.weComErrorCode)
                     }
                     ForwardingChannels.DINGTALK -> {
                         val webhook = instance.optString("webhook")
@@ -615,9 +625,8 @@ class MultiChannelForwardWorker(
                         val result = org.fossify.messages.remote.runtime.RemoteSourceRuntimeManager
                             .getInstance(applicationContext)
                             .sendWeComPush(sourceInstanceId, chatId, "$title\n$content")
-                        check(result.isSuccess) {
-                            result.weComErrorCode?.let { "${result.message}（错误码 $it）" } ?: result.message
-                        }
+                        DeliveryFailurePolicy.requireRemoteAccepted(result.isSuccess, result.code,
+                            result.message, result.weComErrorCode)
                     }
                     ForwardingChannels.DINGTALK -> {
                         val webhook = instance.optString("webhook")
@@ -1342,7 +1351,10 @@ class MultiChannelForwardWorker(
         require(phone.isNotBlank()) { "目标手机号不能为空" }
         val normalized = phone.trim()
         require(normalized.isNotEmpty()) { "目标手机号格式无效" }
-        if (runAttemptCount > 0 || smsDirectPreviouslyStarted) throw SmsDirectOutcomeUnknown("这是系统重新执行的短信直发任务，先前结果未确认；已阻止自动重发")
+        val recordId = inputData.getString(KEY_HISTORY_RECORD_ID).orEmpty()
+        val pureSms = inputData.getString(KEY_TARGET_CHANNEL) == ForwardingChannels.SMS_DIRECT
+        val preparing = pureSms && SmsDirectBillingPolicy.canResumePreparation(ForwardingHistoryStore(applicationContext).smsPhase(recordId))
+        if ((runAttemptCount > 0 || smsDirectPreviouslyStarted) && !preparing) throw SmsDirectOutcomeUnknown("这是系统重新执行的短信直发任务，先前结果未确认；已阻止自动重发")
         if (SmsDirectBillingPolicy.isUnidentifiedLegacyDegradedSource(smsDirectSource))
             throw SmsDirectOutcomeUnknown("旧降级任务无法确认原短信身份，已阻止收费发送，请先核对收件端")
         require(isTest || !SmsDirectBillingPolicy.isEcho(inputData.getString(KEY_SENDER).orEmpty(), normalized)) {
@@ -1353,14 +1365,16 @@ class MultiChannelForwardWorker(
         } else {
             org.fossify.messages.models.SmsSendTriggerType.FORWARDING_SMS_DIRECT
         }
-        SmsDirectSendGuard.sendOnce(applicationContext, smsDirectSource, normalized) {
+        SmsDirectSendGuard.sendPrepared(applicationContext, smsDirectSource, normalized, recordId,
+            receiptRecordId = recordId.takeIf { pureSms }.orEmpty()) { before ->
             applicationContext.sendMessageCompat(
                 text = content,
                 addresses = listOf(normalized),
                 subId = receiveSubId.takeIf { it >= 0 },
                 attachments = emptyList(),
                 propagateErrors = true,
-                triggerType = triggerType
+                triggerType = triggerType,
+                beforeBillableSubmit = before
             )
         }
     }
@@ -1494,6 +1508,7 @@ class MultiChannelForwardWorker(
             originalSim: ForwardingSimSnapshot? = null,
             allowSimLabelPrefix: Boolean = false,
             originalSmsDirectSource: String = "",
+            retryOf: ForwardingHistoryRecord? = null,
         ) {
             val stableSmsDirectSource = originalSmsDirectSource.ifBlank {
                 SmsDirectBillingPolicy.workerSource(uniqueId, receivedAt, uniqueId)
@@ -1687,7 +1702,8 @@ class MultiChannelForwardWorker(
             val request = requestBuilder.build()
             ForwardingWorkScheduler.enqueue(context, "multi-forward-$uniqueId-$effectiveChannel", request, historyRecordId,
                 input = requestData, retryPayload = retryPayload, notBefore = System.currentTimeMillis() + delaySeconds * 1000L,
-                repairAllowed = !isTest && groupPlan.isBlank() && constraintChannel in ForwardingChannels.networkChannels)
+                repairAllowed = !isTest && groupPlan.isBlank() && constraintChannel in ForwardingChannels.networkChannels,
+                retryOf = retryOf)
         }
 
         fun enqueueTest(context: Context, channel: String = ForwardingChannels.ALL, sender: String = "10086", body: String = "这是一条短信多渠道转发测试消息") {

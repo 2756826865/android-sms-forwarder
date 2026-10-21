@@ -23,3 +23,7 @@ logcat*.txt
 outputs/
 
 !scripts/test_queue_repair_sql.py
+
+!scripts/test_forwarding_integration_sql.py
+
+__pycache__/

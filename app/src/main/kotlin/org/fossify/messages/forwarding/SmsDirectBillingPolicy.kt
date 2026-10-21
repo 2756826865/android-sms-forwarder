@@ -34,6 +34,8 @@ internal object SmsDirectBillingPolicy {
 
     fun canRetryManually(isSmsDirect: Boolean, attempts: Int): Boolean = !isSmsDirect || attempts == 0
 
+    fun canResumePreparation(phase: String): Boolean = phase in setOf("preparing", "pre_submit_failed")
+
     fun key(source: String, destination: String): String {
         require(source.isNotBlank() && destination.isNotBlank()) { "短信直发缺少稳定任务标识或目标" }
         val bytes = ByteArrayOutputStream().also { buffer ->
@@ -77,3 +79,5 @@ internal object SmsDirectBillingPolicy {
 }
 
 internal class SmsDirectOutcomeUnknown(message: String, cause: Throwable? = null) : IOException(message, cause)
+
+internal class SmsDirectPreSubmitFailure(cause: Throwable) : IllegalStateException("短信发送前准备失败，尚未提交，可检查配置后手动重试", cause)

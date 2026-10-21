@@ -189,7 +189,10 @@ class ForwardingHistoryActivity : SimpleActivity() {
                     }
                     if (record.status in setOf(ForwardingHistoryStore.STATUS_FAILED, ForwardingHistoryStore.STATUS_UNKNOWN)) {
                         addView(TextView(context).apply {
-                            text = "仅重试此通道"
+                            val unavailable = org.fossify.messages.forwarding.ForwardingRetry.unavailableReason(context, record)
+                            text = unavailable ?: "检查并重试此通道"
+                            isEnabled = unavailable == null
+                            alpha = if (isEnabled) 1f else 0.6f
                             setPadding(0, dp(10), 0, dp(10))
                             setTextColor(ContextCompat.getColor(context, R.color.miui_action_blue))
                             setOnClickListener { confirmRetry(record) }
@@ -239,7 +242,7 @@ class ForwardingHistoryActivity : SimpleActivity() {
                         runCatching { org.fossify.messages.forwarding.ForwardingRetry.enqueue(applicationContext, record.recordId) }
                     }
                     android.widget.Toast.makeText(this@ForwardingHistoryActivity,
-                        result.exceptionOrNull()?.message ?: "已提交此通道重试", android.widget.Toast.LENGTH_LONG).show()
+                        result.exceptionOrNull()?.message ?: "已检查重试请求，请查看对应日志状态", android.widget.Toast.LENGTH_LONG).show()
                 }
             }
             .setNegativeButton("取消", null).create().showSmsStyled()

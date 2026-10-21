@@ -32,6 +32,7 @@
         tools:node="remove" />
 
     <queries>
+        <provider android:authorities="org.fossify.commons.contactsprovider" />
         <package android:name="org.fossify.contacts.debug" />
         <package android:name="org.fossify.contacts" />
     </queries>
