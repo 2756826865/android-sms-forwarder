@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## 待发布（10210zx 整合）
+## [1.2.5] - 2026-10-21
 
 - 保留批量历史同步优化，补充同步互斥、失败状态与完成标记保护。
 - 复查补充同步异常时的游标关闭保护，避免上一轮同步清掉下一轮进度。
@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 兼容保活默认开启，保留用户已保存的关闭设置。
 
 整合范围、验证结果与真机待验项见 [整合说明](docs/integration-10210zx-2026-10-21.md)。
+
+[简短更新说明](docs/release-1.2.5.md)
 
 ## [1.2.4(101901)] - 2026-10-19
 
