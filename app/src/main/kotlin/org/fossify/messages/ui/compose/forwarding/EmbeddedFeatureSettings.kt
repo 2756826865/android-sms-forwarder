@@ -3,6 +3,7 @@ package org.fossify.messages.ui.compose.forwarding
 import org.fossify.messages.forwarding.ForwardingChannels
 
 import android.widget.Toast
+import org.fossify.messages.R
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
@@ -444,6 +445,7 @@ fun LowBatteryEmbeddedScreen() {
     val realInstances = allInstances.filterNot { it.id.startsWith("catalog:") || it.channelType == ForwardingChannels.CHANNEL_GROUP }
     var enabled by remember { mutableStateOf(cfg.enableLowBatteryReminder) }
     var threshold by remember { mutableStateOf(cfg.lowBatteryThreshold) }
+    var deviceName by remember { mutableStateOf(cfg.lowBatteryDeviceName) }
     var selectedIds by remember { mutableStateOf(cfg.lowBatteryChannelInstanceIds) }
     var hasSelection by remember { mutableStateOf(cfg.hasLowBatteryInstanceSelection) }
     var choosingChannels by remember { mutableStateOf(false) }
@@ -463,6 +465,22 @@ fun LowBatteryEmbeddedScreen() {
             Slider(value = threshold.toFloat(), onValueChange = { threshold = it.toInt() }, onValueChangeFinished = {
                 cfg.lowBatteryThreshold = threshold; cfg.lowBatteryLastNotifiedLevel = -1
             }, valueRange = 5f..50f, steps = 44)
+        } }
+        item { FeatureCard {
+            OutlinedTextField(
+                value = deviceName,
+                onValueChange = { value ->
+                    if (value.length <= 64) {
+                        deviceName = value
+                        cfg.lowBatteryDeviceName = value
+                    }
+                },
+                label = { Text(context.getString(R.string.low_battery_device_name_label)) },
+                placeholder = { Text(context.getString(R.string.low_battery_device_name_hint)) },
+                supportingText = { Text(context.getString(R.string.low_battery_device_name_summary)) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
         } }
         item { FeatureCard {
             Text("发送通道", fontSize = 15.sp, fontWeight = FontWeight.Bold)

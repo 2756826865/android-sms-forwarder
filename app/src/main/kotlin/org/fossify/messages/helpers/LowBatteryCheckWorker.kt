@@ -63,7 +63,11 @@ class LowBatteryCheckWorker(
         if (batteryLevel <= threshold && lastNotifiedLevel == -1) {
             val title = appContext.getString(R.string.low_battery_alert_title)
             val body = appContext.getString(R.string.low_battery_alert_body, threshold, batteryLevel)
-            val content = "$title\n$body"
+            val deviceName = config.lowBatteryDeviceName
+            val content = if (deviceName.isBlank()) "$title\n$body" else {
+                val deviceLine = appContext.getString(R.string.low_battery_device_name_line, deviceName)
+                "$title\n$deviceLine\n$body"
+            }
 
             try {
                 // Claim before enqueue so a process death cannot enqueue the same alert twice.

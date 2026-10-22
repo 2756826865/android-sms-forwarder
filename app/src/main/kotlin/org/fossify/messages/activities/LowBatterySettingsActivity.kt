@@ -2,6 +2,7 @@ package org.fossify.messages.activities
 
 import android.os.Bundle
 import androidx.appcompat.app.AlertDialog
+import androidx.core.widget.doAfterTextChanged
 import org.fossify.commons.extensions.toast
 import org.fossify.commons.extensions.viewBinding
 import org.fossify.commons.helpers.NavigationIcon
@@ -38,6 +39,8 @@ class LowBatterySettingsActivity : SimpleActivity() {
         }
         binding.lowBatteryEnableSwitch.isChecked = config.enableLowBatteryReminder
         binding.lowBatteryThresholdSlider.value = config.lowBatteryThreshold.toFloat()
+        binding.lowBatteryDeviceName.setText(config.lowBatteryDeviceName)
+        binding.lowBatteryDeviceName.doAfterTextChanged { config.lowBatteryDeviceName = it?.toString().orEmpty() }
         updateThresholdSummary(config.lowBatteryThreshold)
         updateChannelSummary()
 

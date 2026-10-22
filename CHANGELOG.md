@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.5(102201)] - 2026-10-22
+
+- 电量提醒增加自定义设备名称，经典版与开发模式共用，支持备份和恢复。
+
+[更新说明](docs/release-1.2.5%28102201%29.md)
+
 ## [1.2.5] - 2026-10-21
 
 - 保留批量历史同步优化，补充同步互斥、失败状态与完成标记保护。

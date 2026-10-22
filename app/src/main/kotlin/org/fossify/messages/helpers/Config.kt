@@ -253,6 +253,11 @@ class Config(context: Context) : BaseConfig(context) {
         get() = prefs.getInt(LOW_BATTERY_THRESHOLD, 15).coerceIn(5, 50)
         set(value) = prefs.edit().putInt(LOW_BATTERY_THRESHOLD, value.coerceIn(5, 50)).apply()
 
+    var lowBatteryDeviceName: String
+        get() = prefs.getString("low_battery_device_name", "").orEmpty()
+        set(value) = prefs.edit().putString("low_battery_device_name",
+            value.replace('\n', ' ').replace('\r', ' ').trim().take(64)).apply()
+
     var lowBatteryLastNotifiedLevel: Int
         get() = prefs.getInt(LOW_BATTERY_LAST_NOTIFIED_LEVEL, -1)
         set(value) = prefs.edit().putInt(LOW_BATTERY_LAST_NOTIFIED_LEVEL, value).apply()

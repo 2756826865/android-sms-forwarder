@@ -99,6 +99,25 @@
                 </LinearLayout>
             </LinearLayout>
 
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="18dp"
+                android:hint="@string/low_battery_device_name_label"
+                app:placeholderText="@string/low_battery_device_name_hint"
+                app:helperText="@string/low_battery_device_name_summary">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/low_battery_device_name"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="textCapSentences"
+                    android:maxLength="64"
+                    android:singleLine="true"
+                    android:textColor="@color/miui_primary_text" />
+            </com.google.android.material.textfield.TextInputLayout>
+
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"

@@ -435,6 +435,10 @@
     <string name="low_battery_threshold_label">提醒电量</string>
     <string name="low_battery_threshold_summary">当前阈值：%d%%</string>
     <string name="low_battery_alert_title">⚠️ 电量提醒</string>
+    <string name="low_battery_device_name_label">自定义设备名称</string>
+    <string name="low_battery_device_name_hint">例如：工作手机1234</string>
+    <string name="low_battery_device_name_summary">自动保存，最多64个字符；留空时不显示设备名称</string>
+    <string name="low_battery_device_name_line">📱 设备：%1$s</string>
     <string name="low_battery_alert_body">设备电量已低于 %1$d%%，请及时充电！当前电量：%2$d%%</string>
     <string name="low_battery_channels_label">发送通道</string>
     <string name="low_battery_channels_empty">未选择渠道</string>

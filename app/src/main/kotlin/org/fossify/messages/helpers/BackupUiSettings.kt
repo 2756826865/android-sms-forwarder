@@ -28,6 +28,7 @@ internal object BackupUiSettings {
             .put("lockScreenVisibilitySetting", config.lockScreenVisibilitySetting)
             .put("bulkSendDelaySeconds", config.bulkSendDelaySeconds)
             .put("lowBatteryThreshold", config.lowBatteryThreshold)
+            .put("lowBatteryDeviceName", config.lowBatteryDeviceName)
             .put("mmsFileSizeLimit", config.mmsFileSizeLimit)
             .put("blockedKeywords", JSONArray(config.blockedKeywords.toList()))
             .put("whitelistedNumbers", JSONArray(config.whitelistedNumbers.toList()))
@@ -55,6 +56,7 @@ internal object BackupUiSettings {
         if (json.has("lockScreenVisibilitySetting")) require(json.get("lockScreenVisibilitySetting") is Int)
         if (json.has("bulkSendDelaySeconds")) require(json.get("bulkSendDelaySeconds") is Int)
         if (json.has("lowBatteryThreshold")) require(json.get("lowBatteryThreshold") is Int)
+        if (json.has("lowBatteryDeviceName")) require(json.get("lowBatteryDeviceName") is String)
         if (json.has("mmsFileSizeLimit")) require(json.get("mmsFileSizeLimit") is Number)
         if (json.has("homeListDensity")) require(json.getInt("homeListDensity") in listOf(4, 6, 8, 10))
         if (json.has("lowBatteryThreshold")) require(json.getInt("lowBatteryThreshold") in 5..50)
@@ -86,6 +88,7 @@ internal object BackupUiSettings {
         if (json.has("lockScreenVisibilitySetting")) config.lockScreenVisibilitySetting = json.getInt("lockScreenVisibilitySetting")
         if (json.has("bulkSendDelaySeconds")) config.bulkSendDelaySeconds = json.getInt("bulkSendDelaySeconds")
         if (json.has("lowBatteryThreshold")) config.lowBatteryThreshold = json.getInt("lowBatteryThreshold")
+        if (json.has("lowBatteryDeviceName")) config.lowBatteryDeviceName = json.getString("lowBatteryDeviceName")
         if (json.has("mmsFileSizeLimit")) config.mmsFileSizeLimit = json.getLong("mmsFileSizeLimit")
         if (json.has("blockedKeywords")) config.blockedKeywords = json.getJSONArray("blockedKeywords").let { a -> (0 until a.length()).map { a.getString(it) }.toSet() }
         if (json.has("whitelistedNumbers")) config.whitelistedNumbers = json.getJSONArray("whitelistedNumbers").let { a -> (0 until a.length()).map { a.getString(it) }.toSet() }
