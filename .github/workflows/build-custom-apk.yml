@@ -124,8 +124,8 @@ jobs:
           fi
           if [ -n "$existing_tag_sha" ] && [ "$existing_tag_sha" != "$GITHUB_SHA" ]; then
             # Preserve published tags and assets. Each distinct source needs a new version.
-            echo "::warning::Tag $tag points to $existing_tag_sha, not $GITHUB_SHA. Not replacing published assets; the new signed APK is in Actions artifacts. Bump VERSION_NAME for a new release."
-            exit 0
+            echo "::error::Tag $tag points to $existing_tag_sha, not $GITHUB_SHA. Not replacing published assets; the signed APK remains in Actions artifacts. Bump VERSION_NAME for a new release."
+            exit 1
           fi
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$tag" "$apk" "$checksum" \
