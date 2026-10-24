@@ -95,7 +95,11 @@ class HeartbeatWorker(
         val deviceName = TemplateDataRetriever.getDeviceName()
 
         val simCards: List<SubscriptionInfo> = runCatching {
-            context.subscriptionManagerCompat().activeSubscriptionInfoList.orEmpty()
+            try {
+                context.subscriptionManagerCompat().activeSubscriptionInfoList.orEmpty()
+            } catch (_: SecurityException) {
+                emptyList()
+            }
         }.getOrDefault(emptyList())
 
         fun formatSimSlot(slotIndex: Int, customName: String): String {
