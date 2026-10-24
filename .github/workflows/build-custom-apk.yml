@@ -56,6 +56,7 @@ jobs:
           python3 scripts/test_sms_direct_guard_sql.py
           python3 scripts/test_queue_repair_sql.py
           python3 scripts/test_forwarding_integration_sql.py
+          python3 tools/incoming-sms-ui-host-tests/run.py
           ./gradlew :app:testCoreDebugUnitTest :app:compileCoreDebugAndroidTestKotlin
 
       - name: Build signed release APK

@@ -172,11 +172,12 @@ class SmsRecoveryWorker(
                     // 列为"明确不做"，恢复路径无权替它补做决定——远程指令会真的发出短信，是风险
                     // 最高的操作，宁可不执行（缺一次指令是 fail-safe，误执行不是）。
                     val backfillForwardingOnly = alreadyLocal || ingress.workId.startsWith("sms-minimal-")
+                    // Suppressing command/notification replay must not suppress missing UI data.
+                    if (!alreadyLocal && threadId > 0L) threadIdsToSync.add(threadId)
                     if (backfillForwardingOnly) {
                         ShadowRepository.incrementCounter(applicationContext, "RECOVERY_FORWARD_BACKFILLED")
                     } else {
                         ShadowRepository.incrementCounter(applicationContext, "RECOVERY_ITEM_FOUND")
-                        threadIdsToSync.add(threadId)
                     }
                     repairedAny = true
 

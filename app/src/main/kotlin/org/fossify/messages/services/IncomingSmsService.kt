@@ -54,6 +54,7 @@ import org.fossify.messages.helpers.refreshMessages
 import org.fossify.messages.messaging.SmsRecoveryWorker
 import org.fossify.messages.messaging.SmsIngressIdentity
 import org.fossify.messages.messaging.SmsRoleDiagnostics
+import org.fossify.messages.messaging.IncomingSmsUiSyncWorker
 import org.fossify.messages.models.Message
 import org.json.JSONArray
 import org.json.JSONObject
@@ -271,6 +272,7 @@ open class IncomingSmsService : Service() {
         }.onFailure { error ->
             Log.e(TAG, "system SMS persisted, local refresh failed", error)
             ShadowRepository.recordStep(this, operationId, "LOCAL_SYNC_OBSERVED", "FAILED", error.message)
+            IncomingSmsUiSyncWorker.enqueue(applicationContext, address, body, receivedAt, subscriptionId, fingerprint)
             SmsRecoveryWorker.enqueueNow(applicationContext)
         }
 
@@ -721,6 +723,10 @@ open class IncomingSmsService : Service() {
                     -1L
                 }
 
+                if (insertedMessageId < 0L) {
+                    // UI repair must not depend on the forwarding identity database succeeding.
+                    IncomingSmsUiSyncWorker.enqueue(appContext, address, body, receivedAt, subscriptionId, fingerprint)
+                }
                 val ingress = SmsIngressIdentity(appContext).broadcast(address, body,
                     parts.minOf { it.timestampMillis }.coerceAtLeast(0L), receivedAt, subscriptionId,
                     fingerprint, insertedMessageId)
@@ -770,9 +776,11 @@ open class IncomingSmsService : Service() {
                         )
                     }.onFailure { error ->
                         Log.e(TAG, "minimal: local refresh failed (non-fatal)", error)
+                        IncomingSmsUiSyncWorker.enqueue(appContext, address, body, receivedAt, subscriptionId, fingerprint)
                     }
                 } else {
                     Log.w(TAG, "minimal: skipped local sync, budget exhausted after ${System.currentTimeMillis() - startedAt}ms")
+                    IncomingSmsUiSyncWorker.enqueue(appContext, address, body, receivedAt, subscriptionId, fingerprint)
                 }
 
                 // 4. 入队转发（命中用户过滤规则时除外）。

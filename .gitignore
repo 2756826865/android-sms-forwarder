@@ -27,3 +27,4 @@ outputs/
 !scripts/test_forwarding_integration_sql.py
 
 __pycache__/
+!tools/incoming-sms-ui-host-tests/run.py
