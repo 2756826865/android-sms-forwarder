@@ -8,6 +8,29 @@ on:
     - cron: "0 6 * * 0"
 
 jobs:
+  check-github-app:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      available: ${{ steps.check.outputs.available }}
+    steps:
+      - name: Check optional GitHub App credentials
+        id: check
+        shell: bash
+        env:
+          APP_ID: ${{ secrets.APP_ID }}
+          APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
+        run: |
+          if [[ -n "$APP_ID" && -n "$APP_PRIVATE_KEY" ]]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Update Commons requires APP_ID and APP_PRIVATE_KEY; skipping the optional job until they are configured."
+          fi
+
   update-commons:
+    needs: check-github-app
+    if: needs.check-github-app.outputs.available == 'true'
     uses: FossifyOrg/.github/.github/workflows/update-commons.yml@main
     secrets: inherit
