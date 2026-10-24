@@ -237,9 +237,15 @@ class RuleEditorViewModel(
                 val template = action.customTemplate.takeIf { action.templateMode == RuleTemplateMode.CUSTOM }
                     ?: rule.customTemplate.takeIf(String::isNotBlank)
                 if (template != null) {
-                    ForwardingMessageFormatter.renderRuleTemplate(appContext, template, state.testSender, text, System.currentTimeMillis(), -1, simSnapshot = previewSim)
+                    ForwardingMessageFormatter.renderRuleTemplate(
+                        appContext, template, state.testSender, text,
+                        System.currentTimeMillis(), -1, simSnapshot = previewSim
+                    )
                 } else {
-                    ForwardingMessageFormatter.format(appContext, state.testSender, text, System.currentTimeMillis(), -1, simSnapshot = previewSim).content
+                    ForwardingMessageFormatter.format(
+                        appContext, state.testSender, text,
+                        System.currentTimeMillis(), -1, simSnapshot = previewSim
+                    ).content
                 }
             }
         )

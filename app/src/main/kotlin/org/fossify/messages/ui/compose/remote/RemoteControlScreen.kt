@@ -783,7 +783,10 @@ private fun RemoteSourceCard(
 
             if (source.lastMessageAt > 0L) {
                 Spacer(modifier = Modifier.height(6.dp))
-                val timeStr = SimpleDateFormat("MM-dd HH:mm:ss", LocalConfiguration.current.locales[0]).format(Date(source.lastMessageAt))
+                val timeStr = SimpleDateFormat(
+                    "MM-dd HH:mm:ss",
+                    LocalConfiguration.current.locales[0]
+                ).format(Date(source.lastMessageAt))
                 Text(
                     text = "最后收到指令: $timeStr",
                     fontSize = 11.sp,
