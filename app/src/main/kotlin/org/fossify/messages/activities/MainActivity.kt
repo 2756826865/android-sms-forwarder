@@ -81,6 +81,8 @@ import org.fossify.messages.helpers.syncSmsHistory
 import org.fossify.messages.helpers.SEARCHED_MESSAGE_ID
 import org.fossify.messages.helpers.THREAD_ID
 import org.fossify.messages.helpers.THREAD_TITLE
+import org.fossify.messages.helpers.THREAD_NUMBER
+import org.fossify.messages.helpers.YellowPageHelper
 import org.fossify.messages.helpers.formatConversationDate
 import org.fossify.messages.messaging.SmsRecoveryWorker
 import org.fossify.messages.models.Conversation
@@ -1000,7 +1002,17 @@ class MainActivity : SimpleActivity() {
         Intent(this, ThreadActivity::class.java).apply {
             val conversation = any as Conversation
             putExtra(THREAD_ID, conversation.threadId)
-            putExtra(THREAD_TITLE, conversation.title)
+            val yellow = YellowPageHelper.lookup(this@MainActivity, conversation.phoneNumber, conversation.snippet)
+            val titleToPass = if (conversation.title.isBlank() ||
+                conversation.title.equals(conversation.phoneNumber, ignoreCase = true) ||
+                conversation.title.replace("+", "").replace(" ", "").replace("-", "").all { it.isDigit() }
+            ) {
+                yellow?.brand ?: conversation.title
+            } else {
+                conversation.title
+            }
+            putExtra(THREAD_TITLE, titleToPass)
+            putExtra(THREAD_NUMBER, conversation.phoneNumber)
             startActivity(this)
         }
     }
@@ -1121,9 +1133,13 @@ class MainActivity : SimpleActivity() {
                 SearchResultsAdapter(this, searchResults, binding.searchResultsList, searchedText) {
                     hideKeyboard()
                     Intent(this, ThreadActivity::class.java).apply {
-                        putExtra(THREAD_ID, (it as SearchResult).threadId)
-                        putExtra(THREAD_TITLE, it.title)
-                        putExtra(SEARCHED_MESSAGE_ID, it.messageId)
+                        val result = it as SearchResult
+                        putExtra(THREAD_ID, result.threadId)
+                        val yellow = YellowPageHelper.lookup(this@MainActivity, result.title, result.snippet)
+                        val titleToPass = yellow?.brand ?: result.title
+                        putExtra(THREAD_TITLE, titleToPass)
+                        putExtra(THREAD_NUMBER, result.title)
+                        putExtra(SEARCHED_MESSAGE_ID, result.messageId)
                         startActivity(this)
                     }
                 }.apply {

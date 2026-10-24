@@ -6,6 +6,9 @@ import android.view.Menu
 import android.view.View
 import android.view.ViewGroup
 import com.bumptech.glide.Glide
+import com.bumptech.glide.load.engine.DiskCacheStrategy
+import org.fossify.messages.R
+import org.fossify.messages.helpers.YellowPageHelper
 import org.fossify.commons.adapters.MyRecyclerViewAdapter
 import org.fossify.commons.extensions.getTextSize
 import org.fossify.commons.extensions.highlightTextPart
@@ -87,7 +90,25 @@ class SearchResultsAdapter(
                 setTextSize(TypedValue.COMPLEX_UNIT_PX, fontSize * 0.8f)
             }
 
-            SimpleContactsHelper(activity).loadContactImage(searchResult.photoUri, searchResultImage, searchResult.title)
+            val yellow = YellowPageHelper.lookup(activity, searchResult.title, searchResult.snippet)
+            val displayTitle = yellow?.brand ?: searchResult.title
+            searchResultTitle.text = displayTitle.highlightTextPart(textToHighlight, highlightColor)
+            val logoUrl = yellow?.logoUrl.orEmpty()
+            if (searchResult.photoUri.isNotBlank()) {
+                Glide.with(activity).clear(searchResultImage)
+                SimpleContactsHelper(activity).loadContactImage(searchResult.photoUri, searchResultImage, displayTitle)
+            } else if (logoUrl.isNotBlank()) {
+                Glide.with(activity)
+                    .load(logoUrl)
+                    .diskCacheStrategy(DiskCacheStrategy.ALL)
+                    .circleCrop()
+                    .placeholder(R.drawable.miui_avatar_background)
+                    .error(R.drawable.ic_person_vector)
+                    .into(searchResultImage)
+            } else {
+                Glide.with(activity).clear(searchResultImage)
+                SimpleContactsHelper(activity).loadContactImage("", searchResultImage, displayTitle)
+            }
         }
     }
 

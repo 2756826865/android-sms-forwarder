@@ -58,6 +58,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bumptech.glide.Glide
+import com.bumptech.glide.load.engine.DiskCacheStrategy
+import org.fossify.messages.helpers.YellowPageHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.fossify.messages.R
@@ -134,9 +136,11 @@ fun ConversationsScreen(
             uiState.conversations
         } else {
             uiState.conversations.filter {
-                it.threadId in uiState.searchThreadIds || it.title.contains(searchQuery, ignoreCase = true) ||
+                it.threadId in uiState.searchThreadIds ||
+                it.title.contains(searchQuery, ignoreCase = true) ||
                 it.snippet.contains(searchQuery, ignoreCase = true) ||
-                it.phoneNumber.contains(searchQuery, ignoreCase = true)
+                it.phoneNumber.contains(searchQuery, ignoreCase = true) ||
+                YellowPageHelper.lookup(context, it.phoneNumber, it.snippet)?.brand?.contains(searchQuery, ignoreCase = true) == true
             }
         }
     }
@@ -426,9 +430,18 @@ fun ConversationsScreen(
                                 if (uiState.deletingThreadId == null) deleteTarget = conv
                             },
                             onClick = {
+                                val yellow = YellowPageHelper.lookup(context, conv.phoneNumber, conv.snippet)
+                                val titleToPass = if (conv.title.isBlank() ||
+                                    conv.title.equals(conv.phoneNumber, ignoreCase = true) ||
+                                    conv.title.replace("+", "").replace(" ", "").replace("-", "").all { it.isDigit() }
+                                ) {
+                                    yellow?.brand ?: conv.title
+                                } else {
+                                    conv.title
+                                }
                                 val intent = Intent(context, ThreadActivity::class.java).apply {
                                     putExtra(THREAD_ID, conv.threadId)
-                                    putExtra(THREAD_TITLE, conv.title)
+                                    putExtra(THREAD_TITLE, titleToPass)
                                     putExtra(THREAD_NUMBER, conv.phoneNumber)
                                 }
                                 context.startActivity(intent)
@@ -466,12 +479,35 @@ fun ConversationItem(
         dateFormat.format(Date(conversation.date.toLong() * 1000L))
     }
 
-    var contactBitmap by remember(conversation.photoUri) {
-        mutableStateOf<Bitmap?>(avatarLruCache.get(conversation.photoUri))
+    val yellowResult = remember(conversation.phoneNumber, conversation.snippet) {
+        YellowPageHelper.lookup(context, conversation.phoneNumber, conversation.snippet)
     }
-    LaunchedEffect(conversation.photoUri) {
-        if (conversation.photoUri.isNotBlank()) {
-            val cached = avatarLruCache.get(conversation.photoUri)
+
+    val displayTitle = remember(conversation.title, yellowResult) {
+        if (yellowResult != null) {
+            val isJustNumber = conversation.title.isBlank() ||
+                conversation.title.equals(conversation.phoneNumber, ignoreCase = true) ||
+                conversation.title.replace("+", "").replace(" ", "").replace("-", "").all { it.isDigit() }
+            if (isJustNumber) {
+                yellowResult.brand
+            } else {
+                conversation.title
+            }
+        } else {
+            conversation.title
+        }
+    }
+
+    val avatarSource = remember(conversation.photoUri, yellowResult) {
+        conversation.photoUri.ifBlank { yellowResult?.logoUrl.orEmpty() }
+    }
+
+    var contactBitmap by remember(avatarSource) {
+        mutableStateOf<Bitmap?>(if (avatarSource.isNotBlank()) avatarLruCache.get(avatarSource) else null)
+    }
+    LaunchedEffect(avatarSource) {
+        if (avatarSource.isNotBlank()) {
+            val cached = avatarLruCache.get(avatarSource)
             if (cached != null) {
                 contactBitmap = cached
             } else {
@@ -479,12 +515,14 @@ fun ConversationItem(
                     val bmp = runCatching {
                         Glide.with(context)
                             .asBitmap()
-                            .load(conversation.photoUri)
+                            .load(avatarSource)
+                            .diskCacheStrategy(DiskCacheStrategy.ALL)
+                            .timeout(3000)
                             .submit(120, 120)
                             .get()
                     }.getOrNull()
                     if (bmp != null) {
-                        avatarLruCache.put(conversation.photoUri, bmp)
+                        avatarLruCache.put(avatarSource, bmp)
                     }
                     contactBitmap = bmp
                 }
@@ -515,16 +553,31 @@ fun ConversationItem(
                 .padding(horizontal = 14.dp, vertical = rowPadding),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 联系人头像：真实头像或品牌绿色圆形默认头像
+            // 联系人头像：真实头像 / 黄页官方圆形Logo / 品牌文字占位 / 默认绿色头像
             if (contactBitmap != null) {
                 Image(
                     bitmap = contactBitmap!!.asImageBitmap(),
-                    contentDescription = conversation.title,
+                    contentDescription = displayTitle,
                     modifier = Modifier
                         .size(46.dp)
                         .clip(CircleShape),
                     contentScale = ContentScale.Crop
                 )
+            } else if (yellowResult != null) {
+                Box(
+                    modifier = Modifier
+                        .size(46.dp)
+                        .clip(CircleShape)
+                        .background(if (isDark) Color(0xFF1E2D3D) else Color(0xFFE8F1FC)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = yellowResult.brand.take(1),
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isDark) Color(0xFF64B5F6) else Color(0xFF1976D2)
+                    )
+                }
             } else {
                 Box(
                     modifier = Modifier
@@ -553,7 +606,7 @@ fun ConversationItem(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = conversation.title,
+                        text = displayTitle,
                         fontSize = 16.sp,
                         fontWeight = if (conversation.read) FontWeight.SemiBold else FontWeight.Bold,
                         color = if (isDark) Color.White else TextPrimary,
@@ -594,12 +647,29 @@ fun ConversationItem(
 
                     if (!conversation.read) {
                         Spacer(modifier = Modifier.width(8.dp))
-                        Box(
-                            modifier = Modifier
-                                .size(9.dp)
-                                .clip(CircleShape)
-                                .background(BrandGreen)
-                        )
+                        if (conversation.unreadCount > 1) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(BrandGreen)
+                                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = if (conversation.unreadCount > 99) "99+" else conversation.unreadCount.toString(),
+                                    color = Color.White,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .size(9.dp)
+                                    .clip(CircleShape)
+                                    .background(BrandGreen)
+                            )
+                        }
                     }
                 }
             }

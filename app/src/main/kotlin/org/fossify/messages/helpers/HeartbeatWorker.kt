@@ -13,6 +13,8 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import android.telephony.SubscriptionInfo
+import org.fossify.messages.extensions.subscriptionManagerCompat
 import org.fossify.messages.forwarding.HeartbeatConfig
 import org.fossify.messages.forwarding.MultiChannelForwardWorker
 import org.fossify.messages.forwarding.MultiForwardConfig
@@ -92,8 +94,31 @@ class HeartbeatWorker(
         val uptimeInfo = getUptimeString()
         val deviceName = TemplateDataRetriever.getDeviceName()
 
-        val sim1Desc = multiConfig.simOneLabel.ifBlank { "SIM 1" }
-        val sim2Desc = multiConfig.simTwoLabel.ifBlank { "SIM 2" }
+        val simCards: List<SubscriptionInfo> = runCatching {
+            context.subscriptionManagerCompat().activeSubscriptionInfoList.orEmpty()
+        }.getOrDefault(emptyList())
+
+        fun formatSimSlot(slotIndex: Int, customName: String): String {
+            val card = simCards.firstOrNull { it.simSlotIndex == slotIndex }
+            return if (card != null) {
+                val carrier = card.carrierName?.toString()?.takeIf { it.isNotBlank() }
+                    ?: card.displayName?.toString().orEmpty()
+                val custom = customName.trim()
+                val label = if (custom.isNotBlank() && !custom.equals("SIM ${slotIndex + 1}", ignoreCase = true)) {
+                    "$custom ($carrier)"
+                } else {
+                    carrier.ifBlank { "已激活" }
+                }
+                "SIM ${slotIndex + 1} · $label"
+            } else if (customName.isNotBlank() && !customName.equals("SIM ${slotIndex + 1}", ignoreCase = true)) {
+                "$customName (未检测到卡)"
+            } else {
+                "未插卡 / 离线"
+            }
+        }
+
+        val sim1Desc = formatSimSlot(0, multiConfig.simOneLabel)
+        val sim2Desc = formatSimSlot(1, multiConfig.simTwoLabel)
 
         return buildString {
             appendLine("🟢 【设备状态与心跳保活】")

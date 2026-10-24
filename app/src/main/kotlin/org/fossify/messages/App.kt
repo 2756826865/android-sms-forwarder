@@ -17,6 +17,7 @@ import org.fossify.messages.databases.MessagesDatabase
 import org.fossify.messages.extensions.rescheduleAllScheduledMessages
 import org.fossify.messages.helpers.DatabaseRecoveryNotifier
 import org.fossify.messages.helpers.MessagingCache
+import org.fossify.messages.helpers.YellowPageHelper
 import org.fossify.messages.messaging.SmsRecoveryWorker
 import org.fossify.messages.helpers.LowBatteryCheckWorker
 import org.fossify.messages.helpers.HeartbeatWorker
@@ -90,6 +91,7 @@ class App : FossifyApp() {
         // 应用启动即触发旧版通道的幂等自动迁移与长连接预热，放后台 IO 协程执行，绝不阻塞主线程冷启动。
         CoroutineScope(Dispatchers.IO).launch {
             runCatching {
+                YellowPageHelper.ensureInitialized(this@App)
                 org.fossify.messages.forwarding.repository.ChannelRepository.getInstance(this@App)
                 org.fossify.messages.remote.repository.RemoteSourceRepository.getInstance(this@App).importLegacySources()
                 org.fossify.messages.remote.runtime.RemoteSourceRuntimeManager.getInstance(this@App).sync()

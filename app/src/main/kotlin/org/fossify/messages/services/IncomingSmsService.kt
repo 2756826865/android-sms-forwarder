@@ -175,15 +175,7 @@ open class IncomingSmsService : Service() {
             ?.takeIf { it > 0L }
             ?: System.currentTimeMillis()
         val receivedAt = System.currentTimeMillis()
-        val subscriptionId = listOf(
-            "subscription",
-            "subscription_id",
-            "android.telephony.extra.SUBSCRIPTION_INDEX",
-            "subscriptionIndex",
-            "android.telephony.extra.SUBSCRIPTION_ID",
-        ).map { intent.getIntExtra(it, SubscriptionManager.INVALID_SUBSCRIPTION_ID) }
-            .firstOrNull { it != SubscriptionManager.INVALID_SUBSCRIPTION_ID }
-            ?: SubscriptionManager.INVALID_SUBSCRIPTION_ID
+        val subscriptionId = resolveSubscriptionId(this, intent)
         Log.d(TAG, "subscriptionId resolved: $subscriptionId from ${intent.action}")
 
         // 1A: Initialize Shadow Operation (Fail-open, non-blocking)
@@ -686,7 +678,7 @@ open class IncomingSmsService : Service() {
                     ?.takeIf { it > 0L }
                     ?: System.currentTimeMillis()
                 val receivedAt = System.currentTimeMillis()
-                val subscriptionId = resolveSubscriptionId(source)
+                val subscriptionId = resolveSubscriptionId(appContext, source)
                 val fingerprint = fingerprint(address, body, sentAt, subscriptionId)
 
                 // 2a. 幂等：SMS_DELIVER 与 SMS_RECEIVED 可能双发，已入库则直接停止。
@@ -1074,15 +1066,55 @@ open class IncomingSmsService : Service() {
             refreshConversations()
         }
 
-        private fun resolveSubscriptionId(intent: Intent): Int = listOf(
-            "subscription",
-            "subscription_id",
-            "android.telephony.extra.SUBSCRIPTION_INDEX",
-            "subscriptionIndex",
-            "android.telephony.extra.SUBSCRIPTION_ID",
-        ).map { intent.getIntExtra(it, SubscriptionManager.INVALID_SUBSCRIPTION_ID) }
-            .firstOrNull { it != SubscriptionManager.INVALID_SUBSCRIPTION_ID }
-            ?: SubscriptionManager.INVALID_SUBSCRIPTION_ID
+        fun resolveSubscriptionId(context: Context, intent: Intent): Int {
+            val subCandidates = listOf(
+                "subscription",
+                "subscription_id",
+                "android.telephony.extra.SUBSCRIPTION_INDEX",
+                "subscriptionIndex",
+                "android.telephony.extra.SUBSCRIPTION_ID",
+                "sub_id"
+            )
+            for (key in subCandidates) {
+                val id = intent.getIntExtra(key, SubscriptionManager.INVALID_SUBSCRIPTION_ID)
+                if (id != SubscriptionManager.INVALID_SUBSCRIPTION_ID && id >= 0) {
+                    return id
+                }
+            }
+            val slotCandidates = listOf(
+                "phone",
+                "slot",
+                "simId",
+                "sim_id",
+                "slot_id",
+                "phone_id",
+                "simnum",
+                "android.telephony.extra.SLOT_INDEX"
+            )
+            val slotIndex = slotCandidates.map { intent.getIntExtra(it, -1) }
+                .firstOrNull { it in 0..1 }
+                ?: -1
+
+            if (slotIndex >= 0) {
+                val resolvedSubId = runCatching {
+                    context.subscriptionManagerCompat().activeSubscriptionInfoList
+                        ?.firstOrNull { it.simSlotIndex == slotIndex }?.subscriptionId
+                }.getOrNull()
+                if (resolvedSubId != null && resolvedSubId >= 0) {
+                    return resolvedSubId
+                }
+            }
+
+            val singleSubId = runCatching {
+                val activeList = context.subscriptionManagerCompat().activeSubscriptionInfoList
+                if (activeList?.size == 1) activeList[0].subscriptionId else null
+            }.getOrNull()
+            if (singleSubId != null && singleSubId >= 0) {
+                return singleSubId
+            }
+
+            return SubscriptionManager.INVALID_SUBSCRIPTION_ID
+        }
 
         fun persistWithRetry(
             context: Context,

@@ -57,6 +57,7 @@ import org.fossify.messages.helpers.FILE_SIZE_NONE
 import org.fossify.messages.helpers.MAX_MESSAGE_LENGTH
 import org.fossify.messages.helpers.MESSAGES_LIMIT
 import org.fossify.messages.helpers.MessagingCache
+import org.fossify.messages.helpers.YellowPageHelper
 import org.fossify.messages.helpers.NotificationHelper
 import org.fossify.messages.helpers.ShortcutHelper
 import org.fossify.messages.helpers.ThreadRecipient
@@ -682,7 +683,7 @@ fun Context.getMMS(messageUri: Uri): Message? {
 fun Context.getThreadSnippet(threadId: Long): String {
     val sortOrder = "${Mms.DATE} DESC LIMIT 1"
     val latestMms = getMMS(threadId, sortOrder).firstOrNull()
-    var snippet = latestMms?.body ?: ""
+    var snippet = latestMms?.body?.ifBlank { null } ?: if (latestMms?.attachment?.attachments?.isNotEmpty() == true) "[图片]" else (latestMms?.attachment?.text ?: "")
 
     val uri = Sms.CONTENT_URI
     val projection = arrayOf(
@@ -835,8 +836,12 @@ fun Context.getThreadContactNames(
             names.add(name)
         } else {
             val privateContact = privateContacts.firstOrNull { it.doesHavePhoneNumber(number) }
-            // 彻底删除黄页功能：如果不是私有联系人，直接返回原始号码
-            names.add(privateContact?.name ?: number)
+            if (privateContact != null) {
+                names.add(privateContact.name)
+            } else {
+                val yellow = YellowPageHelper.lookup(this, number)
+                names.add(yellow?.brand ?: number)
+            }
         }
     }
     return names
@@ -941,8 +946,18 @@ fun Context.getNameAndPhotoFromPhoneNumber(number: String): NamePhoto {
         }
     }
 
-    // Yellow pages are home-list only (getThreadContactNames); keep this contacts-only.
-    val resolvedName = contactName?.takeIf { it.isNotBlank() } ?: number
+    var resolvedName = contactName?.takeIf { it.isNotBlank() }
+    if (resolvedName == null) {
+        val yellow = YellowPageHelper.lookup(this, number)
+        if (yellow != null) {
+            resolvedName = yellow.brand
+            if (photoUri == null) {
+                photoUri = yellow.logoUrl
+            }
+        } else {
+            resolvedName = number
+        }
+    }
     val result = NamePhoto(resolvedName, photoUri)
     MessagingCache.namePhoto.put(number, result)
     return result
@@ -1234,7 +1249,7 @@ fun Context.getNotificationBitmap(photoUri: String): Bitmap? {
     }
 
     val options = RequestOptions()
-        .diskCacheStrategy(DiskCacheStrategy.RESOURCE)
+        .diskCacheStrategy(DiskCacheStrategy.ALL)
         .centerCrop()
 
     return try {

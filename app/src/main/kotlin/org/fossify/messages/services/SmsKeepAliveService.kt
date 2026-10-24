@@ -87,8 +87,7 @@ class SmsKeepAliveService : Service() {
         private const val NOTIFICATION_ID = 19081
 
         private fun shouldRun(context: Context): Boolean =
-            org.fossify.messages.forwarding.MultiForwardConfig(context).keepAliveServiceEnabled &&
-                DeviceCompatHelper.isDefaultSmsApp(context)
+            org.fossify.messages.forwarding.MultiForwardConfig(context).keepAliveServiceEnabled
 
         fun ensureStarted(context: Context) {
             if (!shouldRun(context)) {

@@ -182,6 +182,7 @@ import org.fossify.messages.helpers.THREAD_ID
 import org.fossify.messages.helpers.THREAD_NUMBER
 import org.fossify.messages.helpers.THREAD_TEXT
 import org.fossify.messages.helpers.THREAD_TITLE
+import org.fossify.messages.helpers.YellowPageHelper
 import org.fossify.messages.helpers.generateRandomId
 import org.fossify.messages.forwarding.MultiForwardConfig
 import org.fossify.messages.helpers.refreshConversations
@@ -1208,13 +1209,26 @@ class ThreadActivity : SimpleActivity() {
     }
 
     private fun setupThreadTitle() {
-        val title = conversation?.title?.takeIf { it.isNotEmpty() }
+        var title = conversation?.title?.takeIf { it.isNotEmpty() }
             ?: participants.getThreadTitle()
         val number = conversation?.phoneNumber
             ?.ifEmpty { null }
             ?: participants.firstOrNull()?.phoneNumbers?.firstOrNull()?.normalizedNumber
             ?: participants.firstOrNull()?.phoneNumbers?.firstOrNull()?.value
             ?: ""
+
+        if (title.isBlank() || title.equals(number, ignoreCase = true) || title.replace("+", "").replace(" ", "").replace("-", "").all { it.isDigit() }) {
+            val passedTitle = intent.getStringExtra(THREAD_TITLE)?.takeIf { it.isNotBlank() }
+            val isPassedTitleValid = passedTitle != null && !passedTitle.equals(number, ignoreCase = true) && !passedTitle.replace("+", "").replace(" ", "").replace("-", "").all { it.isDigit() }
+            if (isPassedTitleValid) {
+                title = passedTitle
+            } else {
+                val yellow = YellowPageHelper.lookup(this, number, conversation?.snippet)
+                if (yellow != null) {
+                    title = yellow.brand
+                }
+            }
+        }
 
         binding.threadToolbar.title = null
         binding.threadTitleText.text = title

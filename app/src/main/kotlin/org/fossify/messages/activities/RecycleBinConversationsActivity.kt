@@ -21,6 +21,8 @@ import org.fossify.messages.extensions.emptyMessagesRecycleBin
 import org.fossify.messages.helpers.IS_RECYCLE_BIN
 import org.fossify.messages.helpers.THREAD_ID
 import org.fossify.messages.helpers.THREAD_TITLE
+import org.fossify.messages.helpers.THREAD_NUMBER
+import org.fossify.messages.helpers.YellowPageHelper
 import org.fossify.messages.models.Conversation
 import org.fossify.messages.models.Events
 import org.greenrobot.eventbus.EventBus
@@ -169,7 +171,17 @@ class RecycleBinConversationsActivity : SimpleActivity() {
         Intent(this, ThreadActivity::class.java).apply {
             val conversation = any as Conversation
             putExtra(THREAD_ID, conversation.threadId)
-            putExtra(THREAD_TITLE, conversation.title)
+            val yellow = YellowPageHelper.lookup(this@RecycleBinConversationsActivity, conversation.phoneNumber, conversation.snippet)
+            val titleToPass = if (conversation.title.isBlank() ||
+                conversation.title.equals(conversation.phoneNumber, ignoreCase = true) ||
+                conversation.title.replace("+", "").replace(" ", "").replace("-", "").all { it.isDigit() }
+            ) {
+                yellow?.brand ?: conversation.title
+            } else {
+                conversation.title
+            }
+            putExtra(THREAD_TITLE, titleToPass)
+            putExtra(THREAD_NUMBER, conversation.phoneNumber)
             putExtra(IS_RECYCLE_BIN, true)
             startActivity(this)
         }

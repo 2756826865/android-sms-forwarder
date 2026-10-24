@@ -27,6 +27,7 @@ import org.fossify.messages.extensions.showSmsStyled
 import org.fossify.messages.helpers.IS_SCHEDULE_MODE
 import org.fossify.messages.helpers.THREAD_ID
 import org.fossify.messages.helpers.THREAD_TITLE
+import org.fossify.messages.helpers.THREAD_NUMBER
 import org.fossify.messages.messaging.cancelScheduleSendPendingIntent
 import org.fossify.messages.messaging.sendMessageCompat
 import org.fossify.messages.models.Message
@@ -110,6 +111,7 @@ class ScheduledMessagesActivity : SimpleActivity() {
             Intent(this, ThreadActivity::class.java)
                 .putExtra(THREAD_ID, message.threadId)
                 .putExtra(THREAD_TITLE, message.participants.getThreadTitle())
+                .putExtra(THREAD_NUMBER, message.participants.firstOrNull()?.phoneNumbers?.firstOrNull()?.normalizedNumber ?: message.participants.firstOrNull()?.phoneNumbers?.firstOrNull()?.value ?: "")
         )
     }
 

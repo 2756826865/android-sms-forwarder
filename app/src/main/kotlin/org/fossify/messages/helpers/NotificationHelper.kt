@@ -22,6 +22,7 @@ import org.fossify.messages.R
 import org.fossify.messages.activities.ThreadActivity
 import org.fossify.messages.extensions.config
 import org.fossify.messages.extensions.shortcutHelper
+import org.fossify.messages.extensions.getNameAndPhotoFromPhoneNumber
 import org.fossify.messages.helpers.liveisland.LiveIslandCoordinator
 import org.fossify.messages.helpers.liveisland.LiveIslandMessage
 import org.fossify.messages.messaging.isShortCodeWithLetters
@@ -58,6 +59,10 @@ class NotificationHelper(private val context: Context) {
         val notificationId = threadId.hashCode()
         val contentIntent = Intent(context, ThreadActivity::class.java).apply {
             putExtra(THREAD_ID, threadId)
+            putExtra(THREAD_NUMBER, address)
+            val yellow = YellowPageHelper.lookup(context, address, body)
+            val titleToPass = yellow?.brand ?: sender ?: context.getNameAndPhotoFromPhoneNumber(address).name
+            putExtra(THREAD_TITLE, titleToPass)
         }
         val contentPendingIntent =
             PendingIntent.getActivity(

@@ -11,6 +11,8 @@ import android.widget.TextView
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
+import com.bumptech.glide.load.engine.DiskCacheStrategy
+import org.fossify.messages.helpers.YellowPageHelper
 import com.qtalk.recyclerviewfastscroller.RecyclerViewFastScroller
 import org.fossify.commons.adapters.MyRecyclerViewListAdapter
 import org.fossify.commons.extensions.applyColorFilter
@@ -207,8 +209,18 @@ abstract class BaseConversationsAdapter(
                 if (isSelected) R.drawable.selection_circle_checked else R.drawable.selection_circle_unchecked
             )
 
+            val yellow = YellowPageHelper.lookup(activity, conversation.phoneNumber, conversation.snippet)
+            val displayTitle = if (yellow != null) {
+                val isJustNumber = conversation.title.isBlank() ||
+                    conversation.title.equals(conversation.phoneNumber, ignoreCase = true) ||
+                    conversation.title.replace("+", "").replace(" ", "").replace("-", "").all { it.isDigit() }
+                if (isJustNumber) yellow.brand else conversation.title
+            } else {
+                conversation.title
+            }
+
             conversationAddress.apply {
-                text = conversation.title
+                text = displayTitle
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, density.titleSp)
                 includeFontPadding = false
             }
@@ -252,20 +264,32 @@ abstract class BaseConversationsAdapter(
             }
 
             if (activity.config.showListAvatars) {
-                if (!activity.hasPermission(PERMISSION_READ_CONTACTS) || conversation.photoUri.isBlank()) {
+                Glide.with(activity).clear(conversationImage)
+                val avatarSource = conversation.photoUri.ifBlank { yellow?.logoUrl.orEmpty() }
+                if (avatarSource.isNotBlank()) {
+                    conversationImage.background = null
+                    conversationImage.setPadding(0, 0, 0, 0)
+                    if (conversation.photoUri.isNotBlank()) {
+                        SimpleContactsHelper(activity).loadContactImage(
+                            path = conversation.photoUri,
+                            imageView = conversationImage,
+                            placeholderName = displayTitle,
+                            placeholderImage = placeholder
+                        )
+                    } else {
+                        Glide.with(activity)
+                            .load(avatarSource)
+                            .diskCacheStrategy(DiskCacheStrategy.ALL)
+                            .circleCrop()
+                            .placeholder(R.drawable.miui_avatar_background)
+                            .error(R.drawable.ic_person_vector)
+                            .into(conversationImage)
+                    }
+                } else {
                     conversationImage.setImageResource(R.drawable.ic_person_vector)
                     conversationImage.setBackgroundResource(R.drawable.miui_avatar_background)
                     val iconPad = dp(density.avatarIconPadDp)
                     conversationImage.setPadding(iconPad, iconPad, iconPad, iconPad)
-                } else {
-                    conversationImage.background = null
-                    conversationImage.setPadding(0, 0, 0, 0)
-                    SimpleContactsHelper(activity).loadContactImage(
-                        path = conversation.photoUri,
-                        imageView = conversationImage,
-                        placeholderName = conversation.title,
-                        placeholderImage = placeholder
-                    )
                 }
             }
         }

@@ -435,7 +435,15 @@ class SmsRecoveryWorker(
         ) return null
         return runCatching {
             val manager = applicationContext.getSystemService(SubscriptionManager::class.java)
-            manager?.getActiveSubscriptionInfo(subscriptionId)?.simSlotIndex
+            val info = manager?.getActiveSubscriptionInfo(subscriptionId)
+            if (info != null && info.simSlotIndex >= 0) {
+                info.simSlotIndex
+            } else {
+                val activeList = manager?.activeSubscriptionInfoList
+                if (activeList?.size == 1 && activeList[0].simSlotIndex >= 0) {
+                    activeList[0].simSlotIndex
+                } else null
+            }
         }.getOrNull()
     }
 

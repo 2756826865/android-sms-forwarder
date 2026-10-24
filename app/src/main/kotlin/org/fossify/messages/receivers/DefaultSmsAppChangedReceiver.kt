@@ -31,7 +31,9 @@ class DefaultSmsAppChangedReceiver : BroadcastReceiver() {
             NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID)
             SmsKeepAliveService.ensureStarted(context)
         } else {
-            SmsKeepAliveService.stop(context)
+            if (!org.fossify.messages.forwarding.MultiForwardConfig(context).keepAliveServiceEnabled) {
+                SmsKeepAliveService.stop(context)
+            }
             showDefaultSmsLostNotification(context)
         }
     }
