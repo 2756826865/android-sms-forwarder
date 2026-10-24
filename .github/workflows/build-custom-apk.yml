@@ -4,6 +4,10 @@ on:
   workflow_dispatch:
   push:
     branches: [main, "build/**"]
+    # Release-note-only commits are handled by update-release-notes.yml.
+    paths-ignore:
+      - "docs/**"
+      - "CHANGELOG.md"
 
 concurrency:
   group: build-custom-apk-${{ github.ref }}
@@ -107,12 +111,21 @@ jobs:
           tag="v$version"
           apk="deliverables/SMS-Forwarder-$version-release.apk"
           checksum="$apk.sha256"
-          # A deleted Release can leave its old tag behind. Keep source and APK aligned.
-          existing_tag_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --jq '.object.sha' 2>/dev/null || true)"
+          # Only use a successful GitHub API response. A 404 can emit JSON on stdout,
+          # which must never be passed to git as a commit SHA.
+          existing_tag_sha=""
+          if tag_ref="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" 2>/dev/null)"; then
+            existing_tag_sha="$(printf '%s' "$tag_ref" | jq -r '.object.sha // empty')"
+            existing_tag_type="$(printf '%s' "$tag_ref" | jq -r '.object.type // empty')"
+            if [ "$existing_tag_type" != "commit" ] || [[ ! "$existing_tag_sha" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "::error::Tag $tag has an unexpected object; refusing to publish an unverified APK." >&2
+              exit 1
+            fi
+          fi
           if [ -n "$existing_tag_sha" ] && [ "$existing_tag_sha" != "$GITHUB_SHA" ]; then
-            git merge-base --is-ancestor "$existing_tag_sha" "$GITHUB_SHA"
-            gh api --method PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/$tag" \
-              -f sha="$GITHUB_SHA" -F force=false
+            # Preserve published tags and assets. Each distinct source needs a new version.
+            echo "::warning::Tag $tag points to $existing_tag_sha, not $GITHUB_SHA. Not replacing published assets; the new signed APK is in Actions artifacts. Bump VERSION_NAME for a new release."
+            exit 0
           fi
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$tag" "$apk" "$checksum" \
