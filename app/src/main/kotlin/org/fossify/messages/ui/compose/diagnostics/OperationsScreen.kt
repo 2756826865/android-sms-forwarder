@@ -61,6 +61,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -102,7 +103,7 @@ fun OperationsScreen(
     viewModel: DiagnosticsViewModel
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val timeFormat = SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault())
+    val timeFormat = SimpleDateFormat("HH:mm:ss.SSS", LocalConfiguration.current.locales[0])
     val isDark = isSystemInDarkTheme()
     val pageBgColor = if (isDark) DarkBackground else AppBackground
     val primaryTextColor = if (isDark) Color.White else TextPrimary

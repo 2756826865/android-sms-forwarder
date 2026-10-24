@@ -56,6 +56,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -782,7 +783,7 @@ private fun RemoteSourceCard(
 
             if (source.lastMessageAt > 0L) {
                 Spacer(modifier = Modifier.height(6.dp))
-                val timeStr = SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault()).format(Date(source.lastMessageAt))
+                val timeStr = SimpleDateFormat("MM-dd HH:mm:ss", LocalConfiguration.current.locales[0]).format(Date(source.lastMessageAt))
                 Text(
                     text = "最后收到指令: $timeStr",
                     fontSize = 11.sp,
@@ -791,7 +792,7 @@ private fun RemoteSourceCard(
             }
             if (source.type == RemoteSourceType.FEISHU && source.lastConnectedAt > 0L) {
                 Spacer(modifier = Modifier.height(6.dp))
-                val connectedAt = SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault())
+                val connectedAt = SimpleDateFormat("MM-dd HH:mm:ss", LocalConfiguration.current.locales[0])
                     .format(Date(source.lastConnectedAt))
                 Text(
                     text = "最近连接成功: $connectedAt",

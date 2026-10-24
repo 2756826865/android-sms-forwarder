@@ -50,6 +50,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -475,9 +476,9 @@ fun LowBatteryEmbeddedScreen() {
                         cfg.lowBatteryDeviceName = value
                     }
                 },
-                label = { Text(context.getString(R.string.low_battery_device_name_label)) },
-                placeholder = { Text(context.getString(R.string.low_battery_device_name_hint)) },
-                supportingText = { Text(context.getString(R.string.low_battery_device_name_summary)) },
+                label = { Text(stringResource(R.string.low_battery_device_name_label)) },
+                placeholder = { Text(stringResource(R.string.low_battery_device_name_hint)) },
+                supportingText = { Text(stringResource(R.string.low_battery_device_name_summary)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )

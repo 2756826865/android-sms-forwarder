@@ -23,12 +23,12 @@ import org.fossify.messages.forwarding.repository.ChannelRepository
 import java.util.UUID
 
 class RuleEditorViewModel(
-    private val context: Context,
+    context: Context,
     private val ruleId: String? = null
 ) : ViewModel() {
 
-    private val repository = RuleRepository.getInstance(context)
-    private val channelRepository = ChannelRepository.getInstance(context)
+    private val repository = RuleRepository.getInstance(context.applicationContext)
+    private val channelRepository = ChannelRepository.getInstance(context.applicationContext)
 
     private val _uiState = MutableStateFlow(RuleEditorUiState())
     val uiState: StateFlow<RuleEditorUiState> = _uiState.asStateFlow()

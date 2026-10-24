@@ -21,10 +21,12 @@ import org.fossify.messages.ui.usecase.RunManualRecoveryUseCase
  * 诊断与可观测性中心 ViewModel
  */
 class DiagnosticsViewModel(
-    private val context: Context,
+    context: Context,
     private val getRecoveryRecordsUseCase: GetRecoveryRecordsUseCase,
     private val runManualRecoveryUseCase: RunManualRecoveryUseCase
 ) : ViewModel() {
+
+    private val appContext = context.applicationContext
 
     private val _uiState = MutableStateFlow<UiState<DiagnosticsState>>(UiState.Idle)
     val uiState: StateFlow<UiState<DiagnosticsState>> = _uiState.asStateFlow()
@@ -35,8 +37,8 @@ class DiagnosticsViewModel(
             try {
                 val records = getRecoveryRecordsUseCase(50)
                 val profile = CompatibilityManager.deviceProfile
-                val isBatteryOptimized = !CompatibilityManager.backgroundCompat.isBatteryOptimizationIgnored(context)
-                val isNotificationEnabled = CompatibilityManager.backgroundCompat.isNotificationEnabled(context)
+                val isBatteryOptimized = !CompatibilityManager.backgroundCompat.isBatteryOptimizationIgnored(appContext)
+                val isNotificationEnabled = CompatibilityManager.backgroundCompat.isNotificationEnabled(appContext)
                 val tips = CompatibilityManager.backgroundCompat.getBrandTips()
                 val perfSummaries = PerformanceTracker.getAllSummaries()
                 val recentLogs = RingBufferLogManager.getRecentLogs(50)
@@ -70,8 +72,8 @@ class DiagnosticsViewModel(
                 }
                 val records = getRecoveryRecordsUseCase(50)
                 val profile = CompatibilityManager.deviceProfile
-                val isBatteryOptimized = !CompatibilityManager.backgroundCompat.isBatteryOptimizationIgnored(context)
-                val isNotificationEnabled = CompatibilityManager.backgroundCompat.isNotificationEnabled(context)
+                val isBatteryOptimized = !CompatibilityManager.backgroundCompat.isBatteryOptimizationIgnored(appContext)
+                val isNotificationEnabled = CompatibilityManager.backgroundCompat.isNotificationEnabled(appContext)
                 val tips = CompatibilityManager.backgroundCompat.getBrandTips()
                 val perfSummaries = PerformanceTracker.getAllSummaries()
                 val recentLogs = RingBufferLogManager.getRecentLogs(50)
@@ -98,7 +100,7 @@ class DiagnosticsViewModel(
     fun exportDiagnosticBundle(encryptWithKeyStore: Boolean = false) {
         viewModelScope.launch {
             try {
-                val bundleResult = DiagnosticBundleGenerator.generateBundle(context, encryptWithKeyStore)
+                val bundleResult = DiagnosticBundleGenerator.generateBundle(appContext, encryptWithKeyStore)
                 val currentState = (_uiState.value as? UiState.Success)?.data
                 if (currentState != null) {
                     _uiState.value = UiState.Success(currentState.copy(lastExportedBundle = bundleResult))
