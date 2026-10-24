@@ -34,8 +34,12 @@ object ForwardingMessageFormatter {
                 resolveSimInfo(context, subscriptionId)
             } else {
                 runCatching {
-                    val activeList = context.subscriptionManagerCompat().activeSubscriptionInfoList
-                    if (activeList?.size == 1) activeList[0] else null
+                    try {
+                        val activeList = context.subscriptionManagerCompat().activeSubscriptionInfoList
+                        if (activeList?.size == 1) activeList[0] else null
+                    } catch (_: SecurityException) {
+                        null // Do not guess a SIM when the OS denies subscription access.
+                    }
                 }.getOrNull()
             }
             val slot = resolvedInfo?.simSlotIndex?.takeIf { it >= 0 } ?: return content
@@ -314,8 +318,12 @@ object ForwardingMessageFormatter {
         val info = resolveSimInfo(context, subscriptionId)
             ?: if (subscriptionId < 0) {
                 runCatching {
-                    val activeList = context.subscriptionManagerCompat().activeSubscriptionInfoList
-                    if (activeList?.size == 1) activeList[0] else null
+                    try {
+                        val activeList = context.subscriptionManagerCompat().activeSubscriptionInfoList
+                        if (activeList?.size == 1) activeList[0] else null
+                    } catch (_: SecurityException) {
+                        null // Do not guess a SIM when the OS denies subscription access.
+                    }
                 }.getOrNull()
             } else null
         val slot = info?.simSlotIndex?.takeIf { it >= 0 } ?: -1
