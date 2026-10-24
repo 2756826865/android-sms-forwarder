@@ -1097,8 +1097,12 @@ open class IncomingSmsService : Service() {
 
             if (slotIndex >= 0) {
                 val resolvedSubId = runCatching {
-                    context.subscriptionManagerCompat().activeSubscriptionInfoList
-                        ?.firstOrNull { it.simSlotIndex == slotIndex }?.subscriptionId
+                    try {
+                        context.subscriptionManagerCompat().activeSubscriptionInfoList
+                            ?.firstOrNull { it.simSlotIndex == slotIndex }?.subscriptionId
+                    } catch (_: SecurityException) {
+                        null
+                    }
                 }.getOrNull()
                 if (resolvedSubId != null && resolvedSubId >= 0) {
                     return resolvedSubId
@@ -1106,8 +1110,12 @@ open class IncomingSmsService : Service() {
             }
 
             val singleSubId = runCatching {
-                val activeList = context.subscriptionManagerCompat().activeSubscriptionInfoList
-                if (activeList?.size == 1) activeList[0].subscriptionId else null
+                try {
+                    val activeList = context.subscriptionManagerCompat().activeSubscriptionInfoList
+                    if (activeList?.size == 1) activeList[0].subscriptionId else null
+                } catch (_: SecurityException) {
+                    null
+                }
             }.getOrNull()
             if (singleSubId != null && singleSubId >= 0) {
                 return singleSubId
