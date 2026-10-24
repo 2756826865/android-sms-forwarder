@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## 待验证：1.2.5(102401)
+## [1.2.5] - 2026-10-24
 
 - 修复部分降级收信后列表、会话不及时刷新的问题；系统短信落库后独立补同步本地数据。
 - 修复恢复扫描中防重判断误跳过本地同步的遗漏，保留系统写库权限与收费发送防重保护。
