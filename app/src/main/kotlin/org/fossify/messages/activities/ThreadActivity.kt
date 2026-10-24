@@ -1935,7 +1935,13 @@ class ThreadActivity : SimpleActivity() {
         if (sendInProgress) return
         // Revalidate the selected identity immediately before sending. Do not switch
         // a stale selection to another subscription, which may incur charges there.
-        val activeCards = runCatching { subscriptionManagerCompat().activeSubscriptionInfoList.orEmpty() }
+        val activeCards = runCatching {
+            try {
+                subscriptionManagerCompat().activeSubscriptionInfoList.orEmpty()
+            } catch (_: SecurityException) {
+                emptyList() // Fail closed: never switch the sending SIM implicitly.
+            }
+        }
         if (requiresSimReselection || subscriptionId < 0 || activeCards.isFailure ||
             activeCards.getOrDefault(emptyList()).none { it.subscriptionId == subscriptionId }) {
             toast("发送卡不可用或无法读取，请检查电话权限并重新选择 SIM 卡")
