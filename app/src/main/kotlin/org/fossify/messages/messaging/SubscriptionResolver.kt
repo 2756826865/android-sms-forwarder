@@ -402,7 +402,11 @@ object SubscriptionResolver {
      */
     fun getActiveSubscriptionSnapshots(context: Context): List<SubscriptionSnapshot> {
         val activeList = runCatching {
-            context.subscriptionManagerCompat().activeSubscriptionInfoList.orEmpty()
+            try {
+                context.subscriptionManagerCompat().activeSubscriptionInfoList.orEmpty()
+            } catch (_: SecurityException) {
+                emptyList()
+            }
         }.getOrDefault(emptyList())
 
         val simDisplayConfig = MultiForwardConfig(context)
