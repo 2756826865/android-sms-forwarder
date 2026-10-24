@@ -20,6 +20,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import org.fossify.messages.autofill.AutofillConfig
+import java.lang.ref.WeakReference
 
 /**
  * 屏幕顶部 5 秒悬浮验证码小胶囊管理器
@@ -27,17 +28,18 @@ import org.fossify.messages.autofill.AutofillConfig
  */
 object FloatingCodePillManager {
 
-    private var floatingView: View? = null
+    private var floatingView: WeakReference<View>? = null
     private val mainHandler = Handler(Looper.getMainLooper())
     private var dismissRunnable: Runnable? = null
 
     fun showPill(context: Context, code: String) {
-        val autofillConfig = AutofillConfig(context)
+        val appContext = context.applicationContext
+        val autofillConfig = AutofillConfig(appContext)
         if (!autofillConfig.enabled || !autofillConfig.enableFloatingPill) return
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(context)) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(appContext)) return
 
         mainHandler.post {
-            showFloatingPillInternal(context, code)
+            showFloatingPillInternal(appContext, code)
         }
     }
 
@@ -124,7 +126,7 @@ object FloatingCodePillManager {
 
         runCatching {
             windowManager.addView(container, params)
-            floatingView = container
+            floatingView = WeakReference(container)
 
             // 5 秒自动优雅消失
             val runnable = Runnable {
@@ -138,7 +140,7 @@ object FloatingCodePillManager {
     fun dismissPill(context: Context) {
         dismissRunnable?.let { mainHandler.removeCallbacks(it) }
         dismissRunnable = null
-        val view = floatingView ?: return
+        val view = floatingView?.get() ?: return
         floatingView = null
 
         val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as? WindowManager ?: return

@@ -23,12 +23,13 @@ import org.fossify.messages.forwarding.repository.ChannelRepository
 import java.util.UUID
 
 class RuleEditorViewModel(
-    private val context: Context,
+    context: Context,
     private val ruleId: String? = null
 ) : ViewModel() {
 
-    private val repository = RuleRepository.getInstance(context)
-    private val channelRepository = ChannelRepository.getInstance(context)
+    private val appContext = context.applicationContext
+    private val repository = RuleRepository.getInstance(appContext)
+    private val channelRepository = ChannelRepository.getInstance(appContext)
 
     private val _uiState = MutableStateFlow(RuleEditorUiState())
     val uiState: StateFlow<RuleEditorUiState> = _uiState.asStateFlow()
@@ -221,7 +222,7 @@ class RuleEditorViewModel(
         val state = _uiState.value
         val draftRule = buildRuleFromState()
 
-        val previewSim = ForwardingMessageFormatter.previewSim(context, state.testSimSlot)
+        val previewSim = ForwardingMessageFormatter.previewSim(appContext, state.testSimSlot)
         val engine = ForwardingRuleEngine(listOf(draftRule.copy(enabled = true)))
         val candidates = channelRepository.getEnabledInstances(includeGroups = true)
             .map { it.channelType }
@@ -236,9 +237,15 @@ class RuleEditorViewModel(
                 val template = action.customTemplate.takeIf { action.templateMode == RuleTemplateMode.CUSTOM }
                     ?: rule.customTemplate.takeIf(String::isNotBlank)
                 if (template != null) {
-                    ForwardingMessageFormatter.renderRuleTemplate(context, template, state.testSender, text, System.currentTimeMillis(), -1, simSnapshot = previewSim)
+                    ForwardingMessageFormatter.renderRuleTemplate(
+                        appContext, template, state.testSender, text,
+                        System.currentTimeMillis(), -1, simSnapshot = previewSim
+                    )
                 } else {
-                    ForwardingMessageFormatter.format(context, state.testSender, text, System.currentTimeMillis(), -1, simSnapshot = previewSim).content
+                    ForwardingMessageFormatter.format(
+                        appContext, state.testSender, text,
+                        System.currentTimeMillis(), -1, simSnapshot = previewSim
+                    ).content
                 }
             }
         )
