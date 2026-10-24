@@ -150,6 +150,12 @@ android {
     }
 }
 
+// Detekt 1.x does not support JVM target 25. Keep its analysis target aligned
+// with the application's Java/Kotlin bytecode target (currently 17).
+tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach {
+    jvmTarget = project.libs.versions.app.build.kotlinJVMTarget.get()
+}
+
 detekt {
     baseline = file("detekt-baseline.xml")
     config.setFrom("$rootDir/detekt.yml")
