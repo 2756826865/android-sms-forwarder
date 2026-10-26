@@ -235,20 +235,25 @@ object ChannelTestSender {
                         config.customWebhookContentType(), config.customWebhookBodyTemplate(),
                         title, content, now, config
                     )
-                    "自定义 Webhook 请求成功送达！"
+                    "自定义 Webhook 请求已按配置判定成功，不代表终端送达。"
                 }
                 ForwardingChannels.SMS_DIRECT -> {
                     val phone = config.smsDirectPhone()
                     require(phone.isNotBlank()) { "短信直发目标号码不能为空，请先配置" }
+                    val mode = config.smsDirectSimMode
+                    require(mode in 1..2) { "测试没有接收卡信息，请先选择固定 SIM1 或 SIM2" }
+                    val resolved = org.fossify.messages.messaging.SubscriptionResolver.resolve(context,
+                        org.fossify.messages.messaging.SimResolutionRequest(explicitSlotIndex = mode - 1, allowFallback = false))
+                    require(resolved.resolvedSubscriptionId >= 0) { "指定卡不可用或缺少电话权限，已停止发送" }
                     context.sendMessageCompat(
                         text = "$title $content",
                         addresses = listOf(phone),
-                        subId = null,
+                        subId = resolved.resolvedSubscriptionId,
                         attachments = emptyList(),
                         propagateErrors = true,
                         triggerType = org.fossify.messages.models.SmsSendTriggerType.SMS_DIRECT_TEST
                     )
-                    "测试短信已通过本机 SIM 卡发送！"
+                    "测试短信已提交，实际发送结果请查看发送记录。"
                 }
                 ForwardingChannels.CHANNEL_GROUP -> {
                     val members = config.channelGroupMembers()
@@ -556,7 +561,7 @@ object ChannelTestSender {
                         instance.optString("successMode", "http"),
                         instance.optString("successField"), instance.optString("successValue")
                     )
-                    "自定义 Webhook 请求成功送达！"
+                    "自定义 Webhook 请求已按配置判定成功，不代表终端送达。"
                 }
                 ForwardingChannels.GOTIFY -> {
                     val serverUrl = instance.optString("serverUrl").trim().trimEnd('/')
@@ -647,15 +652,20 @@ object ChannelTestSender {
                 ForwardingChannels.SMS_DIRECT -> {
                     val phone = instance.optString("phone")
                     require(phone.isNotBlank()) { "短信直发目标号码不能为空，请先配置" }
+                    val mode = instance.optInt("simMode", config.smsDirectSimMode)
+                    require(mode in 1..2) { "测试没有接收卡信息，请先选择固定 SIM1 或 SIM2" }
+                    val resolved = org.fossify.messages.messaging.SubscriptionResolver.resolve(context,
+                        org.fossify.messages.messaging.SimResolutionRequest(explicitSlotIndex = mode - 1, allowFallback = false))
+                    require(resolved.resolvedSubscriptionId >= 0) { "指定卡不可用或缺少电话权限，已停止发送" }
                     context.sendMessageCompat(
                         text = "$title $content",
                         addresses = listOf(phone),
-                        subId = null,
+                        subId = resolved.resolvedSubscriptionId,
                         attachments = emptyList(),
                         propagateErrors = true,
                         triggerType = org.fossify.messages.models.SmsSendTriggerType.SMS_DIRECT_TEST
                     )
-                    "测试短信已通过本机 SIM 卡发送！"
+                    "测试短信已提交，实际发送结果请查看发送记录。"
                 }
                 ForwardingChannels.CHANNEL_GROUP -> {
                     val members = runCatching {

@@ -42,5 +42,6 @@ data class RecoverySummary(
     val totalRecovered: Int,
     val unlockedTasks: Int,
     val resetPendingTasks: Int,
-    val markedUnknownCount: Int
+    val markedUnknownCount: Int,
+    val failedChecks: Int = 0
 )

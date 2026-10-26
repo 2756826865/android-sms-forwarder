@@ -139,6 +139,8 @@ object ForwardingMessageFormatter {
         includeSim: Boolean = true,
         includeTime: Boolean = true,
         simSnapshot: ForwardingSimSnapshot? = null,
+        templateModeOverride: Int? = null,
+        customTemplateOverride: String? = null,
     ): ForwardingPayload {
         val config = MultiForwardConfig(context)
         val battery by lazy { TemplateDataRetriever.batterySnapshot(context) }
@@ -169,7 +171,7 @@ object ForwardingMessageFormatter {
             SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date(receivedAt))
         }
             
-        val content = when (config.templateMode) {
+        val content = when (templateModeOverride ?: config.templateMode) {
             MultiForwardConfig.TEMPLATE_STANDARD -> buildList {
                 add(body)
                 if (includeSender && contactName != null && sender.isNotBlank()) add("号码：$sender")
@@ -197,7 +199,7 @@ object ForwardingMessageFormatter {
             }
 
             MultiForwardConfig.TEMPLATE_CUSTOM -> {
-                val customTemplate = config.customTemplate
+                val customTemplate = customTemplateOverride ?: config.customTemplate
                 if (customTemplate.isNotBlank()) {
                     val code by lazy { org.fossify.messages.rule.template.TemplateRenderer.extractVerificationCode(body) }
                     val dateOnly by lazy { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(receivedAt)) }

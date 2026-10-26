@@ -176,6 +176,8 @@ dependencies {
     implementation(libs.androidx.documentfile)
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.foundation)
+    implementation("top.yukonga.miuix.kmp:miuix-ui-android:0.9.4")
+    implementation("top.yukonga.miuix.kmp:miuix-blur-android:0.9.4")
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.activity)
     implementation(libs.androidx.work.runtime)

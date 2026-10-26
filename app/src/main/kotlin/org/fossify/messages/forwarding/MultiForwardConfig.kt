@@ -569,6 +569,10 @@ class MultiForwardConfig(
     fun saveSmsDirect(phone: String) {
         saveSecret(KEY_SMS_DIRECT_PHONE, phone)
     }
+    var smsDirectSimMode: Int
+        get() = prefs.getInt("sms_direct_sim_mode", 0)
+        set(value) { prefs.edit().putInt("sms_direct_sim_mode", value).apply() }
+
     fun smsDirectPhone() = getSecret(KEY_SMS_DIRECT_PHONE)
 
     // 16. 自定义 Webhook

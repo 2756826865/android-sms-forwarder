@@ -48,13 +48,17 @@ object RecoveryEngine {
         var markedUnknownCount = 0
         var alignedCount = 0
         var totalScanned = 0
+        var failedChecks = 0
 
         // =====================================================================
         // 1. Outbox 死锁恢复 (RUNNING + lockExpiresAt < now)
         // =====================================================================
         val deadlockedTasks = try {
             outboxDao.findDeadlockedTasks(now)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
+            failedChecks++
             Log.w(TAG, "Failed to scan deadlocked outbox tasks: ${e.message}")
             emptyList()
         }
@@ -79,7 +83,10 @@ object RecoveryEngine {
                     createdAt = now
                 )
                 recoveryDao.insert(record)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
+                failedChecks++
                 Log.w(TAG, "Failed to recover deadlocked task ${task.taskId}: ${e.message}")
             }
         }
@@ -89,7 +96,10 @@ object RecoveryEngine {
         // =====================================================================
         val dueRetryTasks = try {
             outboxDao.findDueRetryTasks(now)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
+            failedChecks++
             Log.w(TAG, "Failed to scan due retry tasks: ${e.message}")
             emptyList()
         }
@@ -113,7 +123,10 @@ object RecoveryEngine {
                     createdAt = now
                 )
                 recoveryDao.insert(record)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
+                failedChecks++
                 Log.w(TAG, "Failed to advance retry task ${task.taskId}: ${e.message}")
             }
         }
@@ -125,7 +138,10 @@ object RecoveryEngine {
         val submittingCutoff = now - SUBMITTING_TIMEOUT_MS
         val staleSubmittingOps = try {
             smsSendDao.findStaleSubmittingOperations(submittingCutoff)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
+            failedChecks++
             Log.w(TAG, "Failed to scan stale SUBMITTING operations: ${e.message}")
             emptyList()
         }
@@ -149,7 +165,10 @@ object RecoveryEngine {
                     createdAt = now
                 )
                 recoveryDao.insert(record)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
+                failedChecks++
                 Log.w(TAG, "Failed to recover SUBMITTING operation ${op.sendOperationId}: ${e.message}")
             }
         }
@@ -158,7 +177,10 @@ object RecoveryEngine {
         val submittedCutoff = now - SUBMITTED_TIMEOUT_MS
         val staleSubmittedOps = try {
             smsSendDao.findStaleSubmittedOperations(submittedCutoff)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
+            failedChecks++
             Log.w(TAG, "Failed to scan stale SUBMITTED operations: ${e.message}")
             emptyList()
         }
@@ -182,7 +204,10 @@ object RecoveryEngine {
                     createdAt = now
                 )
                 recoveryDao.insert(record)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
+                failedChecks++
                 Log.w(TAG, "Failed to recover SUBMITTED operation ${op.sendOperationId}: ${e.message}")
             }
         }
@@ -192,7 +217,10 @@ object RecoveryEngine {
         // =====================================================================
         val runningCommands = try {
             remoteCommandDao.findRunningCommands()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
+            failedChecks++
             Log.w(TAG, "Failed to scan running remote commands: ${e.message}")
             emptyList()
         }
@@ -265,7 +293,10 @@ object RecoveryEngine {
         // =====================================================================
         val runningOutboxTasks = try {
             outboxDao.findRunningTasks()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
+            failedChecks++
             Log.w(TAG, "Failed to scan running outbox tasks: ${e.message}")
             emptyList()
         }
@@ -322,7 +353,10 @@ object RecoveryEngine {
         // =====================================================================
         val runningDeliveries = try {
             shadowDao.findRunningDeliveries()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
+            failedChecks++
             Log.w(TAG, "Failed to scan running deliveries: ${e.message}")
             emptyList()
         }
@@ -379,6 +413,8 @@ object RecoveryEngine {
                     "(unlocked=$unlockedTasks, resetPending=$resetPendingTasks, markedUnknown=$markedUnknownCount, aligned=$alignedCount)"
         )
 
+        org.fossify.messages.observability.log.RingBufferLogManager.i(TAG,
+            "scanCompleted scanned=$totalScanned recovered=$totalRecovered failedChecks=$failedChecks")
         RecoverySummary(
             triggerSource = triggerSource,
             scanTime = now,
@@ -386,7 +422,8 @@ object RecoveryEngine {
             totalRecovered = totalRecovered,
             unlockedTasks = unlockedTasks,
             resetPendingTasks = resetPendingTasks,
-            markedUnknownCount = markedUnknownCount
+            markedUnknownCount = markedUnknownCount,
+            failedChecks = failedChecks
         )
     }
 }

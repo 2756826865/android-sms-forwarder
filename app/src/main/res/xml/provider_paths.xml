@@ -3,4 +3,5 @@
     <cache-path name="compressed_files" path="compressed/"/>
     <cache-path name="attachment_files" path="attachments/"/>
     <cache-path name="app_updates" path="updates/"/>
+    <cache-path name="diagnostic_files" path="diagnostics/"/>
 </paths>

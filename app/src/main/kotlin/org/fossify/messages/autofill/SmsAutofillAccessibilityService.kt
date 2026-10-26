@@ -54,11 +54,11 @@ class SmsAutofillAccessibilityService : AccessibilityService() {
                 putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, code)
             }
             val filled = targetInput.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, arguments)
-            Log.i(TAG, "Autofill code $code result: $filled in $currentPackage")
+            Log.i(TAG, "Autofill result: $filled")
 
             if (filled) {
                 mainHandler.post {
-                    Toast.makeText(this, "已自动填充验证码: $code", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "已自动填充验证码", Toast.LENGTH_SHORT).show()
                 }
 
                 if (config.autoSubmit) {
@@ -141,13 +141,27 @@ class SmsAutofillAccessibilityService : AccessibilityService() {
             if (!config.enabled) return
 
             if (config.copyToClipboard) {
-                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                clipboard?.setPrimaryClip(ClipData.newPlainText("VerificationCode", code))
+                runCatching {
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                        ?: error("Clipboard service unavailable")
+                    val clip = ClipData.newPlainText("VerificationCode", code)
+                    if (android.os.Build.VERSION.SDK_INT >= 33) {
+                        clip.description.extras = android.os.PersistableBundle().apply {
+                            putBoolean("android.content.extra.IS_SENSITIVE", true)
+                        }
+                    }
+                    clipboard.setPrimaryClip(clip)
+                }.onFailure {
+                    Log.w(TAG, "Clipboard write failed: ${it.javaClass.simpleName}")
+                }
             }
 
-            // 弹出屏幕顶部 5 秒悬浮胶囊
             if (config.enableFloatingPill) {
-                org.fossify.messages.helpers.FloatingCodePillManager.showPill(context, code)
+                runCatching {
+                    org.fossify.messages.helpers.FloatingCodePillManager.showPill(context, code)
+                }.onFailure {
+                    Log.w(TAG, "Code pill failed: ${it.javaClass.simpleName}")
+                }
             }
         }
     }

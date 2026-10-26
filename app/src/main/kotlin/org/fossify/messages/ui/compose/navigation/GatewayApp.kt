@@ -1,7 +1,12 @@
 package org.fossify.messages.ui.compose.navigation
 
+import top.yukonga.miuix.kmp.blur.layerBackdrop
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -52,7 +57,7 @@ enum class GatewayTab(val title: String, val emoji: String) {
     DASHBOARD("大盘", "📊"),
     CHANNELS("通道", "🔌"),
     RULES("规则", "⚡"),
-    OPERATIONS("运维", "🛠️")
+    OPERATIONS("设置", "⚙️")
 }
 
 /** Space reserved by gateway pages for the floating dock itself (system navigation inset excluded). */
@@ -72,6 +77,7 @@ fun GatewayApp(
     onRequestDefaultSmsRole: () -> Unit = {},
     onSwitchToClassic: () -> Unit = {}
 ) {
+    val dockBackdrop = top.yukonga.miuix.kmp.blur.rememberLayerBackdrop()
     var selectedTab by remember { mutableStateOf(GatewayTab.MESSAGES) }
     var editingRuleId by remember { mutableStateOf<String?>(null) }
     var isEditingRule by remember { mutableStateOf(false) }
@@ -93,7 +99,7 @@ fun GatewayApp(
         ) {
             // 主体内容页面：全屏沉浸穿透滚动，子页面通过 LocalGatewayBottomPadding 动态预留避让空间
             Box(
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize().layerBackdrop(dockBackdrop)
             ) {
                 when (selectedTab) {
                     GatewayTab.MESSAGES -> ConversationsScreen(
@@ -131,84 +137,29 @@ fun GatewayApp(
                 }
             }
 
-            // 悬浮白色大圆角底部导航栏 (Modern Floating Capsule Dock)
-            val isDark = androidx.compose.foundation.isSystemInDarkTheme()
             if (isDockVisible) {
-                Surface(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .padding(
-                            start = 18.dp,
-                            end = 18.dp,
-                            bottom = safeBottom + 12.dp
-                        ),
-                    shape = RoundedCornerShape(34.dp),
-                    color = if (isDark) org.fossify.messages.ui.compose.theme.DarkSurface else Color.White,
-                    shadowElevation = 10.dp,
-                    border = BorderStroke(1.dp, if (isDark) org.fossify.messages.ui.compose.theme.DarkOutline else org.fossify.messages.ui.compose.theme.OutlineSoft)
-                ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 6.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.SpaceAround,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                GatewayTab.values().filterNot { it == GatewayTab.RULES }.forEach { tab ->
-                    val isSelected = selectedTab == tab
-
-                    val itemBgColor by animateColorAsState(
-                        targetValue = if (isSelected) {
-                            if (isDark) Color(0xFF1B3322) else org.fossify.messages.ui.compose.theme.BrandGreenSoft
-                        } else Color.Transparent,
-                        animationSpec = tween(200),
-                        label = "tabBg"
-                    )
-
-                    val textColor by animateColorAsState(
-                        targetValue = if (isSelected) org.fossify.messages.ui.compose.theme.BrandGreen else Color(0xFF667085),
-                        animationSpec = tween(200),
-                        label = "tabText"
-                    )
-
-                    Surface(
-                        onClick = {
-                            if (tab == GatewayTab.RULES && selectedTab == GatewayTab.RULES) {
-                                isEditingRule = false
-                            }
-                            selectedTab = tab
-                        },
-                        shape = RoundedCornerShape(20.dp),
-                        color = itemBgColor,
-                        modifier = Modifier
-                            .padding(horizontal = 1.dp, vertical = 2.dp)
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .padding(horizontal = 8.dp, vertical = 5.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
+                val tabs = GatewayTab.values().filterNot { it == GatewayTab.RULES }
+                org.fossify.messages.ui.compose.ksu.FloatingBottomBar(
+                    modifier = Modifier.align(Alignment.BottomCenter)
+                        .padding(start = 28.dp, end = 28.dp, bottom = safeBottom + 8.dp),
+                    selectedIndex = tabs.indexOf(selectedTab).coerceAtLeast(0),
+                    onSelected = { selectedTab = tabs[it] },
+                    backdrop = dockBackdrop,
+                    tabsCount = tabs.size,
+                    isBlurEnabled = org.fossify.messages.ui.compose.theme.LocalAppearance.current.blur && android.os.Build.VERSION.SDK_INT >= 33
+                ) { activate ->
+                    tabs.forEachIndexed { index, tab ->
+                        org.fossify.messages.ui.compose.ksu.FloatingBottomBarItem(
+                            selected = selectedTab == tab,
+                            onClick = { activate(index) }
                         ) {
-                            Text(
-                                text = tab.emoji,
-                                fontSize = if (isSelected) 17.sp else 15.sp
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = tab.title,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                fontSize = 11.sp,
-                                color = textColor,
-                                maxLines = 1,
-                                softWrap = false
-                            )
+                            Text(tab.emoji, fontSize = 20.sp)
+                            Text(tab.title, fontSize = 11.sp,
+                                color = top.yukonga.miuix.kmp.theme.LocalContentColor.current)
                         }
                     }
                 }
             }
         }
     }
-}
-}
 }

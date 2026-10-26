@@ -256,7 +256,8 @@ fun DashboardContent(
         return ForwardingChannels.displayName(channel)
     }
 
-    // 动态计算真实保活健康指数 (Keep-Alive Health Score 0~100)
+    // Configuration indicator, not a measurement or guarantee of background survival.
+    val healthDataAvailable = stats.collectionFailures.isEmpty()
     val healthScore = remember(stats) {
         var score = 100
         if (!stats.isDefaultSmsApp) score -= 30
@@ -268,15 +269,17 @@ fun DashboardContent(
     }
 
     val scoreColor = when {
+        !healthDataAvailable -> GatewayOrange
         healthScore >= 90 -> GatewayGreen
         healthScore >= 70 -> GatewayOrange
         else -> GatewayRed
     }
 
     val scoreDescription = when {
-        healthScore >= 90 -> "🛡️ 运行极佳 · 息屏无休眠风险"
+        !healthDataAvailable -> "⚠️ 部分检查未完成，请重试"
+        healthScore >= 90 -> "🛡️ 已检查配置正常 · 后台稳定性仍取决于系统"
         healthScore >= 70 -> "⚠️ 存在休眠风险 · 请点击下面黄色字"
-        else -> "🚨 高危掉线 · 请点击下面黄色字"
+        else -> "⚠️ 多项配置需要检查 · 请查看下面提示"
     }
 
     LazyColumn(
@@ -289,6 +292,9 @@ fun DashboardContent(
         ),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
+        if (stats.collectionFailures.isNotEmpty()) {
+            item { Text("部分统计读取失败，未知值不代表零：" + stats.collectionFailures.joinToString("、"), color = GatewayOrange) }
+        }
         // 0. 最顶部置顶：一键切换到经典版 (单排紧凑)
         item {
             Surface(
@@ -346,7 +352,7 @@ fun DashboardContent(
         }
 
         // 顶部保活预警条 (单排紧凑，动态显示得分)
-        if (healthScore < 90) {
+        if (!healthDataAvailable || healthScore < 90) {
             item {
                 Surface(
                     color = GatewayOrange.copy(alpha = 0.12f),
@@ -364,7 +370,7 @@ fun DashboardContent(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
-                            text = "⚠️ 当前手机保活得分: $healthScore",
+                            text = if (healthDataAvailable) "⚠️ 当前配置参考分: $healthScore" else "⚠️ 检查数据不完整，暂不评分",
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
                             color = GatewayOrange,
@@ -471,7 +477,7 @@ fun DashboardContent(
                             modifier = Modifier.size(68.dp)
                         ) {
                             CircularProgressIndicator(
-                                progress = { (healthScore.toFloat() / 100f) },
+                                progress = { if (healthDataAvailable) healthScore.toFloat() / 100f else 0f },
                                 modifier = Modifier.fillMaxSize(),
                                 color = scoreColor,
                                 strokeWidth = 6.dp,
@@ -479,13 +485,13 @@ fun DashboardContent(
                             )
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(
-                                    text = "$healthScore",
+                                    text = if (healthDataAvailable) "$healthScore" else "—",
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 18.sp,
                                     color = scoreColor
                                 )
                                 Text(
-                                    text = "健康分",
+                                    text = "配置参考",
                                     fontSize = 8.5.sp,
                                     color = if (isDark) Color(0xFF9CA3AF) else TextSecondary
                                 )
@@ -598,7 +604,7 @@ fun DashboardContent(
 
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        text = "已同步收到 ${stats.todayReceivedCount} 条短信 · 发送结果未知 ${stats.todayUnknownCount} 条",
+                        text = "已同步收到 ${stats.todayReceivedCount.takeIf { it >= 0 } ?: "未知"} 条短信 · 发送结果未知 ${stats.todayUnknownCount.takeIf { it >= 0 } ?: "未知"} 条",
                         fontSize = 12.sp,
                         color = if (isDark) Color.LightGray else TextSecondary
                     )
@@ -610,21 +616,21 @@ fun DashboardContent(
                     ) {
                         StatMetricColumn(
                             title = "已记录发送",
-                            value = "${stats.todaySentCount}",
+                            value = "${stats.todaySentCount.takeIf { it >= 0 } ?: "未知"}",
                             icon = "🚀",
                             color = GatewayBlue,
                             modifier = Modifier.weight(1f)
                         )
                         StatMetricColumn(
                             title = "发送成功",
-                            value = "${stats.todaySuccessCount}",
+                            value = "${stats.todaySuccessCount.takeIf { it >= 0 } ?: "未知"}",
                             icon = "✅",
                             color = GatewayGreen,
                             modifier = Modifier.weight(1f)
                         )
                         StatMetricColumn(
                             title = "发信失败",
-                            value = "${stats.todayFailedSendCount}",
+                            value = "${stats.todayFailedSendCount.takeIf { it >= 0 } ?: "未知"}",
                             icon = "⚠️",
                             color = GatewayRed,
                             modifier = Modifier.weight(1f)
@@ -679,21 +685,21 @@ fun DashboardContent(
                     ) {
                         StatMetricColumn(
                             title = "已受理",
-                            value = "${stats.todayForwardSuccessCount}",
+                            value = "${stats.todayForwardSuccessCount.takeIf { it >= 0 } ?: "未知"}",
                             icon = "✈️",
                             color = GatewayGreen,
                             modifier = Modifier.weight(1f)
                         )
                         StatMetricColumn(
                             title = "转发中/队列",
-                            value = "${stats.todayForwardPendingCount}",
+                            value = "${stats.todayForwardPendingCount.takeIf { it >= 0 } ?: "未知"}",
                             icon = "📦",
                             color = GatewayBlue,
                             modifier = Modifier.weight(1f)
                         )
                         StatMetricColumn(
                             title = "转发失败",
-                            value = "${stats.todayForwardFailedCount}",
+                            value = "${stats.todayForwardFailedCount.takeIf { it >= 0 } ?: "未知"}",
                             icon = "❌",
                             color = GatewayOrange,
                             modifier = Modifier.weight(1f)
@@ -731,7 +737,7 @@ fun DashboardContent(
                             color = if (isZero) (if (isDark) Color(0xFF1B3322) else BrandGreenSoft) else Color(0xFFFFF3E0)
                         ) {
                             Text(
-                                text = if (isZero) "队列零积压" else "积压: ${stats.pendingOutboxCount}",
+                                text = if (isZero) "队列零积压" else "积压: ${stats.pendingOutboxCount.takeIf { it >= 0 } ?: "未知"}",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = if (isZero) BrandGreen else GatewayOrange,
@@ -750,21 +756,21 @@ fun DashboardContent(
                     ) {
                         StatMetricColumn(
                             title = "待发送",
-                            value = "${stats.pendingOutboxCount}",
+                            value = "${stats.pendingOutboxCount.takeIf { it >= 0 } ?: "未知"}",
                             icon = "⏳",
                             color = GatewayBlue,
                             modifier = Modifier.weight(1f)
                         )
                         StatMetricColumn(
                             title = "重试中",
-                            value = "${stats.retryOutboxCount}",
+                            value = "${stats.retryOutboxCount.takeIf { it >= 0 } ?: "未知"}",
                             icon = "🔄",
                             color = GatewayOrange,
                             modifier = Modifier.weight(1f)
                         )
                         StatMetricColumn(
                             title = "失败",
-                            value = "${stats.failedOutboxCount}",
+                            value = "${stats.failedOutboxCount.takeIf { it >= 0 } ?: "未知"}",
                             icon = "🚫",
                             color = GatewayRed,
                             modifier = Modifier.weight(1f)

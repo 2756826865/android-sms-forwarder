@@ -73,6 +73,12 @@
                 android:textColor="#FF5722"
                 android:textSize="12sp" />
 
+            <Spinner
+                android:id="@+id/sms_direct_sim_mode"
+                android:layout_width="match_parent"
+                android:layout_height="48dp" />
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="指定卡不可用时停止发送，不自动换卡；跟随模式测试需改选固定卡。" />
             <View
                 android:layout_width="match_parent"
                 android:layout_height="1dp"

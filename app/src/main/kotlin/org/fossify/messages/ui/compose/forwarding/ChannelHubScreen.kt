@@ -1188,6 +1188,7 @@ fun InstanceEditorDialog(
     var dingTalkWhitelistEnabled by remember {
         mutableStateOf(existingInstance?.optBoolean("whitelistEnabled", false) ?: false)
     }
+    var smsDirectSimMode by remember { mutableStateOf(existingInstance?.optInt("simMode", MultiForwardConfig(context).smsDirectSimMode) ?: MultiForwardConfig(context).smsDirectSimMode) }
     var smsDirectOnlyOnNoNetwork by remember {
         val legacyMode = MultiForwardConfig(context).smsDirectOnlyOnNoNetwork
         mutableStateOf(existingInstance?.optBoolean("onlyOnNoNetwork", legacyMode) ?: legacyMode)
@@ -1291,7 +1292,7 @@ fun InstanceEditorDialog(
             ForwardingChannels.CHANNEL_GROUP -> configJson.put("members", org.json.JSONArray(groupMembers))
                 .put("executionMode", groupMode)
             ForwardingChannels.SMS_DIRECT -> configJson.put("phone", f1)
-                .put("onlyOnNoNetwork", smsDirectOnlyOnNoNetwork)
+                .put("onlyOnNoNetwork", smsDirectOnlyOnNoNetwork).put("simMode", smsDirectSimMode)
             ForwardingChannels.CUSTOM_WEBHOOK -> configJson.put("url", f1).put("headers", f2)
                 .put("method", customWebhookMethod.uppercase())
                 .put("contentType", customWebhookContentType)
@@ -1664,6 +1665,12 @@ fun InstanceEditorDialog(
                         OutlinedTextField(value = f4, onValueChange = { f4 = it }, label = { Text("接收邮箱 (多个用逗号隔开)") }, modifier = Modifier.fillMaxWidth())
                     }
                     ForwardingChannels.SMS_DIRECT -> {
+                        Text("发送卡（不可用时停止，不自动换卡）")
+                        listOf("跟随接收卡", "固定 SIM1", "固定 SIM2").forEachIndexed { index, label ->
+                            TextButton(onClick = { smsDirectSimMode = index }) {
+                                Text((if (smsDirectSimMode == index) "● " else "○ ") + label)
+                            }
+                        }
                         OutlinedTextField(value = f1, onValueChange = { f1 = it }, label = { Text("目标接收手机号码") }, modifier = Modifier.fillMaxWidth())
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                             Text("仅断网时发送", modifier = Modifier.weight(1f))

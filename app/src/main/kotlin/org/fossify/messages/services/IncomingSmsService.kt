@@ -288,7 +288,11 @@ open class IncomingSmsService : Service() {
                 )
             }
         } else {
-            org.fossify.messages.autofill.SmsAutofillAccessibilityService.onNewVerificationSms(applicationContext, body)
+            runCatching {
+                org.fossify.messages.autofill.SmsAutofillAccessibilityService.onNewVerificationSms(applicationContext, body)
+            }.onFailure { error ->
+                Log.w(TAG, "Verification hint failed: ${error.javaClass.simpleName}")
+            }
         }
 
         val rulesConfig = ForwardingRulesConfig(applicationContext)
@@ -433,10 +437,11 @@ open class IncomingSmsService : Service() {
                     context = this,
                     senderNumber = address,
                     messageBody = body,
-                    incomingSubId = subscriptionId
+                    incomingSubId = subscriptionId,
+                    sourceId = fingerprint
                 )
                 if (autoReplyResult is AutoReplyProcessor.Result.Executed) {
-                    ShadowRepository.recordStep(this, operationId, "AUTO_REPLY", "SUCCESS", "Rule: ${autoReplyResult.ruleName}")
+                    ShadowRepository.recordStep(this, operationId, "AUTO_REPLY", "QUEUED", "Rule: ${autoReplyResult.ruleName}")
                 }
             }.onFailure { e ->
                 Log.e(TAG, "AutoReply evaluation error", e)
@@ -492,13 +497,14 @@ open class IncomingSmsService : Service() {
         /** false 时只入库、不弹通知（命中过滤规则的短信走这条路）。 */
         notify: Boolean = true,
     ) {
-        val contact = getNameAndPhotoFromPhoneNumber(address)
-        val photoUri = contact.photoUri.orEmpty()
+        // Contact enrichment must never prevent the original SMS from being stored.
+        val contact = runCatching { getNameAndPhotoFromPhoneNumber(address) }.getOrNull()
+        val photoUri = contact?.photoUri.orEmpty()
         val senderName = runCatching {
             getMyContactsCursor(favoritesOnly = false, withPhoneNumbersOnly = true).use {
                 getNameFromAddress(address, it)
             }
-        }.getOrDefault(contact.name.ifBlank { address })
+        }.getOrDefault(contact?.name.orEmpty().ifBlank { address })
         val participant = SimpleContact(
             rawId = 0,
             contactId = 0,

@@ -27,6 +27,9 @@ class SmsDirectSettingsActivity : SimpleActivity() {
         setupMaterialScrollListener(binding.smsDirectScrollview, binding.smsDirectAppbar)
         setupTopAppBar(binding.smsDirectAppbar, NavigationIcon.Arrow)
         applyMiuiTopAppBarChrome(binding.smsDirectAppbar, binding.smsDirectToolbar)
+        binding.smsDirectSimMode.adapter = android.widget.ArrayAdapter(this,
+            android.R.layout.simple_spinner_dropdown_item,
+            listOf("跟随接收卡", "固定 SIM1", "固定 SIM2"))
         loadConfig()
 
         binding.smsDirectSave.setOnClickListener {
@@ -68,6 +71,7 @@ class SmsDirectSettingsActivity : SimpleActivity() {
     }
 
     private fun loadConfig() = with(binding) {
+        smsDirectSimMode.setSelection(forwardingConfig.smsDirectSimMode.coerceIn(0, 2))
         smsDirectEnabled.isChecked = forwardingConfig.smsDirectEnabled
         smsDirectPhone.setText(forwardingConfig.smsDirectPhone())
         smsDirectOnlyOnNoNetwork.isChecked = forwardingConfig.smsDirectOnlyOnNoNetwork
@@ -81,6 +85,7 @@ class SmsDirectSettingsActivity : SimpleActivity() {
             toast("请填写目标手机号")
             return false
         }
+        forwardingConfig.smsDirectSimMode = binding.smsDirectSimMode.selectedItemPosition
         forwardingConfig.smsDirectEnabled = binding.smsDirectEnabled.isChecked
         forwardingConfig.saveSmsDirect(phone)
         forwardingConfig.smsDirectOnlyOnNoNetwork = binding.smsDirectOnlyOnNoNetwork.isChecked
@@ -102,8 +107,13 @@ class SmsDirectSettingsActivity : SimpleActivity() {
                 toast("目标手机号不能为空")
                 return false
             }
+            val mode = forwardingConfig.smsDirectSimMode
+            require(mode in 1..2) { "测试没有接收卡信息，请先选择固定 SIM1 或 SIM2" }
+            val resolved = org.fossify.messages.messaging.SubscriptionResolver.resolve(this,
+                org.fossify.messages.messaging.SimResolutionRequest(explicitSlotIndex = mode - 1, allowFallback = false))
+            require(resolved.resolvedSubscriptionId >= 0) { "指定卡不可用或缺少电话权限，已停止发送" }
             sendMessageCompat(
-                message, listOf(normalized), null, emptyList(),
+                message, listOf(normalized), resolved.resolvedSubscriptionId, emptyList(),
                 propagateErrors = true,
                 triggerType = SmsSendTriggerType.SMS_DIRECT_TEST
             )

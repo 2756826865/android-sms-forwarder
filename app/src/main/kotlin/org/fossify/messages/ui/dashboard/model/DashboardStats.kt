@@ -40,5 +40,6 @@ data class DashboardStats(
     // 6. 发送与转发流水记录 (最新 30 条)
     val recentHistoryRecords: List<ForwardingHistoryRecord> = emptyList(),
 
+    val collectionFailures: Set<String> = emptySet(),
     val lastUpdated: Long = System.currentTimeMillis()
 )

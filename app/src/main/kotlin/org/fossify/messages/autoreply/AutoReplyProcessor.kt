@@ -1,31 +1,79 @@
 package org.fossify.messages.autoreply
 
 import android.content.Context
-import android.telephony.SmsManager
 import android.util.Log
 import org.fossify.messages.extensions.config
 import org.fossify.messages.messaging.MessagingUtils
 import org.fossify.messages.messaging.SimResolutionRequest
 import org.fossify.messages.messaging.SubscriptionResolver
 import org.fossify.messages.models.SmsSendTriggerType
-import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
 object AutoReplyProcessor {
     private const val TAG = "AutoReplyProcessor"
     
-    // In-memory rate limiting map: "sender_phone" -> timestampMillis
-    private val lastReplyTimeMap = ConcurrentHashMap<String, Long>()
-    
-    // Daily count tracking: "day_key" -> count
-    private val dailyCountMap = ConcurrentHashMap<String, Int>()
-
     sealed class Result {
-        data class Executed(val ruleName: String, val replyContent: String, val toSender: String, val simSlot: Int) : Result()
+        data class Executed(val ruleName: String, val replyContent: String, val toSender: String, val simSlot: Int, val delaySeconds: Int = 0, val ruleId: String = "") : Result()
         data class Skipped(val reason: String) : Result()
     }
 
-    fun processIncoming(
+    fun processIncoming(context: Context, senderNumber: String, messageBody: String, incomingSubId: Int, sourceId: String): Result {
+        require(sourceId.isNotBlank()) { "缺少来源标识，已停止自动回复" }
+        return synchronized(this) {
+            val prepared = prepareIncoming(context, senderNumber, messageBody, incomingSubId)
+            if (prepared is Result.Executed) {
+                val rule = AutoReplyConfig(context).rules.first { it.id == prepared.ruleId }
+                // Persist only a compact rule digest. WorkManager input has a 10 KiB limit.
+                // No budget or deduplication claim is consumed before durable enqueue succeeds.
+                val data = androidx.work.workDataOf(
+                    "rule" to prepared.ruleId, "to" to prepared.toSender,
+                    "ruleSnapshot" to ruleDigest(rule), "text" to prepared.replyContent,
+                    "sub" to prepared.simSlot, "source" to sourceId
+                )
+                val request = androidx.work.OneTimeWorkRequestBuilder<AutoReplyWorker>()
+                    .setInputData(data)
+                    .setInitialDelay(prepared.delaySeconds.coerceIn(0, 30).toLong(), TimeUnit.SECONDS)
+                    .build()
+                val config = AutoReplyConfig(context)
+                config.lastDecision = "规则 [${prepared.ruleName}] 自动回复排队中，尚未提交发送"
+                try {
+                    androidx.work.WorkManager.getInstance(context)
+                        .enqueueUniqueWork("auto-reply-$sourceId", androidx.work.ExistingWorkPolicy.KEEP, request)
+                        .result.get()
+                } catch (e: Exception) {
+                    config.lastDecision = "自动回复排队失败，未提交发送"
+                    throw e
+                }
+            }
+            prepared
+        }
+    }
+
+    internal fun ruleDigest(rule: AutoReplyRule): String = java.security.MessageDigest.getInstance("SHA-256")
+        .digest(rule.toString().toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
+
+    /** One atomic reservation immediately before submission; unknown outcomes retain the claim. */
+    internal fun reserveSubmission(context: Context, source: String, sender: String, rule: AutoReplyRule): Boolean =
+        synchronized(this) {
+            val config = AutoReplyConfig(context)
+            val limits = context.getSharedPreferences("auto_reply_limits", Context.MODE_PRIVATE)
+            val legacyClaims = context.getSharedPreferences("auto_reply_submission_claims", Context.MODE_PRIVATE)
+            if (legacyClaims.contains(source) || limits.contains("submitted_$source")) return@synchronized false
+            val today = getTodayKey()
+            val count = if (limits.getString("day", "") == today) limits.getInt("count", 0) else 0
+            val now = System.currentTimeMillis()
+            val cooldownKey = "cooldown_" + android.net.Uri.encode(sender)
+            val last = limits.getLong(cooldownKey, 0L)
+            if (count >= config.dailyLimit ||
+                (rule.rateLimitMinutes > 0 && now - last < TimeUnit.MINUTES.toMillis(rule.rateLimitMinutes.toLong()))) {
+                config.lastDecision = "自动回复取消：已达到每日上限或号码冷却期"
+                return@synchronized false
+            }
+            limits.edit().putString("day", today).putInt("count", count + 1)
+                .putLong(cooldownKey, now).putLong("submitted_$source", now).commit()
+        }
+
+    private fun prepareIncoming(
         context: Context,
         senderNumber: String,
         messageBody: String,
@@ -43,7 +91,8 @@ object AutoReplyProcessor {
 
         // Daily limit check
         val todayKey = getTodayKey()
-        val currentDailyCount = dailyCountMap[todayKey] ?: 0
+        val limits = context.getSharedPreferences("auto_reply_limits", Context.MODE_PRIVATE)
+        val currentDailyCount = if (limits.getString("day", "") == todayKey) limits.getInt("count", 0) else 0
         if (currentDailyCount >= config.dailyLimit) {
             val msg = "已达单日自动回复上限 (${config.dailyLimit} 条)"
             config.lastDecision = msg
@@ -58,7 +107,7 @@ object AutoReplyProcessor {
 
             // Rate limit check for this sender
             if (rule.rateLimitMinutes > 0) {
-                val lastReplyTime = lastReplyTimeMap[senderNumber] ?: 0L
+                val lastReplyTime = limits.getLong("cooldown_" + android.net.Uri.encode(senderNumber), 0L)
                 val cooldownMillis = TimeUnit.MINUTES.toMillis(rule.rateLimitMinutes.toLong())
                 val now = System.currentTimeMillis()
                 if (now - lastReplyTime < cooldownMillis) {
@@ -78,23 +127,13 @@ object AutoReplyProcessor {
 
             val targetSubId = resolveSubscriptionId(context, rule.simScope, incomingSubId)
             
-            // Execute send
-            sendSms(context, senderNumber, replyText, targetSubId, rule.delaySeconds)
-
-            // Update rate limit trackers
-            val now = System.currentTimeMillis()
-            lastReplyTimeMap[senderNumber] = now
-            dailyCountMap[todayKey] = currentDailyCount + 1
-
-            val decision = "规则 [${rule.name}] 成功向 $senderNumber 自动回复: $replyText"
-            config.lastDecision = decision
-            Log.i(TAG, decision)
-
             return Result.Executed(
                 ruleName = rule.name,
                 replyContent = replyText,
                 toSender = senderNumber,
-                simSlot = targetSubId
+                simSlot = targetSubId,
+                delaySeconds = rule.delaySeconds,
+                ruleId = rule.id
             )
         }
 
@@ -151,21 +190,15 @@ object AutoReplyProcessor {
                 targetAddress = null,
                 receivedSubId = incomingSubId,
                 configuredMode = configuredMode,
-                allowFallback = true
+                allowFallback = false
             )
         )
-        return if (result.isSuccessful) result.resolvedSubscriptionId else {
-            if (incomingSubId >= 0) incomingSubId else SmsManager.getDefaultSmsSubscriptionId()
-        }
+        check(result.isSuccessful) { "自动回复指定发送卡不可用，已停止发送：${result.errorReason}" }
+        return result.resolvedSubscriptionId
     }
 
-    private fun sendSms(context: Context, destination: String, text: String, subId: Int, delaySeconds: Int) {
-        if (delaySeconds > 0) {
-            try {
-                Thread.sleep((delaySeconds * 1000L).coerceAtMost(30000L))
-            } catch (_: InterruptedException) {}
-        }
-
+    internal fun sendSms(context: Context, destination: String, text: String, subId: Int) {
+        check(AutoReplyConfig(context).enabled) { "自动回复已关闭，取消发送" }
         try {
             // 统一走应用发送链：先写系统短信 Provider 和本地 DB，再创建发送观测记录，
             // 最后由 SmsSender 提交。避免自动回复发送成功却不显示在会话和运行大盘。
@@ -176,9 +209,9 @@ object AutoReplyProcessor {
                 requireDeliveryReport = context.config.enableDeliveryReports,
                 triggerType = SmsSendTriggerType.AUTO_REPLY
             )
-            Log.i(TAG, "Successfully sent auto-reply SMS to $destination (subId=$subId)")
+            Log.i(TAG, "Auto-reply submitted")
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to send auto-reply SMS to $destination", e)
+            Log.w(TAG, "Auto-reply submission failed: ${e.javaClass.simpleName}")
             throw e
         }
     }

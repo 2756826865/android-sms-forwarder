@@ -50,7 +50,6 @@ class HeartbeatWorker(
         if (instances.isEmpty() && legacyChannels.isEmpty()) return@withContext Result.success()
 
         val now = System.currentTimeMillis()
-        config.lastReportTime = now
 
         val reportBody = buildReport(applicationContext, multiConfig, now)
         val uniqueId = "heartbeat-$now"
@@ -82,11 +81,13 @@ class HeartbeatWorker(
                 isTest = false
             )
         }
+        config.lastReportTime = now // Last enqueue attempt, not a delivery acknowledgement.
         Log.i(TAG, "Heartbeat report enqueued to ${instances.size + legacyChannels.size} channel targets")
         Result.success()
     }
 
-    private fun buildReport(context: Context, multiConfig: MultiForwardConfig, now: Long): String {
+    companion object {
+    fun buildReport(context: Context, multiConfig: MultiForwardConfig, now: Long): String {
         val timeFormatted = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date(now))
         val batteryInfo = TemplateDataRetriever.getBatteryInfo(context)
         val networkInfo = getNetworkStatus(context)
@@ -124,15 +125,24 @@ class HeartbeatWorker(
         val sim1Desc = formatSimSlot(0, multiConfig.simOneLabel)
         val sim2Desc = formatSimSlot(1, multiConfig.simTwoLabel)
 
+        val template = HeartbeatConfig(context).customTemplate
+        if (template.isNotBlank()) {
+            val values = mapOf("DEVICE_NAME" to deviceName, "BATTERY" to batteryInfo,
+                "NETWORK" to networkInfo, "TRAFFIC" to trafficInfo, "SIM1" to sim1Desc,
+                "SIM2" to sim2Desc, "UPTIME" to uptimeInfo, "TIME" to timeFormatted)
+            return Regex("\\{\\{([A-Z0-9_]+)\\}\\}").replace(template) { match ->
+                values[match.groupValues[1]] ?: match.value
+            }
+        }
         return buildString {
-            appendLine("🟢 【设备状态与心跳保活】")
+            appendLine("🟢 【设备定时报活】")
             appendLine("📱 设备机型：$deviceName")
             appendLine("🔋 电池状态：$batteryInfo")
             appendLine("📶 网络环境：$networkInfo")
-            appendLine("📊 累计流量：$trafficInfo")
+            appendLine("📊 整机累计流量：$trafficInfo")
             appendLine("💳 卡槽一：$sim1Desc")
             appendLine("💳 卡槽二：$sim2Desc")
-            appendLine("⏱️ 运行时间：$uptimeInfo")
+            appendLine("⏱️ 开机时间：$uptimeInfo")
             appendLine("🕒 报活时间：$timeFormatted")
         }.trim()
     }
@@ -147,7 +157,7 @@ class HeartbeatWorker(
             caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> "以太网 (已连接)"
             else -> "已连接"
         }
-    }.getOrDefault("网络正常")
+    }.getOrDefault("未知网络")
 
     private fun getUptimeString(): String {
         val uptimeMillis = SystemClock.elapsedRealtime()
@@ -178,7 +188,6 @@ class HeartbeatWorker(
         return String.format(Locale.getDefault(), "%.1f %s", value, units[unitIndex])
     }
 
-    companion object {
         private const val TAG = "HeartbeatWorker"
         private const val WORK_NAME = "heartbeat_periodic_work"
 

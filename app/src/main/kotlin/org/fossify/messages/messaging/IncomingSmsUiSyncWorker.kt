@@ -30,12 +30,12 @@ class IncomingSmsUiSyncWorker(context: Context, params: WorkerParameters) : Coro
         val receivedAt = inputData.getLong(KEY_RECEIVED_AT, 0L)
         val expectedHash = inputData.getString(KEY_CONTENT_HASH).orEmpty()
         if (receivedAt <= 0L || expectedHash.isBlank()) return@withContext Result.failure()
-        if (!canRead()) return@withContext Result.success()
+        if (!canRead()) return@withContext retryOrFail("read permission unavailable")
 
         // The native default app may insert just after SMS_RECEIVED. Wait briefly without
         // blocking the receiver; longer delays use a bounded WorkManager retry.
         repeat(4) { pass ->
-            if (!canRead()) return@withContext Result.success()
+            if (!canRead()) return@withContext retryOrFail("read permission unavailable")
             try {
                 if (syncMatchingThread(receivedAt, expectedHash)) {
                     refreshMessages()
@@ -46,16 +46,24 @@ class IncomingSmsUiSyncWorker(context: Context, params: WorkerParameters) : Coro
             } catch (error: CancellationException) {
                 throw error
             } catch (_: SecurityException) {
-                Log.w(TAG, "read permission unavailable; local sync stopped")
-                return@withContext Result.success()
+                return@withContext retryOrFail("read permission unavailable")
             } catch (error: Exception) {
                 Log.w(TAG, "local sync unavailable: ${error.javaClass.simpleName}")
             }
             if (pass < 3) delay(250L)
         }
-        if (runAttemptCount < 3) Result.retry() else {
-            Log.w(TAG, "provider record not synchronized after bounded retries")
-            Result.failure()
+        retryOrFail("provider record not synchronized")
+    }
+
+    // Keep read-only repair pending across short permission/Provider outages. WorkManager
+    // persists retries across process death; no forwarding or sending is performed here.
+    private fun retryOrFail(reason: String): Result {
+        return if (runAttemptCount < 12) {
+            Log.w(TAG, "$reason; local sync pending")
+            Result.retry()
+        } else {
+            Log.w(TAG, "$reason; retry limit reached")
+            Result.failure(workDataOf("reason" to reason))
         }
     }
 

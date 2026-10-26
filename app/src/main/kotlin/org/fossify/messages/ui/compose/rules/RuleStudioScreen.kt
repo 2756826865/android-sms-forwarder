@@ -116,34 +116,18 @@ fun RuleStudioScreen(
 
     // 实时预览渲染结果
     val previewOutput = remember(currentMode, customTemplateText, testSender, testBody, testSimSlot) {
-        if (currentMode == MultiForwardConfig.TEMPLATE_CUSTOM) {
-            val prevCustom = config.customTemplate
-            val prevMode = config.templateMode
-            config.customTemplate = customTemplateText
-            config.templateMode = MultiForwardConfig.TEMPLATE_CUSTOM
-            val payload = ForwardingMessageFormatter.format(
-                context = context,
-                sender = testSender,
-                body = testBody,
-                receivedAt = System.currentTimeMillis(),
-                subscriptionId = testSimSlot
-            )
-            config.customTemplate = prevCustom
-            config.templateMode = prevMode
-            payload.content
-        } else {
-            val prevMode = config.templateMode
-            config.templateMode = currentMode
-            val payload = ForwardingMessageFormatter.format(
-                context = context,
-                sender = testSender,
-                body = testBody,
-                receivedAt = System.currentTimeMillis(),
-                subscriptionId = testSimSlot
-            )
-            config.templateMode = prevMode
-            "${payload.title}\n\n${payload.content}"
-        }
+        val payload = ForwardingMessageFormatter.format(
+            context = context,
+            sender = testSender,
+            body = testBody,
+            receivedAt = System.currentTimeMillis(),
+            subscriptionId = -1,
+            simSnapshot = ForwardingMessageFormatter.previewSim(context, testSimSlot),
+            templateModeOverride = currentMode,
+            customTemplateOverride = customTemplateText
+        )
+        if (currentMode == MultiForwardConfig.TEMPLATE_CUSTOM) payload.content
+        else "${payload.title}\n\n${payload.content}"
     }
 
     // 常用模板标签（4 列紧凑网格使用）

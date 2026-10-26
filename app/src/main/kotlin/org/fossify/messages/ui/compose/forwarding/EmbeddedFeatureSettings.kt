@@ -298,6 +298,14 @@ fun MissedCallEmbeddedScreen() {
             accessResult?.let { Text(it.summary(), fontSize = 12.sp, color = TextSecondary) }
             SettingSwitch("仅未接来电", "忽略已接听和主动拒接的来电", missedOnly) { missedOnly = it; cfg.missedCallOnly = it }
             SettingSwitch("已接来电也提醒", "接听后的通话记录也发送提醒", answered) { answered = it; cfg.forwardAnsweredCall = it }
+            Button(
+                onClick = {
+                    cfg.lowBatteryDeviceName = deviceName
+                    deviceName = cfg.lowBatteryDeviceName
+                    Toast.makeText(context, "设备名称已保存", Toast.LENGTH_SHORT).show()
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("确定") }
         } }
         item { FeatureCard {
             Text("发送通道", fontSize = 15.sp, fontWeight = FontWeight.Bold)
@@ -473,12 +481,11 @@ fun LowBatteryEmbeddedScreen() {
                 onValueChange = { value ->
                     if (value.length <= 64) {
                         deviceName = value
-                        cfg.lowBatteryDeviceName = value
                     }
                 },
                 label = { Text(stringResource(R.string.low_battery_device_name_label)) },
                 placeholder = { Text(stringResource(R.string.low_battery_device_name_hint)) },
-                supportingText = { Text(stringResource(R.string.low_battery_device_name_summary)) },
+                supportingText = { Text("点击确定保存，最多64个字符；留空时不显示设备名称") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -562,10 +569,12 @@ fun AutofillEmbeddedScreen() {
     ) {
         item {
             FeatureCard {
-                SettingSwitch("验证码写入", "识别短信验证码并写入系统剪贴板", enabled) {
+                SettingSwitch("验证码复制与提示", "识别短信验证码，按下方设置复制或提示", enabled) {
                     enabled = it
                     cfg.enabled = it
                 }
+                Text("不自动填写或提交其他应用的输入框。剪贴板写入是否可用受系统限制，以实际粘贴为准。", fontSize = 12.sp)
+                Text(if (android.provider.Settings.canDrawOverlays(context)) "悬浮窗权限：已允许" else "悬浮窗权限：未允许，胶囊提示不可用", fontSize = 12.sp)
                 SettingSwitch("写入剪贴板", "识别成功后可直接在其他应用粘贴", copyToClipboard) {
                     copyToClipboard = it
                     cfg.copyToClipboard = it
@@ -596,6 +605,7 @@ fun HeartbeatEmbeddedScreen() {
     val cfg = remember { HeartbeatConfig(context) }
     var enabled by remember { mutableStateOf(cfg.enabled) }
     var intervalHours by remember { mutableStateOf(cfg.intervalHours) }
+    var heartbeatTemplate by remember { mutableStateOf(cfg.customTemplate) }
     val channelConfig = remember { MultiForwardConfig(context) }
     val channelRepository = remember { ChannelRepository.getInstance(context) }
     val allInstances by channelRepository.instancesFlow.collectAsState()
@@ -631,6 +641,17 @@ fun HeartbeatEmbeddedScreen() {
                         HeartbeatWorker.sync(context.applicationContext)
                     }
                 }
+                OutlinedTextField(
+                    value = heartbeatTemplate,
+                    onValueChange = { heartbeatTemplate = it },
+                    label = { Text("报活自定义模板") },
+                    supportingText = { Text("留空使用默认格式。变量：{{DEVICE_NAME}} {{BATTERY}} {{NETWORK}} {{TRAFFIC}} {{SIM1}} {{SIM2}} {{UPTIME}} {{TIME}}") },
+                    modifier = Modifier.fillMaxWidth(), minLines = 3
+                )
+                Button(onClick = {
+                    cfg.customTemplate = heartbeatTemplate
+                    Toast.makeText(context, "报活模板已保存", Toast.LENGTH_SHORT).show()
+                }) { Text("确定保存模板") }
                 Text("发送周期：每 $intervalHours 小时", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                 Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                     listOf(1, 3, 6, 12, 24).forEach { hours ->
@@ -694,15 +715,7 @@ fun HeartbeatEmbeddedScreen() {
                             } else {
                                 "接收 ${formatHeartbeatBytes(rx)} · 发送 ${formatHeartbeatBytes(tx)}"
                             }
-                            val body = buildString {
-                                appendLine("【设备心跳·模拟测试】")
-                                appendLine("设备机型：${TemplateDataRetriever.getDeviceName()}")
-                                appendLine("电池状态：${TemplateDataRetriever.getBatteryInfo(context)}")
-                                appendLine("网络环境：${TemplateDataRetriever.getNetworkType(context)}")
-                                appendLine("累计流量：$traffic")
-                                appendLine("运行时间：${uptimeHours / 24}天 ${uptimeHours % 24}小时")
-                                append("设备时间：${TemplateDataRetriever.getCurrentTime()}")
-                            }
+                            val body = HeartbeatWorker.buildReport(context, channelConfig, now)
                             targetInstances.forEach { instance ->
                                 MultiChannelForwardWorker.enqueueSingle(
                                     context = context,
@@ -1087,7 +1100,7 @@ fun NotificationForwardEmbeddedScreen() {
             FeatureCard {
                 Text("功能测试与诊断", fontSize = 15.sp, fontWeight = FontWeight.Bold)
                 Text(
-                    "向当前已选的推送通道发送一条模拟的微信通知转发消息，验证全链路是否畅通。",
+                    "向当前已选的推送通道发送一条模拟的微信通知转发消息，仅验证模板生成和通道投递，不验证真实通知监听。",
                     fontSize = 12.sp,
                     color = if (dark) Color(0xFF9CA3AF) else TextSecondary
                 )
@@ -1186,6 +1199,30 @@ fun NotificationForwardEmbeddedScreen() {
     // 选择目标应用弹窗
     if (choosingPackages) {
         var tempPackages by remember(choosingPackages) { mutableStateOf(targetPackages) }
+        var installedApps by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
+        var appSearch by remember { mutableStateOf("") }
+        var loadingApps by remember { mutableStateOf(true) }
+        var loadError by remember { mutableStateOf(false) }
+        androidx.compose.runtime.LaunchedEffect(Unit) {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    val pm = context.packageManager
+                    val intent = android.content.Intent(android.content.Intent.ACTION_MAIN)
+                        .addCategory(android.content.Intent.CATEGORY_LAUNCHER)
+                    pm.queryIntentActivities(intent, 0)
+                        .map { it.activityInfo.packageName to it.loadLabel(pm).toString() }
+                        .filter { it.first != context.packageName }
+                        .distinctBy { it.first }.sortedBy { it.second.lowercase() }
+                }
+            }
+            installedApps = result.getOrDefault(emptyList())
+            loadError = result.isFailure
+            loadingApps = false
+        }
+        val appChoices = (installedApps + tempPackages.filter { pkg -> installedApps.none { it.first == pkg } }
+            .map { pkg -> pkg to (PRESET_NOTIFICATION_APPS.firstOrNull { it.first == pkg }?.second ?: pkg) })
+            .filter { (pkg, label) -> appSearch.isBlank() || pkg.contains(appSearch, true) || label.contains(appSearch, true) }
+
         AlertDialog(
             modifier = Modifier.navigationBarsPadding(),
             onDismissRequest = { choosingPackages = false },
@@ -1198,9 +1235,9 @@ fun NotificationForwardEmbeddedScreen() {
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         TextButton(onClick = {
-                            tempPackages = PRESET_NOTIFICATION_APPS.map { it.first }.toSet()
+                            tempPackages = tempPackages + appChoices.map { it.first }
                         }) {
-                            Text("勾选常用全部")
+                            Text("勾选当前列表")
                         }
                         TextButton(onClick = {
                             tempPackages = emptySet()
@@ -1209,8 +1246,11 @@ fun NotificationForwardEmbeddedScreen() {
                         }
                     }
 
+                    OutlinedTextField(value = appSearch, onValueChange = { appSearch = it },
+                        label = { Text("搜索应用名称或包名") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    Text(if (loadingApps) "正在读取应用…" else if (loadError) "读取失败，可手动添加包名" else "已读取 ${installedApps.size} 个可启动应用；无桌面入口的应用可手动添加", fontSize = 12.sp)
                     LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
-                        items(PRESET_NOTIFICATION_APPS, key = { it.first }) { (pkg, appName) ->
+                        items(appChoices, key = { it.first }) { (pkg, appName) ->
                             val isChecked = pkg in tempPackages
                             Row(
                                 modifier = Modifier

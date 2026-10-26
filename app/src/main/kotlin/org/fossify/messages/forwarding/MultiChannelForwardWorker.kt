@@ -478,7 +478,7 @@ class MultiChannelForwardWorker(
                     ForwardingChannels.SMS_DIRECT -> {
                         val phone = instance.optString("phone")
                         check(phone.isNotBlank()) { "目标手机号未配置" }
-                        sendSmsDirect(phone, textOnlyContent, subscriptionId, isTest = isTest)
+                        sendSmsDirect(phone, textOnlyContent, subscriptionId, isTest = isTest, simMode = instance.optInt("simMode", MultiForwardConfig(applicationContext).smsDirectSimMode))
                     }
                     ForwardingChannels.CHANNEL_GROUP -> error("通道组必须展开为具体实例后发送")
                     else -> error("暂不支持的通道类型：${instance.channelType}")
@@ -748,7 +748,7 @@ class MultiChannelForwardWorker(
                         )
                     }
                     ForwardingChannels.SMS_DIRECT -> sendSmsDirect(
-                        instance.optString("phone"), textOnlyContent, subscriptionId, isTest
+                        instance.optString("phone"), textOnlyContent, subscriptionId, isTest, instance.optInt("simMode", MultiForwardConfig(applicationContext).smsDirectSimMode)
                     )
                     ForwardingChannels.CHANNEL_GROUP -> error("通道组必须展开为具体实例后发送")
                     else -> error("暂不支持的通道类型：${instance.channelType}")
@@ -1346,7 +1346,7 @@ class MultiChannelForwardWorker(
         }
     }
 
-    private fun sendSmsDirect(phone: String, content: String, receiveSubId: Int, isTest: Boolean = false) {
+    private fun sendSmsDirect(phone: String, content: String, receiveSubId: Int, isTest: Boolean = false, simMode: Int = MultiForwardConfig(applicationContext).smsDirectSimMode) {
         smsDirectAttempted = true
         require(phone.isNotBlank()) { "目标手机号不能为空" }
         val normalized = phone.trim()
@@ -1360,6 +1360,14 @@ class MultiChannelForwardWorker(
         require(isTest || !SmsDirectBillingPolicy.isEcho(inputData.getString(KEY_SENDER).orEmpty(), normalized)) {
             "原发件人与短信直发目标相同，已拦截回传，避免循环扣费"
         }
+        require(simMode in 0..2) { "短信直发选卡设置无效" }
+        require(simMode != 0 || receiveSubId >= 0) { "跟随接收卡模式没有接收卡信息，请选择固定 SIM1 或 SIM2 后测试" }
+        val resolved = org.fossify.messages.messaging.SubscriptionResolver.resolve(applicationContext,
+            org.fossify.messages.messaging.SimResolutionRequest(
+                explicitSubId = if (simMode == 0) receiveSubId else null,
+                explicitSlotIndex = if (simMode == 0) null else simMode - 1,
+                allowFallback = false))
+        require(resolved.resolvedSubscriptionId >= 0) { "指定发送卡不可用或缺少电话权限，已停止发送：${resolved.errorReason}" }
         val triggerType = if (isTest) {
             org.fossify.messages.models.SmsSendTriggerType.SMS_DIRECT_TEST
         } else {
@@ -1370,7 +1378,7 @@ class MultiChannelForwardWorker(
             applicationContext.sendMessageCompat(
                 text = content,
                 addresses = listOf(normalized),
-                subId = receiveSubId.takeIf { it >= 0 },
+                subId = resolved.resolvedSubscriptionId,
                 attachments = emptyList(),
                 propagateErrors = true,
                 triggerType = triggerType,

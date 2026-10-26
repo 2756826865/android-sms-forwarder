@@ -55,6 +55,8 @@ class DiagnosticsViewModel(
                     lastUpdated = System.currentTimeMillis()
                 )
                 _uiState.value = UiState.Success(state)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _uiState.value = UiState.Error(e.message ?: "Failed to load diagnostics", e)
             }
@@ -78,6 +80,10 @@ class DiagnosticsViewModel(
                 val perfSummaries = PerformanceTracker.getAllSummaries()
                 val recentLogs = RingBufferLogManager.getRecentLogs(50)
 
+                if (summary.failedChecks > 0) {
+                    _uiState.value = UiState.Error("扫描未完整完成：${summary.failedChecks} 项检查或处理失败，请查看诊断日志")
+                    return@launch
+                }
                 val updatedState = DiagnosticsState(
                     recoveryRecords = records,
                     deviceProfile = profile,
@@ -91,6 +97,8 @@ class DiagnosticsViewModel(
                     lastUpdated = System.currentTimeMillis()
                 )
                 _uiState.value = UiState.Success(updatedState)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _uiState.value = UiState.Error(e.message ?: "Manual recovery scan failed", e)
             }
@@ -105,6 +113,8 @@ class DiagnosticsViewModel(
                 if (currentState != null) {
                     _uiState.value = UiState.Success(currentState.copy(lastExportedBundle = bundleResult))
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _uiState.value = UiState.Error(e.message ?: "Failed to export diagnostic bundle", e)
             }

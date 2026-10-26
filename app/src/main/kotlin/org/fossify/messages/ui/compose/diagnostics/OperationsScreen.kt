@@ -99,89 +99,67 @@ import org.fossify.messages.services.SmsKeepAliveService
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun OperationsScreen(
-    viewModel: DiagnosticsViewModel
-) {
+fun OperationsScreen(viewModel: DiagnosticsViewModel) {
+    var section by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<String?>(null) }
+    androidx.activity.compose.BackHandler(enabled = section != null) { section = null }
     val uiState by viewModel.uiState.collectAsState()
     val timeFormat = SimpleDateFormat("HH:mm:ss.SSS", LocalConfiguration.current.locales[0])
-    val isDark = isSystemInDarkTheme()
-    val pageBgColor = if (isDark) DarkBackground else AppBackground
-    val primaryTextColor = if (isDark) Color.White else TextPrimary
-    val secondaryTextColor = if (isDark) Color(0xFF9CA3AF) else TextSecondary
-
-    Scaffold(
-        containerColor = pageBgColor
-    ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .statusBarsPadding()
-        ) {
-            // 顶部 Header
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text(
-                        text = "运维中心",
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = primaryTextColor,
-                        maxLines = 1,
-                        softWrap = false,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "后台运行、短信链路与配置管理",
-                        fontSize = 13.sp,
-                        color = secondaryTextColor,
-                        maxLines = 1,
-                        softWrap = false,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
+    Scaffold(containerColor = MaterialTheme.colorScheme.background) { padding ->
+        Column(Modifier.fillMaxSize().padding(padding).statusBarsPadding()) {
+            Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (section != null) TextButton(onClick = { section = null }) { Text("‹ 返回") }
+                Text(section ?: "设置", style = MaterialTheme.typography.headlineSmall)
             }
-
-            when (val state = uiState) {
-                is UiState.Loading -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator(color = BrandGreen)
+            if (section == null) {
+                LazyColumn(
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp,
+                        bottom = org.fossify.messages.ui.compose.navigation.LocalGatewayBottomPadding.current + 24.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    item { SettingsCategory("◐", "外观与主题", "明暗模式、配色与胶囊效果") { section = "外观与主题" } }
+                    item { SettingsCategory("✉", "短信与显示", "显示密度、拦截名单与回收站") { section = "短信与显示" } }
+                    item { SettingsCategory("⚙", "后台运行", "电池优化、自启动与前台服务") { section = "后台运行" } }
+                    item { SettingsCategory("▣", "备份与恢复", "配置文件导出与导入") { section = "备份与恢复" } }
+                    item { SettingsCategory("⌕", "诊断与报告", "短信链路、队列、Root 状态与日志") { section = "诊断与报告" } }
+                    item { SupportSettings() }
+                }
+            } else if (section in listOf("外观与主题", "短信与显示", "备份与恢复")) {
+                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)
+                    .padding(bottom = org.fossify.messages.ui.compose.navigation.LocalGatewayBottomPadding.current),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    when (section) {
+                        "外观与主题" -> org.fossify.messages.ui.compose.theme.AppearanceSettingsButton(embedded = true)
+                        "短信与显示" -> { DeveloperSettingsCard(); ClassicSettingsAccessCard() }
+                        "备份与恢复" -> ConfigBackupCard()
                     }
                 }
-                is UiState.Error -> {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(20.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "加载诊断数据失败: ${state.message}",
-                            color = MaterialTheme.colorScheme.error
-                        )
+            } else {
+                when (val state = uiState) {
+                    is UiState.Success -> OperationsContent(state.data, viewModel, timeFormat,
+                        modifier = Modifier.fillMaxSize(), section = section.orEmpty())
+                    is UiState.Error -> Column(Modifier.padding(20.dp)) {
+                        Text("诊断暂不可用：${state.message}", color = MaterialTheme.colorScheme.error)
+                        TextButton(onClick = { viewModel.loadDiagnostics() }) { Text("重新加载") }
                     }
-                }
-                is UiState.Success -> {
-                    OperationsContent(
-                        state = state.data,
-                        viewModel = viewModel,
-                        timeFormat = timeFormat,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-                UiState.Idle -> {
-                    viewModel.loadDiagnostics()
+                    is UiState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                    UiState.Idle -> androidx.compose.runtime.LaunchedEffect(viewModel) { viewModel.loadDiagnostics() }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun SettingsCategory(icon: String, title: String, summary: String, onClick: () -> Unit) {
+    Surface(onClick = onClick, shape = RoundedCornerShape(22.dp), color = MaterialTheme.colorScheme.surface) {
+        Row(Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Text(icon, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleMedium)
+                Text(summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Text("›", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -191,16 +169,17 @@ fun OperationsContent(
     state: DiagnosticsState,
     viewModel: DiagnosticsViewModel,
     timeFormat: SimpleDateFormat,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    section: String = "诊断与报告"
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var showReportDialog by remember { mutableStateOf(false) }
     var plainReportText by remember { mutableStateOf("") }
     var showAllLogs by remember { mutableStateOf(false) }
-    val isDark = isSystemInDarkTheme()
-    val primaryTextColor = if (isDark) Color.White else TextPrimary
-    val secondaryTextColor = if (isDark) Color(0xFF9CA3AF) else TextSecondary
+    val isDark = org.fossify.messages.ui.compose.ksu.isInDarkTheme()
+    val primaryTextColor = MaterialTheme.colorScheme.onSurface
+    val secondaryTextColor = MaterialTheme.colorScheme.onSurfaceVariant
 
     // 检查电池白名单状态
     val powerManager = remember { context.getSystemService(Context.POWER_SERVICE) as? PowerManager }
@@ -235,12 +214,13 @@ fun OperationsContent(
         ),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        if (section == "后台运行") {
         item { OperationsGroupHeading("01", "后台运行", "先检查系统限制与服务状态") }
         // 1. 厂商保活与白名单一键直达向导 (OEM Whitelist Wizard)
         item {
             Surface(
                 shape = RoundedCornerShape(22.dp),
-                color = if (isDark) DarkSurface else SurfaceCard,
+                color = MaterialTheme.colorScheme.surface,
                 shadowElevation = 2.dp,
                 border = BorderStroke(1.dp, if (isDark) DarkOutline else Color(0xFFF0F3F7)),
                 modifier = Modifier.fillMaxWidth()
@@ -539,6 +519,8 @@ fun OperationsContent(
             }
         }
 
+        }
+        if (section == "诊断与报告") {
         item { OperationsGroupHeading("02", "链路诊断", "按需检查，同步状态随时可见") }
         item { SmsChainDiagnosticsCard() }
 
@@ -547,7 +529,7 @@ fun OperationsContent(
         item {
             Surface(
                 shape = RoundedCornerShape(22.dp),
-                color = if (isDark) DarkSurface else SurfaceCard,
+                color = MaterialTheme.colorScheme.surface,
                 shadowElevation = 2.dp,
                 border = BorderStroke(1.dp, if (isDark) DarkOutline else Color(0xFFF0F3F7)),
                 modifier = Modifier.fillMaxWidth()
@@ -604,7 +586,7 @@ fun OperationsContent(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text("✅ 诊断包已就绪", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = BrandGreen)
+                                    Text("✅ 诊断包已就绪", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
                                     Surface(
                                         shape = RoundedCornerShape(8.dp),
                                         color = if (isDark) Color(0xFF2C1E3A) else Color(0xFFF3E8FF)
@@ -712,18 +694,12 @@ fun OperationsContent(
             }
         }
 
-        item { OperationsGroupHeading("04", "备份与恢复", "迁移配置前先导出文件") }
-        item { ConfigBackupCard() }
-        item { OperationsGroupHeading("05", "更多设置", "显示、拦截与经典设置入口") }
-        item { DeveloperSettingsCard() }
-        item { ClassicSettingsAccessCard() }
-
         item { OperationsGroupHeading("06", "运行日志", "最近事件，仅供排查") }
         // 3. RingBuffer 实时日志瀑布流 (Live Log Waterfall)
         item {
             Surface(
                 shape = RoundedCornerShape(22.dp),
-                color = if (isDark) DarkSurface else SurfaceCard,
+                color = MaterialTheme.colorScheme.surface,
                 shadowElevation = 2.dp,
                 border = BorderStroke(1.dp, if (isDark) DarkOutline else Color(0xFFF0F3F7)),
                 modifier = Modifier.fillMaxWidth()
@@ -824,6 +800,7 @@ fun OperationsContent(
         item {
             Spacer(modifier = Modifier.height(16.dp))
         }
+        }
     }
 
     // 明文体检报告弹窗
@@ -869,7 +846,6 @@ fun OperationsContent(
 
 @Composable
 private fun OperationsGroupHeading(number: String, title: String, description: String) {
-    val dark = isSystemInDarkTheme()
     Row(
         modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -877,19 +853,19 @@ private fun OperationsGroupHeading(number: String, title: String, description: S
     ) {
         Surface(
             shape = RoundedCornerShape(10.dp),
-            color = if (dark) Color(0xFF183A2A) else BrandGreenSoft
+            color = MaterialTheme.colorScheme.primaryContainer
         ) {
             Text(
                 number,
                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
-                color = if (dark) Color(0xFF8DE1A7) else Color(0xFF138348),
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
                 fontWeight = FontWeight.Bold,
                 fontSize = 12.sp
             )
         }
         Column {
-            Text(title, color = if (dark) Color.White else TextPrimary, fontWeight = FontWeight.Bold, fontSize = 17.sp)
-            Text(description, color = if (dark) Color(0xFF9CA3AF) else TextSecondary, fontSize = 11.sp)
+            Text(title, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+            Text(description, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
         }
     }
 }

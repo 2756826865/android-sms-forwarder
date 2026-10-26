@@ -84,10 +84,53 @@ fun GatewayTheme(
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val prefs = androidx.compose.runtime.remember(context) { context.getSharedPreferences("gateway_appearance", 0) }
+    val state = androidx.compose.runtime.remember(prefs) {
+        androidx.compose.runtime.mutableStateOf(Appearance(prefs.getInt("mode", 0), prefs.getBoolean("dynamic", dynamicColor),
+            prefs.getInt("accent", 0), prefs.getBoolean("amoled", false), prefs.getBoolean("blur", false), prefs.getInt("key_color", 0), prefs.getString("palette", "TonalSpot") ?: "TonalSpot", prefs.getBoolean("spec2025", true)))
+    }
+    val settings = state.value
+    val dark = when (settings.mode) { 1 -> false; 2 -> true; else -> darkTheme }
+    val accent = if (settings.keyColor != 0) Color(settings.keyColor) else when (settings.accent) { 1 -> Color(0xFF2962C0); 2 -> Color(0xFF8050A0); else -> LightPrimary }
+    val base = if (settings.dynamic && Build.VERSION.SDK_INT >= 31) {
+        if (dark) androidx.compose.material3.dynamicDarkColorScheme(context) else androidx.compose.material3.dynamicLightColorScheme(context)
+    } else {
+        (if (dark) DarkColorScheme else LightColorScheme).copy(
+            primary = if (dark) androidx.compose.ui.graphics.lerp(accent, Color.White, 0.45f) else accent,
+            primaryContainer = androidx.compose.ui.graphics.lerp(accent, if (dark) Color.Black else Color.White, 0.85f)
+        )
+    }
+    val colorScheme = if (dark && settings.amoled) base.copy(background = Color.Black, surface = Color.Black) else base
 
-    MaterialTheme(
-        colorScheme = colorScheme,
-        content = content
-    )
+    androidx.compose.runtime.CompositionLocalProvider(
+        LocalAppearance provides settings,
+        LocalSetAppearance provides { next ->
+            state.value = next
+            prefs.edit().putInt("mode", next.mode).putBoolean("dynamic", next.dynamic)
+                .putInt("accent", next.accent).putBoolean("amoled", next.amoled).putBoolean("blur", next.blur).putInt("key_color", next.keyColor)
+                .putString("palette", next.palette).putBoolean("spec2025", next.spec2025).apply()
+        }
+    ) {
+        top.yukonga.miuix.kmp.theme.MiuixTheme(
+            controller = top.yukonga.miuix.kmp.theme.ThemeController(
+                if (dark) top.yukonga.miuix.kmp.theme.ColorSchemeMode.Dark else top.yukonga.miuix.kmp.theme.ColorSchemeMode.Light,
+                keyColor = colorScheme.primary,
+                isDark = dark,
+                paletteStyle = runCatching { top.yukonga.miuix.kmp.theme.ThemePaletteStyle.valueOf(settings.palette) }
+                    .getOrDefault(top.yukonga.miuix.kmp.theme.ThemePaletteStyle.TonalSpot),
+                colorSpec = if (settings.spec2025) top.yukonga.miuix.kmp.theme.ThemeColorSpec.Spec2025
+                    else top.yukonga.miuix.kmp.theme.ThemeColorSpec.Spec2021
+            )
+        ) {
+            val miuix = top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme
+            MaterialTheme(colorScheme = colorScheme.copy(
+                primary = miuix.primary,
+                background = if (dark && settings.amoled) Color.Black else miuix.background,
+                surface = if (dark && settings.amoled) Color.Black else miuix.surface,
+                onBackground = miuix.onBackground,
+                onSurface = miuix.onSurface
+            ), content = content)
+        }
+    }
 }

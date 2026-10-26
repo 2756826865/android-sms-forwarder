@@ -20,6 +20,12 @@ class DashboardDataRepository(private val context: Context) {
 
     suspend fun getDashboardStats(): DashboardStats = withContext(Dispatchers.IO) {
         val db = context.getMessagesDB()
+        val failures = linkedSetOf<String>()
+        suspend fun count(section: String, query: suspend () -> Int): Int = try {
+            query()
+        } catch (e: kotlinx.coroutines.CancellationException) { throw e
+        } catch (e: Exception) { failures.add(section); -1 }
+
         val calendar = Calendar.getInstance().apply {
             set(Calendar.HOUR_OF_DAY, 0)
             set(Calendar.MINUTE, 0)
@@ -29,33 +35,37 @@ class DashboardDataRepository(private val context: Context) {
         val startOfDay = calendar.timeInMillis
         calendar.add(Calendar.DAY_OF_MONTH, 1)
         val endOfDay = calendar.timeInMillis
-        val receivedCount = db.MessagesDao().getReceivedSmsCountBetween(startOfDay / 1000, endOfDay / 1000)
+        val receivedCount = count("短信接收统计") { db.MessagesDao().getReceivedSmsCountBetween(startOfDay / 1000, endOfDay / 1000) }
 
         // 1. 短信概览
-        val sentCount = runCatching { db.SmsSendDao().getCountSince(startOfDay) }.getOrDefault(0)
-        val successSendCount = runCatching { db.SmsSendDao().getSuccessCountSince(startOfDay) }.getOrDefault(0)
-        val failedSendCount = runCatching { db.SmsSendDao().getFailedCountSince(startOfDay) }.getOrDefault(0)
-        val unknownSendCount = runCatching { db.SmsSendDao().getUnknownCountSince(startOfDay) }.getOrDefault(0)
+        val sentCount = count("短信发送统计") { db.SmsSendDao().getCountSince(startOfDay) }
+        val successSendCount = count("短信发送统计") { db.SmsSendDao().getSuccessCountSince(startOfDay) }
+        val failedSendCount = count("短信发送统计") { db.SmsSendDao().getFailedCountSince(startOfDay) }
+        val unknownSendCount = count("短信发送统计") { db.SmsSendDao().getUnknownCountSince(startOfDay) }
 
         // Use the same actual lifecycle records as the history list. Shadow observation
         // may be disabled or incomplete and must not be presented as business totals.
         val historyStore = ForwardingHistoryStore(context)
-        val counts = historyStore.countsBetween(startOfDay, endOfDay)
-        val forwardSuccessCount = counts[ForwardingHistoryStore.STATUS_SUCCESS] ?: 0
-        val forwardFailedCount = counts[ForwardingHistoryStore.STATUS_FAILED] ?: 0
-        val forwardPendingCount = listOf(
+        val counts = try { historyStore.countsBetween(startOfDay, endOfDay) }
+        catch (e: kotlinx.coroutines.CancellationException) { throw e }
+        catch (e: Exception) { failures.add("转发统计"); null }
+        val forwardSuccessCount = counts?.get(ForwardingHistoryStore.STATUS_SUCCESS) ?: if (counts == null) -1 else 0
+        val forwardFailedCount = counts?.get(ForwardingHistoryStore.STATUS_FAILED) ?: if (counts == null) -1 else 0
+        val forwardPendingCount = if (counts == null) -1 else listOf(
             ForwardingHistoryStore.STATUS_QUEUED, ForwardingHistoryStore.STATUS_RUNNING,
             ForwardingHistoryStore.STATUS_RETRY, ForwardingHistoryStore.STATUS_WAITING_NETWORK
         ).sumOf { counts[it] ?: 0 }
 
         // 3. Outbox 健康
-        val pendingOutboxCount = runCatching { db.OutboxTaskDao().getPendingTaskCount() }.getOrDefault(0)
-        val retryOutboxCount = runCatching { db.OutboxTaskDao().getRetryTaskCount() }.getOrDefault(0)
-        val failedOutboxCount = runCatching { db.OutboxTaskDao().getFailedTaskCount() }.getOrDefault(0)
+        val pendingOutboxCount = count("待发队列统计") { db.OutboxTaskDao().getPendingTaskCount() }
+        val retryOutboxCount = count("待发队列统计") { db.OutboxTaskDao().getRetryTaskCount() }
+        val failedOutboxCount = count("待发队列统计") { db.OutboxTaskDao().getFailedTaskCount() }
 
         // 4. Recovery 健康
-        val recoveryRecords = runCatching { db.RecoveryRecordDao().queryLatest(100) }.getOrDefault(emptyList())
-        val todayRecoveryCount = runCatching { db.RecoveryRecordDao().getCountSince(startOfDay) }.getOrDefault(0)
+        val recoveryRecords = try { db.RecoveryRecordDao().queryLatest(100) }
+        catch (e: kotlinx.coroutines.CancellationException) { throw e }
+        catch (e: Exception) { failures.add("恢复记录"); emptyList() }
+        val todayRecoveryCount = count("恢复统计") { db.RecoveryRecordDao().getCountSince(startOfDay) }
         val latestRecovery = recoveryRecords.firstOrNull()
 
         // 5. OEM 状态
@@ -71,9 +81,9 @@ class DashboardDataRepository(private val context: Context) {
         val brandTips = CompatibilityManager.backgroundCompat.getBrandTips()
 
         // 6. 发送与转发流水记录 (最新 30 条)
-        val historyRecords = runCatching {
-            historyStore.records(limit = 30)
-        }.getOrDefault(emptyList())
+        val historyRecords = try { historyStore.records(limit = 30) }
+        catch (e: kotlinx.coroutines.CancellationException) { throw e }
+        catch (e: Exception) { failures.add("转发历史"); emptyList() }
 
         DashboardStats(
             todayReceivedCount = receivedCount,
@@ -87,7 +97,8 @@ class DashboardDataRepository(private val context: Context) {
             pendingOutboxCount = pendingOutboxCount,
             retryOutboxCount = retryOutboxCount,
             failedOutboxCount = failedOutboxCount,
-            totalRecoveryEvents = db.RecoveryRecordDao().getTotalCount(),
+            totalRecoveryEvents = count("恢复总数") { db.RecoveryRecordDao().getTotalCount() },
+            collectionFailures = failures.toSet(),
             todayRecoveryCount = todayRecoveryCount,
             lastRecoveryTime = latestRecovery?.scanTime,
             lastRecoveryAction = latestRecovery?.actionTaken,

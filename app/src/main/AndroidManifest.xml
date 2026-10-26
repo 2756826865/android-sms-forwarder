@@ -32,6 +32,10 @@
         tools:node="remove" />
 
     <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
         <provider android:authorities="org.fossify.commons.contactsprovider" />
         <package android:name="org.fossify.contacts.debug" />
         <package android:name="org.fossify.contacts" />
