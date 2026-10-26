@@ -96,6 +96,8 @@ fun GatewayApp(
 ) {
     val dockBackdrop = if (android.os.Build.VERSION.SDK_INT >= 33) top.yukonga.miuix.kmp.blur.rememberLayerBackdrop() else null
     var selectedTab by remember { mutableStateOf(GatewayTab.MESSAGES) }
+    var settingsTarget by remember { mutableStateOf<String?>(null) }
+    var settingsRequest by remember { mutableStateOf(0) }
     var editingRuleId by remember { mutableStateOf<String?>(null) }
     var isEditingRule by remember { mutableStateOf(false) }
     var isInlineEditorOpen by remember { mutableStateOf(false) }
@@ -127,7 +129,7 @@ fun GatewayApp(
                     GatewayTab.DASHBOARD -> DashboardScreen(
                         viewModel = dashboardViewModel,
                         onRequestDefaultSms = onRequestDefaultSmsRole,
-                        onNavigateToOperations = { selectedTab = GatewayTab.OPERATIONS },
+                        onNavigateToOperations = { settingsTarget = "保活设置"; settingsRequest++; selectedTab = GatewayTab.OPERATIONS },
                         onSwitchToClassic = onSwitchToClassic
                     )
                     GatewayTab.CHANNELS -> ChannelHubScreen(
@@ -150,7 +152,7 @@ fun GatewayApp(
                             )
                         }
                     }
-                    GatewayTab.OPERATIONS -> OperationsScreen(viewModel = diagnosticsViewModel)
+                    GatewayTab.OPERATIONS -> OperationsScreen(viewModel = diagnosticsViewModel, initialSection = settingsTarget, navigationRequest = settingsRequest)
                 }
             }
 
@@ -160,7 +162,7 @@ fun GatewayApp(
                     androidx.compose.material3.NavigationBar(Modifier.align(Alignment.BottomCenter)) {
                         tabs.forEach { tab ->
                             NavigationBarItem(selected = selectedTab == tab,
-                                onClick = { selectedTab = tab },
+                                onClick = { selectedTab = tab; if (tab == GatewayTab.OPERATIONS) { settingsTarget = null; settingsRequest = 0 } },
                                 icon = { androidx.compose.material3.Icon(tab.navigationIcon(), null) },
                                 label = { Text(tab.title) })
                         }
@@ -170,7 +172,7 @@ fun GatewayApp(
                         shape = CircleShape, color = MaterialTheme.colorScheme.surface, shadowElevation = 8.dp) {
                         Row(Modifier.fillMaxWidth().padding(4.dp)) {
                             tabs.forEach { tab ->
-                                Surface(onClick = { selectedTab = tab }, shape = CircleShape,
+                                Surface(onClick = { selectedTab = tab; if (tab == GatewayTab.OPERATIONS) { settingsTarget = null; settingsRequest = 0 } }, shape = CircleShape,
                                     color = if (selectedTab == tab) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else Color.Transparent,
                                     modifier = Modifier.weight(1f).height(56.dp)) {
                                     Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
@@ -188,7 +190,7 @@ fun GatewayApp(
                         .fillMaxWidth()
                         .padding(start = 28.dp, end = 28.dp, bottom = safeBottom + 8.dp),
                     selectedIndex = tabs.indexOf(selectedTab).coerceAtLeast(0),
-                    onSelected = { selectedTab = tabs[it] },
+                    onSelected = { selectedTab = tabs[it]; if (selectedTab == GatewayTab.OPERATIONS) { settingsTarget = null; settingsRequest = 0 } },
                     backdrop = dockBackdrop,
                     tabsCount = tabs.size,
                     isBlurEnabled = org.fossify.messages.ui.compose.theme.LocalAppearance.current.blur && android.os.Build.VERSION.SDK_INT >= 33

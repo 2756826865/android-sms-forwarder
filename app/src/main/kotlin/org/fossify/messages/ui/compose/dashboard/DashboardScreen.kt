@@ -378,7 +378,7 @@ fun DashboardContent(
                             softWrap = false
                         )
                         Text(
-                            text = "👉 修复",
+                            text = "保活设置 ›",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = GatewayOrange,
@@ -595,7 +595,7 @@ fun DashboardContent(
                             }
                         }
                         Text(
-                            text = "今日短信收发",
+                            text = "今日短信与转发",
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (isDark) Color.White else TextPrimary
@@ -636,49 +636,14 @@ fun DashboardContent(
                             modifier = Modifier.weight(1f)
                         )
                     }
-                }
-            }
-        }
-
-        // 3. 今日多渠道转发水压
-        item {
-            Surface(
-                shape = RoundedCornerShape(20.dp),
-                color = if (isDark) DarkSurface else SurfaceCard,
-                shadowElevation = 2.dp,
-                border = BorderStroke(1.dp, if (isDark) DarkOutline else Color(0xFFF0F3F7)),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(15.dp)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = if (isDark) Color(0xFF1E3A5F) else Color(0xFFE8F1FF),
-                            modifier = Modifier.size(28.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                                Text("🌐", fontSize = 14.sp)
-                            }
-                        }
-                        Text(
-                            text = "今日转发 · 近期保留记录",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (isDark) Color.White else TextPrimary
-                        )
-                    }
-
+                    Spacer(modifier = Modifier.height(16.dp))
+                    androidx.compose.material3.HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        text = "按短信接收日期统计，基于最多 200 条保留流水，不含测试；受理不代表终端已收到。",
-                        fontSize = 11.sp,
-                        color = if (isDark) Color.LightGray else TextSecondary
-                    )
+                    Text("通道转发", fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface)
+                    Text("基于近期保留流水统计今日转发，不含测试；通道受理不等于送达。",
+                        fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(modifier = Modifier.height(8.dp))
-
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween

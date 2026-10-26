@@ -48,7 +48,7 @@ fun AboutScreenMaterial(
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val info = androidx.compose.runtime.remember(context) { context.packageManager.getPackageInfo(context.packageName, 0) }
-    val links = listOf("GitHub 源码" to "https://github.com/2756826865/android-sms-forwarder", "更新日志" to "https://github.com/2756826865/android-sms-forwarder/releases", "使用教程" to "https://github.com/2756826865/android-sms-forwarder#readme")
+    val links = listOf("GitHub 源码" to "https://github.com/2756826865/android-sms-forwarder", "更新日志" to "app:changelog", "使用声明" to "app:notice", "开源许可" to "app:licenses", "开发者主页" to "https://www.coolapk.com/u/3270136")
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
 
     ExpressiveScaffold(
@@ -114,8 +114,7 @@ fun AboutScreenMaterial(
                         }
                     }
                 )
-                Text("QQ 群：569321348", Modifier.padding(16.dp))
-                Text("KernelSU 导航与界面：GPL-3.0-or-later；Miuix 0.9.4。原始声明随源码保留。", Modifier.padding(16.dp))
+                androidx.compose.material3.TextButton(onClick = { onOpenLink("app:qq") }) { Text("加入 QQ 群 · 569321348") }
                 Spacer(
                     Modifier.height(
                         WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() +

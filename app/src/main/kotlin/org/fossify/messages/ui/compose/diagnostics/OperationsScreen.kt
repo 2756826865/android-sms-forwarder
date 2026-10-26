@@ -99,11 +99,19 @@ import org.fossify.messages.services.SmsKeepAliveService
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun OperationsScreen(viewModel: DiagnosticsViewModel) {
+fun OperationsScreen(viewModel: DiagnosticsViewModel, initialSection: String? = null, navigationRequest: Int = 0) {
     var section by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<String?>(null) }
+    androidx.compose.runtime.LaunchedEffect(navigationRequest) {
+        if (navigationRequest > 0) section = initialSection
+    }
     androidx.activity.compose.BackHandler(enabled = section != null) { section = null }
+    val settingsContext = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
     val timeFormat = SimpleDateFormat("HH:mm:ss.SSS", LocalConfiguration.current.locales[0])
+    if (section == "帮助与反馈") {
+        DeveloperHelpPage(onBack = { section = null })
+        return
+    }
     if (section == "外观与主题") {
         if (org.fossify.messages.ui.compose.theme.LocalAppearance.current.material)
             org.fossify.messages.ui.compose.theme.MaterialAppearancePage(onBack = { section = null })
@@ -111,8 +119,8 @@ fun OperationsScreen(viewModel: DiagnosticsViewModel) {
         return
     }
     if (section == null) {
-        if (org.fossify.messages.ui.compose.theme.LocalAppearance.current.material) MaterialSettingsHome(onOpen = { section = it })
-        else KsuSettingsHome(onOpen = { section = it })
+        if (org.fossify.messages.ui.compose.theme.LocalAppearance.current.material) MaterialSettingsHome(onOpen = { if (it == "完整设置") openSupportDestination(settingsContext, "app:settings") else section = it })
+        else KsuSettingsHome(onOpen = { if (it == "完整设置") openSupportDestination(settingsContext, "app:settings") else section = it })
         return
     }
     KsuSettingsPage(section.orEmpty(), onBack = { section = null }) { padding ->
@@ -123,7 +131,7 @@ fun OperationsScreen(viewModel: DiagnosticsViewModel) {
                     verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     when (section) {
                         "外观与主题" -> org.fossify.messages.ui.compose.theme.AppearanceSettingsButton(embedded = true)
-                        "短信与显示" -> { DeveloperSettingsCard(); ClassicSettingsAccessCard() }
+                        "短信与显示" -> DeveloperSettingsCard()
                         "备份与恢复" -> ConfigBackupCard()
                     }
                 }
@@ -193,8 +201,7 @@ fun OperationsContent(
         ),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        if (section == "后台运行") {
-        item { OperationsGroupHeading("01", "后台运行", "先检查系统限制与服务状态") }
+        if (section == "保活设置") {
         // 1. 厂商保活与白名单一键直达向导 (OEM Whitelist Wizard)
         item {
             Surface(
@@ -205,15 +212,6 @@ fun OperationsContent(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
-                    Text(
-                        text = "🛡️ 保活设置",
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isDark) Color.White else TextPrimary
-                    )
-
-                    Spacer(modifier = Modifier.height(6.dp))
-
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp)

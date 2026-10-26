@@ -82,13 +82,13 @@ fun SupportSettings() {
             startAction = {
                 top.yukonga.miuix.kmp.basic.Icon(androidx.compose.material.icons.Icons.Rounded.BugReport,
                     modifier = Modifier.padding(end = 6.dp), contentDescription = null,
-                    tint = top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.onBackground)
+                    tint = top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.primary)
             }, onClick = { logsOpen = true })
         top.yukonga.miuix.kmp.preference.ArrowPreference(title = "关于",
             startAction = {
                 top.yukonga.miuix.kmp.basic.Icon(androidx.compose.material.icons.Icons.Rounded.Info,
                     modifier = Modifier.padding(end = 6.dp), contentDescription = null,
-                    tint = top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.onBackground)
+                    tint = top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.primary)
             }, onClick = { aboutOpen = true })
     }
     }
@@ -119,7 +119,7 @@ fun SupportSettings() {
                 }
             })
     } else if (logsOpen) top.yukonga.miuix.kmp.overlay.OverlayDialog(
-        show = true, onDismissRequest = { logsOpen = false }, insideMargin = androidx.compose.ui.unit.DpSize(0.dp, 0.dp)
+        show = true, renderInRootScaffold = false, onDismissRequest = { logsOpen = false }, insideMargin = androidx.compose.ui.unit.DpSize(0.dp, 0.dp)
     ) {
         Column(Modifier.fillMaxWidth().padding(20.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("发送日志", style = MaterialTheme.typography.titleLarge)
@@ -140,7 +140,7 @@ fun SupportSettings() {
     if (aboutOpen) Dialog(onDismissRequest = { aboutOpen = false }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         if (org.fossify.messages.ui.compose.theme.LocalAppearance.current.material) {
             AboutScreenMaterial(onBack = { aboutOpen = false }, onOpenLink = { url ->
-                try { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } catch (_: Exception) { failed() }
+                try { openSupportDestination(context, url) } catch (_: Exception) { failed() }
             })
         } else KsuSettingsPage("关于", onBack = { aboutOpen = false }) { padding ->
             Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 12.dp).verticalScroll(rememberScrollState()),
@@ -160,14 +160,13 @@ fun SupportSettings() {
                     Column {
                         listOf(
                             "GitHub 源码" to "https://github.com/2756826865/android-sms-forwarder",
-                            "更新日志" to "https://github.com/2756826865/android-sms-forwarder/releases",
-                            "使用教程" to "https://github.com/2756826865/android-sms-forwarder#readme"
+                            "更新日志" to "app:changelog",
+                            "使用声明" to "app:notice", "开源许可" to "app:licenses", "开发者主页" to "https://www.coolapk.com/u/3270136"
                         ).forEach { (label, url) ->
                             top.yukonga.miuix.kmp.preference.ArrowPreference(title = label,
-                                onClick = { try { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } catch (_: Exception) { failed() } })
+                                onClick = { try { openSupportDestination(context, url) } catch (_: Exception) { failed() } })
                         }
-                        Text("QQ 群：569321348", Modifier.padding(16.dp))
-                        Text("开源组件：KernelSU v3.3.1 导航（GPL-3.0-or-later）、Miuix 0.9.4；原始声明随源码保留。", Modifier.padding(16.dp), style = MaterialTheme.typography.bodySmall)
+                        top.yukonga.miuix.kmp.preference.ArrowPreference(title = "加入 QQ 群", summary = "569321348", onClick = { openSupportDestination(context, "app:qq") })
                     }
                 }
             }

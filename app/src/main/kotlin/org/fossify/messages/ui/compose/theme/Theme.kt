@@ -123,14 +123,31 @@ fun GatewayTheme(
                     else top.yukonga.miuix.kmp.theme.ThemeColorSpec.Spec2021
             )
         ) {
-            val miuix = top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme
+            val generated = top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme
+            val neutralPage = if (dark) { if (settings.amoled) Color.Black else Color(0xFF121417) } else Color(0xFFF5F5F5)
+            val neutralCard = if (dark) Color(0xFF1E2024) else Color.White
+            val neutralText = if (dark) Color(0xFFE6E6E6) else Color(0xFF202124)
+            val miuix = generated.copy(
+                primary = if (settings.dynamic) generated.primary else accent,
+                surface = neutralPage,
+                background = neutralPage,
+                surfaceContainer = neutralCard,
+                surfaceVariant = neutralCard,
+                onBackground = neutralText,
+                onSurface = neutralText,
+                onSurfaceContainer = neutralText
+            )
+            top.yukonga.miuix.kmp.theme.MiuixTheme(colors = miuix) {
             MaterialTheme(colorScheme = colorScheme.copy(
                 primary = miuix.primary,
                 background = if (dark && settings.amoled) Color.Black else miuix.background,
-                surface = if (dark && settings.amoled) Color.Black else miuix.surface,
+                surface = neutralCard,
+                surfaceBright = neutralCard,
+                surfaceContainer = neutralPage,
                 onBackground = miuix.onBackground,
                 onSurface = miuix.onSurface
             ), content = content)
+            }
         }
     }
 }

@@ -14,7 +14,6 @@ import org.fossify.messages.extensions.config
 fun DeveloperSettingsCard() {
     val context = LocalContext.current
     val config = context.config
-    var expanded by remember { mutableStateOf(false) }
     var liveIsland by remember { mutableStateOf(config.enableLiveIsland) }
     var recycleEnabled by remember { mutableStateOf(config.useRecycleBin) }
     var density by remember { mutableStateOf(config.homeListDensity) }
@@ -25,8 +24,7 @@ fun DeveloperSettingsCard() {
         draft = when (kind) { "关键词" -> config.blockedKeywords; "黑名单" -> config.blacklistedNumbers; else -> config.whitelistedNumbers }.joinToString("\n")
     }
     OperationsSection("显示与拦截设置") {
-        TextButton(onClick = { expanded = !expanded }) { Text(if (expanded) "收起设置" else "展开设置") }
-        if (expanded) {
+        run {
             Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                 Text("灵动岛", Modifier.weight(1f))
                 Switch(liveIsland, onCheckedChange = { liveIsland = it; config.enableLiveIsland = it })

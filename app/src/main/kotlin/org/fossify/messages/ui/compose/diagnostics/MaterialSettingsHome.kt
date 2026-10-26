@@ -40,9 +40,11 @@ internal fun MaterialSettingsHome(onOpen: (String) -> Unit) {
             ))
             Spacer(Modifier.height(13.dp))
             SegmentedColumn(content = listOf(
-                { MaterialEntry("后台运行", "电池优化、自启动与前台服务", Icons.Rounded.Settings, onOpen) },
+                { MaterialEntry("保活设置", "电池优化、自启动与前台服务", Icons.Rounded.Settings, onOpen) },
                 { MaterialEntry("备份与恢复", "配置文件导出与导入", Icons.Rounded.Save, onOpen) },
-                { MaterialEntry("诊断与报告", "短信链路、队列、Root 状态与日志", Icons.Rounded.BugReport, onOpen) }
+                { MaterialEntry("诊断与报告", "短信链路、队列、Root 状态与日志", Icons.Rounded.BugReport, onOpen) },
+                { MaterialEntry("帮助与反馈", "教程、常见问题、已知问题与交流群", Icons.Rounded.Message, onOpen) },
+                { MaterialEntry("完整设置", "系统兼容与更多短信选项", Icons.Rounded.Settings, onOpen) }
             ))
             Spacer(Modifier.height(13.dp))
             SupportSettings()
@@ -54,5 +56,5 @@ internal fun MaterialSettingsHome(onOpen: (String) -> Unit) {
 @Composable
 private fun MaterialEntry(title: String, summary: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onOpen: (String) -> Unit) {
     SegmentedListItem(onClick = { onOpen(title) }, headlineContent = { Text(title) },
-        supportingContent = { Text(summary) }, leadingContent = { Icon(icon, null) })
+        supportingContent = { Text(summary) }, leadingContent = { Icon(icon, null, tint = MaterialTheme.colorScheme.primary) })
 }

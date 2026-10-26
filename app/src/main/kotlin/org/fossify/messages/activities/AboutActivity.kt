@@ -78,7 +78,7 @@ class AboutActivity : SimpleActivity() {
     }
 
     companion object {
-        private const val QQ_GROUP_INVITE =
+        const val QQ_GROUP_INVITE =
             "https://qun.qq.com/universal-share/share?ac=1&authKey=oA1lovv3Le%2F3NODAGwDlNmfFEkjenmNPlM1jr92An%2BGuY4aliEni9xu4HTh0avKR&busi_data=eyJncm91cENvZGUiOiI1NjkzMjEzNDgiLCJ0b2tlbiI6IkU5MUJNc29aYlJYTDlqNHlHSFc1aExOaHladUQyZVV6Sm95ZjlwdHhRRzM0QXZFeXJYQ1laNUdqdkRiSTBLL0IiLCJ1aW4iOiIyNzU2ODI2ODY1In0%3D&data=GqZa5ouDqCxEUJJDapcFruBqASgcseMKcmpMhZM1IVgWd6CDGE9_FWhBfTMpBANO_rbAPJLHbisWHkB60HajIA&svctype=4&tempid=h5_group_info"
         private const val PROJECT_REPOSITORY =
             "https://github.com/2756826865/android-sms-forwarder"

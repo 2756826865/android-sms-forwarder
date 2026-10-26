@@ -372,3 +372,41 @@
 - 从 SendLogBottomSheet.kt 移入64dp保存/分享按钮及底部弹层布局，替换保存与分享回调；复用现有 JSON 快照、SAF和FileProvider，保留预览/加载/错误提示。
 - 复制上游TonalCard/TopBarBackButton组件，保留GPL声明。风格切换现在覆盖这三个入口；未宣称全应用所有业务卡片均双实现。
 - diff --check通过；compileCoreDebugKotlin仍在Gradle下载Network is unreachable阶段失败，尚未编译验证，也未推送/生成新APK。待验证Material3-alpha API及升级连锁影响、弹层预览滚动和保存/分享。
+
+## 2026-10-26 1.2.7/1218 重构构建通过
+- build/1.2.7源码9146be92b370f79a23d3afbe5671b5715e40903d；Actions40337218350成功。首轮Material3升级导致menuAnchor(type)、DropdownMenu与NavigationBarItem扩展调用失败，已适配重建。
+- 测试/Debug编译/Android测试源码编译、签名Release、签名验证与artifact上传均通过，未运行设备测试、未发布Release或合入main。
+- 下载artifact12657811893并解析APK manifest：com.helyu.smsforwarder、versionName1.2.7、versionCode1218。
+- SHA256 d3e52f8a08166c9f8bda4acfedcb5daad092a8c6aad352d0ccfa248bffba390a，本地与附带校验文件一致；证书SHA256 227d5ed7b74462e37d6e88c424eb0aad58a33acb1b6e193f2e2d08a650107c96与旧版一致。
+- 替换deliverables/1.2.7/SMS-Forwarder-1.2.7-release.apk为1218，独立归档deliverables/1.2.7-1218。双风格实际渲染、恢复、旧系统和短信实收发仍待验收；+86显示未改。
+
+## 2026-10-26 灰底白卡颜色修正
+- 根据1218真机截图，Monet生成的surfaceContainer导致设置卡片整块泛绿；保留原KSU布局，增加中性颜色映射：浅色页面#F5F5F5、卡片#FFFFFF、正文#202124；深色对应中性背景/卡片。
+- 保留主题accent作为primary，设置入口图标使用primary；不再把主色调铺满卡片。Material主题同步中性背景/卡片映射。
+- diff --check通过，未重新编译或推送，尚需检查Miuix颜色copy API及实际渲染。
+
+## 2026-10-26 大盘统计合并与图标澄清
+- 用户明确指设置入口左侧图标：Miuix入口图标使用primary，Material入口同步primary，不再默认黑色。
+- 大盘将今日短信收发和今日通道转发合成“今日短信与转发”同一张卡片，以分隔线分区；保留全部原统计字段及保留流水范围说明。最近记录列表和详情不变，未删除记录数据。
+- diff --check通过；尚未编译/推送，当前1218不含本轮修改。
+
+## 2026-10-26 日志入口与关于跳转维修
+- Miuix设置/主题恢复默认popupHost，日志OverlayDialog显式renderInRootScaffold=false，修复空宿主下弹层可能不可见的问题；待设备确认。
+- 复用AboutActivity已有QQ群邀请链接和UserGuideActivity；两风格关于页提供加入QQ群操作（复制群号、优先QQ、浏览器回退）。
+- 更新日志改为应用内开发分支变更摘要，不再跳GitHub；教程使用内置页面。关于页移除用户指定的组件版本说明，保留源码GPL及原作者注释。
+- diff --check通过；尚未编译/推送，1218旧APK不包含本次改动。
+
+## 2026-10-26 开发版帮助与关于分工
+- 经典版关于布局和行为保留；开发版关于不集中堆入教程/排障/声明。
+- 新增开发版原生帮助与反馈二级页（Miuix/Material分支），集中内置教程、常见问题、已知问题、加群；使用声明独立设置入口。
+- 开发版关于保留实际版本、更新日志、源码/开发者主页、许可；原有经典关于只复用其已验证资源和链接。
+- diff --check通过；未编译/推送，尚需验收入口与返回。
+
+## 2026-10-26 使用声明位置调整
+- 按用户指示，将开发版使用声明移入关于页（两种风格同步），删除设置首页独立入口及其路由。经典版不变。
+- diff --check通过；未构建或推送。
+
+## 2026-10-26 保活设置统一与大盘直达
+- 两风格设置入口/二级路由统一“保活设置”；删除01后台运行分组及卡片内保活设置标题，只在页顶保留一个标题。解释性文案中的系统后台运行术语保留。
+- 大盘配置提示改为“保活设置 ›”，相关回调携带二级目标进入保活页；正常点击底部设置清除该目标，仍回分类首页。返回键继续回设置首页。
+- diff --check通过；尚未编译/推送，待验证大盘反复进入与返回、底部标签切换不重置异常。

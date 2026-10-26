@@ -56,3 +56,16 @@ fun formatThreadMessageDate(epochSeconds: Int): String = formatMessageTimestamp(
 
 fun isThreadMessageDateToday(epochSeconds: Int): Boolean =
     isSameCalendarDay(epochSeconds * 1000L)
+
+/** Developer conversation list: retain the year for messages outside the current year. */
+fun formatDeveloperConversationDate(epochSeconds: Int, nowMillis: Long = System.currentTimeMillis()): String {
+    val date = Date(epochSeconds * 1000L)
+    val now = Calendar.getInstance().apply { timeInMillis = nowMillis }
+    val target = Calendar.getInstance().apply { timeInMillis = date.time }
+    val pattern = if (now.get(Calendar.YEAR) == target.get(Calendar.YEAR)) {
+        "MM-dd HH:mm"
+    } else {
+        "yyyy-MM-dd HH:mm"
+    }
+    return SimpleDateFormat(pattern, Locale.CHINA).format(date)
+}

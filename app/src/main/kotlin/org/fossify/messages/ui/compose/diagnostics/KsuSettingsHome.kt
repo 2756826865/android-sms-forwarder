@@ -33,7 +33,6 @@ internal fun KsuSettingsHome(onOpen: (String) -> Unit) {
     val scrollBehavior = MiuixScrollBehavior()
     Scaffold(
         topBar = { TopAppBar(title = "设置", scrollBehavior = scrollBehavior) },
-        popupHost = {},
         contentWindowInsets = WindowInsets.systemBars.add(WindowInsets.displayCutout).only(WindowInsetsSides.Horizontal)
     ) { innerPadding ->
         LazyColumn(
@@ -51,11 +50,13 @@ internal fun KsuSettingsHome(onOpen: (String) -> Unit) {
                     KsuSettingEntry("短信与显示", "显示密度、拦截名单与回收站", Icons.Rounded.Message, onOpen)
                 }
                 Card(Modifier.padding(top = 12.dp).fillMaxWidth()) {
-                    KsuSettingEntry("后台运行", "电池优化、自启动与前台服务", Icons.Rounded.Settings, onOpen)
+                    KsuSettingEntry("保活设置", "电池优化、自启动与前台服务", Icons.Rounded.Settings, onOpen)
                     KsuSettingEntry("备份与恢复", "配置文件导出与导入", Icons.Rounded.Save, onOpen)
                 }
                 Card(Modifier.padding(top = 12.dp).fillMaxWidth()) {
                     KsuSettingEntry("诊断与报告", "短信链路、队列、Root 状态与日志", Icons.Rounded.BugReport, onOpen)
+                    KsuSettingEntry("帮助与反馈", "教程、常见问题、已知问题与交流群", Icons.Rounded.Message, onOpen)
+                    KsuSettingEntry("完整设置", "系统兼容与更多短信选项", Icons.Rounded.Settings, onOpen)
                 }
                 Spacer(Modifier.height(12.dp))
                 SupportSettings()
@@ -70,7 +71,7 @@ private fun KsuSettingEntry(title: String, summary: String, icon: ImageVector, o
     ArrowPreference(title = title, summary = summary,
         startAction = {
             Icon(icon, contentDescription = null, modifier = Modifier.padding(end = 6.dp),
-                tint = MiuixTheme.colorScheme.onBackground)
+                tint = MiuixTheme.colorScheme.primary)
         }, onClick = { onOpen(title) })
 }
 
@@ -86,10 +87,10 @@ internal fun KsuSettingsPage(title: String, onBack: () -> Unit, content: @Compos
             top.yukonga.miuix.kmp.basic.SmallTopAppBar(title = title, navigationIcon = {
                 androidx.compose.material3.IconButton(onClick = onBack) {
                     Icon(androidx.compose.material.icons.Icons.AutoMirrored.Rounded.ArrowBack,
-                        contentDescription = "返回", tint = MiuixTheme.colorScheme.onBackground)
+                        contentDescription = "返回", tint = MiuixTheme.colorScheme.primary)
                 }
             })
-        }, popupHost = {},
+        },
         contentWindowInsets = WindowInsets.systemBars.add(WindowInsets.displayCutout).only(WindowInsetsSides.Horizontal),
         content = content
     )

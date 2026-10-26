@@ -83,9 +83,6 @@ import org.fossify.messages.ui.compose.theme.SurfaceCard
 import org.fossify.messages.ui.compose.theme.TextPrimary
 import org.fossify.messages.ui.compose.theme.TextSecondary
 import org.fossify.messages.ui.compose.theme.TextTertiary
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -193,7 +190,7 @@ fun ConversationsScreen(
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "共 ${uiState.conversations.size} 条对话 · 短信收发与托管",
+                        text = "共 ${uiState.conversations.size} 个会话 · 按联系人/号码归组",
                         fontSize = 12.sp,
                         color = secondaryTextColor,
                         maxLines = 1,
@@ -474,10 +471,7 @@ fun ConversationItem(
     val density = context.config.homeListDensity
     val itemHeight = when (density) { 4 -> 98.dp; 8 -> 64.dp; 10 -> 58.dp; else -> 74.dp }
     val rowPadding = when (density) { 4 -> 18.dp; 8 -> 7.dp; 10 -> 4.dp; else -> 11.dp }
-    val dateFormat = remember { SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()) }
-    val formattedDate = remember(conversation.date) {
-        dateFormat.format(Date(conversation.date.toLong() * 1000L))
-    }
+    val formattedDate = org.fossify.messages.helpers.formatDeveloperConversationDate(conversation.date)
 
     val yellowResult = remember(conversation.phoneNumber, conversation.snippet) {
         YellowPageHelper.lookup(context, conversation.phoneNumber, conversation.snippet)
