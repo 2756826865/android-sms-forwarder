@@ -97,8 +97,8 @@ fun DashboardScreen(
     onSwitchToClassic: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val isDark = isSystemInDarkTheme()
-    val pageBgColor = if (isDark) DarkBackground else AppBackground
+    val isDark = org.fossify.messages.ui.compose.theme.LocalGatewayDark.current
+    val pageBgColor = androidx.compose.material3.MaterialTheme.colorScheme.background
     val primaryTextColor = if (isDark) Color.White else TextPrimary
     val secondaryTextColor = if (isDark) Color(0xFF9CA3AF) else TextSecondary
 
@@ -170,7 +170,7 @@ fun DashboardScreen(
                     Surface(
                         onClick = { viewModel.loadStats() },
                         shape = RoundedCornerShape(10.dp),
-                        color = if (isDark) DarkSurface else Color.White,
+                        color = androidx.compose.material3.MaterialTheme.colorScheme.surface,
                         shadowElevation = 2.dp,
                         border = BorderStroke(1.dp, if (isDark) DarkOutline else OutlineSoft),
                         modifier = Modifier.size(34.dp)
@@ -244,7 +244,7 @@ fun DashboardContent(
     val channelInstances by channelRepo.instancesFlow.collectAsState()
     var selectedRecord by remember { mutableStateOf<org.fossify.messages.forwarding.ForwardingHistoryRecord?>(null) }
     val timeFormat = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
-    val isDark = isSystemInDarkTheme()
+    val isDark = org.fossify.messages.ui.compose.theme.LocalGatewayDark.current
 
     fun resolveChannelName(channel: String): String {
         if (channel.startsWith("instance_")) {
@@ -394,7 +394,7 @@ fun DashboardContent(
         item {
             Surface(
                 shape = RoundedCornerShape(20.dp),
-                color = if (isDark) DarkSurface else SurfaceCard,
+                color = androidx.compose.material3.MaterialTheme.colorScheme.surface,
                 shadowElevation = 2.dp,
                 border = BorderStroke(1.dp, if (isDark) DarkOutline else Color(0xFFF0F3F7)),
                 modifier = Modifier.fillMaxWidth()
@@ -575,7 +575,7 @@ fun DashboardContent(
         item {
             Surface(
                 shape = RoundedCornerShape(20.dp),
-                color = if (isDark) DarkSurface else SurfaceCard,
+                color = androidx.compose.material3.MaterialTheme.colorScheme.surface,
                 shadowElevation = 2.dp,
                 border = BorderStroke(1.dp, if (isDark) DarkOutline else Color(0xFFF0F3F7)),
                 modifier = Modifier.fillMaxWidth()
@@ -604,70 +604,31 @@ fun DashboardContent(
 
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        text = "已同步收到 ${stats.todayReceivedCount.takeIf { it >= 0 } ?: "未知"} 条短信 · 发送结果未知 ${stats.todayUnknownCount.takeIf { it >= 0 } ?: "未知"} 条",
-                        fontSize = 12.sp,
-                        color = if (isDark) Color.LightGray else TextSecondary
+                        text = "收件为本地已同步短信；成功表示通道受理，不代表终端送达。转发统计来自近期保留流水，不含测试。",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        StatMetricColumn(
-                            title = "已记录发送",
-                            value = "${stats.todaySentCount.takeIf { it >= 0 } ?: "未知"}",
-                            icon = "🚀",
-                            color = GatewayBlue,
-                            modifier = Modifier.weight(1f)
-                        )
-                        StatMetricColumn(
-                            title = "发送成功",
-                            value = "${stats.todaySuccessCount.takeIf { it >= 0 } ?: "未知"}",
-                            icon = "✅",
-                            color = GatewayGreen,
-                            modifier = Modifier.weight(1f)
-                        )
-                        StatMetricColumn(
-                            title = "发信失败",
-                            value = "${stats.todayFailedSendCount.takeIf { it >= 0 } ?: "未知"}",
-                            icon = "⚠️",
-                            color = GatewayRed,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(16.dp))
-                    androidx.compose.material3.HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     Spacer(modifier = Modifier.height(12.dp))
-                    Text("通道转发", fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface)
-                    Text("基于近期保留流水统计今日转发，不含测试；通道受理不等于送达。",
-                        fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
+                    Row(modifier = Modifier.fillMaxWidth()) {
                         StatMetricColumn(
-                            title = "已受理",
-                            value = "${stats.todayForwardSuccessCount.takeIf { it >= 0 } ?: "未知"}",
-                            icon = "✈️",
-                            color = GatewayGreen,
-                            modifier = Modifier.weight(1f)
+                            title = "收件",
+                            value = stats.todayReceivedCount.takeIf { it >= 0 }?.toString() ?: "未知",
+                            icon = "📩", color = GatewayBlue, modifier = Modifier.weight(1f)
                         )
                         StatMetricColumn(
-                            title = "转发中/队列",
-                            value = "${stats.todayForwardPendingCount.takeIf { it >= 0 } ?: "未知"}",
-                            icon = "📦",
-                            color = GatewayBlue,
-                            modifier = Modifier.weight(1f)
+                            title = "成功",
+                            value = stats.todayForwardSuccessCount.takeIf { it >= 0 }?.toString() ?: "未知",
+                            icon = "✅", color = GatewayGreen, modifier = Modifier.weight(1f)
                         )
                         StatMetricColumn(
-                            title = "转发失败",
-                            value = "${stats.todayForwardFailedCount.takeIf { it >= 0 } ?: "未知"}",
-                            icon = "❌",
-                            color = GatewayOrange,
-                            modifier = Modifier.weight(1f)
+                            title = "队列",
+                            value = stats.todayForwardPendingCount.takeIf { it >= 0 }?.toString() ?: "未知",
+                            icon = "📦", color = GatewayBlue, modifier = Modifier.weight(1f)
+                        )
+                        StatMetricColumn(
+                            title = "失败",
+                            value = stats.todayForwardFailedCount.takeIf { it >= 0 }?.toString() ?: "未知",
+                            icon = "⚠️", color = GatewayRed, modifier = Modifier.weight(1f)
                         )
                     }
                 }
@@ -678,7 +639,7 @@ fun DashboardContent(
         item {
             Surface(
                 shape = RoundedCornerShape(20.dp),
-                color = if (isDark) DarkSurface else SurfaceCard,
+                color = androidx.compose.material3.MaterialTheme.colorScheme.surface,
                 shadowElevation = 2.dp,
                 border = BorderStroke(1.dp, if (isDark) DarkOutline else Color(0xFFF0F3F7)),
                 modifier = Modifier.fillMaxWidth()
@@ -861,7 +822,7 @@ private fun StatusChipItem(
     modifier: Modifier = Modifier,
     onClick: () -> Unit = {}
 ) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = org.fossify.messages.ui.compose.theme.LocalGatewayDark.current
     val bg = if (isOk) (if (isDark) Color(0xFF1B3322) else BrandGreenSoft) else (if (isDark) Color(0xFF332014) else Color(0xFFFFF3E0))
     val textColor = if (isOk) BrandGreen else GatewayOrange
 
@@ -901,7 +862,7 @@ private fun StatMetricColumn(
     color: Color,
     modifier: Modifier = Modifier
 ) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = org.fossify.messages.ui.compose.theme.LocalGatewayDark.current
 
     Column(
         modifier = modifier.padding(horizontal = 2.dp),
@@ -943,7 +904,7 @@ private fun ForwardingRecordDetailDialog(
     resolvedChannelName: String,
     onDismiss: () -> Unit
 ) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = org.fossify.messages.ui.compose.theme.LocalGatewayDark.current
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
     val fullDateFormat = remember { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()) }
@@ -1116,7 +1077,7 @@ private fun ForwardingRecordDetailDialog(
 
 @Composable
 private fun DetailRowItem(label: String, value: String) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = org.fossify.messages.ui.compose.theme.LocalGatewayDark.current
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,

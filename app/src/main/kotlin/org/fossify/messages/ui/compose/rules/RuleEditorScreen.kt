@@ -86,8 +86,8 @@ fun RuleEditorScreen(
 
     var showExitConfirmDialog by remember { mutableStateOf(false) }
 
-    val isDark = isSystemInDarkTheme()
-    val pageBg = if (isDark) DarkBackground else AppBackground
+    val isDark = org.fossify.messages.ui.compose.theme.LocalGatewayDark.current
+    val pageBg = androidx.compose.material3.MaterialTheme.colorScheme.background
     val primaryText = if (isDark) Color.White else TextPrimary
     val secondaryText = if (isDark) Color(0xFF9CA3AF) else TextSecondary
     val borderColor = if (isDark) DarkOutline else OutlineSoft

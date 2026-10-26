@@ -456,7 +456,7 @@ private fun ChannelNavChip(
         color = if (selected) {
             if (isDark) Color(0xFF1B3322) else BrandGreenSoft
         } else {
-            if (isDark) DarkSurface else Color.White
+            androidx.compose.material3.MaterialTheme.colorScheme.surface
         },
         border = BorderStroke(1.dp, if (selected) BrandGreen else if (isDark) DarkOutline else OutlineSoft),
         modifier = Modifier.height(36.dp)
@@ -543,8 +543,8 @@ fun ChannelHubScreen(
     }
     val visibleInstances = if (selectedSection == "custom") instances else allChannelItems
 
-    val isDark = isSystemInDarkTheme()
-    val pageBgColor = if (isDark) DarkBackground else AppBackground
+    val isDark = org.fossify.messages.ui.compose.theme.LocalGatewayDark.current
+    val pageBgColor = androidx.compose.material3.MaterialTheme.colorScheme.background
     val primaryTextColor = if (isDark) Color.White else TextPrimary
     val secondaryTextColor = if (isDark) Color(0xFF9CA3AF) else TextSecondary
 
@@ -697,7 +697,7 @@ fun ChannelHubScreen(
             } else if (visibleInstances.isEmpty()) {
                 Surface(
                     shape = RoundedCornerShape(20.dp),
-                    color = if (isDark) DarkSurface else SurfaceCard,
+                    color = androidx.compose.material3.MaterialTheme.colorScheme.surface,
                     border = BorderStroke(1.dp, if (isDark) DarkOutline else OutlineSoft),
                     modifier = Modifier
                         .fillMaxWidth()
@@ -738,7 +738,7 @@ fun ChannelHubScreen(
 
                         Surface(
                             shape = RoundedCornerShape(20.dp),
-                            color = if (isDark) DarkSurface else SurfaceCard,
+                            color = androidx.compose.material3.MaterialTheme.colorScheme.surface,
                             shadowElevation = 2.dp,
                             border = BorderStroke(1.dp, if (isDark) DarkOutline else Color(0xFFF0F3F7)),
                             modifier = Modifier.fillMaxWidth()
@@ -993,7 +993,7 @@ private fun LegacyFeatureEntry(
     actionText: String,
     onClick: () -> Unit
 ) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = org.fossify.messages.ui.compose.theme.LocalGatewayDark.current
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -1003,7 +1003,7 @@ private fun LegacyFeatureEntry(
         Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(20.dp),
-            color = if (isDark) DarkSurface else SurfaceCard,
+            color = androidx.compose.material3.MaterialTheme.colorScheme.surface,
             border = BorderStroke(1.dp, if (isDark) DarkOutline else OutlineSoft),
             shadowElevation = 2.dp
         ) {

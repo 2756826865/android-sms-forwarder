@@ -61,10 +61,10 @@ fun ActionInstanceSelector(
     onAddAction: (instanceId: String) -> Unit,
     onRemoveAction: (actionId: String) -> Unit
 ) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = org.fossify.messages.ui.compose.theme.LocalGatewayDark.current
     val primaryText = if (isDark) Color.White else TextPrimary
     val secondaryText = if (isDark) Color(0xFF9CA3AF) else TextSecondary
-    val cardBg = if (isDark) DarkSurface else SurfaceCard
+    val cardBg = androidx.compose.material3.MaterialTheme.colorScheme.surface
     val borderColor = if (isDark) DarkOutline else OutlineSoft
 
     var pickerExpanded by remember { mutableStateOf(false) }

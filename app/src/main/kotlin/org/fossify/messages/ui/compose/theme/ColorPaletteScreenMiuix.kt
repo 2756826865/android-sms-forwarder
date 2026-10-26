@@ -98,7 +98,7 @@ fun ColorPaletteScreenMiuix(
     val scrollBehavior = MiuixScrollBehavior()
     val uiState = LocalAppearance.current
     val update = LocalSetAppearance.current
-    val isDark = uiState.mode == 2 || uiState.mode == 0 && isSystemInDarkTheme()
+    val isDark = uiState.mode == 2 || uiState.mode == 0 && org.fossify.messages.ui.compose.theme.LocalGatewayDark.current
     val backdrop = if (Build.VERSION.SDK_INT >= 33 && uiState.blur) top.yukonga.miuix.kmp.blur.rememberLayerBackdrop() else null
     val barColor = colorScheme.surface
 

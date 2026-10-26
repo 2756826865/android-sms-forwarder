@@ -80,7 +80,7 @@ import org.fossify.messages.ui.compose.navigation.LocalGatewayBottomPadding
 
 @Composable
 private fun FeatureCard(content: @Composable () -> Unit) {
-    val dark = isSystemInDarkTheme()
+    val dark = org.fossify.messages.ui.compose.theme.LocalGatewayDark.current
     Surface(
         shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
         color = if (dark) DarkSurface else SurfaceCard,
@@ -92,7 +92,7 @@ private fun FeatureCard(content: @Composable () -> Unit) {
 
 @Composable
 private fun SettingSwitch(title: String, subtitle: String, checked: Boolean, onChange: (Boolean) -> Unit) {
-    val dark = isSystemInDarkTheme()
+    val dark = org.fossify.messages.ui.compose.theme.LocalGatewayDark.current
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f).padding(end = 10.dp)) {
             Text(title, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = if (dark) Color.White else TextPrimary)
@@ -111,7 +111,7 @@ fun AutoReplyEmbeddedScreen() {
     var rules by remember { mutableStateOf(cfg.rules) }
     var editing by remember { mutableStateOf<AutoReplyRule?>(null) }
     var adding by remember { mutableStateOf(false) }
-    val dark = isSystemInDarkTheme()
+    val dark = org.fossify.messages.ui.compose.theme.LocalGatewayDark.current
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item {
@@ -904,7 +904,7 @@ fun NotificationForwardEmbeddedScreen() {
     var customPackageInput by remember { mutableStateOf("") }
     var customTemplate by remember { mutableStateOf(cfg.customTemplate) }
 
-    val dark = isSystemInDarkTheme()
+    val dark = org.fossify.messages.ui.compose.theme.LocalGatewayDark.current
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),

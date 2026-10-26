@@ -90,8 +90,8 @@ fun RuleStudioScreen(
 ) {
     val context = LocalContext.current
     val config = remember { MultiForwardConfig(context) }
-    val isDark = isSystemInDarkTheme()
-    val pageBgColor = if (isDark) DarkBackground else AppBackground
+    val isDark = org.fossify.messages.ui.compose.theme.LocalGatewayDark.current
+    val pageBgColor = androidx.compose.material3.MaterialTheme.colorScheme.background
     val primaryTextColor = if (isDark) Color.White else TextPrimary
     val secondaryTextColor = if (isDark) Color(0xFF9CA3AF) else TextSecondary
 
@@ -183,7 +183,7 @@ fun RuleStudioScreen(
                         Surface(
                             onClick = onBack,
                             shape = RoundedCornerShape(14.dp),
-                            color = if (isDark) DarkSurface else Color.White,
+                            color = androidx.compose.material3.MaterialTheme.colorScheme.surface,
                             shadowElevation = 2.dp,
                             border = BorderStroke(1.dp, if (isDark) DarkOutline else OutlineSoft),
                             modifier = Modifier.size(38.dp)
@@ -231,7 +231,7 @@ fun RuleStudioScreen(
                 item {
                     Surface(
                         shape = RoundedCornerShape(22.dp),
-                        color = if (isDark) DarkSurface else SurfaceCard,
+                        color = androidx.compose.material3.MaterialTheme.colorScheme.surface,
                         shadowElevation = 2.dp,
                         border = BorderStroke(1.dp, if (isDark) DarkOutline else Color(0xFFF0F3F7)),
                         modifier = Modifier.fillMaxWidth()
@@ -403,7 +403,7 @@ fun RuleStudioScreen(
                 item {
                     Surface(
                         shape = RoundedCornerShape(22.dp),
-                        color = if (isDark) DarkSurface else SurfaceCard,
+                        color = androidx.compose.material3.MaterialTheme.colorScheme.surface,
                         shadowElevation = 2.dp,
                         border = BorderStroke(1.dp, if (isDark) DarkOutline else Color(0xFFF0F3F7)),
                         modifier = Modifier.fillMaxWidth()
@@ -545,7 +545,7 @@ fun RuleStudioScreen(
 
                     Surface(
                         shape = RoundedCornerShape(22.dp),
-                        color = if (isDark) DarkSurface else SurfaceCard,
+                        color = androidx.compose.material3.MaterialTheme.colorScheme.surface,
                         shadowElevation = 2.dp,
                         border = BorderStroke(1.dp, if (isDark) DarkOutline else Color(0xFFF0F3F7)),
                         modifier = Modifier.fillMaxWidth()
@@ -688,7 +688,7 @@ fun RuleStudioScreen(
                 item {
                     Surface(
                         shape = RoundedCornerShape(22.dp),
-                        color = if (isDark) DarkSurface else SurfaceCard,
+                        color = androidx.compose.material3.MaterialTheme.colorScheme.surface,
                         shadowElevation = 2.dp,
                         border = BorderStroke(1.dp, if (isDark) DarkOutline else Color(0xFFF0F3F7)),
                         modifier = Modifier.fillMaxWidth()
@@ -760,7 +760,7 @@ fun RuleStudioScreen(
 
                     Surface(
                         shape = RoundedCornerShape(22.dp),
-                        color = if (isDark) DarkSurface else SurfaceCard,
+                        color = androidx.compose.material3.MaterialTheme.colorScheme.surface,
                         shadowElevation = 2.dp,
                         border = BorderStroke(1.dp, if (isDark) DarkOutline else Color(0xFFF0F3F7)),
                         modifier = Modifier.fillMaxWidth()
@@ -844,7 +844,7 @@ private fun TemplatePresetCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = org.fossify.messages.ui.compose.theme.LocalGatewayDark.current
     val bgColor = if (isSelected) {
         if (isDark) Color(0xFF1B3322) else BrandGreenSoft
     } else {

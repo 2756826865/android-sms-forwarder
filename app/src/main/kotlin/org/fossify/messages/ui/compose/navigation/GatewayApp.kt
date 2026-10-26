@@ -101,13 +101,15 @@ fun GatewayApp(
     var editingRuleId by remember { mutableStateOf<String?>(null) }
     var isEditingRule by remember { mutableStateOf(false) }
     var isInlineEditorOpen by remember { mutableStateOf(false) }
+    var isSettingsNested by remember { mutableStateOf(false) }
 
     val safeBottom = WindowInsets.safeDrawing
         .only(WindowInsetsSides.Bottom)
         .asPaddingValues()
         .calculateBottomPadding()
 
-    val isDockVisible = !isEditingRule && !isInlineEditorOpen
+    val isDockVisible = !isEditingRule && !isInlineEditorOpen &&
+        !(selectedTab == GatewayTab.OPERATIONS && isSettingsNested)
     val dynamicBottomPadding = if (isDockVisible) safeBottom + 86.dp else safeBottom + 16.dp
 
     androidx.compose.runtime.CompositionLocalProvider(LocalGatewayBottomPadding provides dynamicBottomPadding) {
@@ -152,7 +154,8 @@ fun GatewayApp(
                             )
                         }
                     }
-                    GatewayTab.OPERATIONS -> OperationsScreen(viewModel = diagnosticsViewModel, initialSection = settingsTarget, navigationRequest = settingsRequest)
+                    GatewayTab.OPERATIONS -> OperationsScreen(viewModel = diagnosticsViewModel, initialSection = settingsTarget,
+                        navigationRequest = settingsRequest, onNestedChanged = { isSettingsNested = it })
                 }
             }
 

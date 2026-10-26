@@ -13,16 +13,27 @@ val ClassicGreen = Color(0xFF159447)
 val ClassicFabGreen = Color(0xFF1DCE38)
 val ClassicBadgeGreen = Color(0xFF20C45A)
 
+val LocalGatewayDark = androidx.compose.runtime.staticCompositionLocalOf { false }
+
 // Modern High-Fidelity Design Tokens
-val BrandGreen = Color(0xFF159447)
-val BrandGreenDark = Color(0xFF087A36)
-val BrandGreenSoft = Color(0xFFEAF8EE)
-val AppBackground = Color(0xFFF7F9FC)
-val SurfaceCard = Color(0xFFFFFFFF)
-val TextPrimary = Color(0xFF111827)
-val TextSecondary = Color(0xFF5F6673)
-val TextTertiary = Color(0xFF8A919E)
-val OutlineSoft = Color(0xFFE5E9EF)
+val BrandGreen
+    @Composable get() = MaterialTheme.colorScheme.primary
+val BrandGreenDark
+    @Composable get() = MaterialTheme.colorScheme.primary
+val BrandGreenSoft
+    @Composable get() = MaterialTheme.colorScheme.primaryContainer
+val AppBackground
+    @Composable get() = MaterialTheme.colorScheme.background
+val SurfaceCard
+    @Composable get() = MaterialTheme.colorScheme.surface
+val TextPrimary
+    @Composable get() = MaterialTheme.colorScheme.onSurface
+val TextSecondary
+    @Composable get() = MaterialTheme.colorScheme.onSurfaceVariant
+val TextTertiary
+    @Composable get() = MaterialTheme.colorScheme.onSurfaceVariant
+val OutlineSoft
+    @Composable get() = MaterialTheme.colorScheme.outlineVariant
 val RefreshIconBlue = Color(0xFF3A7698)
 
 // Gateway Industrial Colors
@@ -87,8 +98,11 @@ fun GatewayTheme(
     val context = androidx.compose.ui.platform.LocalContext.current
     val prefs = androidx.compose.runtime.remember(context) { context.getSharedPreferences("gateway_appearance", 0) }
     val state = androidx.compose.runtime.remember(prefs) {
-        androidx.compose.runtime.mutableStateOf(Appearance(prefs.getInt("mode", 0), prefs.getBoolean("dynamic", dynamicColor),
-            prefs.getInt("accent", 0), prefs.getBoolean("amoled", false), prefs.getBoolean("blur", false), prefs.getInt("key_color", 0), prefs.getString("palette", "TonalSpot") ?: "TonalSpot", prefs.getBoolean("spec2025", true), prefs.getBoolean("floating", true), prefs.getBoolean("material", false)))
+        androidx.compose.runtime.mutableStateOf(Appearance(prefs.getInt("mode", 0), prefs.getBoolean("dynamic", false),
+            prefs.getInt("accent", 0), prefs.getBoolean("amoled", false), prefs.getBoolean("blur", false),
+            prefs.getInt("key_color", if (prefs.contains("accent")) 0 else 0xFF1F7169.toInt()),
+            prefs.getString("palette", "TonalSpot") ?: "TonalSpot", prefs.getBoolean("spec2025", true),
+            prefs.getBoolean("floating", true), prefs.getBoolean("material", false)))
     }
     val settings = state.value
     val dark = when (settings.mode) { 1 -> false; 2 -> true; else -> darkTheme }
@@ -105,6 +119,7 @@ fun GatewayTheme(
 
     androidx.compose.runtime.CompositionLocalProvider(
         LocalAppearance provides settings,
+        LocalGatewayDark provides dark,
         LocalSetAppearance provides { next ->
             state.value = next
             prefs.edit().putInt("mode", next.mode).putBoolean("dynamic", next.dynamic)
@@ -115,7 +130,7 @@ fun GatewayTheme(
         top.yukonga.miuix.kmp.theme.MiuixTheme(
             controller = top.yukonga.miuix.kmp.theme.ThemeController(
                 if (dark) top.yukonga.miuix.kmp.theme.ColorSchemeMode.MonetDark else top.yukonga.miuix.kmp.theme.ColorSchemeMode.MonetLight,
-                keyColor = if (settings.dynamic && settings.keyColor == 0) colorScheme.primary else if (settings.keyColor != 0) Color(settings.keyColor) else LightPrimary,
+                keyColor = if (settings.dynamic && settings.keyColor == 0) colorScheme.primary else if (settings.keyColor != 0) Color(settings.keyColor) else accent,
                 isDark = dark,
                 paletteStyle = runCatching { top.yukonga.miuix.kmp.theme.ThemePaletteStyle.valueOf(settings.palette) }
                     .getOrDefault(top.yukonga.miuix.kmp.theme.ThemePaletteStyle.TonalSpot),
@@ -145,8 +160,14 @@ fun GatewayTheme(
                 surfaceBright = neutralCard,
                 surfaceContainer = neutralPage,
                 onBackground = miuix.onBackground,
-                onSurface = miuix.onSurface
-            ), content = content)
+                onSurface = miuix.onSurface,
+                onSurfaceVariant = if (dark) Color(0xFFBCC1C8) else Color(0xFF5F6673)
+            )) {
+                androidx.compose.runtime.CompositionLocalProvider(
+                    androidx.compose.material3.LocalContentColor provides neutralText,
+                    content = content
+                )
+            }
             }
         }
     }

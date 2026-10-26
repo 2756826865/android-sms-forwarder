@@ -65,7 +65,7 @@ fun RuleCard(
     onMoveDown: () -> Unit,
     onDelete: () -> Unit
 ) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = org.fossify.messages.ui.compose.theme.LocalGatewayDark.current
     val primaryColor = if (isDark) Color.White else TextPrimary
     val secondaryColor = if (isDark) Color(0xFF9CA3AF) else TextSecondary
     var menuExpanded by remember { mutableStateOf(false) }

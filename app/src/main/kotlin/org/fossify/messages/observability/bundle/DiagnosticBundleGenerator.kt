@@ -171,6 +171,7 @@ object DiagnosticBundleGenerator {
                 collectionStatus.put(section, JSONObject().put("status", if (empty) emptyReason else "collected"))
             }
         }
+        root.put("sendLogs", SendLogCollector.collect(context))
         val plainJson = root.toString(2)
         val checksum = calculateSha256(plainJson)
 

@@ -101,7 +101,7 @@ fun RemoteControlScreen(
     onBack: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
-    val isDark = isSystemInDarkTheme()
+    val isDark = org.fossify.messages.ui.compose.theme.LocalGatewayDark.current
     val remoteRepo = remember { RemoteSourceRepository.getInstance(context) }
     val channelRepo = remember { ChannelRepository.getInstance(context) }
     val sources by remoteRepo.sourcesFlow.collectAsState()
@@ -115,8 +115,8 @@ fun RemoteControlScreen(
     var editingSource by remember { mutableStateOf<RemoteSourceInstance?>(null) }
     var showReceiptDialog by remember { mutableStateOf(false) }
 
-    val bgColor = if (isDark) DarkBackground else AppBackground
-    val cardColor = if (isDark) DarkSurface else SurfaceCard
+    val bgColor = androidx.compose.material3.MaterialTheme.colorScheme.background
+    val cardColor = androidx.compose.material3.MaterialTheme.colorScheme.surface
     val outlineColor = if (isDark) DarkOutline else OutlineSoft
 
     Scaffold(
@@ -577,7 +577,7 @@ private fun RemoteSourceTypePickerDialog(
     onDismiss: () -> Unit,
     onSelect: (RemoteSourceType) -> Unit
 ) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = org.fossify.messages.ui.compose.theme.LocalGatewayDark.current
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {

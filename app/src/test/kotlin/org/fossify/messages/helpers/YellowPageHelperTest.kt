@@ -55,5 +55,8 @@ class YellowPageHelperTest {
         assertFalse(YellowPageHelper.isCommercialOrSpecialAddress("+8615988886666"))
         assertFalse(YellowPageHelper.isCommercialOrSpecialAddress("18611112222"))
         assertFalse(YellowPageHelper.isCommercialOrSpecialAddress("19900001111"))
+        // Even if a bundled directory labels a mobile number as customer service,
+        // a reassigned subscriber must not inherit its brand through the body.
+        assertFalse(YellowPageHelper.isCommercialOrSpecialAddress("13800138000"))
     }
 }

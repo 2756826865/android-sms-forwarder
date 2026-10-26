@@ -44,7 +44,7 @@ fun DndEditor(
     days: List<Int>,
     onUpdate: (enabled: Boolean, start: String, end: String, days: List<Int>) -> Unit
 ) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = org.fossify.messages.ui.compose.theme.LocalGatewayDark.current
     val primaryText = if (isDark) Color.White else TextPrimary
     val secondaryText = if (isDark) Color(0xFF9CA3AF) else TextSecondary
     val borderColor = if (isDark) DarkOutline else OutlineSoft

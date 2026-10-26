@@ -77,8 +77,8 @@ fun RuleManagementScreen(
     var isRulesEnabled by remember { mutableStateOf(repository.isRulesEnabled()) }
     var ruleToDelete by remember { mutableStateOf<String?>(null) }
 
-    val isDark = isSystemInDarkTheme()
-    val pageBg = if (isDark) DarkBackground else AppBackground
+    val isDark = org.fossify.messages.ui.compose.theme.LocalGatewayDark.current
+    val pageBg = androidx.compose.material3.MaterialTheme.colorScheme.background
     val primaryText = if (isDark) Color.White else TextPrimary
     val secondaryText = if (isDark) Color(0xFF9CA3AF) else TextSecondary
 

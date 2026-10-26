@@ -53,8 +53,8 @@ fun ConditionRow(
     onUpdate: (field: RuleTargetField, operator: RuleOperator, value: String, ignoreCase: Boolean) -> Unit,
     onRemove: () -> Unit
 ) {
-    val isDark = isSystemInDarkTheme()
-    val cardBg = if (isDark) DarkSurface else SurfaceCard
+    val isDark = org.fossify.messages.ui.compose.theme.LocalGatewayDark.current
+    val cardBg = androidx.compose.material3.MaterialTheme.colorScheme.surface
     val borderColor = if (isDark) DarkOutline else OutlineSoft
     val primaryText = if (isDark) Color.White else TextPrimary
     val secondaryText = if (isDark) Color(0xFF9CA3AF) else TextSecondary

@@ -28,11 +28,13 @@ import org.fossify.messages.observability.bundle.DiagnosticBundleGenerator
 /** Support actions do not depend on the live diagnostics screen loading successfully. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SupportSettings() {
+fun SupportSettings(onOverlayChanged: (Boolean) -> Unit = {}) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var logsOpen by remember { mutableStateOf(false) }
     var aboutOpen by remember { mutableStateOf(false) }
+    LaunchedEffect(logsOpen, aboutOpen) { onOverlayChanged(logsOpen || aboutOpen) }
+    DisposableEffect(Unit) { onDispose { onOverlayChanged(false) } }
     var content by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
@@ -99,7 +101,7 @@ fun SupportSettings() {
             error = null
             try {
                 content = withContext(Dispatchers.IO) {
-                    DiagnosticBundleGenerator.generateBundle(context, encryptWithKeyStore = false).bundleContent
+                    org.fossify.messages.observability.bundle.SendLogCollector.collect(context).toString(2)
                 }
             } catch (cancel: CancellationException) { throw cancel }
             catch (_: Exception) { error = "日志生成失败，关闭后可重新尝试。" }
@@ -123,7 +125,7 @@ fun SupportSettings() {
     ) {
         Column(Modifier.fillMaxWidth().padding(20.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("发送日志", style = MaterialTheme.typography.titleLarge)
-            Text("包含设备环境和诊断记录。请先预览并检查内容，再保存或调用系统分享。", style = MaterialTheme.typography.bodySmall)
+            Text("读取已保留的短信发送操作与通道转发流水，包括状态、时间和错误。最多500条短信操作、2000条通道记录，不代表全部历史；不导出号码和正文。", style = MaterialTheme.typography.bodySmall)
             if (busy) CircularProgressIndicator()
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             content?.let { snapshot ->

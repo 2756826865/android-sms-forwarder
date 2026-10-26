@@ -13,7 +13,7 @@ import androidx.compose.ui.Modifier
 
 internal val LocalAppearance = staticCompositionLocalOf { Appearance() }
 internal val LocalSetAppearance = staticCompositionLocalOf<(Appearance) -> Unit> { {} }
-internal data class Appearance(val mode: Int = 0, val dynamic: Boolean = false, val accent: Int = 0, val amoled: Boolean = false, val blur: Boolean = false, val keyColor: Int = 0, val palette: String = "TonalSpot", val spec2025: Boolean = true, val floating: Boolean = true, val material: Boolean = false)
+internal data class Appearance(val mode: Int = 0, val dynamic: Boolean = false, val accent: Int = 0, val amoled: Boolean = false, val blur: Boolean = false, val keyColor: Int = 0xFF1F7169.toInt(), val palette: String = "TonalSpot", val spec2025: Boolean = true, val floating: Boolean = true, val material: Boolean = false)
 
 @Composable
 fun AppearanceSettingsButton(embedded: Boolean = false) {

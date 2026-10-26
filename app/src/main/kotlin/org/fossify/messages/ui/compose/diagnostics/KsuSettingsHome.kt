@@ -27,7 +27,7 @@ import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 
 @Composable
-internal fun KsuSettingsHome(onOpen: (String) -> Unit) {
+internal fun KsuSettingsHome(onOpen: (String) -> Unit, onOverlayChanged: (Boolean) -> Unit = {}) {
     val appearance = org.fossify.messages.ui.compose.theme.LocalAppearance.current
     val update = org.fossify.messages.ui.compose.theme.LocalSetAppearance.current
     val scrollBehavior = MiuixScrollBehavior()
@@ -59,7 +59,7 @@ internal fun KsuSettingsHome(onOpen: (String) -> Unit) {
                     KsuSettingEntry("完整设置", "系统兼容与更多短信选项", Icons.Rounded.Settings, onOpen)
                 }
                 Spacer(Modifier.height(12.dp))
-                SupportSettings()
+                SupportSettings(onOverlayChanged = onOverlayChanged)
                 Spacer(Modifier.height(org.fossify.messages.ui.compose.navigation.LocalGatewayBottomPadding.current + 24.dp))
             }
         }

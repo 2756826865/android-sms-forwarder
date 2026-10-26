@@ -99,8 +99,12 @@ import org.fossify.messages.services.SmsKeepAliveService
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun OperationsScreen(viewModel: DiagnosticsViewModel, initialSection: String? = null, navigationRequest: Int = 0) {
+fun OperationsScreen(viewModel: DiagnosticsViewModel, initialSection: String? = null, navigationRequest: Int = 0,
+    onNestedChanged: (Boolean) -> Unit = {}) {
     var section by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<String?>(null) }
+    var overlayOpen by remember { mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(section, overlayOpen) { onNestedChanged(section != null || overlayOpen) }
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { onNestedChanged(false) } }
     androidx.compose.runtime.LaunchedEffect(navigationRequest) {
         if (navigationRequest > 0) section = initialSection
     }
@@ -119,8 +123,12 @@ fun OperationsScreen(viewModel: DiagnosticsViewModel, initialSection: String? = 
         return
     }
     if (section == null) {
-        if (org.fossify.messages.ui.compose.theme.LocalAppearance.current.material) MaterialSettingsHome(onOpen = { if (it == "完整设置") openSupportDestination(settingsContext, "app:settings") else section = it })
-        else KsuSettingsHome(onOpen = { if (it == "完整设置") openSupportDestination(settingsContext, "app:settings") else section = it })
+        if (org.fossify.messages.ui.compose.theme.LocalAppearance.current.material) MaterialSettingsHome(
+            onOpen = { if (it == "完整设置") openSupportDestination(settingsContext, "app:settings") else section = it },
+            onOverlayChanged = { overlayOpen = it })
+        else KsuSettingsHome(
+            onOpen = { if (it == "完整设置") openSupportDestination(settingsContext, "app:settings") else section = it },
+            onOverlayChanged = { overlayOpen = it })
         return
     }
     KsuSettingsPage(section.orEmpty(), onBack = { section = null }) { padding ->

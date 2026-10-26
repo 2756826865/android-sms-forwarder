@@ -22,7 +22,7 @@ import org.fossify.messages.ui.compose.theme.LocalSetAppearance
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun MaterialSettingsHome(onOpen: (String) -> Unit) {
+internal fun MaterialSettingsHome(onOpen: (String) -> Unit, onOverlayChanged: (Boolean) -> Unit = {}) {
     val behavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
     val appearance = LocalAppearance.current
     val update = LocalSetAppearance.current
@@ -47,7 +47,7 @@ internal fun MaterialSettingsHome(onOpen: (String) -> Unit) {
                 { MaterialEntry("完整设置", "系统兼容与更多短信选项", Icons.Rounded.Settings, onOpen) }
             ))
             Spacer(Modifier.height(13.dp))
-            SupportSettings()
+            SupportSettings(onOverlayChanged = onOverlayChanged)
             Spacer(Modifier.height(org.fossify.messages.ui.compose.navigation.LocalGatewayBottomPadding.current + 24.dp))
         }
     }

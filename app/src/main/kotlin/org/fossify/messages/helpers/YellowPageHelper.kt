@@ -36,6 +36,9 @@ object YellowPageHelper {
     private val numberMap = HashMap<String, YellowPageEntry>()
     private val brandList = ArrayList<YellowPageEntry>()
     private val resultCache = LruCache<String, YellowPageResult>(500)
+    // An unverified 11-digit mobile number can be reassigned to a private subscriber.
+    // Do not let bundled data rename a contact or enable body-signature matching for it.
+    private val privateMobilePattern = Regex("1[3-9][0-9]{9}")
 
     fun ensureInitialized(context: Context) {
         if (isInitialized) return
@@ -58,7 +61,7 @@ object YellowPageHelper {
                         val entry = YellowPageEntry(brand, number, category, logoUrl)
                         if (number.isNotEmpty()) {
                             val cleanNumber = normalizeNumber(number)
-                            numberMap[cleanNumber] = entry
+                            if (!privateMobilePattern.matches(cleanNumber)) numberMap[cleanNumber] = entry
                         }
                         brandList.add(entry)
                     }
@@ -81,6 +84,7 @@ object YellowPageHelper {
     fun isCommercialOrSpecialAddress(address: String): Boolean {
         val clean = normalizeNumber(address)
         if (clean.isBlank()) return false
+        if (privateMobilePattern.matches(clean)) return false
 
         // 1. 在内置直配表中已登记的官方服务号（如 13800138000 官方充值号）
         if (numberMap.containsKey(clean)) return true

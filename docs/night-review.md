@@ -410,3 +410,12 @@
 - 两风格设置入口/二级路由统一“保活设置”；删除01后台运行分组及卡片内保活设置标题，只在页顶保留一个标题。解释性文案中的系统后台运行术语保留。
 - 大盘配置提示改为“保活设置 ›”，相关回调携带二级目标进入保活页；正常点击底部设置清除该目标，仍回分类首页。返回键继续回设置首页。
 - diff --check通过；尚未编译/推送，待验证大盘反复进入与返回、底部标签切换不重置异常。
+
+
+## 2026-10-27 developer theme and send log correction (local)
+
+Developer screens now read the app theme selection rather than the system setting independently. Shared developer color tokens follow MaterialTheme; Miuix/Material text and secondary text have explicit contrast, native informational dialogs follow the app day/night choice. About text inherits the active foreground.
+
+The sending-log entry now reads persisted SMS send operations (500 most recent) and forwarding history (2000 most recent), with outcomes, subscription IDs, errors and timestamps. Diagnostic exports also include these records. Empty records and collection failures are differentiated. Message bodies and recipient fields are excluded; channel detail URLs and long numeric sequences are redacted. Export is bounded retained history, not a claim of lifetime completeness.
+
+Local Gradle compile blocked before compilation: Gradle 9.7.0 distribution download network unreachable. No device validation, push, build or release for these changes yet. bundleVersion is the export schema version, distinct from application.versionName.
