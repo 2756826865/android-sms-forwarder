@@ -65,9 +65,11 @@ fun Context.syncSmsHistory(source: String, strict: Boolean = false): SmsSyncResu
     SmsSyncProgress.update(SmsSyncProgress.State(running = true))
 
     var readCount = 0
+    var processedCount = 0
     var parseFailedCount = 0
     var writtenCount = 0
     var threadsUpdatedCount = 0
+    var totalSms = 0
 
     try {
         val projection = arrayOf(
@@ -100,8 +102,6 @@ fun Context.syncSmsHistory(source: String, strict: Boolean = false): SmsSyncResu
             return SmsSyncResult(traceId, false, 0, 0, 0, 0, elapsed, "null_cursor")
         }
 
-        var totalSms = 0
-
         val contactCache = HashMap<String, NamePhoto>()
         val batch = ArrayList<Message>(1000)
 
@@ -122,14 +122,15 @@ fun Context.syncSmsHistory(source: String, strict: Boolean = false): SmsSyncResu
             val simCol = c.getColumnIndex("sim_id")
 
             while (c.moveToNext()) {
+                processedCount++
                 val id = if (idCol >= 0) c.getLong(idCol) else 0L
                 var threadId = if (threadCol >= 0) c.getLong(threadCol) else 0L
                 val address = if (addrCol >= 0) c.getString(addrCol) else null
 
                 if (id <= 0L || threadId <= 0L) {
                     parseFailedCount++
-                    SmsSyncProgress.update(SmsSyncProgress.State(
-                        running = true, completed = readCount, total = totalSms, failed = parseFailedCount
+                    if (processedCount % 500 == 0) SmsSyncProgress.update(SmsSyncProgress.State(
+                        running = true, completed = processedCount, total = totalSms, failed = parseFailedCount
                     ))
                     continue
                 }
@@ -186,9 +187,10 @@ fun Context.syncSmsHistory(source: String, strict: Boolean = false): SmsSyncResu
                 batch.add(message)
                 readCount++
 
-                // Reading progress is independent of the database's bounded write batch.
-                SmsSyncProgress.update(SmsSyncProgress.State(
-                    running = true, completed = readCount, total = totalSms, failed = parseFailedCount
+                // Scanning progress is independent of the bounded database write batch.
+                // Avoid emitting a UI state update for every row in a large SMS archive.
+                if (processedCount % 500 == 0) SmsSyncProgress.update(SmsSyncProgress.State(
+                    running = true, completed = processedCount, total = totalSms, failed = parseFailedCount
                 ))
 
                 if (batch.size >= 1000) {
@@ -241,7 +243,7 @@ fun Context.syncSmsHistory(source: String, strict: Boolean = false): SmsSyncResu
         SmsSyncProgress.update(
             SmsSyncProgress.State(
                 running = false,
-                completed = readCount,
+                completed = processedCount,
                 total = totalSms,
                 failed = parseFailedCount
             )
@@ -270,8 +272,8 @@ fun Context.syncSmsHistory(source: String, strict: Boolean = false): SmsSyncResu
         SmsSyncProgress.update(
             SmsSyncProgress.State(
                 running = false,
-                completed = readCount,
-                total = readCount,
+                completed = processedCount,
+                total = if (totalSms > 0) totalSms else processedCount,
                 failed = parseFailedCount + 1
             )
         )
