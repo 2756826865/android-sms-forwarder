@@ -307,3 +307,13 @@
 - 二级页支持标题返回和系统返回，分类状态 rememberSaveable；原后台运行块仅在后台运行页显示，短信链路/报告/日志集中到诊断页。短信设置与经典设置入口保留，备份独立。
 - 外观编辑器直接嵌入二级页，避免“点入口后再点按钮”；避免嵌套纵向滚动无限高度。
 - diff --check 通过。Debug 构建再次在 Gradle 分发包下载阶段 Network is unreachable，未编译。二级页返回、旋转、长内容滚动和主题切换需实际验证；未提交推送发布。
+
+## 2026-10-26 1.2.7 分支云端构建结果
+- 分支 build/1.2.7；成功构建源码提交 7e6aa0ca990ed352c5cd253e73fc0b11a2ddc1b2；main 保持 708c5117eece30336f752476ae58cdd4df310666。
+- Actions https://github.com/2756826865/android-sms-forwarder/actions/runs/40326759316 全部成功；单元测试/Android 测试源码编译、签名 Release、签名验证、artifact 上传通过。未运行设备测试；没有创建 Release。
+- 构建中修复：host WorkManager 桩 failure(Data) 与权限重试断言；Miuix Blur minSdk33 与现有 minSdk26 冲突（仅 API33+ 加载，低版本普通导航）；CompatibilityManager 参数逗号；电量设备名保存按钮作用域；RowScope 导航项扩展导入。
+- 本地 SQL/查询回归共 36 个测试及补同步 worker 16 个模拟场景通过。
+- 下载 artifact 12651687550 并校验 APK：com.helyu.smsforwarder，versionName 1.2.7，versionCode 1216。
+- APK SHA-256：2c2d9af335f76a43cd58ff8ce0e19112cc0ea7800aa948d89ae361380cb7e2b2，与 artifact 内校验文件一致。
+- 云端证书 SHA-256：227d5ed7b74462e37d6e88c424eb0aad58a33acb1b6e193f2e2d08a650107c96，与既有发布证书一致。
+- 下载 https://github.com/2756826865/android-sms-forwarder/actions/runs/40326759316/artifacts/12651687550 。安装包仅用于分支验收，不代表真机短信/旧系统降级/主题手势验证通过。
