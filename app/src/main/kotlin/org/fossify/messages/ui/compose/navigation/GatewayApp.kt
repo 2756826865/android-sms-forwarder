@@ -77,7 +77,7 @@ fun GatewayApp(
     onRequestDefaultSmsRole: () -> Unit = {},
     onSwitchToClassic: () -> Unit = {}
 ) {
-    val dockBackdrop = top.yukonga.miuix.kmp.blur.rememberLayerBackdrop()
+    val dockBackdrop = if (android.os.Build.VERSION.SDK_INT >= 33) top.yukonga.miuix.kmp.blur.rememberLayerBackdrop() else null
     var selectedTab by remember { mutableStateOf(GatewayTab.MESSAGES) }
     var editingRuleId by remember { mutableStateOf<String?>(null) }
     var isEditingRule by remember { mutableStateOf(false) }
@@ -99,7 +99,7 @@ fun GatewayApp(
         ) {
             // 主体内容页面：全屏沉浸穿透滚动，子页面通过 LocalGatewayBottomPadding 动态预留避让空间
             Box(
-                modifier = Modifier.fillMaxSize().layerBackdrop(dockBackdrop)
+                modifier = Modifier.fillMaxSize().then(if (dockBackdrop != null) Modifier.layerBackdrop(dockBackdrop) else Modifier)
             ) {
                 when (selectedTab) {
                     GatewayTab.MESSAGES -> ConversationsScreen(
@@ -139,7 +139,23 @@ fun GatewayApp(
 
             if (isDockVisible) {
                 val tabs = GatewayTab.values().filterNot { it == GatewayTab.RULES }
-                org.fossify.messages.ui.compose.ksu.FloatingBottomBar(
+                if (dockBackdrop == null) {
+                    Surface(Modifier.align(Alignment.BottomCenter).padding(start = 28.dp, end = 28.dp, bottom = safeBottom + 8.dp),
+                        shape = CircleShape, color = MaterialTheme.colorScheme.surface, shadowElevation = 8.dp) {
+                        Row(Modifier.fillMaxWidth().padding(4.dp)) {
+                            tabs.forEach { tab ->
+                                Surface(onClick = { selectedTab = tab }, shape = CircleShape,
+                                    color = if (selectedTab == tab) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else Color.Transparent,
+                                    modifier = Modifier.weight(1f).height(56.dp)) {
+                                    Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                                        Text(tab.emoji, fontSize = 20.sp)
+                                        Text(tab.title, fontSize = 11.sp, color = if (selectedTab == tab) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else org.fossify.messages.ui.compose.ksu.FloatingBottomBar(
                     modifier = Modifier.align(Alignment.BottomCenter)
                         .padding(start = 28.dp, end = 28.dp, bottom = safeBottom + 8.dp),
                     selectedIndex = tabs.indexOf(selectedTab).coerceAtLeast(0),

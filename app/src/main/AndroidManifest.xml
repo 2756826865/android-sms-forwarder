@@ -3,6 +3,8 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:installLocation="auto">
 
+    <!-- Blur is isolated to API 33+; older devices use the standard dock. -->
+    <uses-sdk tools:overrideLibrary="top.yukonga.miuix.kmp.blur" />
     <uses-permission android:name="android.permission.READ_SMS" />
     <uses-permission android:name="android.permission.WRITE_SMS" />
     <uses-permission android:name="android.permission.SEND_SMS" />
