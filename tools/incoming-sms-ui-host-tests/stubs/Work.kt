@@ -12,7 +12,7 @@ abstract class CoroutineWorker(val applicationContext:Context,p:WorkerParameters
  val inputData=p.data;val runAttemptCount=p.attempts
  abstract suspend fun doWork():Result
  data class Result(val kind:String){ companion object {
-  fun success()=Result("success");fun retry()=Result("retry");fun failure()=Result("failure")
+  fun success()=Result("success");fun retry()=Result("retry");fun failure(data:Data=Data())=Result("failure")
  } }
 }
 enum class BackoffPolicy{EXPONENTIAL}
