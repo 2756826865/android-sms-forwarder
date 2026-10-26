@@ -1,5 +1,9 @@
 package org.fossify.messages.ui.compose.diagnostics
 
+import androidx.compose.material.icons.rounded.BugReport
+import androidx.compose.material.icons.rounded.Info
+import androidx.core.graphics.drawable.toBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
@@ -45,11 +49,19 @@ fun SupportSettings() {
             catch (_: Exception) { failed() }
         }
     }
-    Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surface) {
-        Column(Modifier.fillMaxWidth()) {
-            TextButton(onClick = { logsOpen = true }, modifier = Modifier.fillMaxWidth()) { Text("发送日志    ›") }
-            TextButton(onClick = { aboutOpen = true }, modifier = Modifier.fillMaxWidth()) { Text("关于    ›") }
-        }
+    top.yukonga.miuix.kmp.basic.Card(Modifier.fillMaxWidth()) {
+        top.yukonga.miuix.kmp.preference.ArrowPreference(title = "发送日志",
+            startAction = {
+                top.yukonga.miuix.kmp.basic.Icon(androidx.compose.material.icons.Icons.Rounded.BugReport,
+                    modifier = Modifier.padding(end = 6.dp), contentDescription = null,
+                    tint = top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.onBackground)
+            }, onClick = { logsOpen = true })
+        top.yukonga.miuix.kmp.preference.ArrowPreference(title = "关于",
+            startAction = {
+                top.yukonga.miuix.kmp.basic.Icon(androidx.compose.material.icons.Icons.Rounded.Info,
+                    modifier = Modifier.padding(end = 6.dp), contentDescription = null,
+                    tint = top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.onBackground)
+            }, onClick = { aboutOpen = true })
     }
     LaunchedEffect(logsOpen) {
         if (logsOpen) {
@@ -65,7 +77,9 @@ fun SupportSettings() {
             finally { busy = false }
         }
     }
-    if (logsOpen) ModalBottomSheet(onDismissRequest = { logsOpen = false }) {
+    if (logsOpen) top.yukonga.miuix.kmp.overlay.OverlayDialog(
+        show = true, onDismissRequest = { logsOpen = false }, insideMargin = androidx.compose.ui.unit.DpSize(0.dp, 0.dp)
+    ) {
         Column(Modifier.fillMaxWidth().padding(20.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("发送日志", style = MaterialTheme.typography.titleLarge)
             Text("包含设备环境和诊断记录。请先预览并检查内容，再保存或调用系统分享。", style = MaterialTheme.typography.bodySmall)
@@ -99,21 +113,29 @@ fun SupportSettings() {
         }
     }
     if (aboutOpen) Dialog(onDismissRequest = { aboutOpen = false }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            Column(Modifier.safeDrawingPadding().padding(24.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-                TextButton(onClick = { aboutOpen = false }) { Text("‹ 返回设置") }
+        KsuSettingsPage("关于", onBack = { aboutOpen = false }) { padding ->
+            Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 12.dp).verticalScroll(rememberScrollState()),
+                horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                Spacer(Modifier.height(56.dp))
+                val appIcon = remember(context) {
+                    context.applicationInfo.loadIcon(context.packageManager).toBitmap(144, 144).asImageBitmap()
+                }
+                androidx.compose.foundation.Image(appIcon, contentDescription = null, modifier = Modifier.size(96.dp))
                 Text(context.applicationInfo.loadLabel(context.packageManager).toString(), style = MaterialTheme.typography.headlineLarge)
                 val info = remember(context) { context.packageManager.getPackageInfo(context.packageName, 0) }
                 Text("版本 ${info.versionName.orEmpty()}", style = MaterialTheme.typography.titleMedium)
                 Text("短信收发与转发", style = MaterialTheme.typography.bodyMedium)
-                Surface(shape = MaterialTheme.shapes.large) {
+                Spacer(Modifier.height(36.dp))
+                top.yukonga.miuix.kmp.basic.Card(Modifier.fillMaxWidth()) {
                     Column {
                         listOf(
                             "GitHub 源码" to "https://github.com/2756826865/android-sms-forwarder",
                             "更新日志" to "https://github.com/2756826865/android-sms-forwarder/releases",
                             "使用教程" to "https://github.com/2756826865/android-sms-forwarder#readme"
                         ).forEach { (label, url) ->
-                            TextButton(onClick = { try { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } catch (_: Exception) { failed() } }, modifier = Modifier.fillMaxWidth()) { Text("$label    ›") }
+                            top.yukonga.miuix.kmp.preference.ArrowPreference(title = label,
+                                onClick = { try { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } catch (_: Exception) { failed() } })
                         }
                         Text("QQ 群：569321348", Modifier.padding(16.dp))
                         Text("开源组件：KernelSU v3.3.1 导航（GPL-3.0-or-later）、Miuix 0.9.4；原始声明随源码保留。", Modifier.padding(16.dp), style = MaterialTheme.typography.bodySmall)

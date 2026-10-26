@@ -317,3 +317,23 @@
 - APK SHA-256：2c2d9af335f76a43cd58ff8ce0e19112cc0ea7800aa948d89ae361380cb7e2b2，与 artifact 内校验文件一致。
 - 云端证书 SHA-256：227d5ed7b74462e37d6e88c424eb0aad58a33acb1b6e193f2e2d08a650107c96，与既有发布证书一致。
 - 下载 https://github.com/2756826865/android-sms-forwarder/actions/runs/40326759316/artifacts/12651687550 。安装包仅用于分支验收，不代表真机短信/旧系统降级/主题手势验证通过。
+
+## 2026-10-26 真机截图：导航胶囊收缩
+- 用户 1.2.7 截图确认四项导航被挤在底部中央，属于实际布局缺陷。
+- 根因：FloatingBottomBar 使用 IntrinsicSize.Min；移植调用未携带上游导航项 defaultMinSize，且未指定外层宽度，emoji/文字固有宽度使胶囊收缩。
+- 修正：API33+ 胶囊外层 fillMaxWidth（保留左右28dp），四项权重均分，补 minWidth64dp；旧版普通胶囊不变。
+- diff --check 通过；修正尚未重新编译及设备验证，不宣称已验收。未推送此修正。
+
+## 2026-10-26 按原版 KSU 设置页改造
+- 用户明确要求直接移植页面，撤掉之前自行拼接的首页卡片/文字箭头，新增 KsuSettingsHome，来源 tiann/KernelSU v3.3.1 SettingsMiuix.kt，保留原作者与 GPL 声明。
+- 使用同版 Miuix Scaffold/TopAppBar/MiuixScrollBehavior、Card、ArrowPreference、scrollEndHaptic/overScrollVertical、12dp分组间距和边距；用我们的设置标题、描述和导航回调替换内核授权业务。
+- 日志/关于改成同款 ArrowPreference 和分组卡片；导航图标改为单色矢量 Material Rounded，去掉 emoji。补 Miuix preference0.9.4 和 material-icons-extended1.7.8 依赖。
+- 胶囊宽度修正一并保留。diff --check 通过，尚未重新构建/设备验证。本次未推送；已成功的 1.2.7 APK 不包含这些后续修改。
+
+## 2026-10-26 设置大改：统一原版组件
+- 二级页面新增 KsuSettingsPage，使用 Miuix Scaffold/SmallTopAppBar 与真实返回图标，替换拼接标题。
+- 外观页采用 Miuix Card、OverlayDropdownPreference、SwitchPreference，低版本禁用动态色/玻璃并显示系统要求；保留自定义颜色输入和明确应用按钮。
+- 日志弹层使用与 KSU 同款 OverlayDialog；沿用我们自己的报告生成/预览、SAF 和 FileProvider，不搬入 KernelSU root 日志命令。
+- 关于页增加实际应用图标、名称、版本及 Miuix ArrowPreference 链接组。
+- 外观偏好加入 BackupPreferences 可迁移白名单及导入类型/范围验证；恢复后主题内存刷新仍需验证。
+- 新组件 API 已对照 Miuix v0.9.4 原始签名；diff --check 通过。compileCoreDebugKotlin 仍停在 Gradle 下载 Network is unreachable；本轮没有新的编译通过/截图验证结果。后续修改未推送，旧分支 APK 不包含这些变更。

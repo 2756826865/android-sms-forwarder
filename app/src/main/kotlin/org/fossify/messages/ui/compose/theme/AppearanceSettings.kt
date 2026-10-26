@@ -24,26 +24,32 @@ fun AppearanceSettingsButton(embedded: Boolean = false) {
     val parsed = hex.removePrefix("#").takeIf { it.length == 6 }?.toLongOrNull(16)?.toInt()
     val editor: @Composable () -> Unit = {
             Column(if (embedded) Modifier else Modifier.verticalScroll(rememberScrollState())) {
-                listOf("跟随系统", "浅色", "深色").forEachIndexed { index, label ->
-                    TextButton(onClick = { update(value.copy(mode = index)) }) {
-                        Text(if (value.mode == index) "✓ $label" else label)
-                    }
+                top.yukonga.miuix.kmp.basic.Card(Modifier.fillMaxWidth()) {
+                    top.yukonga.miuix.kmp.preference.OverlayDropdownPreference(
+                        title = "明暗模式", items = listOf("跟随系统", "浅色", "深色"),
+                        selectedIndex = value.mode.coerceIn(0, 2), onSelectedIndexChange = { update(value.copy(mode = it)) })
+                    top.yukonga.miuix.kmp.preference.SwitchPreference(title = "纯黑背景", summary = "在深色模式下使用纯黑页面背景",
+                        checked = value.amoled, onCheckedChange = { update(value.copy(amoled = it)) })
+                    top.yukonga.miuix.kmp.preference.SwitchPreference(title = "系统动态配色", summary = "跟随系统壁纸配色，需要 Android 12 及以上",
+                        checked = value.dynamic, enabled = android.os.Build.VERSION.SDK_INT >= 31,
+                        onCheckedChange = { update(value.copy(dynamic = it, keyColor = 0)) })
+                    top.yukonga.miuix.kmp.preference.SwitchPreference(title = "液态玻璃胶囊", summary = "模糊、折射和按压高光，需要 Android 13 及以上",
+                        checked = value.blur, enabled = android.os.Build.VERSION.SDK_INT >= 33,
+                        onCheckedChange = { update(value.copy(blur = it)) })
                 }
-                TextButton(onClick = { update(value.copy(amoled = !value.amoled)) }) {
-                    Text("纯黑深色背景：${if (value.amoled) "开" else "关"}")
-                }
-                if (android.os.Build.VERSION.SDK_INT >= 31) {
-                    TextButton(onClick = { update(value.copy(dynamic = !value.dynamic)) }) {
-                        Text("系统动态配色：${if (value.dynamic) "开" else "关"}")
-                    }
-                }
-                TextButton(onClick = { update(value.copy(blur = !value.blur)) }) {
-                    Text("胶囊液态玻璃（Android 13+）：${if (value.blur) "开" else "关"}")
-                }
-                listOf("绿色", "蓝色", "紫色").forEachIndexed { index, label ->
-                    TextButton(onClick = { update(value.copy(accent = index, dynamic = false, keyColor = 0)) }) {
-                        Text(if (!value.dynamic && value.accent == index) "✓ $label" else label)
-                    }
+                top.yukonga.miuix.kmp.basic.Card(Modifier.fillMaxWidth().padding(top = 12.dp)) {
+                    top.yukonga.miuix.kmp.preference.OverlayDropdownPreference(
+                        title = "预设主题色", items = listOf("绿色", "蓝色", "紫色"),
+                        selectedIndex = value.accent.coerceIn(0, 2),
+                        onSelectedIndexChange = { update(value.copy(accent = it, dynamic = false, keyColor = 0)) })
+                    val palettes = top.yukonga.miuix.kmp.theme.ThemePaletteStyle.entries
+                    top.yukonga.miuix.kmp.preference.OverlayDropdownPreference(
+                        title = "调色板风格", items = palettes.map { it.name },
+                        selectedIndex = palettes.indexOfFirst { it.name == value.palette }.coerceAtLeast(0),
+                        onSelectedIndexChange = { update(value.copy(palette = palettes[it].name)) })
+                    top.yukonga.miuix.kmp.preference.OverlayDropdownPreference(
+                        title = "色彩规范", items = listOf("2021", "2025"), selectedIndex = if (value.spec2025) 1 else 0,
+                        onSelectedIndexChange = { update(value.copy(spec2025 = it == 1)) })
                 }
                 OutlinedTextField(value = hex, onValueChange = { hex = it.take(7) },
                     label = { Text("自定义颜色 RRGGBB") }, singleLine = true,
@@ -51,15 +57,6 @@ fun AppearanceSettingsButton(embedded: Boolean = false) {
                 TextButton(enabled = parsed != null, onClick = {
                     parsed?.let { update(value.copy(keyColor = it or 0xFF000000.toInt(), dynamic = false)) }
                 }) { Text("应用自定义颜色") }
-                Text("调色板风格")
-                top.yukonga.miuix.kmp.theme.ThemePaletteStyle.entries.forEach { style ->
-                    TextButton(onClick = { update(value.copy(palette = style.name)) }) {
-                        Text(if (value.palette == style.name) "✓ ${style.name}" else style.name)
-                    }
-                }
-                TextButton(onClick = { update(value.copy(spec2025 = !value.spec2025)) }) {
-                    Text("色彩规范：${if (value.spec2025) "2025" else "2021"}")
-                }
                 TextButton(onClick = { update(Appearance()) }) { Text("恢复默认外观") }
                 Text("设置立即保存。部分页面仍使用固定配色，尚未全部适配。")
             }

@@ -52,6 +52,7 @@ internal object BackupPreferences {
         "heartbeat_config" to setOf("heartbeat_enabled", "heartbeat_interval_hours", "heartbeat_custom_template", "heartbeat_channel_instance_ids"),
         "call_forward_config" to setOf("call_forward_enabled", "call_forward_missed_only", "call_forward_answered", "call_forward_custom_template", "call_forward_channel_instance_ids"),
         "notification_forward_config" to setOf("notification_forward_enabled", "notification_forward_ignore_ongoing", "notification_forward_channel_instance_ids", "notification_forward_target_packages", "notification_forward_custom_template"),
+        "gateway_appearance" to setOf("mode", "dynamic", "accent", "amoled", "blur", "key_color", "palette", "spec2025"),
         "thread_layout" to setOf("composer_offset_dp")
     )
     fun export(context: Context): JSONObject = JSONObject().apply {
@@ -67,11 +68,17 @@ internal object BackupPreferences {
             require(values.keys.all { name == "forwarding_fallback" || it in portableKeys.getValue(name) })
             values.forEach { (key, value) ->
                 when {
+                    name == "gateway_appearance" -> when (key) {
+                        "mode", "accent", "key_color" -> require(value is Int)
+                        "palette" -> require(value is String && value.length <= 64)
+                        else -> require(value is Boolean)
+                    }
                     name == "forwarding_fallback" || key.startsWith("sim_") || key.endsWith("template") -> require(value is String)
                     key.endsWith("instance_ids") || key.endsWith("packages") -> require(value is Set<*>)
                     key in setOf("forwarding_delay_seconds", "composer_offset_dp", "heartbeat_interval_hours") -> require(value is Int)
                     else -> require(value is Boolean)
                 }
+                if (name == "gateway_appearance" && key in setOf("mode", "accent")) require((value as Int) in 0..2)
                 if (key == "forwarding_delay_seconds") require((value as Int) in 0..60)
                 if (key == "composer_offset_dp") require((value as Int) in 0..160)
                 if (key == "heartbeat_interval_hours") require(value in listOf(1, 3, 6, 12, 24))

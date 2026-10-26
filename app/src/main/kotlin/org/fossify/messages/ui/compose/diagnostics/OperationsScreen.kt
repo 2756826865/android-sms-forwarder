@@ -104,26 +104,13 @@ fun OperationsScreen(viewModel: DiagnosticsViewModel) {
     androidx.activity.compose.BackHandler(enabled = section != null) { section = null }
     val uiState by viewModel.uiState.collectAsState()
     val timeFormat = SimpleDateFormat("HH:mm:ss.SSS", LocalConfiguration.current.locales[0])
-    Scaffold(containerColor = MaterialTheme.colorScheme.background) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding).statusBarsPadding()) {
-            Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (section != null) TextButton(onClick = { section = null }) { Text("‹ 返回") }
-                Text(section ?: "设置", style = MaterialTheme.typography.headlineSmall)
-            }
-            if (section == null) {
-                LazyColumn(
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp,
-                        bottom = org.fossify.messages.ui.compose.navigation.LocalGatewayBottomPadding.current + 24.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    item { SettingsCategory("◐", "外观与主题", "明暗模式、配色与胶囊效果") { section = "外观与主题" } }
-                    item { SettingsCategory("✉", "短信与显示", "显示密度、拦截名单与回收站") { section = "短信与显示" } }
-                    item { SettingsCategory("⚙", "后台运行", "电池优化、自启动与前台服务") { section = "后台运行" } }
-                    item { SettingsCategory("▣", "备份与恢复", "配置文件导出与导入") { section = "备份与恢复" } }
-                    item { SettingsCategory("⌕", "诊断与报告", "短信链路、队列、Root 状态与日志") { section = "诊断与报告" } }
-                    item { SupportSettings() }
-                }
-            } else if (section in listOf("外观与主题", "短信与显示", "备份与恢复")) {
+    if (section == null) {
+        KsuSettingsHome(onOpen = { section = it })
+        return
+    }
+    KsuSettingsPage(section.orEmpty(), onBack = { section = null }) { padding ->
+        Column(Modifier.fillMaxSize().padding(padding)) {
+            if (section in listOf("外观与主题", "短信与显示", "备份与恢复")) {
                 Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)
                     .padding(bottom = org.fossify.messages.ui.compose.navigation.LocalGatewayBottomPadding.current),
                     verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -145,21 +132,6 @@ fun OperationsScreen(viewModel: DiagnosticsViewModel) {
                     UiState.Idle -> androidx.compose.runtime.LaunchedEffect(viewModel) { viewModel.loadDiagnostics() }
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun SettingsCategory(icon: String, title: String, summary: String, onClick: () -> Unit) {
-    Surface(onClick = onClick, shape = RoundedCornerShape(22.dp), color = MaterialTheme.colorScheme.surface) {
-        Row(Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            Text(icon, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
-            Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.titleMedium)
-                Text(summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Text("›", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

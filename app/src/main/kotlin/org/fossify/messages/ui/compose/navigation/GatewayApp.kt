@@ -1,5 +1,11 @@
 package org.fossify.messages.ui.compose.navigation
 
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Message
+import androidx.compose.material.icons.rounded.BarChart
+import androidx.compose.material.icons.rounded.Extension
+import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Rule
 import org.fossify.messages.ui.compose.ksu.FloatingBottomBarItem
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import androidx.compose.animation.animateColorAsState
@@ -12,6 +18,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -59,6 +66,14 @@ enum class GatewayTab(val title: String, val emoji: String) {
     CHANNELS("通道", "🔌"),
     RULES("规则", "⚡"),
     OPERATIONS("设置", "⚙️")
+}
+
+private fun GatewayTab.navigationIcon() = when (this) {
+    GatewayTab.MESSAGES -> Icons.Rounded.Message
+    GatewayTab.DASHBOARD -> Icons.Rounded.BarChart
+    GatewayTab.CHANNELS -> Icons.Rounded.Extension
+    GatewayTab.OPERATIONS -> Icons.Rounded.Settings
+    GatewayTab.RULES -> Icons.Rounded.Rule
 }
 
 /** Space reserved by gateway pages for the floating dock itself (system navigation inset excluded). */
@@ -149,7 +164,9 @@ fun GatewayApp(
                                     color = if (selectedTab == tab) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else Color.Transparent,
                                     modifier = Modifier.weight(1f).height(56.dp)) {
                                     Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                                        Text(tab.emoji, fontSize = 20.sp)
+                                        androidx.compose.material3.Icon(tab.navigationIcon(),
+                                contentDescription = null, modifier = Modifier.size(24.dp),
+                                tint = MaterialTheme.colorScheme.onSurface)
                                         Text(tab.title, fontSize = 11.sp, color = if (selectedTab == tab) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
                                     }
                                 }
@@ -158,6 +175,7 @@ fun GatewayApp(
                     }
                 } else org.fossify.messages.ui.compose.ksu.FloatingBottomBar(
                     modifier = Modifier.align(Alignment.BottomCenter)
+                        .fillMaxWidth()
                         .padding(start = 28.dp, end = 28.dp, bottom = safeBottom + 8.dp),
                     selectedIndex = tabs.indexOf(selectedTab).coerceAtLeast(0),
                     onSelected = { selectedTab = tabs[it] },
@@ -168,9 +186,12 @@ fun GatewayApp(
                     tabs.forEachIndexed { index, tab ->
                         FloatingBottomBarItem(
                             selected = selectedTab == tab,
-                            onClick = { activate(index) }
+                            onClick = { activate(index) },
+                            modifier = Modifier.defaultMinSize(minWidth = 64.dp)
                         ) {
-                            Text(tab.emoji, fontSize = 20.sp)
+                            androidx.compose.material3.Icon(tab.navigationIcon(),
+                                contentDescription = null, modifier = Modifier.size(24.dp),
+                                tint = top.yukonga.miuix.kmp.theme.LocalContentColor.current)
                             Text(tab.title, fontSize = 11.sp,
                                 color = top.yukonga.miuix.kmp.theme.LocalContentColor.current)
                         }
