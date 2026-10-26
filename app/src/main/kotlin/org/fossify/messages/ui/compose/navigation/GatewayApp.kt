@@ -1,5 +1,6 @@
 package org.fossify.messages.ui.compose.navigation
 
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Message
 import androidx.compose.material.icons.rounded.BarChart
@@ -158,7 +159,7 @@ fun GatewayApp(
                 if (org.fossify.messages.ui.compose.theme.LocalAppearance.current.material) {
                     androidx.compose.material3.NavigationBar(Modifier.align(Alignment.BottomCenter)) {
                         tabs.forEach { tab ->
-                            androidx.compose.material3.NavigationBarItem(selected = selectedTab == tab,
+                            NavigationBarItem(selected = selectedTab == tab,
                                 onClick = { selectedTab = tab },
                                 icon = { androidx.compose.material3.Icon(tab.navigationIcon(), null) },
                                 label = { Text(tab.title) })

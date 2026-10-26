@@ -1344,9 +1344,9 @@ fun InstanceEditorDialog(
                             onValueChange = {},
                             readOnly = true,
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = typeMenuExpanded) },
-                            modifier = Modifier.menuAnchor().fillMaxWidth()
+                            modifier = Modifier.menuAnchor(androidx.compose.material3.ExposedDropdownMenuAnchorType.PrimaryNotEditable).fillMaxWidth()
                         )
-                        ExposedDropdownMenu(
+                        androidx.compose.material3.DropdownMenu(
                             expanded = typeMenuExpanded,
                             onDismissRequest = { typeMenuExpanded = false }
                         ) {
@@ -1503,9 +1503,9 @@ fun InstanceEditorDialog(
                                 readOnly = true,
                                 label = { Text("连接来源") },
                                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = weComSourceMenuExpanded) },
-                                modifier = Modifier.menuAnchor().fillMaxWidth()
+                                modifier = Modifier.menuAnchor(androidx.compose.material3.ExposedDropdownMenuAnchorType.PrimaryNotEditable).fillMaxWidth()
                             )
-                            ExposedDropdownMenu(
+                            androidx.compose.material3.DropdownMenu(
                                 expanded = weComSourceMenuExpanded,
                                 onDismissRequest = { weComSourceMenuExpanded = false }
                             ) {
