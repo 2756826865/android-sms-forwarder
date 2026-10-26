@@ -1,5 +1,6 @@
 package org.fossify.messages.ui.compose.navigation
 
+import org.fossify.messages.ui.compose.ksu.FloatingBottomBarItem
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
@@ -165,7 +166,7 @@ fun GatewayApp(
                     isBlurEnabled = org.fossify.messages.ui.compose.theme.LocalAppearance.current.blur && android.os.Build.VERSION.SDK_INT >= 33
                 ) { activate ->
                     tabs.forEachIndexed { index, tab ->
-                        org.fossify.messages.ui.compose.ksu.FloatingBottomBarItem(
+                        FloatingBottomBarItem(
                             selected = selectedTab == tab,
                             onClick = { activate(index) }
                         ) {

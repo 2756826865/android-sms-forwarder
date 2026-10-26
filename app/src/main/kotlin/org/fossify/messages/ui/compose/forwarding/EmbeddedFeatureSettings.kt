@@ -298,14 +298,6 @@ fun MissedCallEmbeddedScreen() {
             accessResult?.let { Text(it.summary(), fontSize = 12.sp, color = TextSecondary) }
             SettingSwitch("仅未接来电", "忽略已接听和主动拒接的来电", missedOnly) { missedOnly = it; cfg.missedCallOnly = it }
             SettingSwitch("已接来电也提醒", "接听后的通话记录也发送提醒", answered) { answered = it; cfg.forwardAnsweredCall = it }
-            Button(
-                onClick = {
-                    cfg.lowBatteryDeviceName = deviceName
-                    deviceName = cfg.lowBatteryDeviceName
-                    Toast.makeText(context, "设备名称已保存", Toast.LENGTH_SHORT).show()
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) { Text("确定") }
         } }
         item { FeatureCard {
             Text("发送通道", fontSize = 15.sp, fontWeight = FontWeight.Bold)
@@ -489,6 +481,15 @@ fun LowBatteryEmbeddedScreen() {
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
+            Button(
+                onClick = {
+                    cfg.lowBatteryDeviceName = deviceName
+                    deviceName = cfg.lowBatteryDeviceName
+                    Toast.makeText(context, "设备名称已保存", Toast.LENGTH_SHORT).show()
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("确定") }
+
         } }
         item { FeatureCard {
             Text("发送通道", fontSize = 15.sp, fontWeight = FontWeight.Bold)

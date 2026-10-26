@@ -75,7 +75,7 @@ object CompatibilityManager {
             model = model,
             apiLevel = Build.VERSION.SDK_INT,
             romName = detectRomName(brand),
-            romVersion = "" // Android release is not a vendor ROM version,
+            romVersion = "", // Android release is not a vendor ROM version
             capabilities = capabilities
         )
     }
