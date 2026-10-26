@@ -104,8 +104,15 @@ fun OperationsScreen(viewModel: DiagnosticsViewModel) {
     androidx.activity.compose.BackHandler(enabled = section != null) { section = null }
     val uiState by viewModel.uiState.collectAsState()
     val timeFormat = SimpleDateFormat("HH:mm:ss.SSS", LocalConfiguration.current.locales[0])
+    if (section == "外观与主题") {
+        if (org.fossify.messages.ui.compose.theme.LocalAppearance.current.material)
+            org.fossify.messages.ui.compose.theme.MaterialAppearancePage(onBack = { section = null })
+        else org.fossify.messages.ui.compose.theme.ColorPaletteScreenMiuix(onBack = { section = null })
+        return
+    }
     if (section == null) {
-        KsuSettingsHome(onOpen = { section = it })
+        if (org.fossify.messages.ui.compose.theme.LocalAppearance.current.material) MaterialSettingsHome(onOpen = { section = it })
+        else KsuSettingsHome(onOpen = { section = it })
         return
     }
     KsuSettingsPage(section.orEmpty(), onBack = { section = null }) { padding ->

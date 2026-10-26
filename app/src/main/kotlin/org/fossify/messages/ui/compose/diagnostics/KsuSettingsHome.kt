@@ -28,6 +28,8 @@ import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 
 @Composable
 internal fun KsuSettingsHome(onOpen: (String) -> Unit) {
+    val appearance = org.fossify.messages.ui.compose.theme.LocalAppearance.current
+    val update = org.fossify.messages.ui.compose.theme.LocalSetAppearance.current
     val scrollBehavior = MiuixScrollBehavior()
     Scaffold(
         topBar = { TopAppBar(title = "设置", scrollBehavior = scrollBehavior) },
@@ -42,6 +44,9 @@ internal fun KsuSettingsHome(onOpen: (String) -> Unit) {
         ) {
             item {
                 Card(Modifier.padding(top = 12.dp).fillMaxWidth()) {
+                    top.yukonga.miuix.kmp.preference.OverlayDropdownPreference(
+                        title = "界面风格", items = listOf("Miuix", "Material"), selectedIndex = 0,
+                        onSelectedIndexChange = { update(appearance.copy(material = it == 1)) })
                     KsuSettingEntry("外观与主题", "明暗模式、配色与胶囊效果", Icons.Rounded.Palette, onOpen)
                     KsuSettingEntry("短信与显示", "显示密度、拦截名单与回收站", Icons.Rounded.Message, onOpen)
                 }
@@ -72,6 +77,10 @@ private fun KsuSettingEntry(title: String, summary: String, icon: ImageVector, o
 /** Shared secondary-page chrome, using the same Miuix scaffold as upstream. */
 @Composable
 internal fun KsuSettingsPage(title: String, onBack: () -> Unit, content: @Composable (PaddingValues) -> Unit) {
+    if (org.fossify.messages.ui.compose.theme.LocalAppearance.current.material) {
+        MaterialSettingsPage(title, onBack, content)
+        return
+    }
     Scaffold(
         topBar = {
             top.yukonga.miuix.kmp.basic.SmallTopAppBar(title = title, navigationIcon = {
@@ -84,4 +93,16 @@ internal fun KsuSettingsPage(title: String, onBack: () -> Unit, content: @Compos
         contentWindowInsets = WindowInsets.systemBars.add(WindowInsets.displayCutout).only(WindowInsetsSides.Horizontal),
         content = content
     )
+}
+
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun MaterialSettingsPage(title: String, onBack: () -> Unit, content: @Composable (PaddingValues) -> Unit) {
+    org.fossify.messages.ui.compose.ksu.material.ExpressiveScaffold(topBar = {
+        androidx.compose.material3.TopAppBar(title = { androidx.compose.material3.Text(title) }, navigationIcon = {
+            androidx.compose.material3.IconButton(onClick = onBack) {
+                androidx.compose.material3.Icon(Icons.AutoMirrored.Rounded.ArrowBack, "返回")
+            }
+        })
+    }, content = content)
 }

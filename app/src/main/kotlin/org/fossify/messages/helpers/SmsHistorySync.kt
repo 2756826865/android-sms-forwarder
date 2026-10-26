@@ -103,7 +103,7 @@ fun Context.syncSmsHistory(source: String, strict: Boolean = false): SmsSyncResu
         var totalSms = 0
 
         val contactCache = HashMap<String, NamePhoto>()
-        val batch = ArrayList<Message>(500)
+        val batch = ArrayList<Message>(1000)
 
         cursor.use { c ->
             // count can perform a Provider IPC and throw if permission changes.
@@ -128,6 +128,9 @@ fun Context.syncSmsHistory(source: String, strict: Boolean = false): SmsSyncResu
 
                 if (id <= 0L || threadId <= 0L) {
                     parseFailedCount++
+                    SmsSyncProgress.update(SmsSyncProgress.State(
+                        running = true, completed = readCount, total = totalSms, failed = parseFailedCount
+                    ))
                     continue
                 }
 
@@ -183,18 +186,15 @@ fun Context.syncSmsHistory(source: String, strict: Boolean = false): SmsSyncResu
                 batch.add(message)
                 readCount++
 
-                if (batch.size >= 500) {
+                // Reading progress is independent of the database's bounded write batch.
+                SmsSyncProgress.update(SmsSyncProgress.State(
+                    running = true, completed = readCount, total = totalSms, failed = parseFailedCount
+                ))
+
+                if (batch.size >= 1000) {
                     messagesDB.insertMessages(*batch.toTypedArray())
                     writtenCount += batch.size
                     batch.clear()
-                    SmsSyncProgress.update(
-                        SmsSyncProgress.State(
-                            running = true,
-                            completed = readCount,
-                            total = totalSms,
-                            failed = parseFailedCount
-                        )
-                    )
                 }
             }
         }

@@ -49,47 +49,9 @@ fun SupportSettings() {
             catch (_: Exception) { failed() }
         }
     }
-    top.yukonga.miuix.kmp.basic.Card(Modifier.fillMaxWidth()) {
-        top.yukonga.miuix.kmp.preference.ArrowPreference(title = "发送日志",
-            startAction = {
-                top.yukonga.miuix.kmp.basic.Icon(androidx.compose.material.icons.Icons.Rounded.BugReport,
-                    modifier = Modifier.padding(end = 6.dp), contentDescription = null,
-                    tint = top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.onBackground)
-            }, onClick = { logsOpen = true })
-        top.yukonga.miuix.kmp.preference.ArrowPreference(title = "关于",
-            startAction = {
-                top.yukonga.miuix.kmp.basic.Icon(androidx.compose.material.icons.Icons.Rounded.Info,
-                    modifier = Modifier.padding(end = 6.dp), contentDescription = null,
-                    tint = top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.onBackground)
-            }, onClick = { aboutOpen = true })
-    }
-    LaunchedEffect(logsOpen) {
-        if (logsOpen) {
-            busy = true
-            content = null
-            error = null
-            try {
-                content = withContext(Dispatchers.IO) {
-                    DiagnosticBundleGenerator.generateBundle(context, encryptWithKeyStore = false).bundleContent
-                }
-            } catch (cancel: CancellationException) { throw cancel }
-            catch (_: Exception) { error = "日志生成失败，关闭后可重新尝试。" }
-            finally { busy = false }
-        }
-    }
-    if (logsOpen) top.yukonga.miuix.kmp.overlay.OverlayDialog(
-        show = true, onDismissRequest = { logsOpen = false }, insideMargin = androidx.compose.ui.unit.DpSize(0.dp, 0.dp)
-    ) {
-        Column(Modifier.fillMaxWidth().padding(20.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("发送日志", style = MaterialTheme.typography.titleLarge)
-            Text("包含设备环境和诊断记录。请先预览并检查内容，再保存或调用系统分享。", style = MaterialTheme.typography.bodySmall)
-            if (busy) CircularProgressIndicator()
-            error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-            content?.let { snapshot ->
-                OutlinedTextField(value = snapshot, onValueChange = {}, readOnly = true,
-                    modifier = Modifier.fillMaxWidth().heightIn(max = 260.dp), label = { Text("内容预览") })
-                OutlinedButton(onClick = { save.launch("sms-forwarder-diagnostics-${System.currentTimeMillis()}.json") }, modifier = Modifier.fillMaxWidth()) { Text("保存日志") }
-                Button(onClick = {
+    val shareLogs: () -> Unit = {
+        content?.let { snapshot ->
+
                     scope.launch {
                         try {
                             val file = withContext(Dispatchers.IO) {
@@ -106,14 +68,81 @@ fun SupportSettings() {
                         } catch (cancel: CancellationException) { throw cancel }
                         catch (_: Exception) { failed() }
                     }
-                }, modifier = Modifier.fillMaxWidth()) { Text("分享日志") }
+
+        }
+    }
+    if (org.fossify.messages.ui.compose.theme.LocalAppearance.current.material) {
+        org.fossify.messages.ui.compose.ksu.material.SegmentedColumn(content = listOf(
+            { org.fossify.messages.ui.compose.ksu.material.SegmentedListItem(onClick = { logsOpen = true }, headlineContent = { Text("发送日志") }) },
+            { org.fossify.messages.ui.compose.ksu.material.SegmentedListItem(onClick = { aboutOpen = true }, headlineContent = { Text("关于") }) }
+        ))
+    } else {
+    top.yukonga.miuix.kmp.basic.Card(Modifier.fillMaxWidth()) {
+        top.yukonga.miuix.kmp.preference.ArrowPreference(title = "发送日志",
+            startAction = {
+                top.yukonga.miuix.kmp.basic.Icon(androidx.compose.material.icons.Icons.Rounded.BugReport,
+                    modifier = Modifier.padding(end = 6.dp), contentDescription = null,
+                    tint = top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.onBackground)
+            }, onClick = { logsOpen = true })
+        top.yukonga.miuix.kmp.preference.ArrowPreference(title = "关于",
+            startAction = {
+                top.yukonga.miuix.kmp.basic.Icon(androidx.compose.material.icons.Icons.Rounded.Info,
+                    modifier = Modifier.padding(end = 6.dp), contentDescription = null,
+                    tint = top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.onBackground)
+            }, onClick = { aboutOpen = true })
+    }
+    }
+    LaunchedEffect(logsOpen) {
+        if (logsOpen) {
+            busy = true
+            content = null
+            error = null
+            try {
+                content = withContext(Dispatchers.IO) {
+                    DiagnosticBundleGenerator.generateBundle(context, encryptWithKeyStore = false).bundleContent
+                }
+            } catch (cancel: CancellationException) { throw cancel }
+            catch (_: Exception) { error = "日志生成失败，关闭后可重新尝试。" }
+            finally { busy = false }
+        }
+    }
+    if (logsOpen && org.fossify.messages.ui.compose.theme.LocalAppearance.current.material) {
+        MaterialLogSheet(onDismissRequest = { logsOpen = false },
+            onSave = { if (content != null) save.launch("sms-forwarder-diagnostics-${System.currentTimeMillis()}.json") },
+            onShare = shareLogs,
+            preview = {
+                Column(Modifier.fillMaxWidth().padding(20.dp)) {
+                    if (busy) CircularProgressIndicator()
+                    error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                    content?.let { OutlinedTextField(value = it, onValueChange = {}, readOnly = true,
+                        modifier = Modifier.fillMaxWidth().heightIn(max = 220.dp), label = { Text("分享前请检查内容") }) }
+                }
+            })
+    } else if (logsOpen) top.yukonga.miuix.kmp.overlay.OverlayDialog(
+        show = true, onDismissRequest = { logsOpen = false }, insideMargin = androidx.compose.ui.unit.DpSize(0.dp, 0.dp)
+    ) {
+        Column(Modifier.fillMaxWidth().padding(20.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("发送日志", style = MaterialTheme.typography.titleLarge)
+            Text("包含设备环境和诊断记录。请先预览并检查内容，再保存或调用系统分享。", style = MaterialTheme.typography.bodySmall)
+            if (busy) CircularProgressIndicator()
+            error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            content?.let { snapshot ->
+                OutlinedTextField(value = snapshot, onValueChange = {}, readOnly = true,
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 260.dp), label = { Text("内容预览") })
+                OutlinedButton(onClick = { save.launch("sms-forwarder-diagnostics-${System.currentTimeMillis()}.json") }, modifier = Modifier.fillMaxWidth()) { Text("保存日志") }
+                Button(onClick = { shareLogs() }, modifier = Modifier.fillMaxWidth()) { Text("分享日志") }
+
             }
             TextButton(onClick = { logsOpen = false }, modifier = Modifier.fillMaxWidth()) { Text("取消") }
             Spacer(Modifier.navigationBarsPadding())
         }
     }
     if (aboutOpen) Dialog(onDismissRequest = { aboutOpen = false }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        KsuSettingsPage("关于", onBack = { aboutOpen = false }) { padding ->
+        if (org.fossify.messages.ui.compose.theme.LocalAppearance.current.material) {
+            AboutScreenMaterial(onBack = { aboutOpen = false }, onOpenLink = { url ->
+                try { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } catch (_: Exception) { failed() }
+            })
+        } else KsuSettingsPage("关于", onBack = { aboutOpen = false }) { padding ->
             Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 12.dp).verticalScroll(rememberScrollState()),
                 horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(18.dp)) {

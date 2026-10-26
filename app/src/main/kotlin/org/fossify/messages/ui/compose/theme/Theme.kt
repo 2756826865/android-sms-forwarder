@@ -88,7 +88,7 @@ fun GatewayTheme(
     val prefs = androidx.compose.runtime.remember(context) { context.getSharedPreferences("gateway_appearance", 0) }
     val state = androidx.compose.runtime.remember(prefs) {
         androidx.compose.runtime.mutableStateOf(Appearance(prefs.getInt("mode", 0), prefs.getBoolean("dynamic", dynamicColor),
-            prefs.getInt("accent", 0), prefs.getBoolean("amoled", false), prefs.getBoolean("blur", false), prefs.getInt("key_color", 0), prefs.getString("palette", "TonalSpot") ?: "TonalSpot", prefs.getBoolean("spec2025", true)))
+            prefs.getInt("accent", 0), prefs.getBoolean("amoled", false), prefs.getBoolean("blur", false), prefs.getInt("key_color", 0), prefs.getString("palette", "TonalSpot") ?: "TonalSpot", prefs.getBoolean("spec2025", true), prefs.getBoolean("floating", true), prefs.getBoolean("material", false)))
     }
     val settings = state.value
     val dark = when (settings.mode) { 1 -> false; 2 -> true; else -> darkTheme }
@@ -109,13 +109,13 @@ fun GatewayTheme(
             state.value = next
             prefs.edit().putInt("mode", next.mode).putBoolean("dynamic", next.dynamic)
                 .putInt("accent", next.accent).putBoolean("amoled", next.amoled).putBoolean("blur", next.blur).putInt("key_color", next.keyColor)
-                .putString("palette", next.palette).putBoolean("spec2025", next.spec2025).apply()
+                .putString("palette", next.palette).putBoolean("spec2025", next.spec2025).putBoolean("floating", next.floating).putBoolean("material", next.material).apply()
         }
     ) {
         top.yukonga.miuix.kmp.theme.MiuixTheme(
             controller = top.yukonga.miuix.kmp.theme.ThemeController(
-                if (dark) top.yukonga.miuix.kmp.theme.ColorSchemeMode.Dark else top.yukonga.miuix.kmp.theme.ColorSchemeMode.Light,
-                keyColor = colorScheme.primary,
+                if (dark) top.yukonga.miuix.kmp.theme.ColorSchemeMode.MonetDark else top.yukonga.miuix.kmp.theme.ColorSchemeMode.MonetLight,
+                keyColor = if (settings.dynamic && settings.keyColor == 0) colorScheme.primary else if (settings.keyColor != 0) Color(settings.keyColor) else LightPrimary,
                 isDark = dark,
                 paletteStyle = runCatching { top.yukonga.miuix.kmp.theme.ThemePaletteStyle.valueOf(settings.palette) }
                     .getOrDefault(top.yukonga.miuix.kmp.theme.ThemePaletteStyle.TonalSpot),

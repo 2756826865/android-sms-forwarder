@@ -337,3 +337,38 @@
 - 关于页增加实际应用图标、名称、版本及 Miuix ArrowPreference 链接组。
 - 外观偏好加入 BackupPreferences 可迁移白名单及导入类型/范围验证；恢复后主题内存刷新仍需验证。
 - 新组件 API 已对照 Miuix v0.9.4 原始签名；diff --check 通过。compileCoreDebugKotlin 仍停在 Gradle 下载 Network is unreachable；本轮没有新的编译通过/截图验证结果。后续修改未推送，旧分支 APK 不包含这些变更。
+
+## 2026-10-26 设置与导航重构云端构建
+- build/1.2.7 源码提交 d84ba742f54499e95669ccde12929e9544538255，版本1.2.7/1217；Actions 40330069311 成功，测试/Debug编译/签名Release/证书校验/上传通过；未合入main、未发布Release、未真机验收。
+- artifact12654312778；APK SHA256 ec645fef5e89a647641707f66d0d3193704145a7d54c72ef11234550bc7610f2，本地下载后与校验文件一致。
+- 新反馈：开发版纯号码标题保留+86，尚未修改；全量同步进度1000/1310的总数来自SMS Provider cursor.count，代码无1310/1000上限，500条批量写入。三万多条差异根因尚未确认，不声称数据删除或已修复。
+
+## 2026-10-26 全量同步进度粒度
+- 进度从“500条写入批次结束后更新”改为逐条解析读取后更新，失败记录也更新失败计数；UI 明确标注已读取短信条数，避免将会话数或写入批次混淆。
+- 不改 Provider 查询范围、不增加上限；数据库仍分500条写入，最终成功仍须完成剩余写入、MMS和会话更新。
+- diff --check通过，尚未编译/设备验证；这项修改未推送，不包含在1217 APK。
+
+## 2026-10-26 全量短信写入批次调整
+- 按用户要求，SMS 消息缓冲容量和批量写入阈值从500条改为1000条；不足1000条的尾批仍在读取结束后写入。
+- 逐条读取进度保持不变；MMS和会话的200条分批不受本次修改影响。
+- diff --check通过；尚未重新编译或推送。
+
+## 2026-10-26 用户纠正：直接源码移植主题页
+- 直接使用 tiann/KernelSU v3.3.1 ColorPaletteScreenMiuix.kt（保留手机预览函数、TabRow、Card/偏好组件、原布局尺寸），替换包名、中文资源、应用名和偏好读写回调。不是按截图重新绘制预览。保留GPL及来源。
+- 删除不属于本项目的模块描述行数与未接入的手势/页面缩放/导航角标选项；不放假开关。悬浮开关已接入导航分支；普通分支的贴底形态仍需继续核对。界面风格的双实现切换尚未完成，不能称全部交付。
+- MaterialKolor5.0.1同上游依赖用于预览；Miuix主题始终走带seed的生成模式，避免非Monet模式忽略绿色seed后回落蓝色。壁纸动态色仍由开关决定。
+- 大盘移除发信队列深度、网关快捷运维与自愈的UI；没有删后台队列/自愈业务，也未删任何近期历史记录。今日短信/今日转发区块与最近记录详情逻辑保留。
+- diff --check通过；本轮源码尚未重新编译，仍须云端构建和显示验收。未推送。
+
+## 2026-10-26 Miuix/Material 双设置实现
+- 设置首页增加界面风格选择；选择保存到gateway_appearance.material，并纳入备份白名单，切换同一套业务回调与数据。
+- 从KSU v3.3.1直接移入ExpressiveScaffold/SegmentedList/ExpressiveMenu/ExpressiveSwitch及GPL声明；Material3对齐上游1.5.0-alpha28，需要回归其它Material页面。
+- Miuix与Material设置首页、二级标题、主题控件、日志入口、底部导航分别接入；Material使用原版分组组件，原有诊断/短信/备份内容继续共用。Material主题页暂无上游预览图，日志弹层和关于内容仍部分共用Miuix，并非全应用双风格完成。
+- diff --check通过；本地compileCoreDebugKotlin在Gradle下载阶段Network is unreachable，未编译验证；未推送，本轮没有新APK。需验证切换持久化、旋转/返回、恢复主题、三键/键盘避让和升级Material3连锁影响。
+
+## 2026-10-26 Material 剩余页面接入
+- 从 KSU v3.3.1 ColorPaletteScreenMaterial.kt 直接移入手机预览函数，替换应用名称和配色回调；MaterialAppearancePage 接入相同色彩规范与调色板。
+- 从 AboutMaterial.kt 移入可折叠标题/应用图标/版本/链接组页面，替换实际安装包图标、名称、版本及项目链接，保留QQ群与来源说明。
+- 从 SendLogBottomSheet.kt 移入64dp保存/分享按钮及底部弹层布局，替换保存与分享回调；复用现有 JSON 快照、SAF和FileProvider，保留预览/加载/错误提示。
+- 复制上游TonalCard/TopBarBackButton组件，保留GPL声明。风格切换现在覆盖这三个入口；未宣称全应用所有业务卡片均双实现。
+- diff --check通过；compileCoreDebugKotlin仍在Gradle下载Network is unreachable阶段失败，尚未编译验证，也未推送/生成新APK。待验证Material3-alpha API及升级连锁影响、弹层预览滚动和保存/分享。

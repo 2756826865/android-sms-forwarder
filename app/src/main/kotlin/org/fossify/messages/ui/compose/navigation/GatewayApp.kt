@@ -155,7 +155,16 @@ fun GatewayApp(
 
             if (isDockVisible) {
                 val tabs = GatewayTab.values().filterNot { it == GatewayTab.RULES }
-                if (dockBackdrop == null) {
+                if (org.fossify.messages.ui.compose.theme.LocalAppearance.current.material) {
+                    androidx.compose.material3.NavigationBar(Modifier.align(Alignment.BottomCenter)) {
+                        tabs.forEach { tab ->
+                            androidx.compose.material3.NavigationBarItem(selected = selectedTab == tab,
+                                onClick = { selectedTab = tab },
+                                icon = { androidx.compose.material3.Icon(tab.navigationIcon(), null) },
+                                label = { Text(tab.title) })
+                        }
+                    }
+                } else if (dockBackdrop == null || !org.fossify.messages.ui.compose.theme.LocalAppearance.current.floating) {
                     Surface(Modifier.align(Alignment.BottomCenter).padding(start = 28.dp, end = 28.dp, bottom = safeBottom + 8.dp),
                         shape = CircleShape, color = MaterialTheme.colorScheme.surface, shadowElevation = 8.dp) {
                         Row(Modifier.fillMaxWidth().padding(4.dp)) {

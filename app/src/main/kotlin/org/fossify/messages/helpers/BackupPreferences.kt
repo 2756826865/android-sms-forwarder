@@ -52,7 +52,7 @@ internal object BackupPreferences {
         "heartbeat_config" to setOf("heartbeat_enabled", "heartbeat_interval_hours", "heartbeat_custom_template", "heartbeat_channel_instance_ids"),
         "call_forward_config" to setOf("call_forward_enabled", "call_forward_missed_only", "call_forward_answered", "call_forward_custom_template", "call_forward_channel_instance_ids"),
         "notification_forward_config" to setOf("notification_forward_enabled", "notification_forward_ignore_ongoing", "notification_forward_channel_instance_ids", "notification_forward_target_packages", "notification_forward_custom_template"),
-        "gateway_appearance" to setOf("mode", "dynamic", "accent", "amoled", "blur", "key_color", "palette", "spec2025"),
+        "gateway_appearance" to setOf("mode", "dynamic", "accent", "amoled", "blur", "key_color", "palette", "spec2025", "floating", "material"),
         "thread_layout" to setOf("composer_offset_dp")
     )
     fun export(context: Context): JSONObject = JSONObject().apply {

@@ -339,7 +339,7 @@ fun ConversationsScreen(
                     }
                     if (syncProgress.running) {
                         val progressText = if (syncProgress.total > 0) {
-                            "全量同步 ${syncProgress.completed}/${syncProgress.total} · 失败${syncProgress.failed}"
+                            "全量同步：已读取 ${syncProgress.completed}/${syncProgress.total} 条短信 · 失败${syncProgress.failed}"
                         } else {
                             "正在准备全量同步..."
                         }
