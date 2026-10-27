@@ -529,7 +529,7 @@ fun OperationsContent(
                             text = "📦 运行报告",
                             fontSize = 17.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (isDark) Color.White else TextPrimary
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Surface(
                             shape = RoundedCornerShape(14.dp),
@@ -699,7 +699,7 @@ fun OperationsContent(
                             text = "运行日志",
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (isDark) Color.White else TextPrimary
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Surface(
                             shape = RoundedCornerShape(14.dp),
@@ -791,6 +791,10 @@ fun OperationsContent(
     // 明文体检报告弹窗
     if (showReportDialog) {
         AlertDialog(
+            shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp),
+            containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface,
+            titleContentColor = androidx.compose.material3.MaterialTheme.colorScheme.onSurface,
+            textContentColor = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.navigationBarsPadding(),
             onDismissRequest = { showReportDialog = false },
             title = {

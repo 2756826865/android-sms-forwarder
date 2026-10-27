@@ -47,10 +47,15 @@ fun DeveloperSettingsCard() {
             }) { Text("查看回收站") }
         }
     }
-    if (editingList != null) AlertDialog(onDismissRequest = { editingList = null },
+    if (editingList != null) AlertDialog(
+            shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp),
+            containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface,
+            titleContentColor = androidx.compose.material3.MaterialTheme.colorScheme.onSurface,
+            textContentColor = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
+        onDismissRequest = { editingList = null },
         title = { Text("管理${editingList}") },
         text = { Column { Text("每行一项；留空并保存将清空此名单。")
-            OutlinedTextField(value = draft, onValueChange = { draft = it }, modifier = Modifier.heightIn(max = 280.dp), label = { Text("名单内容") }) } },
+            OutlinedTextField(shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp), value = draft, onValueChange = { draft = it }, modifier = Modifier.heightIn(max = 280.dp), label = { Text("名单内容") }) } },
         confirmButton = { TextButton(onClick = {
             val values = draft.lines().map(String::trim).filter(String::isNotBlank).toSet()
             when (editingList) { "关键词" -> config.blockedKeywords = values; "黑名单" -> config.blacklistedNumbers = values; else -> config.whitelistedNumbers = values }

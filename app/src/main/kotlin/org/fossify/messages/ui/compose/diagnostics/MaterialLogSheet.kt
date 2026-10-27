@@ -48,7 +48,9 @@ import java.time.format.DateTimeFormatter
 internal fun MaterialLogSheet(onDismissRequest: () -> Unit, onSave: () -> Unit, onShare: () -> Unit, preview: @Composable () -> Unit) {
     ModalBottomSheet(
         onDismissRequest = { onDismissRequest() },
-        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        containerColor = MaterialTheme.colorScheme.surface,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
         content = {
             preview()
 

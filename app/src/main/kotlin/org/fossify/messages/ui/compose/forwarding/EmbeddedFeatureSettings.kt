@@ -450,6 +450,9 @@ fun LowBatteryEmbeddedScreen() {
     var selectedIds by remember { mutableStateOf(cfg.lowBatteryChannelInstanceIds) }
     var hasSelection by remember { mutableStateOf(cfg.hasLowBatteryInstanceSelection) }
     var choosingChannels by remember { mutableStateOf(false) }
+    val testScope = androidx.compose.runtime.rememberCoroutineScope()
+    var testSending by remember { mutableStateOf(false) }
+    var testStatus by remember { mutableStateOf("") }
     val hasUnavailableSelection = hasSelection && selectedIds.any { selectedId ->
         realInstances.none { it.id == selectedId && it.enabled && it.hasDispatchConfiguration() }
     }
@@ -502,6 +505,49 @@ fun LowBatteryEmbeddedScreen() {
                 Text("部分已选通道已停用、删除或配置不完整", fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
             }
             OutlinedButton(onClick = { choosingChannels = true }, modifier = Modifier.fillMaxWidth()) { Text("选择通道实例") }
+        } }
+        item { FeatureCard {
+            Button(enabled = !testSending, modifier = Modifier.fillMaxWidth(), onClick = {
+                val targets = realInstances.filter { it.id in selectedIds && it.enabled && it.hasDispatchConfiguration() }
+                if (!hasSelection || targets.isEmpty() || hasUnavailableSelection) {
+                    testStatus = "请先在上方选择已启用且配置完整的通道实例"
+                } else if (deviceName != cfg.lowBatteryDeviceName) {
+                    testStatus = "设备名称尚未保存，请先点击确定"
+                } else {
+                    testSending = true
+                    testScope.launch {
+                        try {
+                            val battery = TemplateDataRetriever.batterySnapshot(context)
+                            val body = buildString {
+                                append("【电量提醒测试】\n")
+                                if (cfg.lowBatteryDeviceName.isNotBlank()) append("设备：${cfg.lowBatteryDeviceName}\n")
+                                append("当前电量：${battery.percent}\n提醒阈值：$threshold%\n这是手动测试，不代表低电量事件。")
+                            }
+                            val appContext = context.applicationContext
+                            withContext(Dispatchers.IO) {
+                                val eventId = "low-battery-test-${java.util.UUID.randomUUID()}"
+                                val now = System.currentTimeMillis()
+                                targets.forEach { instance ->
+                                    MultiChannelForwardWorker.enqueueSingle(
+                                        context = appContext,
+                                        sender = appContext.getString(R.string.low_battery_system_sender),
+                                        body = body, receivedAt = now, subscriptionId = -1,
+                                        uniqueId = eventId, targetChannel = instance.channelType,
+                                        allowedChannels = setOf(instance.id), targetInstanceId = instance.id,
+                                        isTest = true
+                                    )
+                                }
+                            }
+                            testStatus = "已提交 ${targets.size} 个通道的测试任务；请在大盘最近记录查看处理结果。提交不代表送达。"
+                        } catch (cancel: kotlinx.coroutines.CancellationException) { throw cancel
+                        } catch (_: Exception) {
+                            testStatus = "测试任务提交未完成，部分任务可能已入队，请先检查最近记录。"
+                        } finally { testSending = false }
+                    }
+                }
+            }) { Text(if (testSending) "提交中…" else "测试发送") }
+            Text("按当前已保存的设备名称和所选通道发送，不受电量阈值限制，也不修改正式提醒状态。", fontSize = 11.sp, color = TextSecondary)
+            if (testStatus.isNotBlank()) Text(testStatus, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface)
         } }
         item { Spacer(Modifier.height(LocalGatewayBottomPadding.current)) }
     }

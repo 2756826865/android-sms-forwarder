@@ -7,6 +7,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import org.fossify.messages.extensions.config
 
 // 经典品牌极简绿调 (MIUI / 微信绿体系)
 val ClassicGreen = Color(0xFF159447)
@@ -99,14 +100,16 @@ fun GatewayTheme(
     val prefs = androidx.compose.runtime.remember(context) { context.getSharedPreferences("gateway_appearance", 0) }
     val state = androidx.compose.runtime.remember(prefs) {
         androidx.compose.runtime.mutableStateOf(Appearance(prefs.getInt("mode", 0), prefs.getBoolean("dynamic", false),
-            prefs.getInt("accent", 0), prefs.getBoolean("amoled", false), prefs.getBoolean("blur", false),
-            prefs.getInt("key_color", if (prefs.contains("accent")) 0 else 0xFF1F7169.toInt()),
+            prefs.getInt("accent", if (context.config.useGatewayDeveloperUi) 3 else 0), prefs.getBoolean("amoled", false), prefs.getBoolean("blur", false),
+            prefs.getInt("key_color", if (prefs.contains("accent") || !context.config.useGatewayDeveloperUi) 0 else 0xFF009688.toInt()),
             prefs.getString("palette", "TonalSpot") ?: "TonalSpot", prefs.getBoolean("spec2025", true),
             prefs.getBoolean("floating", true), prefs.getBoolean("material", false)))
     }
     val settings = state.value
     val dark = when (settings.mode) { 1 -> false; 2 -> true; else -> darkTheme }
-    val accent = if (settings.keyColor != 0) Color(settings.keyColor) else when (settings.accent) { 1 -> Color(0xFF2962C0); 2 -> Color(0xFF8050A0); else -> LightPrimary }
+    // Keep the saved Monet configuration, but do not apply it while its switch is off.
+    val fallbackAccent = when (settings.accent) { 1 -> Color(0xFF2962C0); 2 -> Color(0xFF8050A0); 3 -> Color(0xFFF44336); else -> if (context.config.useGatewayDeveloperUi) Color(0xFF009688) else LightPrimary }
+    val accent = if (settings.dynamic && settings.keyColor != 0) Color(settings.keyColor) else fallbackAccent
     val base = if (settings.dynamic && Build.VERSION.SDK_INT >= 31) {
         if (dark) androidx.compose.material3.dynamicDarkColorScheme(context) else androidx.compose.material3.dynamicLightColorScheme(context)
     } else {
@@ -130,11 +133,11 @@ fun GatewayTheme(
         top.yukonga.miuix.kmp.theme.MiuixTheme(
             controller = top.yukonga.miuix.kmp.theme.ThemeController(
                 if (dark) top.yukonga.miuix.kmp.theme.ColorSchemeMode.MonetDark else top.yukonga.miuix.kmp.theme.ColorSchemeMode.MonetLight,
-                keyColor = if (settings.dynamic && settings.keyColor == 0) colorScheme.primary else if (settings.keyColor != 0) Color(settings.keyColor) else accent,
+                keyColor = if (settings.dynamic && settings.keyColor == 0) colorScheme.primary else accent,
                 isDark = dark,
-                paletteStyle = runCatching { top.yukonga.miuix.kmp.theme.ThemePaletteStyle.valueOf(settings.palette) }
+                paletteStyle = runCatching { top.yukonga.miuix.kmp.theme.ThemePaletteStyle.valueOf(if (settings.dynamic) settings.palette else "TonalSpot") }
                     .getOrDefault(top.yukonga.miuix.kmp.theme.ThemePaletteStyle.TonalSpot),
-                colorSpec = if (settings.spec2025) top.yukonga.miuix.kmp.theme.ThemeColorSpec.Spec2025
+                colorSpec = if (!settings.dynamic || settings.spec2025) top.yukonga.miuix.kmp.theme.ThemeColorSpec.Spec2025
                     else top.yukonga.miuix.kmp.theme.ThemeColorSpec.Spec2021
             )
         ) {
@@ -165,6 +168,7 @@ fun GatewayTheme(
             )) {
                 androidx.compose.runtime.CompositionLocalProvider(
                     androidx.compose.material3.LocalContentColor provides neutralText,
+                    top.yukonga.miuix.kmp.theme.LocalContentColor provides neutralText,
                     content = content
                 )
             }

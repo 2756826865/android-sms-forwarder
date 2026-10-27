@@ -135,6 +135,11 @@ fun ConfigBackupCard() {
         Text(restoreStatus, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
     if (pendingJson != null) AlertDialog(
+            shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp),
+            containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface,
+            titleContentColor = androidx.compose.material3.MaterialTheme.colorScheme.onSurface,
+            textContentColor = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
+
         onDismissRequest = { if (!busy) pendingJson = null },
         title = { Text(if (importing) "恢复前预览" else "导出前预览") },
         text = { Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {

@@ -2,6 +2,9 @@ package org.fossify.messages.ui.compose.diagnostics
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -29,9 +32,14 @@ fun SmsChainDiagnosticsCard() {
     val fallbackConfig = remember { org.fossify.messages.forwarding.ForwardingFallbackConfig(context) }
     if (fallbackPrimary != null) {
         androidx.compose.material3.AlertDialog(
+            shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp),
+            containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface,
+            titleContentColor = androidx.compose.material3.MaterialTheme.colorScheme.onSurface,
+            textContentColor = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
+
             onDismissRequest = { fallbackPrimary = null },
             title = { Text("选择备用通道（仅发送前不可用时）") },
-            text = { Column {
+            text = { Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
                 Text("网络请求结果未知不切换；不自动使用收费短信通道。")
                 instances.filter { it.id != fallbackPrimary && it.enabled && it.hasDispatchConfiguration() && it.channelType != org.fossify.messages.forwarding.ForwardingChannels.SMS_DIRECT }.take(20).forEach { item ->
                     androidx.compose.material3.TextButton(onClick = { fallbackConfig.set(fallbackPrimary!!, item.id); fallbackPrimary = null }) { Text(item.name) }

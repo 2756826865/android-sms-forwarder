@@ -116,7 +116,7 @@ fun SupportSettings(onOverlayChanged: (Boolean) -> Unit = {}) {
                 Column(Modifier.fillMaxWidth().padding(20.dp)) {
                     if (busy) CircularProgressIndicator()
                     error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                    content?.let { OutlinedTextField(value = it, onValueChange = {}, readOnly = true,
+                    content?.let { OutlinedTextField(shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp), value = it, onValueChange = {}, readOnly = true,
                         modifier = Modifier.fillMaxWidth().heightIn(max = 220.dp), label = { Text("分享前请检查内容") }) }
                 }
             })
@@ -129,7 +129,7 @@ fun SupportSettings(onOverlayChanged: (Boolean) -> Unit = {}) {
             if (busy) CircularProgressIndicator()
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             content?.let { snapshot ->
-                OutlinedTextField(value = snapshot, onValueChange = {}, readOnly = true,
+                OutlinedTextField(shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp), value = snapshot, onValueChange = {}, readOnly = true,
                     modifier = Modifier.fillMaxWidth().heightIn(max = 260.dp), label = { Text("内容预览") })
                 OutlinedButton(onClick = { save.launch("sms-forwarder-diagnostics-${System.currentTimeMillis()}.json") }, modifier = Modifier.fillMaxWidth()) { Text("保存日志") }
                 Button(onClick = { shareLogs() }, modifier = Modifier.fillMaxWidth()) { Text("分享日志") }
@@ -153,10 +153,10 @@ fun SupportSettings(onOverlayChanged: (Boolean) -> Unit = {}) {
                     context.applicationInfo.loadIcon(context.packageManager).toBitmap(144, 144).asImageBitmap()
                 }
                 androidx.compose.foundation.Image(appIcon, contentDescription = null, modifier = Modifier.size(96.dp))
-                Text(context.applicationInfo.loadLabel(context.packageManager).toString(), style = MaterialTheme.typography.headlineLarge)
+                Text(context.applicationInfo.loadLabel(context.packageManager).toString(), style = MaterialTheme.typography.headlineLarge, color = MaterialTheme.colorScheme.onSurface)
                 val info = remember(context) { context.packageManager.getPackageInfo(context.packageName, 0) }
-                Text("版本 ${info.versionName.orEmpty()}", style = MaterialTheme.typography.titleMedium)
-                Text("短信收发与转发", style = MaterialTheme.typography.bodyMedium)
+                Text("版本 ${info.versionName.orEmpty()}", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+                Text("短信收发与转发", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(36.dp))
                 top.yukonga.miuix.kmp.basic.Card(Modifier.fillMaxWidth()) {
                     Column {

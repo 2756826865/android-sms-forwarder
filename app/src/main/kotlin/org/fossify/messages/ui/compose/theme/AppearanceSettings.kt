@@ -13,7 +13,7 @@ import androidx.compose.ui.Modifier
 
 internal val LocalAppearance = staticCompositionLocalOf { Appearance() }
 internal val LocalSetAppearance = staticCompositionLocalOf<(Appearance) -> Unit> { {} }
-internal data class Appearance(val mode: Int = 0, val dynamic: Boolean = false, val accent: Int = 0, val amoled: Boolean = false, val blur: Boolean = false, val keyColor: Int = 0xFF1F7169.toInt(), val palette: String = "TonalSpot", val spec2025: Boolean = true, val floating: Boolean = true, val material: Boolean = false)
+internal data class Appearance(val mode: Int = 0, val dynamic: Boolean = false, val accent: Int = 3, val amoled: Boolean = false, val blur: Boolean = false, val keyColor: Int = 0xFF009688.toInt(), val palette: String = "TonalSpot", val spec2025: Boolean = true, val floating: Boolean = true, val material: Boolean = false)
 
 @Composable
 fun AppearanceSettingsButton(embedded: Boolean = false) {
@@ -39,8 +39,8 @@ fun AppearanceSettingsButton(embedded: Boolean = false) {
                 }
                 top.yukonga.miuix.kmp.basic.Card(Modifier.fillMaxWidth().padding(top = 12.dp)) {
                     top.yukonga.miuix.kmp.preference.OverlayDropdownPreference(
-                        title = "预设主题色", items = listOf("绿色", "蓝色", "紫色"),
-                        selectedIndex = value.accent.coerceIn(0, 2),
+                        title = "基础配色", items = listOf("青绿", "蓝色", "紫色", "橘红"),
+                        selectedIndex = value.accent.coerceIn(0, 3),
                         onSelectedIndexChange = { update(value.copy(accent = it, dynamic = false, keyColor = 0)) })
                     val palettes = top.yukonga.miuix.kmp.theme.ThemePaletteStyle.entries
                     top.yukonga.miuix.kmp.preference.OverlayDropdownPreference(
@@ -51,7 +51,7 @@ fun AppearanceSettingsButton(embedded: Boolean = false) {
                         title = "色彩规范", items = listOf("2021", "2025"), selectedIndex = if (value.spec2025) 1 else 0,
                         onSelectedIndexChange = { update(value.copy(spec2025 = it == 1)) })
                 }
-                OutlinedTextField(value = hex, onValueChange = { hex = it.take(7) },
+                OutlinedTextField(shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp), value = hex, onValueChange = { hex = it.take(7) },
                     label = { Text("自定义颜色 RRGGBB") }, singleLine = true,
                     isError = hex.isNotEmpty() && parsed == null)
                 TextButton(enabled = parsed != null, onClick = {
