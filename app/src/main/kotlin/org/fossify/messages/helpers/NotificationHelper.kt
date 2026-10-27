@@ -61,7 +61,8 @@ class NotificationHelper(private val context: Context) {
             putExtra(THREAD_ID, threadId)
             putExtra(THREAD_NUMBER, address)
             val yellow = YellowPageHelper.lookup(context, address, body)
-            val titleToPass = yellow?.brand ?: sender ?: context.getNameAndPhotoFromPhoneNumber(address).name
+            val fallbackTitle = sender ?: context.getNameAndPhotoFromPhoneNumber(address).name
+            val titleToPass = yellow?.brand ?: PhoneNumberDisplayHelper.formatDisplayNumber(fallbackTitle)
             putExtra(THREAD_TITLE, titleToPass)
         }
         val contentPendingIntent =

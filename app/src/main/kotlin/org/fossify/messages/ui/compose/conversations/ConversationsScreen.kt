@@ -59,6 +59,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.engine.DiskCacheStrategy
+import org.fossify.messages.helpers.PhoneNumberDisplayHelper
 import org.fossify.messages.helpers.YellowPageHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -98,6 +99,7 @@ fun ConversationsScreen(
     var confirmSync by remember { mutableStateOf(false) }
     var showMoreOptions by remember { mutableStateOf(false) }
     val syncProgress by org.fossify.messages.helpers.SmsSyncProgress.state.collectAsState()
+    var isNotificationBannerDismissed by remember { mutableStateOf(false) }
     LaunchedEffect(searchQuery) { conversationsViewModel.search(searchQuery) }
     if (confirmSync) androidx.compose.material3.AlertDialog(
         onDismissRequest = { confirmSync = false }, title = { Text("全量同步历史短信") },
@@ -138,6 +140,19 @@ fun ConversationsScreen(
                 it.snippet.contains(searchQuery, ignoreCase = true) ||
                 it.phoneNumber.contains(searchQuery, ignoreCase = true) ||
                 YellowPageHelper.lookup(context, it.phoneNumber, it.snippet)?.brand?.contains(searchQuery, ignoreCase = true) == true
+            }
+        }
+    }
+
+    LaunchedEffect(uiState.diagnosticTraceId, filteredConversations, uiState.isLoading, searchQuery.isBlank()) {
+        uiState.diagnosticTraceId?.let { trace ->
+            org.fossify.messages.helpers.SmsSyncDiagnostics.recent(trace)?.let { diagnostics ->
+                diagnostics.conversations("screen_filtered_source", filteredConversations)
+                diagnostics.log("screen_source", "loading=${uiState.isLoading} searchActive=${searchQuery.isNotBlank()} scope=data_source screenVisibility=not_measured")
+                if (searchQuery.isNotBlank()) {
+                    uiState.conversations.filterNot { row -> filteredConversations.any { it.threadId == row.threadId } }
+                        .forEach { diagnostics.threadResolution(it.threadId, "search_filter") }
+                }
             }
         }
     }
@@ -352,7 +367,7 @@ fun ConversationsScreen(
                     color = GatewayOrange
                 )
             }
-            // 默认短信应用轻量提醒条 (若非默认应用，置于搜索栏下方)
+            // 默认短信应用与系统权限提醒条 (置于搜索栏下方)
             if (!uiState.isDefaultSmsApp) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Surface(
@@ -378,6 +393,55 @@ fun ConversationsScreen(
                             modifier = Modifier.weight(1f)
                         )
                         Text("去设置", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = GatewayOrange)
+                    }
+                }
+            } else if (uiState.isNotificationSmsDenied && !isNotificationBannerDismissed) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Surface(
+                    color = GatewayOrange.copy(alpha = 0.12f),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "⚠️ 小米系统未开启「通知类短信」，10086/服务号短信被拦截",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = GatewayOrange,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable {
+                                    org.fossify.messages.helpers.DeviceCompatHelper.openMiuiPermissionEditor(context)
+                                }
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            "去允许",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = GatewayOrange,
+                            modifier = Modifier.clickable {
+                                org.fossify.messages.helpers.DeviceCompatHelper.openMiuiPermissionEditor(context)
+                            }
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            "✕",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = GatewayOrange,
+                            modifier = Modifier.clickable {
+                                isNotificationBannerDismissed = true
+                            }
+                        )
                     }
                 }
             }
@@ -427,6 +491,7 @@ fun ConversationsScreen(
                                 if (uiState.deletingThreadId == null) deleteTarget = conv
                             },
                             onClick = {
+                                conversationsViewModel.markThreadReadLocally(conv.threadId)
                                 val yellow = YellowPageHelper.lookup(context, conv.phoneNumber, conv.snippet)
                                 val titleToPass = if (conv.title.isBlank() ||
                                     conv.title.equals(conv.phoneNumber, ignoreCase = true) ||
@@ -478,15 +543,17 @@ fun ConversationItem(
     }
 
     val displayTitle = remember(conversation.title, yellowResult) {
+        val isJustNumber = conversation.title.isBlank() ||
+            conversation.title.equals(conversation.phoneNumber, ignoreCase = true) ||
+            conversation.title.replace("+", "").replace(" ", "").replace("-", "").all { it.isDigit() }
         if (yellowResult != null) {
-            val isJustNumber = conversation.title.isBlank() ||
-                conversation.title.equals(conversation.phoneNumber, ignoreCase = true) ||
-                conversation.title.replace("+", "").replace(" ", "").replace("-", "").all { it.isDigit() }
             if (isJustNumber) {
                 yellowResult.brand
             } else {
                 conversation.title
             }
+        } else if (isJustNumber) {
+            PhoneNumberDisplayHelper.formatDisplayNumber(conversation.title.ifBlank { conversation.phoneNumber })
         } else {
             conversation.title
         }

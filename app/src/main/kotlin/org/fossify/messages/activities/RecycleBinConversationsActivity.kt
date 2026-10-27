@@ -22,6 +22,7 @@ import org.fossify.messages.helpers.IS_RECYCLE_BIN
 import org.fossify.messages.helpers.THREAD_ID
 import org.fossify.messages.helpers.THREAD_TITLE
 import org.fossify.messages.helpers.THREAD_NUMBER
+import org.fossify.messages.helpers.PhoneNumberDisplayHelper
 import org.fossify.messages.helpers.YellowPageHelper
 import org.fossify.messages.models.Conversation
 import org.fossify.messages.models.Events
@@ -172,11 +173,11 @@ class RecycleBinConversationsActivity : SimpleActivity() {
             val conversation = any as Conversation
             putExtra(THREAD_ID, conversation.threadId)
             val yellow = YellowPageHelper.lookup(this@RecycleBinConversationsActivity, conversation.phoneNumber, conversation.snippet)
-            val titleToPass = if (conversation.title.isBlank() ||
+            val isJustNumber = conversation.title.isBlank() ||
                 conversation.title.equals(conversation.phoneNumber, ignoreCase = true) ||
                 conversation.title.replace("+", "").replace(" ", "").replace("-", "").all { it.isDigit() }
-            ) {
-                yellow?.brand ?: conversation.title
+            val titleToPass = if (isJustNumber) {
+                yellow?.brand ?: PhoneNumberDisplayHelper.formatDisplayNumber(conversation.title.ifBlank { conversation.phoneNumber })
             } else {
                 conversation.title
             }

@@ -12,6 +12,7 @@ import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.engine.DiskCacheStrategy
+import org.fossify.messages.helpers.PhoneNumberDisplayHelper
 import org.fossify.messages.helpers.YellowPageHelper
 import com.qtalk.recyclerviewfastscroller.RecyclerViewFastScroller
 import org.fossify.commons.adapters.MyRecyclerViewListAdapter
@@ -210,11 +211,13 @@ abstract class BaseConversationsAdapter(
             )
 
             val yellow = YellowPageHelper.lookup(activity, conversation.phoneNumber, conversation.snippet)
+            val isJustNumber = conversation.title.isBlank() ||
+                conversation.title.equals(conversation.phoneNumber, ignoreCase = true) ||
+                conversation.title.replace("+", "").replace(" ", "").replace("-", "").all { it.isDigit() }
             val displayTitle = if (yellow != null) {
-                val isJustNumber = conversation.title.isBlank() ||
-                    conversation.title.equals(conversation.phoneNumber, ignoreCase = true) ||
-                    conversation.title.replace("+", "").replace(" ", "").replace("-", "").all { it.isDigit() }
                 if (isJustNumber) yellow.brand else conversation.title
+            } else if (isJustNumber) {
+                PhoneNumberDisplayHelper.formatDisplayNumber(conversation.title.ifBlank { conversation.phoneNumber })
             } else {
                 conversation.title
             }

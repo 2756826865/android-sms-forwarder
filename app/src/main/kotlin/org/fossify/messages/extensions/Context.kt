@@ -57,6 +57,7 @@ import org.fossify.messages.helpers.FILE_SIZE_NONE
 import org.fossify.messages.helpers.MAX_MESSAGE_LENGTH
 import org.fossify.messages.helpers.MESSAGES_LIMIT
 import org.fossify.messages.helpers.MessagingCache
+import org.fossify.messages.helpers.PhoneNumberDisplayHelper
 import org.fossify.messages.helpers.YellowPageHelper
 import org.fossify.messages.helpers.NotificationHelper
 import org.fossify.messages.helpers.ShortcutHelper
@@ -426,10 +427,11 @@ private fun Context.getStoredThreadDates(threadId: Long?): Map<Long, Int> {
         StoredThreadDateSource(Mms.CONTENT_URI, Mms.THREAD_ID, Mms.DATE, false)
     )) {
         try {
+            val sortOrder = if (threadId != null) "$dateColumn DESC LIMIT 1" else "$dateColumn DESC"
             contentResolver.query(
                 uri, arrayOf(threadColumn, dateColumn),
                 threadId?.let { "$threadColumn = ?" },
-                threadId?.let { arrayOf(it.toString()) }, null
+                threadId?.let { arrayOf(it.toString()) }, sortOrder
             )?.use { cursor ->
                 while (cursor.moveToNext()) {
                     val id = cursor.getLongValue(threadColumn)
@@ -455,6 +457,7 @@ fun Context.getConversations(
     threadId: Long? = null,
     privateContacts: ArrayList<SimpleContact> = ArrayList(),
     strict: Boolean = false,
+    diagnostics: org.fossify.messages.helpers.SmsSyncDiagnostics? = null,
 ): ArrayList<Conversation> {
     val uri = "${Threads.CONTENT_URI}?simple=true".toUri()
     val projection = mutableListOf(
@@ -477,19 +480,25 @@ fun Context.getConversations(
     val conversations = ArrayList<Conversation>()
     val simpleContactHelper = SimpleContactsHelper(this)
     if (!hasPermission(PERMISSION_READ_SMS)) {
+        diagnostics?.log("thread_query", "status=permission_denied result=local_fallback")
         if (strict) throw SecurityException("SMS_PERMISSION_DENIED")
         return ArrayList(conversationsDB.getAllRegular())
     }
     val unreadMap = runCatching { getUnreadCountsByThreadStrict(threadId) }.getOrNull()
     val storedThreadDates = getStoredThreadDates(threadId)
+    var diagnosticTraversed = 0
     try {
         queryCursorUnsafe(
             uri,
             projection.toTypedArray(),
             selection,
             selectionArgs,
-            sortOrder
+            sortOrder,
+            onCursor = { c -> diagnostics?.optional("thread_cursor") {
+                diagnostics.log("thread_cursor", if (c == null) "status=null_cursor" else "status=ok count=${c.count}")
+            } }
         ) { cursor ->
+            diagnosticTraversed++
             val id = cursor.getLongValue(Threads._ID)
             var snippet = cursor.getStringValue(Threads.SNIPPET) ?: ""
             if (snippet.isEmpty()) {
@@ -497,10 +506,15 @@ fun Context.getConversations(
             }
 
             var date = cursor.getLongValue(Threads.DATE)
+            val diagnosticProviderDate = date
             if (date.toString().length > 10) {
                 date /= 1000
             }
-            date = storedThreadDates[id]?.toLong() ?: date
+            date = maxOf(date, storedThreadDates[id]?.toLong() ?: 0L)
+            diagnostics?.threadDate(id, diagnosticProviderDate, storedThreadDates[id], date)
+            if (id == 14L || id == 8855L || id == 5199L) {
+                android.util.Log.i("SmsSyncAudit", "[ThreadCursor] id=" + id + " providerMs=" + diagnosticProviderDate + " storedDate=" + storedThreadDates[id] + " finalSec=" + date)
+            }
 
             // drafts are stored locally they take priority over the original date
             val draft = draftsDB.getDraftById(id)
@@ -518,13 +532,21 @@ fun Context.getConversations(
 
             // A system blocklist entry must not hide an existing conversation.
             if (phoneNumbers.isEmpty()) {
+                diagnostics?.threadResolution(id, "unresolved_recipients_local_fallback")
                 // An unresolved provider key does not prove that a thread was deleted.
-                conversationsDB.getConversationWithThreadId(id)?.let(conversations::add)
+                val storedConversation = conversationsDB.getConversationWithThreadId(id)
+                diagnostics?.threadResolution(id, if (storedConversation == null) "unresolved_recipients_no_local_conversation" else "unresolved_recipients_using_local_conversation")
+                storedConversation?.let(conversations::add)
                 return@queryCursorUnsafe
             }
 
+            val hasCommercialAddress = phoneNumbers.any { YellowPageHelper.isCommercialOrSpecialAddress(it) }
             val names = getThreadContactNames(phoneNumbers, privateContacts)
-            val title = TextUtils.join(", ", names.toTypedArray())
+            val title = if (hasCommercialAddress) {
+                names.firstOrNull() ?: phoneNumbers.first()
+            } else {
+                TextUtils.join(", ", names.toTypedArray())
+            }
             val photoUri = if (phoneNumbers.size == 1 && hasPermission(PERMISSION_READ_CONTACTS)) {
                 runCatching {
                     simpleContactHelper.getPhotoUriFromPhoneNumber(phoneNumbers.first())
@@ -532,9 +554,14 @@ fun Context.getConversations(
             } else {
                 ""
             }
-            val isGroupConversation = phoneNumbers.size > 1
-            val unreadCount = unreadMap?.get(id) ?: 0
-            val read = if (unreadMap != null) unreadCount == 0 else cursor.getIntValue(Threads.READ) == 1
+            val isGroupConversation = phoneNumbers.size > 1 && !hasCommercialAddress
+            val storedConversation = conversationsDB.getConversationWithThreadId(id)
+            var unreadCount = unreadMap?.get(id) ?: 0
+            var read = if (unreadMap != null) unreadCount == 0 else cursor.getIntValue(Threads.READ) == 1
+            if (storedConversation != null && storedConversation.read) {
+                read = true
+                unreadCount = 0
+            }
             val conversation = Conversation(
                 threadId = id,
                 snippet = snippet,
@@ -548,19 +575,24 @@ fun Context.getConversations(
                 unreadCount = unreadCount,
             )
             conversations.add(conversation)
+            diagnostics?.threadResolution(id, "resolved")
         }
     } catch (error: SecurityException) {
+        diagnostics?.log("thread_query", "status=failed kind=SecurityException strict=$strict")
         if (strict) throw error
         return ArrayList(conversationsDB.getAllRegular())
     } catch (sqliteException: SQLiteException) {
+        diagnostics?.log("thread_query", "status=failed kind=${sqliteException.javaClass.simpleName} strict=$strict")
         if (strict) throw sqliteException
         return ArrayList(conversationsDB.getAllRegular())
     } catch (e: Exception) {
+        diagnostics?.log("thread_query", "status=failed kind=${e.javaClass.simpleName} strict=$strict")
         if (e is java.util.concurrent.CancellationException || strict) throw e
         return ArrayList(conversationsDB.getAllRegular())
     }
 
     conversations.sortByDescending { it.date }
+    diagnostics?.log("thread_query_complete", "traversed=$diagnosticTraversed returned=${conversations.size}")
     return conversations
 }
 
@@ -570,16 +602,19 @@ private fun Context.queryCursorUnsafe(
     selection: String? = null,
     selectionArgs: Array<String>? = null,
     sortOrder: String? = null,
+    onCursor: ((Cursor?) -> Unit)? = null,
     callback: (cursor: Cursor) -> Unit,
 ) {
     val cursor = contentResolver.query(uri, projection, selection, selectionArgs, sortOrder)
     cursor?.use {
+        onCursor?.invoke(cursor)
         if (cursor.moveToFirst()) {
             do {
                 callback(cursor)
             } while (cursor.moveToNext())
         }
     }
+    if (cursor == null) onCursor?.invoke(null)
 }
 
 fun Context.getConversationIds(): List<Long> {
@@ -840,7 +875,7 @@ fun Context.getThreadContactNames(
                 names.add(privateContact.name)
             } else {
                 val yellow = YellowPageHelper.lookup(this, number)
-                names.add(yellow?.brand ?: number)
+                names.add(yellow?.brand ?: PhoneNumberDisplayHelper.formatDisplayNumber(number))
             }
         }
     }
@@ -927,6 +962,14 @@ fun Context.getSuggestedContacts(
 fun Context.getNameAndPhotoFromPhoneNumber(number: String): NamePhoto {
     MessagingCache.namePhoto.get(number)?.let { return it }
 
+    if (YellowPageHelper.isCommercialOrSpecialAddress(number)) {
+        val yellow = YellowPageHelper.lookup(this, number)
+        val name = yellow?.brand ?: PhoneNumberDisplayHelper.formatDisplayNumber(number)
+        val result = NamePhoto(name, yellow?.logoUrl)
+        MessagingCache.namePhoto.put(number, result)
+        return result
+    }
+
     var photoUri: String? = null
     var contactName: String? = null
     if (hasPermission(PERMISSION_READ_CONTACTS)) {
@@ -955,7 +998,7 @@ fun Context.getNameAndPhotoFromPhoneNumber(number: String): NamePhoto {
                 photoUri = yellow.logoUrl
             }
         } else {
-            resolvedName = number
+            resolvedName = PhoneNumberDisplayHelper.formatDisplayNumber(number)
         }
     }
     val result = NamePhoto(resolvedName, photoUri)
@@ -1150,20 +1193,29 @@ fun Context.markThreadMessagesRead(threadId: Long) {
         put(Sms.READ, 1)
         put(Sms.SEEN, 1)
     }
-    val smsSelection = "${Sms.THREAD_ID}=? AND ${Sms.TYPE}=? AND (${Sms.READ}=? OR ${Sms.SEEN}=?)"
-    val smsArgs = arrayOf(id, Sms.MESSAGE_TYPE_INBOX.toString(), "0", "0")
-    contentResolver.update(Sms.CONTENT_URI, smsValues, smsSelection, smsArgs)
+    val smsSelection = "${Sms.THREAD_ID} = ? AND (${Sms.READ} = 0 OR ${Sms.SEEN} = 0)"
+    val smsArgs = arrayOf(id)
+    runCatching { contentResolver.update(Sms.CONTENT_URI, smsValues, smsSelection, smsArgs) }
+    runCatching {
+        val threadUri = Uri.parse("${Threads.CONTENT_URI}/$threadId")
+        contentResolver.update(threadUri, smsValues, null, null)
+    }
 
     val mmsValues = ContentValues().apply {
         put(Mms.READ, 1)
         put(Mms.SEEN, 1)
     }
-    val mmsSelection = "${Mms.THREAD_ID}=? AND ${Mms.MESSAGE_BOX}=? AND (${Mms.READ}=? OR ${Mms.SEEN}=?)"
-    val mmsArgs = arrayOf(id, Mms.MESSAGE_BOX_INBOX.toString(), "0", "0")
-    contentResolver.update(Mms.CONTENT_URI, mmsValues, mmsSelection, mmsArgs)
+    val mmsSelection = "${Mms.THREAD_ID} = ? AND (${Mms.READ} = 0 OR ${Mms.SEEN} = 0)"
+    val mmsArgs = arrayOf(id)
+    runCatching { contentResolver.update(Mms.CONTENT_URI, mmsValues, mmsSelection, mmsArgs) }
 
     messagesDB.markThreadRead(threadId)
-    conversationsDB.markRead(threadId)
+    val stored = conversationsDB.getConversationWithThreadId(threadId)
+    if (stored != null) {
+        conversationsDB.insertOrUpdate(stored.copy(read = true, unreadCount = 0, date = maxOf(stored.date, (System.currentTimeMillis() / 1000).toInt())))
+    } else {
+        conversationsDB.markRead(threadId)
+    }
     // Publish only after both provider and local writes have completed.
     org.fossify.messages.helpers.refreshConversations()
 }

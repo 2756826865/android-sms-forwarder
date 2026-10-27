@@ -400,6 +400,7 @@ object SubscriptionResolver {
     /**
      * 读取活跃卡列表并转为 Snapshot 实体
      */
+    @android.annotation.SuppressLint("MissingPermission")
     fun getActiveSubscriptionSnapshots(context: Context): List<SubscriptionSnapshot> {
         val activeList = runCatching {
             try {

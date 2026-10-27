@@ -8,6 +8,7 @@ import android.view.ViewGroup
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.engine.DiskCacheStrategy
 import org.fossify.messages.R
+import org.fossify.messages.helpers.PhoneNumberDisplayHelper
 import org.fossify.messages.helpers.YellowPageHelper
 import org.fossify.commons.adapters.MyRecyclerViewAdapter
 import org.fossify.commons.extensions.getTextSize
@@ -91,7 +92,15 @@ class SearchResultsAdapter(
             }
 
             val yellow = YellowPageHelper.lookup(activity, searchResult.title, searchResult.snippet)
-            val displayTitle = yellow?.brand ?: searchResult.title
+            val isJustNumber = searchResult.title.isBlank() ||
+                searchResult.title.replace("+", "").replace(" ", "").replace("-", "").all { it.isDigit() }
+            val displayTitle = if (yellow != null && isJustNumber) {
+                yellow.brand
+            } else if (isJustNumber) {
+                PhoneNumberDisplayHelper.formatDisplayNumber(searchResult.title)
+            } else {
+                searchResult.title
+            }
             searchResultTitle.text = displayTitle.highlightTextPart(textToHighlight, highlightColor)
             val logoUrl = yellow?.logoUrl.orEmpty()
             if (searchResult.photoUri.isNotBlank()) {

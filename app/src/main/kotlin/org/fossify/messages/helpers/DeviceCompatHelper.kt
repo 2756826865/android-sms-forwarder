@@ -287,6 +287,44 @@ object DeviceCompatHelper {
         return Telephony.Sms.getDefaultSmsPackage(context) == context.packageName
     }
 
+    fun isMiui(): Boolean {
+        val brand = detectBrand()
+        return brand == DeviceBrand.XIAOMI || brand == DeviceBrand.REDMI || brand == DeviceBrand.POCO
+    }
+
+    fun isNotificationSmsDenied(context: Context): Boolean {
+        if (!isMiui()) return false
+        return try {
+            val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as android.app.AppOpsManager
+            val method = android.app.AppOpsManager::class.java.getMethod(
+                "checkOpNoThrow",
+                Int::class.javaPrimitiveType,
+                Int::class.javaPrimitiveType,
+                String::class.java
+            )
+            // 10008 is Xiaomi HyperOS/MIUI OP_READ_NOTIFICATION_SMS
+            val mode = method.invoke(appOps, 10008, android.os.Process.myUid(), context.packageName) as Int
+            mode != android.app.AppOpsManager.MODE_ALLOWED
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    fun openMiuiPermissionEditor(context: Context): Boolean {
+        return runCatching {
+            val intent = Intent("miui.intent.action.APP_PERM_EDITOR").apply {
+                setClassName("com.miui.securitycenter", "com.miui.permcenter.permissions.PermissionsEditorActivity")
+                putExtra("extra_pkgname", context.packageName)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+            true
+        }.getOrElse {
+            openAppDetails(context)
+            false
+        }
+    }
+
     fun isBatteryOptimizationIgnored(context: Context): Boolean {
         val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
         return powerManager.isIgnoringBatteryOptimizations(context.packageName)

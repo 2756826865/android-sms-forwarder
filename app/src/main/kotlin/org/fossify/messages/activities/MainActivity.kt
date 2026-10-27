@@ -82,6 +82,7 @@ import org.fossify.messages.helpers.SEARCHED_MESSAGE_ID
 import org.fossify.messages.helpers.THREAD_ID
 import org.fossify.messages.helpers.THREAD_TITLE
 import org.fossify.messages.helpers.THREAD_NUMBER
+import org.fossify.messages.helpers.PhoneNumberDisplayHelper
 import org.fossify.messages.helpers.YellowPageHelper
 import org.fossify.messages.helpers.formatConversationDate
 import org.fossify.messages.messaging.SmsRecoveryWorker
@@ -671,9 +672,23 @@ class MainActivity : SimpleActivity() {
         handlePermission(PERMISSION_READ_SMS) { hasReadSms ->
             if (hasReadSms) {
                 ensureReceiveSmsPermission()
+                ensureMiuiNotificationSmsPermission()
             }
             initMessenger()
             registerConversationEvents()
+        }
+    }
+
+    private fun ensureMiuiNotificationSmsPermission() {
+        if (org.fossify.messages.helpers.DeviceCompatHelper.isMiui() &&
+            org.fossify.messages.helpers.DeviceCompatHelper.isNotificationSmsDenied(this)) {
+            runCatching {
+                androidx.core.app.ActivityCompat.requestPermissions(
+                    this,
+                    arrayOf("com.miui.permission.READ_NOTIFICATION_SMS"),
+                    10008
+                )
+            }
         }
     }
 
@@ -1003,11 +1018,11 @@ class MainActivity : SimpleActivity() {
             val conversation = any as Conversation
             putExtra(THREAD_ID, conversation.threadId)
             val yellow = YellowPageHelper.lookup(this@MainActivity, conversation.phoneNumber, conversation.snippet)
-            val titleToPass = if (conversation.title.isBlank() ||
+            val isJustNumber = conversation.title.isBlank() ||
                 conversation.title.equals(conversation.phoneNumber, ignoreCase = true) ||
                 conversation.title.replace("+", "").replace(" ", "").replace("-", "").all { it.isDigit() }
-            ) {
-                yellow?.brand ?: conversation.title
+            val titleToPass = if (isJustNumber) {
+                yellow?.brand ?: PhoneNumberDisplayHelper.formatDisplayNumber(conversation.title.ifBlank { conversation.phoneNumber })
             } else {
                 conversation.title
             }

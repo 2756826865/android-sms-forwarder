@@ -11,6 +11,12 @@ import org.fossify.messages.models.RecycleBinMessage
 
 @Dao
 interface MessagesDao {
+    @Query("SELECT is_mms AS isMMS, is_scheduled AS isScheduled, COUNT(*) AS count FROM messages GROUP BY is_mms, is_scheduled")
+    fun getHistorySyncCounts(): List<org.fossify.messages.models.SyncMessageCount>
+
+    @Query("SELECT m.id, m.thread_id AS threadId, m.date, m.is_mms AS isMMS, m.is_scheduled AS isScheduled, EXISTS(SELECT 1 FROM recycle_bin_messages r WHERE r.id = m.id) AS recycled FROM messages m WHERE m.id IN (:ids)")
+    fun getHistorySyncMetadata(ids: List<Long>): List<org.fossify.messages.models.SyncMessageMetadata>
+
     @Query("SELECT DISTINCT m.thread_id FROM messages m INNER JOIN recycle_bin_messages r ON r.id = m.id WHERE NOT EXISTS (SELECT 1 FROM messages visible LEFT JOIN recycle_bin_messages removed ON removed.id = visible.id WHERE visible.thread_id = m.thread_id AND removed.id IS NULL)")
     fun getFullyRecycledThreadIds(): List<Long>
 

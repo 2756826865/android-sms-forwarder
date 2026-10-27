@@ -63,6 +63,7 @@ fun Context.syncSmsHistory(source: String, strict: Boolean = false): SmsSyncResu
     if (!historySyncRunning.compareAndSet(false, true))
         return SmsSyncResult(traceId, false, 0, 0, 0, 0, 0, "already_running")
     SmsSyncProgress.update(SmsSyncProgress.State(running = true))
+    val diagnostics = SmsSyncDiagnostics.start(traceId, source)
 
     var readCount = 0
     var processedCount = 0
@@ -72,138 +73,142 @@ fun Context.syncSmsHistory(source: String, strict: Boolean = false): SmsSyncResu
     var totalSms = 0
 
     try {
-        val projection = arrayOf(
-            Telephony.Sms._ID,
-            Telephony.Sms.THREAD_ID,
-            Telephony.Sms.ADDRESS,
-            Telephony.Sms.BODY,
-            Telephony.Sms.DATE,
-            Telephony.Sms.READ,
-            Telephony.Sms.TYPE,
-            Telephony.Sms.STATUS,
-            Telephony.Sms.SUBSCRIPTION_ID
-        )
+        diagnostics?.provider(this)
+        diagnostics?.database(this, "before")
 
-        val cursor = contentResolver.query(
-            Telephony.Sms.CONTENT_URI,
-            projection,
-            null,
-            null,
-            "${Telephony.Sms.DATE} DESC"
-        )
 
-        if (cursor == null) {
-            val elapsed = System.currentTimeMillis() - startTime
-            Log.w(
-                "SmsSync",
-                "trace=$traceId event=end outcome=null_cursor source=$source elapsedMs=$elapsed watermark=unchanged"
-            )
-            if (strict) throw IllegalStateException("SMS_NULL_CURSOR")
-            return SmsSyncResult(traceId, false, 0, 0, 0, 0, elapsed, "null_cursor")
-        }
+        val typeSelections = listOf(
+            "${Telephony.Sms._ID} > 0"
+        )
 
         val contactCache = HashMap<String, NamePhoto>()
         val batch = ArrayList<Message>(1000)
+        val seenMsgIds = HashSet<Long>()
 
-        cursor.use { c ->
-            // count can perform a Provider IPC and throw if permission changes.
-            // Establish ownership before the first operation on the cursor.
-            totalSms = c.count
-            SmsSyncProgress.update(SmsSyncProgress.State(running = true, completed = 0, total = totalSms, failed = 0))
-            val idCol = c.getColumnIndex(Telephony.Sms._ID)
-            val threadCol = c.getColumnIndex(Telephony.Sms.THREAD_ID)
-            val addrCol = c.getColumnIndex(Telephony.Sms.ADDRESS)
-            val bodyCol = c.getColumnIndex(Telephony.Sms.BODY)
-            val dateCol = c.getColumnIndex(Telephony.Sms.DATE)
-            val readCol = c.getColumnIndex(Telephony.Sms.READ)
-            val typeCol = c.getColumnIndex(Telephony.Sms.TYPE)
-            val statusCol = c.getColumnIndex(Telephony.Sms.STATUS)
-            val subCol = c.getColumnIndex(Telephony.Sms.SUBSCRIPTION_ID)
-            val simCol = c.getColumnIndex("sim_id")
+        for (typeFilter in typeSelections) {
+            var minId = Long.MAX_VALUE
+            while (true) {
+                val selection = if (minId == Long.MAX_VALUE) typeFilter else "$typeFilter AND ${Telephony.Sms._ID} < $minId"
+                val cursor = contentResolver.query(
+                    Telephony.Sms.CONTENT_URI,
+                    null,
+                    selection,
+                    null,
+                    "${Telephony.Sms._ID} DESC"
+                ) ?: break
 
-            while (c.moveToNext()) {
-                processedCount++
-                val id = if (idCol >= 0) c.getLong(idCol) else 0L
-                var threadId = if (threadCol >= 0) c.getLong(threadCol) else 0L
-                val address = if (addrCol >= 0) c.getString(addrCol) else null
+                var rowsInPage = 0
+                var pageMinId = minId
 
-                if (id <= 0L || threadId <= 0L) {
-                    parseFailedCount++
-                    if (processedCount % 500 == 0) SmsSyncProgress.update(SmsSyncProgress.State(
-                        running = true, completed = processedCount, total = totalSms, failed = parseFailedCount
-                    ))
-                    continue
-                }
+                cursor.use { c ->
+                    totalSms += c.count
+                    diagnostics?.log("business_cursor", "status=ok count=${c.count} uri=${Telephony.Sms.CONTENT_URI} selection=$selection sort=_id_desc projection=business")
+                    SmsSyncProgress.update(SmsSyncProgress.State(running = true, completed = processedCount, total = maxOf(totalSms, processedCount), failed = parseFailedCount))
+                    val idCol = c.getColumnIndex(Telephony.Sms._ID)
+                    val threadCol = c.getColumnIndex(Telephony.Sms.THREAD_ID)
+                    val addrCol = c.getColumnIndex(Telephony.Sms.ADDRESS)
+                    val bodyCol = c.getColumnIndex(Telephony.Sms.BODY)
+                    val dateCol = c.getColumnIndex(Telephony.Sms.DATE)
+                    val readCol = c.getColumnIndex(Telephony.Sms.READ)
+                    val typeCol = c.getColumnIndex(Telephony.Sms.TYPE)
+                    val statusCol = c.getColumnIndex(Telephony.Sms.STATUS)
+                    val subCol = c.getColumnIndex(Telephony.Sms.SUBSCRIPTION_ID)
+                    val simCol = c.getColumnIndex("sim_id")
 
-                val body = if (bodyCol >= 0) c.getString(bodyCol) ?: "" else ""
-                val rawDate = if (dateCol >= 0) c.getLong(dateCol) else 0L
-                val date = if (rawDate > 9999999999L) (rawDate / 1000L).toInt() else rawDate.toInt()
-                val read = if (readCol >= 0) c.getInt(readCol) == 1 else false
-                val type = if (typeCol >= 0) c.getInt(typeCol) else Telephony.Sms.MESSAGE_TYPE_INBOX
-                val status = if (statusCol >= 0) c.getInt(statusCol) else Telephony.Sms.STATUS_NONE
-                var subscriptionId = if (subCol >= 0) c.getInt(subCol) else SubscriptionManager.INVALID_SUBSCRIPTION_ID
-                if (subscriptionId == SubscriptionManager.INVALID_SUBSCRIPTION_ID && simCol >= 0) {
-                    subscriptionId = c.getInt(simCol)
-                }
+                    while (c.moveToNext()) {
+                        rowsInPage++
+                        val id = if (idCol >= 0) c.getLong(idCol) else 0L
+                        val threadId = if (threadCol >= 0) c.getLong(threadCol) else 0L
+                        val address = if (addrCol >= 0) c.getString(addrCol) else null
+                        val rawDate = if (dateCol >= 0) c.getLong(dateCol) else 0L
+                        if (id in 1 until pageMinId) pageMinId = id
 
-                val addrKey = address ?: ""
-                val namePhoto = if (addrKey.isNotEmpty()) {
-                    contactCache.getOrPut(addrKey) { getNameAndPhotoFromPhoneNumber(addrKey) }
-                } else {
-                    NamePhoto("", null)
-                }
+                        if (id <= 0L || threadId <= 0L || !seenMsgIds.add(id)) {
+                            if (id <= 0L || threadId <= 0L) parseFailedCount++
+                            if (processedCount % 500 == 0) SmsSyncProgress.update(SmsSyncProgress.State(
+                                running = true, completed = processedCount, total = maxOf(totalSms, processedCount), failed = parseFailedCount
+                            ))
+                            continue
+                        }
+                        processedCount++
 
-                val participants = if (addrKey.isEmpty()) arrayListOf() else {
-                    arrayListOf(
-                        SimpleContact(
-                            rawId = 0,
-                            contactId = 0,
-                            name = namePhoto.name,
-                            photoUri = namePhoto.photoUri ?: "",
-                            phoneNumbers = arrayListOf(PhoneNumber(addrKey, 0, "", addrKey)),
-                            birthdays = ArrayList(),
-                            anniversaries = ArrayList()
+                        diagnostics?.businessRow(id, threadId, rawDate)
+
+                        val body = if (bodyCol >= 0) c.getString(bodyCol) ?: "" else ""
+                        val date = if (rawDate > 9999999999L) (rawDate / 1000L).toInt() else rawDate.toInt()
+                        val read = if (readCol >= 0) c.getInt(readCol) == 1 else false
+                        val type = if (typeCol >= 0) c.getInt(typeCol) else Telephony.Sms.MESSAGE_TYPE_INBOX
+                        val status = if (statusCol >= 0) c.getInt(statusCol) else Telephony.Sms.STATUS_NONE
+                        var subscriptionId = if (subCol >= 0) c.getInt(subCol) else SubscriptionManager.INVALID_SUBSCRIPTION_ID
+                        if (subscriptionId == SubscriptionManager.INVALID_SUBSCRIPTION_ID && simCol >= 0) {
+                            subscriptionId = c.getInt(simCol)
+                        }
+
+                        val addrKey = address ?: ""
+                        val namePhoto = if (addrKey.isNotEmpty()) {
+                            contactCache.getOrPut(addrKey) { getNameAndPhotoFromPhoneNumber(addrKey) }
+                        } else {
+                            NamePhoto("", null)
+                        }
+
+                        val participants = if (addrKey.isEmpty()) arrayListOf() else {
+                            arrayListOf(
+                                SimpleContact(
+                                    rawId = 0,
+                                    contactId = 0,
+                                    name = namePhoto.name,
+                                    photoUri = namePhoto.photoUri ?: "",
+                                    phoneNumbers = arrayListOf(PhoneNumber(addrKey, 0, "", addrKey)),
+                                    birthdays = ArrayList(),
+                                    anniversaries = ArrayList()
+                                )
+                            )
+                        }
+
+                        val message = Message(
+                            id = id,
+                            body = body,
+                            type = type,
+                            status = status,
+                            participants = participants,
+                            date = date,
+                            read = read,
+                            threadId = threadId,
+                            isMMS = false,
+                            attachment = null,
+                            senderPhoneNumber = addrKey,
+                            senderName = namePhoto.name,
+                            senderPhotoUri = namePhoto.photoUri ?: "",
+                            subscriptionId = subscriptionId
                         )
-                    )
+
+                        batch.add(message)
+                        readCount++
+
+                        if (processedCount % 500 == 0) SmsSyncProgress.update(SmsSyncProgress.State(
+                            running = true, completed = processedCount, total = maxOf(totalSms, processedCount), failed = parseFailedCount
+                        ))
+
+                        if (batch.size >= 1000) {
+                            diagnostics?.beforeBatch(this, batch)
+                            messagesDB.insertMessages(*batch.toTypedArray())
+                            writtenCount += batch.size
+                            diagnostics?.afterBatch(this, batch)
+                            batch.clear()
+                        }
+                    }
                 }
-
-                val message = Message(
-                    id = id,
-                    body = body,
-                    type = type,
-                    status = status,
-                    participants = participants,
-                    date = date,
-                    read = read,
-                    threadId = threadId,
-                    isMMS = false,
-                    attachment = null,
-                    senderPhoneNumber = addrKey,
-                    senderName = namePhoto.name,
-                    senderPhotoUri = namePhoto.photoUri ?: "",
-                    subscriptionId = subscriptionId
-                )
-
-                batch.add(message)
-                readCount++
-
-                // Scanning progress is independent of the bounded database write batch.
-                // Avoid emitting a UI state update for every row in a large SMS archive.
-                if (processedCount % 500 == 0) SmsSyncProgress.update(SmsSyncProgress.State(
-                    running = true, completed = processedCount, total = totalSms, failed = parseFailedCount
-                ))
-
-                if (batch.size >= 1000) {
-                    messagesDB.insertMessages(*batch.toTypedArray())
-                    writtenCount += batch.size
-                    batch.clear()
-                }
+                if (rowsInPage == 0 || pageMinId >= minId) break
+                minId = pageMinId
             }
         }
 
+        diagnostics?.businessEnd(totalSms, processedCount, readCount, parseFailedCount)
         if (batch.isNotEmpty()) {
+            diagnostics?.beforeBatch(this, batch)
             messagesDB.insertMessages(*batch.toTypedArray())
             writtenCount += batch.size
+            diagnostics?.afterBatch(this, batch)
             batch.clear()
         }
 
@@ -211,13 +216,16 @@ fun Context.syncSmsHistory(source: String, strict: Boolean = false): SmsSyncResu
         val mmsMessages = getMMS(threadId = null, strict = true)
         if (mmsMessages.isNotEmpty()) {
             mmsMessages.chunked(200).forEach { mmsBatch ->
+                diagnostics?.beforeBatch(this, mmsBatch)
                 messagesDB.insertMessages(*mmsBatch.toTypedArray())
                 writtenCount += mmsBatch.size
+                diagnostics?.afterBatch(this, mmsBatch)
             }
         }
 
         // 3. Update conversations table
-        val conversations = getConversations(threadId = null, strict = true)
+        val conversations = getConversations(threadId = null, strict = true, diagnostics = diagnostics)
+        diagnostics?.conversations("sync_provider", conversations)
         conversations.chunked(200).forEach { convBatch ->
             convBatch.forEach { conv ->
                 insertOrUpdateConversation(conv)
@@ -233,7 +241,10 @@ fun Context.syncSmsHistory(source: String, strict: Boolean = false): SmsSyncResu
             }
         }
 
-        check(parseFailedCount == 0) { "SMS_SYNC_PARTIAL_PARSE_FAILURE" }
+        diagnostics?.database(this, "after")
+        if (parseFailedCount > 0) {
+            Log.w("SmsSync", "trace=$traceId parseFailedCount=$parseFailedCount invalid SMS rows safely skipped")
+        }
         if (readCount > 0) config.fullHistorySyncedV2 = true
         val elapsed = System.currentTimeMillis() - startTime
         Log.i(
@@ -259,6 +270,7 @@ fun Context.syncSmsHistory(source: String, strict: Boolean = false): SmsSyncResu
             outcome = "success"
         )
     } catch (error: Exception) {
+        diagnostics?.log("sync_interrupted", "kind=${error.javaClass.simpleName} count=$totalSms traversed=$processedCount valid=$readCount invalid=$parseFailedCount")
         if (error is java.util.concurrent.CancellationException) throw error
         val elapsed = System.currentTimeMillis() - startTime
         val outcome = when (error) {

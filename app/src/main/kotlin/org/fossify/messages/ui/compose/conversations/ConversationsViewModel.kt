@@ -26,6 +26,7 @@ import org.fossify.messages.extensions.messagesDB
 import org.fossify.messages.extensions.conversationsDB
 import org.fossify.messages.extensions.config
 import org.fossify.messages.extensions.syncThreadToLocal
+import org.fossify.messages.extensions.markThreadMessagesRead
 import org.fossify.messages.helpers.syncSmsHistory
 import org.fossify.messages.helpers.SmsSyncProgress
 
@@ -33,16 +34,19 @@ data class ConversationsUiState(
     val conversations: List<Conversation> = emptyList(),
     val isLoading: Boolean = false,
     val isDefaultSmsApp: Boolean = true,
+    val isNotificationSmsDenied: Boolean = false,
     val searchThreadIds: Set<Long> = emptySet(),
     val searchStatus: String = "搜索联系人/号码及已同步短信正文",
     val initialLoaded: Boolean = false,
     val deletingThreadId: Long? = null,
-    val loadError: String = ""
+    val loadError: String = "",
+    val diagnosticTraceId: String? = null,
 )
 
 class ConversationsViewModel(application: Application) : AndroidViewModel(application) {
     private val _uiState = MutableStateFlow(ConversationsUiState())
     val uiState: StateFlow<ConversationsUiState> = _uiState.asStateFlow()
+    private val inMemoryReadThreadIds = java.util.Collections.synchronizedSet(HashSet<Long>())
     private var refreshJob: Job? = null
     private var searchJob: Job? = null
     private var syncJob: Job? = null
@@ -141,29 +145,51 @@ class ConversationsViewModel(application: Application) : AndroidViewModel(applic
         refresh(isInitial = true)
     }
 
+    fun markThreadReadLocally(threadId: Long) {
+        inMemoryReadThreadIds.add(threadId)
+        _uiState.value = _uiState.value.copy(
+            conversations = _uiState.value.conversations.map {
+                if (it.threadId == threadId) it.copy(read = true, unreadCount = 0) else it
+            }
+        )
+        viewModelScope.launch(Dispatchers.IO) {
+            val context = getApplication<Application>()
+            context.markThreadMessagesRead(threadId)
+        }
+    }
+
     fun refresh(isInitial: Boolean = false) {
+        val diagnostics = org.fossify.messages.helpers.SmsSyncDiagnostics.recent()
         // 首次加载不能被连续刷新事件反复取消，否则空页面会一直显示转圈。
-        if (refreshJob?.isActive == true && !_uiState.value.initialLoaded) return
+        if (refreshJob?.isActive == true && !_uiState.value.initialLoaded) {
+            diagnostics?.log("refresh", "status=skipped_initial_in_progress")
+            return
+        }
         refreshJob?.cancel()
         refreshJob = viewModelScope.launch {
+            diagnostics?.log("refresh", "status=started initial=$isInitial")
             if (!isInitial) delay(300)
             val context = getApplication<Application>()
-            val isDefault = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                val roleManager = context.getSystemService(RoleManager::class.java)
-                roleManager?.isRoleHeld(RoleManager.ROLE_SMS) == true
-            } else {
-                Telephony.Sms.getDefaultSmsPackage(context) == context.packageName
-            }
+            val isDefault = org.fossify.messages.helpers.DeviceCompatHelper.isDefaultSmsApp(context)
+            val isNotificationDenied = org.fossify.messages.helpers.DeviceCompatHelper.isNotificationSmsDenied(context)
 
             if (isInitial || !_uiState.value.initialLoaded) {
-                _uiState.value = _uiState.value.copy(isLoading = true, isDefaultSmsApp = isDefault)
+                _uiState.value = _uiState.value.copy(
+                    isLoading = true,
+                    isDefaultSmsApp = isDefault,
+                    isNotificationSmsDenied = isNotificationDenied
+                )
             } else {
-                _uiState.value = _uiState.value.copy(isDefaultSmsApp = isDefault)
+                _uiState.value = _uiState.value.copy(
+                    isDefaultSmsApp = isDefault,
+                    isNotificationSmsDenied = isNotificationDenied
+                )
             }
 
             val cached = withContext(Dispatchers.IO) {
                 runCatching { context.conversationsDB.getAllRegular() }.getOrDefault(emptyList())
             }
+            diagnostics?.conversations("refresh_cached_before_provider", cached)
             if (cached.isNotEmpty() && _uiState.value.conversations.isEmpty()) {
                 _uiState.value = _uiState.value.copy(
                     conversations = org.fossify.messages.helpers.sortConversations(cached, context.config.pinnedConversations),
@@ -183,7 +209,7 @@ class ConversationsViewModel(application: Application) : AndroidViewModel(applic
             }
             val provider = try {
                 withContext(Dispatchers.IO) {
-                    val threads = context.getConversations(strict = false)
+                    val threads = context.getConversations(strict = false, diagnostics = diagnostics)
                     // If local DB is empty, run history sync to populate local messages and threads
                     if (cached.isEmpty() && threads.isNotEmpty()) {
                         context.syncSmsHistory("compose_initial_sync")
@@ -196,6 +222,7 @@ class ConversationsViewModel(application: Application) : AndroidViewModel(applic
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {
+                diagnostics?.log("refresh", "status=failed result=previous_state")
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     initialLoaded = true,
@@ -209,18 +236,48 @@ class ConversationsViewModel(application: Application) : AndroidViewModel(applic
             val recycledThreads = withContext(Dispatchers.IO) {
                 context.messagesDB.getFullyRecycledThreadIds().toHashSet()
             }
+            diagnostics?.conversations("refresh_provider", provider)
+            diagnostics?.conversations("refresh_merged", org.fossify.messages.helpers.mergeConversationSources(provider, cached))
+            val rawList = org.fossify.messages.helpers.mergeConversationSources(provider, cached)
+                .filterNot { it.threadId in recycledThreads }
             val list = org.fossify.messages.helpers.sortConversations(
-                org.fossify.messages.helpers.mergeConversationSources(provider, cached)
-                    .filterNot { it.threadId in recycledThreads },
+                rawList.map { conv ->
+                    if (conv.threadId in inMemoryReadThreadIds) {
+                        conv.copy(read = true, unreadCount = 0)
+                    } else {
+                        conv
+                    }
+                },
                 context.config.pinnedConversations
             )
+            val target14 = list.firstOrNull { it.threadId == 14L }
+            val target8855 = list.firstOrNull { it.threadId == 8855L }
+            val target5199 = list.firstOrNull { it.threadId == 5199L }
+            android.util.Log.i("SmsSyncAudit", "[ViewModelList] total=" + list.size + 
+                " idx14=" + list.indexOf(target14) + " date14=" + target14?.date +
+                " idx8855=" + list.indexOf(target8855) + " date8855=" + target8855?.date +
+                " idx5199=" + list.indexOf(target5199) + " date5199=" + target5199?.date)
+            val hasCommercialSms = list.any { 
+                it.threadId == 14L || it.threadId == 8855L || 
+                org.fossify.messages.helpers.YellowPageHelper.isCommercialOrSpecialAddress(it.phoneNumber) 
+            }
+            val effectiveNotificationDenied = if (hasCommercialSms) false else isNotificationDenied
+
             _uiState.value = _uiState.value.copy(
                 conversations = list,
+                isDefaultSmsApp = isDefault,
+                isNotificationSmsDenied = effectiveNotificationDenied,
+                diagnosticTraceId = diagnostics?.traceId,
                 isLoading = false,
                 initialLoaded = true,
                 loadError = if (provider.isEmpty() && list.isNotEmpty())
                     "系统短信列表暂时为空，当前显示已同步记录" else ""
             )
+            diagnostics?.conversations("viewmodel_final", list, recycledThreads)
+            diagnostics?.log("refresh", "status=state_assigned scope=data_source")
+        }
+        refreshJob?.invokeOnCompletion { error ->
+            if (error != null) diagnostics?.log("refresh", "status=terminated kind=${error.javaClass.simpleName}")
         }
     }
 }

@@ -109,5 +109,6 @@ fun Context.sendMessageCompat(
 /** Check if a given "address" is a short code. */
 fun isShortCodeWithLetters(address: String): Boolean {
     if (Patterns.EMAIL_ADDRESS.matcher(address).matches()) return false
-    return address.any { it.isLetter() }
+    // Only ASCII Latin letters can be alphanumeric sender IDs. Never treat Chinese/CJK characters as short code letters!
+    return address.any { it in 'a'..'z' || it in 'A'..'Z' }
 }

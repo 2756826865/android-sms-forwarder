@@ -44,13 +44,14 @@ object FloatingCodePillManager {
     }
 
     private fun showFloatingPillInternal(context: Context, code: String) {
-        val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as? WindowManager ?: return
-        dismissPill(context)
+        val appContext = context.applicationContext
+        val windowManager = appContext.getSystemService(Context.WINDOW_SERVICE) as? WindowManager ?: return
+        dismissPill(appContext)
 
-        val dp = context.resources.displayMetrics.density
+        val dp = appContext.resources.displayMetrics.density
 
         // 胶囊容器
-        val container = LinearLayout(context).apply {
+        val container = LinearLayout(appContext).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding((16 * dp).toInt(), (10 * dp).toInt(), (16 * dp).toInt(), (10 * dp).toInt())
@@ -64,7 +65,7 @@ object FloatingCodePillManager {
         }
 
         // 复制图标
-        val iconView = ImageView(context).apply {
+        val iconView = ImageView(appContext).apply {
             setImageResource(org.fossify.commons.R.drawable.ic_copy_vector)
             setColorFilter(Color.parseColor("#38BDF8"))
             layoutParams = LinearLayout.LayoutParams((18 * dp).toInt(), (18 * dp).toInt()).apply {
@@ -74,7 +75,7 @@ object FloatingCodePillManager {
         container.addView(iconView)
 
         // 文案: 验证码: 951332 (点此复制)
-        val textView = TextView(context).apply {
+        val textView = TextView(appContext).apply {
             text = "验证码 $code · 点击复制"
             setTextColor(Color.WHITE)
             textSize = 14f
@@ -83,24 +84,24 @@ object FloatingCodePillManager {
         container.addView(textView)
 
         // 关闭图标
-        val closeView = ImageView(context).apply {
+        val closeView = ImageView(appContext).apply {
             setImageResource(org.fossify.commons.R.drawable.ic_cross_vector)
             setColorFilter(Color.parseColor("#94A3B8"))
             layoutParams = LinearLayout.LayoutParams((14 * dp).toInt(), (14 * dp).toInt()).apply {
                 marginStart = (12 * dp).toInt()
             }
             setOnClickListener {
-                dismissPill(context)
+                dismissPill(appContext)
             }
         }
         container.addView(closeView)
 
         // 点击一键复制
         container.setOnClickListener {
-            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+            val clipboard = appContext.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
             clipboard?.setPrimaryClip(ClipData.newPlainText("VerificationCode", code))
-            Toast.makeText(context, "验证码 $code 已复制到剪贴板", Toast.LENGTH_SHORT).show()
-            dismissPill(context)
+            Toast.makeText(appContext, "验证码 $code 已复制到剪贴板", Toast.LENGTH_SHORT).show()
+            dismissPill(appContext)
         }
 
         val layoutType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -130,7 +131,7 @@ object FloatingCodePillManager {
 
             // 5 秒自动优雅消失
             val runnable = Runnable {
-                dismissPill(context)
+                dismissPill(appContext)
             }
             dismissRunnable = runnable
             mainHandler.postDelayed(runnable, 5000L)
@@ -152,11 +153,11 @@ object FloatingCodePillManager {
                 .setDuration(250L)
                 .setListener(object : AnimatorListenerAdapter() {
                     override fun onAnimationEnd(animation: Animator) {
-                        runCatching { windowManager.removeView(view) }
+                        runCatching { if (view.isAttachedToWindow) windowManager.removeView(view) }
                     }
                 })
         }.onFailure {
-            runCatching { windowManager.removeView(view) }
+            runCatching { if (view.isAttachedToWindow) windowManager.removeView(view) }
         }
     }
 }

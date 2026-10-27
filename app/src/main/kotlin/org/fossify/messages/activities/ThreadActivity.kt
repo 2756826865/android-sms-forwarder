@@ -134,6 +134,7 @@ import org.fossify.messages.extensions.getAddresses
 import org.fossify.messages.extensions.getDefaultKeyboardHeight
 import org.fossify.messages.extensions.getFileSizeFromUri
 import org.fossify.messages.extensions.getMessages
+import org.fossify.messages.extensions.getPhoneNumbersFromSmsTable
 import org.fossify.messages.extensions.getSmsDraft
 import org.fossify.messages.extensions.getThreadId
 import org.fossify.messages.extensions.getThreadParticipants
@@ -182,6 +183,7 @@ import org.fossify.messages.helpers.THREAD_ID
 import org.fossify.messages.helpers.THREAD_NUMBER
 import org.fossify.messages.helpers.THREAD_TEXT
 import org.fossify.messages.helpers.THREAD_TITLE
+import org.fossify.messages.helpers.PhoneNumberDisplayHelper
 import org.fossify.messages.helpers.YellowPageHelper
 import org.fossify.messages.helpers.generateRandomId
 import org.fossify.messages.forwarding.MultiForwardConfig
@@ -304,9 +306,15 @@ class ThreadActivity : SimpleActivity() {
         }
 
         threadId = intent.getLongExtra(THREAD_ID, 0L)
-        intent.getStringExtra(THREAD_TITLE)?.let {
-            binding.threadTitleText.text = it
+        val passedTitle = intent.getStringExtra(THREAD_TITLE)
+        val passedNumber = intent.getStringExtra(THREAD_NUMBER)
+        if (!passedTitle.isNullOrBlank()) {
+            binding.threadTitleText.text = passedTitle
             binding.threadToolbar.title = null
+        }
+        if (!passedNumber.isNullOrBlank() && passedNumber != passedTitle) {
+            binding.threadSubtitleText.text = PhoneNumberDisplayHelper.formatDisplayNumber(passedNumber)
+            binding.threadSubtitleText.beVisible()
         }
         isRecycleBin = intent.getBooleanExtra(IS_RECYCLE_BIN, false)
         isLaunchedFromShortcut = intent.getBooleanExtra(IS_LAUNCHED_FROM_SHORTCUT, false)
@@ -440,7 +448,8 @@ class ThreadActivity : SimpleActivity() {
     }
 
     private fun refreshMenuItems() {
-        val firstPhoneNumber = participants.firstOrNull()?.phoneNumbers?.firstOrNull()?.value
+        val effectiveNumber = getEffectivePhoneNumber()
+        val hasDialableNumber = effectiveNumber.any { it.isDigit() }
         val iconColor = ContextCompat.getColor(this, R.color.text_primary)
         binding.threadToolbar.navigationIcon?.applyColorFilter(iconColor)
         binding.threadToolbar.overflowIcon?.applyColorFilter(iconColor)
@@ -453,16 +462,15 @@ class ThreadActivity : SimpleActivity() {
             findItem(R.id.block_number).title =
                 addLockedLabelIfNeeded(org.fossify.commons.R.string.block_number)
             findItem(R.id.block_number).isVisible = !isRecycleBin
-            findItem(R.id.dial_number).isVisible =
-                participants.size == 1 && !isSpecialNumber() && !isRecycleBin
+            findItem(R.id.dial_number).isVisible = hasDialableNumber && !isRecycleBin
             findItem(R.id.manage_people).isVisible = !isSpecialNumber() && !isRecycleBin
             findItem(R.id.mark_as_unread).isVisible = threadItems.isNotEmpty() && !isRecycleBin
 
             // allow saving number in cases when we don't have it stored yet
             findItem(R.id.add_number_to_contact).isVisible =
-                participants.size == 1 && participants.first().name == firstPhoneNumber && !isRecycleBin
+                participants.size <= 1 && effectiveNumber.isNotEmpty() && (participants.firstOrNull()?.name == effectiveNumber || participants.isEmpty()) && !isRecycleBin
             findItem(R.id.copy_number).isVisible =
-                participants.size == 1 && !firstPhoneNumber.isNullOrEmpty() && !isRecycleBin
+                effectiveNumber.isNotEmpty() && !isRecycleBin
 
             for (i in 0 until size()) {
                 getItem(i).icon?.applyColorFilter(iconColor)
@@ -472,7 +480,6 @@ class ThreadActivity : SimpleActivity() {
 
     private fun setupOptionsMenu() {
         binding.threadToolbar.setOnMenuItemClickListener { menuItem ->
-            if (participants.isEmpty()) return@setOnMenuItemClickListener true
             return@setOnMenuItemClickListener handleMenuItemAction(menuItem)
         }
     }
@@ -668,6 +675,7 @@ class ThreadActivity : SimpleActivity() {
             runOnUiThread {
                 setupThreadTitle()
                 setupSIMSelector()
+                refreshMenuItems()
                 callback()
             }
         }
@@ -1181,41 +1189,27 @@ class ThreadActivity : SimpleActivity() {
         }
     }
 
-    private fun isSpecialNumber(): Boolean {
-        val addresses = participants.getAddresses()
-        return addresses.any { isShortCodeWithLetters(it) }
-    }
+    private fun isSpecialNumber(): Boolean = false
 
     private fun maybeDisableShortCodeReply() {
-        if (isSpecialNumber() && !isRecycleBin) {
-            currentFocus?.clearFocus()
-            hideKeyboard()
-            binding.messageHolder.threadTypeMessage.text?.clear()
-            binding.messageHolder.root.beGone()
-            binding.shortCodeHolder.root.beVisible()
-            val textColor = getProperTextColor()
-            binding.shortCodeHolder.replyDisabledText.setTextColor(textColor)
-            binding.shortCodeHolder.replyDisabledInfo.apply {
-                applyColorFilter(textColor)
-                setOnClickListener {
-                    InvalidNumberDialog(
-                        activity = this@ThreadActivity,
-                        text = getString(R.string.invalid_short_code_desc)
-                    )
-                }
-                tooltipText = getString(org.fossify.commons.R.string.more_info)
-            }
-        }
+        binding.shortCodeHolder.root.beGone()
+        binding.messageHolder.root.beVisible()
+    }
+
+    private fun getEffectivePhoneNumber(): String {
+        return conversation?.phoneNumber?.takeIf { it.isNotBlank() }
+            ?: getPhoneNumbersFromIntent().firstOrNull { it.isNotBlank() }
+            ?: participants.firstOrNull()?.phoneNumbers?.firstOrNull()?.normalizedNumber?.takeIf { it.isNotBlank() }
+            ?: participants.firstOrNull()?.phoneNumbers?.firstOrNull()?.value?.takeIf { it.isNotBlank() }
+            ?: messages.firstOrNull { it.senderPhoneNumber.isNotBlank() }?.senderPhoneNumber
+            ?: (if (threadId != 0L) getPhoneNumbersFromSmsTable(threadId).firstOrNull() else null)
+            ?: ""
     }
 
     private fun setupThreadTitle() {
+        val number = getEffectivePhoneNumber()
         var title = conversation?.title?.takeIf { it.isNotEmpty() }
             ?: participants.getThreadTitle()
-        val number = conversation?.phoneNumber
-            ?.ifEmpty { null }
-            ?: participants.firstOrNull()?.phoneNumbers?.firstOrNull()?.normalizedNumber
-            ?: participants.firstOrNull()?.phoneNumbers?.firstOrNull()?.value
-            ?: ""
 
         if (title.isBlank() || title.equals(number, ignoreCase = true) || title.replace("+", "").replace(" ", "").replace("-", "").all { it.isDigit() }) {
             val passedTitle = intent.getStringExtra(THREAD_TITLE)?.takeIf { it.isNotBlank() }
@@ -1226,6 +1220,8 @@ class ThreadActivity : SimpleActivity() {
                 val yellow = YellowPageHelper.lookup(this, number, conversation?.snippet)
                 if (yellow != null) {
                     title = yellow.brand
+                } else {
+                    title = PhoneNumberDisplayHelper.formatDisplayNumber(title.ifBlank { number })
                 }
             }
         }
@@ -1240,7 +1236,7 @@ class ThreadActivity : SimpleActivity() {
             && !title.contains(number)
         
         if (showNumberAsSubtitle) {
-            binding.threadSubtitleText.text = number
+            binding.threadSubtitleText.text = PhoneNumberDisplayHelper.formatDisplayNumber(number)
             binding.threadSubtitleText.beVisible()
         } else {
             binding.threadSubtitleText.beGone()
@@ -1445,15 +1441,17 @@ class ThreadActivity : SimpleActivity() {
     }
 
     private fun dialNumber() {
-        val phoneNumber = participants.first().phoneNumbers.first().normalizedNumber
-        dialNumber(phoneNumber)
+        val phoneNumber = getEffectivePhoneNumber()
+        if (phoneNumber.isNotBlank()) {
+            dialNumber(phoneNumber)
+        }
     }
 
     private fun copyNumberToClipboard() {
-        val phoneNumber = conversation?.phoneNumber
-            ?.ifEmpty { participants.firstOrNull()?.phoneNumbers?.firstOrNull()?.value }
-            ?: return
-        copyToClipboard(phoneNumber)
+        val phoneNumber = getEffectivePhoneNumber()
+        if (phoneNumber.isNotBlank()) {
+            copyToClipboard(phoneNumber)
+        }
     }
 
     private fun managePeople() {
@@ -1931,6 +1929,7 @@ class ThreadActivity : SimpleActivity() {
         }
     }
 
+    @android.annotation.SuppressLint("MissingPermission")
     private fun sendNormalMessage(text: String, subscriptionId: Int, onSubmitted: (() -> Unit)? = null) {
         if (sendInProgress) return
         // Revalidate the selected identity immediately before sending. Do not switch
