@@ -95,7 +95,7 @@ fun Context.syncSmsHistory(source: String, strict: Boolean = false): SmsSyncResu
                     selection,
                     null,
                     "${Telephony.Sms._ID} DESC"
-                ) ?: break
+                ) ?: throw IllegalStateException("SMS_NULL_CURSOR")
 
                 var rowsInPage = 0
                 var pageMinId = minId
@@ -123,6 +123,7 @@ fun Context.syncSmsHistory(source: String, strict: Boolean = false): SmsSyncResu
                         val rawDate = if (dateCol >= 0) c.getLong(dateCol) else 0L
                         if (id in 1 until pageMinId) pageMinId = id
 
+                        processedCount++
                         if (id <= 0L || threadId <= 0L || !seenMsgIds.add(id)) {
                             if (id <= 0L || threadId <= 0L) parseFailedCount++
                             if (processedCount % 500 == 0) SmsSyncProgress.update(SmsSyncProgress.State(
@@ -130,7 +131,6 @@ fun Context.syncSmsHistory(source: String, strict: Boolean = false): SmsSyncResu
                             ))
                             continue
                         }
-                        processedCount++
 
                         diagnostics?.businessRow(id, threadId, rawDate)
 
@@ -198,7 +198,8 @@ fun Context.syncSmsHistory(source: String, strict: Boolean = false): SmsSyncResu
                         }
                     }
                 }
-                if (rowsInPage == 0 || pageMinId >= minId) break
+                if (rowsInPage == 0) break
+                check(pageMinId < minId) { "SMS_SYNC_CURSOR_NOT_ADVANCING" }
                 minId = pageMinId
             }
         }
@@ -242,9 +243,8 @@ fun Context.syncSmsHistory(source: String, strict: Boolean = false): SmsSyncResu
         }
 
         diagnostics?.database(this, "after")
-        if (parseFailedCount > 0) {
-            Log.w("SmsSync", "trace=$traceId parseFailedCount=$parseFailedCount invalid SMS rows safely skipped")
-        }
+        // Keep valid batches, but never mark a partial scan as a completed full sync.
+        check(parseFailedCount == 0) { "SMS_SYNC_PARTIAL_PARSE_FAILURE" }
         if (readCount > 0) config.fullHistorySyncedV2 = true
         val elapsed = System.currentTimeMillis() - startTime
         Log.i(

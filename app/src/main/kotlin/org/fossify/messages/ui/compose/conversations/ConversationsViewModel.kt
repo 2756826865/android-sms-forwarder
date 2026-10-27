@@ -46,7 +46,6 @@ data class ConversationsUiState(
 class ConversationsViewModel(application: Application) : AndroidViewModel(application) {
     private val _uiState = MutableStateFlow(ConversationsUiState())
     val uiState: StateFlow<ConversationsUiState> = _uiState.asStateFlow()
-    private val inMemoryReadThreadIds = java.util.Collections.synchronizedSet(HashSet<Long>())
     private var refreshJob: Job? = null
     private var searchJob: Job? = null
     private var syncJob: Job? = null
@@ -146,7 +145,6 @@ class ConversationsViewModel(application: Application) : AndroidViewModel(applic
     }
 
     fun markThreadReadLocally(threadId: Long) {
-        inMemoryReadThreadIds.add(threadId)
         _uiState.value = _uiState.value.copy(
             conversations = _uiState.value.conversations.map {
                 if (it.threadId == threadId) it.copy(read = true, unreadCount = 0) else it
@@ -241,24 +239,10 @@ class ConversationsViewModel(application: Application) : AndroidViewModel(applic
             val rawList = org.fossify.messages.helpers.mergeConversationSources(provider, cached)
                 .filterNot { it.threadId in recycledThreads }
             val list = org.fossify.messages.helpers.sortConversations(
-                rawList.map { conv ->
-                    if (conv.threadId in inMemoryReadThreadIds) {
-                        conv.copy(read = true, unreadCount = 0)
-                    } else {
-                        conv
-                    }
-                },
+                rawList,
                 context.config.pinnedConversations
             )
-            val target14 = list.firstOrNull { it.threadId == 14L }
-            val target8855 = list.firstOrNull { it.threadId == 8855L }
-            val target5199 = list.firstOrNull { it.threadId == 5199L }
-            android.util.Log.i("SmsSyncAudit", "[ViewModelList] total=" + list.size + 
-                " idx14=" + list.indexOf(target14) + " date14=" + target14?.date +
-                " idx8855=" + list.indexOf(target8855) + " date8855=" + target8855?.date +
-                " idx5199=" + list.indexOf(target5199) + " date5199=" + target5199?.date)
             val hasCommercialSms = list.any { 
-                it.threadId == 14L || it.threadId == 8855L || 
                 org.fossify.messages.helpers.YellowPageHelper.isCommercialOrSpecialAddress(it.phoneNumber) 
             }
             val effectiveNotificationDenied = if (hasCommercialSms) false else isNotificationDenied

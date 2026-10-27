@@ -512,9 +512,6 @@ fun Context.getConversations(
             }
             date = maxOf(date, storedThreadDates[id]?.toLong() ?: 0L)
             diagnostics?.threadDate(id, diagnosticProviderDate, storedThreadDates[id], date)
-            if (id == 14L || id == 8855L || id == 5199L) {
-                android.util.Log.i("SmsSyncAudit", "[ThreadCursor] id=" + id + " providerMs=" + diagnosticProviderDate + " storedDate=" + storedThreadDates[id] + " finalSec=" + date)
-            }
 
             // drafts are stored locally they take priority over the original date
             val draft = draftsDB.getDraftById(id)
@@ -555,13 +552,8 @@ fun Context.getConversations(
                 ""
             }
             val isGroupConversation = phoneNumbers.size > 1 && !hasCommercialAddress
-            val storedConversation = conversationsDB.getConversationWithThreadId(id)
-            var unreadCount = unreadMap?.get(id) ?: 0
-            var read = if (unreadMap != null) unreadCount == 0 else cursor.getIntValue(Threads.READ) == 1
-            if (storedConversation != null && storedConversation.read) {
-                read = true
-                unreadCount = 0
-            }
+            val unreadCount = unreadMap?.get(id) ?: 0
+            val read = if (unreadMap != null) unreadCount == 0 else cursor.getIntValue(Threads.READ) == 1
             val conversation = Conversation(
                 threadId = id,
                 snippet = snippet,
@@ -1210,12 +1202,7 @@ fun Context.markThreadMessagesRead(threadId: Long) {
     runCatching { contentResolver.update(Mms.CONTENT_URI, mmsValues, mmsSelection, mmsArgs) }
 
     messagesDB.markThreadRead(threadId)
-    val stored = conversationsDB.getConversationWithThreadId(threadId)
-    if (stored != null) {
-        conversationsDB.insertOrUpdate(stored.copy(read = true, unreadCount = 0, date = maxOf(stored.date, (System.currentTimeMillis() / 1000).toInt())))
-    } else {
-        conversationsDB.markRead(threadId)
-    }
+    conversationsDB.markRead(threadId)
     // Publish only after both provider and local writes have completed.
     org.fossify.messages.helpers.refreshConversations()
 }

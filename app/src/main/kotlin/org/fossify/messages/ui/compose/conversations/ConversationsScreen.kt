@@ -164,7 +164,8 @@ fun ConversationsScreen(
                 onClick = {
                     context.startActivity(Intent(context, NewConversationActivity::class.java))
                 },
-                containerColor = BrandGreen,
+                // Match v1.2.6 exactly; the compose action keeps its fixed green in every theme.
+                containerColor = Color(0xFF159447),
                 contentColor = Color.White,
                 shape = CircleShape,
                 modifier = Modifier
