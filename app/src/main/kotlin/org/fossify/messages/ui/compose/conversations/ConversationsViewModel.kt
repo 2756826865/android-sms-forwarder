@@ -49,6 +49,7 @@ class ConversationsViewModel(application: Application) : AndroidViewModel(applic
     private var refreshJob: Job? = null
     private var searchJob: Job? = null
     private var syncJob: Job? = null
+    private var refreshAfterInitialLoad = false
 
     fun search(text: String) {
         searchJob?.cancel()
@@ -160,7 +161,8 @@ class ConversationsViewModel(application: Application) : AndroidViewModel(applic
         val diagnostics = org.fossify.messages.helpers.SmsSyncDiagnostics.recent()
         // 首次加载不能被连续刷新事件反复取消，否则空页面会一直显示转圈。
         if (refreshJob?.isActive == true && !_uiState.value.initialLoaded) {
-            diagnostics?.log("refresh", "status=skipped_initial_in_progress")
+            refreshAfterInitialLoad = true
+            diagnostics?.log("refresh", "status=deferred_initial_in_progress")
             return
         }
         refreshJob?.cancel()
@@ -188,7 +190,9 @@ class ConversationsViewModel(application: Application) : AndroidViewModel(applic
                 runCatching { context.conversationsDB.getAllRegular() }.getOrDefault(emptyList())
             }
             diagnostics?.conversations("refresh_cached_before_provider", cached)
-            if (cached.isNotEmpty() && _uiState.value.conversations.isEmpty()) {
+            // Publish the fresh Room snapshot before potentially slow Provider/contact queries.
+            // Keep the previous list on an empty cache (permission/read failure is not deletion).
+            if (cached.isNotEmpty()) {
                 _uiState.value = _uiState.value.copy(
                     conversations = org.fossify.messages.helpers.sortConversations(cached, context.config.pinnedConversations),
                     isLoading = false, initialLoaded = true
@@ -262,6 +266,11 @@ class ConversationsViewModel(application: Application) : AndroidViewModel(applic
         }
         refreshJob?.invokeOnCompletion { error ->
             if (error != null) diagnostics?.log("refresh", "status=terminated kind=${error.javaClass.simpleName}")
+            if (error == null && refreshAfterInitialLoad) {
+                refreshAfterInitialLoad = false
+                // Dispatch after completion so the next refresh never cancels this job's children.
+                viewModelScope.launch { refresh() }
+            }
         }
     }
 }

@@ -36,5 +36,44 @@ class ConversationFeedbackTest(unittest.TestCase):
         self.db.execute('DELETE FROM recycle_bin_messages WHERE id=10')
         self.assertEqual(set(), self.hidden())
 
+class IncomingConversationVisibilityTest(unittest.TestCase):
+    def setUp(self):
+        self.db = sqlite3.connect(':memory:')
+        self.addCleanup(self.db.close)
+        self.db.executescript('''
+            CREATE TABLE conversations(thread_id INTEGER PRIMARY KEY, date INTEGER,
+                snippet TEXT, is_scheduled INTEGER);
+            CREATE TABLE messages(id INTEGER PRIMARY KEY, thread_id INTEGER, date INTEGER,
+                body TEXT, is_scheduled INTEGER);
+            CREATE TABLE recycle_bin_messages(id INTEGER PRIMARY KEY);
+        ''')
+        self.sql = re.search(r'@Query\("([^"]+)"\)\s+fun getAllRegularWithLatestSnippet',
+                             (DAO / 'ConversationsDao.kt').read_text()).group(1)
+
+    def visible(self):
+        return self.db.execute(self.sql).fetchall()
+
+    def test_message_without_conversation_is_invisible_until_metadata_repaired(self):
+        self.db.execute("INSERT INTO messages VALUES(123,9,100,'incoming',0)")
+        self.assertEqual([], self.visible())
+        self.db.execute("INSERT INTO conversations VALUES(9,100,'incoming',0)")
+        self.assertEqual('incoming', self.visible()[0][0])
+        self.assertEqual(9, self.visible()[0][2])
+
+    def test_repeated_local_upsert_does_not_duplicate_message_or_thread(self):
+        for _ in range(3):
+            self.db.execute("INSERT OR REPLACE INTO messages VALUES(123,9,100,'incoming',0)")
+            self.db.execute("INSERT OR REPLACE INTO conversations VALUES(9,100,'incoming',0)")
+        self.assertEqual(1, len(self.visible()))
+        self.assertEqual(1, self.db.execute('SELECT COUNT(*) FROM messages').fetchone()[0])
+
+    def test_new_sms_keeps_partly_recycled_thread_visible_with_latest_snippet(self):
+        self.db.execute("INSERT INTO conversations VALUES(9,50,'old',0)")
+        self.db.execute("INSERT INTO messages VALUES(122,9,50,'old',0)")
+        self.db.execute('INSERT INTO recycle_bin_messages VALUES(122)')
+        self.assertEqual([], self.visible())
+        self.db.execute("INSERT INTO messages VALUES(123,9,100,'incoming',0)")
+        self.assertEqual(('incoming', 100), self.visible()[0][:2])
+
 if __name__ == '__main__':
     unittest.main()

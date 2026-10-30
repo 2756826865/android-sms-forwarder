@@ -24,6 +24,8 @@ fun main()= runBlocking {
  c=Context();c.nullCursor=true;check(run(c)=="retry"&&c.queries==4)
  c=Context();c.nullCursor=true;check(run(c,12)=="failure"&&c.queries==4)
  c=Context();c.rows=listOf(row());c.noOpSync=true;check(run(c)=="retry"&&Counts.messages==0&&Counts.conversations==0)
+ c=Context();c.rows=listOf(row());c.noConversationSync=true
+ check(run(c)=="retry"&&c.local[123]?.threadId==9L&&Counts.messages==0&&Counts.conversations==0)
  c=Context();c.throwQuery=kotlinx.coroutines.CancellationException("cancelled");var cancelled=false
  try{run(c)}catch(e:kotlinx.coroutines.CancellationException){cancelled=true};check(cancelled&&c.queries==1)
  c=Context();check(run(c,d=Data())=="failure"&&c.queries==0)
@@ -32,5 +34,5 @@ fun main()= runBlocking {
  c=Context();Ui.enqueue(c,"sender","test",1_000_000,2,"fingerprint");Ui.enqueue(c,"sender","test",1_000_000,2,"fingerprint")
  check(c.enqueued.size==2&&c.enqueued.map{it.first}.distinct()==listOf("sms-ui-sync-fingerprint"))
  check(c.enqueued.all{it.second==ExistingWorkPolicy.KEEP&&it.third.data.values.size==3&&it.third.data.values.values.none{v->v=="sender"||v=="test"}})
- println("Actual read-only UI worker: 16 scenarios passed; Provider and WorkManager simulated, no SMS sent")
+ println("Actual read-only UI worker: 17 scenarios passed; Provider and WorkManager simulated, no SMS sent")
 }

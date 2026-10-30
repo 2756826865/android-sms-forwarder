@@ -18,6 +18,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import org.fossify.messages.extensions.messagesDB
+import org.fossify.messages.extensions.conversationsDB
 import org.fossify.messages.extensions.syncThreadToLocal
 import org.fossify.messages.helpers.refreshConversations
 import org.fossify.messages.helpers.refreshMessages
@@ -104,7 +105,8 @@ class IncomingSmsUiSyncWorker(context: Context, params: WorkerParameters) : Coro
         if (matchingId <= 0L) return false
         applicationContext.syncThreadToLocal(matchingThread)
         // syncThreadToLocal tolerates Provider failures; do not treat a no-op as a repair.
-        return applicationContext.messagesDB.getMessageWithId(matchingId)?.threadId == matchingThread
+        return applicationContext.messagesDB.getMessageWithId(matchingId)?.threadId == matchingThread &&
+            applicationContext.conversationsDB.getConversationWithThreadId(matchingThread) != null
     }
 
     companion object {
