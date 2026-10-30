@@ -19,6 +19,7 @@ import androidx.work.workDataOf
 import org.fossify.messages.extensions.getNameAndPhotoFromPhoneNumber
 import org.fossify.messages.extensions.getNotificationBitmap
 import org.fossify.messages.extensions.messagesDB
+import org.fossify.messages.extensions.conversationsDB
 import org.fossify.messages.extensions.showReceivedMessageNotification
 import org.fossify.messages.extensions.syncThreadToLocal
 import org.fossify.messages.forwarding.ForwardingChannels
@@ -117,6 +118,7 @@ class SmsRecoveryWorker(
                 val readIndex = cursor.getColumnIndexOrThrow(Telephony.Sms.READ)
 
                 val threadIdsToSync = mutableSetOf<Long>()
+                val hasLocalConversation = mutableMapOf<Long, Boolean>()
                 ShadowRepository.incrementCounter(applicationContext, "RECOVERY_SCAN_STARTED")
                 
                 while (cursor.moveToNext()) {
@@ -142,6 +144,15 @@ class SmsRecoveryWorker(
                         if (sentIndex >= 0) cursor.getLong(sentIndex) else 0L, date, subscriptionId, id)
                     val uniqueId = ingress.workId
                     val alreadyLocal = id in localIds
+                    // A previous sync may have written the message but failed before creating
+                    // conversation metadata. Repair that UI-only gap even for forwarded/filtered
+                    // messages; keep forwarding and command replay decisions below unchanged.
+                    if (alreadyLocal && threadId > 0L && !hasLocalConversation.getOrPut(threadId) {
+                            applicationContext.conversationsDB.getConversationWithThreadId(threadId) != null
+                        }) {
+                        threadIdsToSync.add(threadId)
+                        repairedAny = true
+                    }
                     // 与 FULL / MINIMAL 两条链路保持一致的过滤：白名单优先 → 应用黑名单 →
                     // 关键词 → 系统屏蔽号（微秒级，不查联系人；blockUnknownNumbers 是已知差异，
                     // 见 IncomingSmsService.isFilteredCheap 的注释）。

@@ -5,6 +5,8 @@ class Context {
  val applicationContext get()=this
  var permission=true; var queries=0; var closes=0; var nullCursor=false; var noOpSync=false
  var delayQueries=0; var throwQuery:Exception?=null; var throwRead:Exception?=null
+ var noConversationSync=false
+ val conversations=mutableSetOf<Long>()
  var rows=emptyList<Map<String,Any?>>()
  val contentResolver=Resolver(this)
  val local=mutableMapOf<Long,LocalMessage>();val synced=mutableListOf<Long>()
