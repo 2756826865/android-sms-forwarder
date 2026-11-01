@@ -1208,7 +1208,7 @@ class MainActivity : SimpleActivity() {
     private fun requestHomeConversationRefresh() {
         if (homeConversationRefreshPending) return
         homeConversationRefreshPending = true
-        homeConversationHandler.postDelayed(homeConversationRefresh, 16L)
+        homeConversationHandler.postDelayed(homeConversationRefresh, HOME_REFRESH_FRAME_MS)
     }
 
     private val eventSubscriber = object {
@@ -1308,4 +1308,6 @@ class MainActivity : SimpleActivity() {
             }
         }
     }
+    private companion object { const val HOME_REFRESH_FRAME_MS = 16L }
+
 }

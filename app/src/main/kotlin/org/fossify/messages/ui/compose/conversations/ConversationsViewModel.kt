@@ -187,9 +187,10 @@ class ConversationsViewModel(application: Application) : AndroidViewModel(applic
             val local = withContext(Dispatchers.IO) {
                 runCatching { context.conversationsDB.getAllRegular() }.getOrDefault(emptyList())
             }
-            if (local.isNotEmpty()) {
+            if (local.isNotEmpty() && !_uiState.value.initialLoaded) {
                 _uiState.value = _uiState.value.copy(
-                    conversations = org.fossify.messages.helpers.sortConversations(local, context.config.pinnedConversations),
+                    conversations = org.fossify.messages.helpers.sortConversations(
+                        local, context.config.pinnedConversations),
                     isLoading = false,
                 )
             }

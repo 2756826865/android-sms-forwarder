@@ -418,6 +418,10 @@ class SmsRecoveryWorker(
                     }
                     ShadowRepository.incrementCounter(applicationContext, "RECOVERY_SCAN_COMPLETED")
             } ?: error("sms_provider_cursor_unavailable")
+            for (threadId in threadIdsToSync.filter { it > 0L }) {
+                coroutineContext.ensureActive()
+                applicationContext.syncThreadToLocal(threadId)
+            }
         } catch (e: CancellationException) {
             // WorkManager 取消（协程取消）必须原样传播，否则会被误当成扫描失败而 retry。
             throw e
@@ -426,13 +430,6 @@ class SmsRecoveryWorker(
             return Result.retry()
         }
 
-        try {
-            for (threadId in threadIdsToSync.filter { it > 0L }) {
-                coroutineContext.ensureActive()
-                applicationContext.syncThreadToLocal(threadId)
-            }
-        } catch (cancelled: CancellationException) { throw cancelled }
-        catch (error: Exception) { Log.w(TAG, "local recovery sync pending", error); return Result.retry() }
         if (scanned > 0) scanState.checkpoint(page, lastDate, lastId)
         if (exhausted) {
             synchronized(SmsRecoveryScanState.lock) {
