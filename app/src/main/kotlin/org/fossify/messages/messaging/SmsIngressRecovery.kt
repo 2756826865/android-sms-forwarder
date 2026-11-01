@@ -16,7 +16,7 @@ internal class SmsIngressRecovery(context: Context) {
             db.rawQuery(
                     """
                     SELECT event_key,payload,confirmed_sub FROM ingress_journal WHERE done=0 AND reason NOT IN
-                    ('provider_result_uncertain','payload_unreadable','configuration_changed') AND payload IS
+                    ('provider_result_uncertain','payload_unreadable','configuration_changed','configuration_unavailable') AND payload IS
                     NOT NULL AND received_at<=? ORDER BY received_at LIMIT ?
                     """
                         .trimIndent(),
@@ -76,7 +76,7 @@ internal class SmsIngressRecovery(context: Context) {
         db.rawQuery(
                 """
                 SELECT 1 FROM ingress_journal WHERE done=0 AND
-                            reason NOT IN ('provider_result_uncertain','payload_unreadable','configuration_changed')
+                            reason NOT IN ('provider_result_uncertain','payload_unreadable','configuration_changed','configuration_unavailable')
                             AND payload IS NOT NULL AND received_at<=? LIMIT 1
                 """
                     .trimIndent(),
@@ -88,7 +88,7 @@ internal class SmsIngressRecovery(context: Context) {
         db.rawQuery(
                 """
                 SELECT 1 FROM ingress_journal WHERE done=0 AND reason NOT IN
-                ('provider_result_uncertain','payload_unreadable','configuration_changed') AND payload IS
+                ('provider_result_uncertain','payload_unreadable','configuration_changed','configuration_unavailable') AND payload IS
                 NOT NULL LIMIT 1
                 """
                     .trimIndent(),

@@ -268,6 +268,34 @@ class SmsIngressDeliveryTest {
     }
 
     @Test
+    fun reviewOnlyRoutingFailureIsNotScheduledForEndlessRecovery() {
+        val context = ForwardingTestContext.context
+        val key = UUID.randomUUID().toString()
+        val db = SmsIngressDatabase.get(context).writableDatabase
+        try {
+            db.execSQL(
+                """INSERT INTO ingress_journal(event_key,pdu_hash,raw_sub,confirmed_sub,slot,
+                       evidence,observed_at,received_at,payload,routing_digest,reason)
+                   VALUES(?,?,?,?,?,?,?,?,?,?,?)""".trimIndent(),
+                arrayOf<Any?>(
+                    key, "pdu", -1, -1, -1, "test", 10, 10,
+                    "cipher", SmsIngressRouting.UNAVAILABLE_SNAPSHOT,
+                    "configuration_unavailable",
+                ),
+            )
+            val recovery = SmsIngressRecovery(context)
+            assertFalse(recovery.pending().any {
+                it.getStringExtra(SmsIngressJournal.EXTRA_EVENT) == key
+            })
+            assertTrue(SmsIngressReview(context).items().any {
+                it.key == key && it.reason == "configuration_unavailable"
+            })
+        } finally {
+            db.execSQL("DELETE FROM ingress_journal WHERE event_key=?", arrayOf(key))
+        }
+    }
+
+    @Test
     fun reencryptingTheSameTokenKeepsTheRoutingDigest() {
         val prefix = "routing-semantic-${UUID.randomUUID()}-"
         val context = object : ContextWrapper(ForwardingTestContext.context) {
