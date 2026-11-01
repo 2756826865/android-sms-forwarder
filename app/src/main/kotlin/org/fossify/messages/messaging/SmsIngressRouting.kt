@@ -70,18 +70,19 @@ internal class SmsIngressRouting(context: Context) {
     }
 
     private fun normalize(name: String, key: String, value: Any?, legacy: Boolean, rawCredentials: Boolean): String =
-when {
-                                value is Set<*> ->
-                                    value.map { it.toString() }.sorted().joinToString("\u0000")
-                                !legacy && key == "channel_instances" -> canonicalChannels()
-                                !legacy && !rawCredentials && isPushPlusToken(name, key) ->
-                                    org.fossify.messages.forwarding.PushPlusConfig(app).readLegacyTokenForRouting(value.toString())
-                                !legacy && !rawCredentials && value is String && org.fossify.messages.forwarding.AndroidKeystoreCipher.looksLikeCiphertext(value) ->
-                                    org.fossify.messages.forwarding.AndroidKeystoreCipher.decrypt(value).also {
-                                        check(it.isNotEmpty()) { "routing_credential_unavailable" }
-                                    }
-                                else -> value.toString()
-                            }
+        when {
+            value is Set<*> -> value.map { it.toString() }.sorted().joinToString("\u0000")
+            !legacy && key == "channel_instances" -> canonicalChannels()
+            !legacy && !rawCredentials && isPushPlusToken(name, key) ->
+                org.fossify.messages.forwarding.PushPlusConfig(app)
+                    .readLegacyTokenForRouting(value.toString())
+            !legacy && !rawCredentials && value is String &&
+                org.fossify.messages.forwarding.AndroidKeystoreCipher.looksLikeCiphertext(value) ->
+                org.fossify.messages.forwarding.AndroidKeystoreCipher.decrypt(value).also {
+                    check(it.isNotEmpty()) { "routing_credential_unavailable" }
+                }
+            else -> value.toString()
+        }
 
     private fun isPushPlusToken(name: String, key: String): Boolean =
         name == "pushplus_forwarding" && key == "token"

@@ -1259,7 +1259,9 @@ fun Context.showReceivedMessageNotification(
 ) {
     val posted = Handler(Looper.getMainLooper()).post {
         runCatching {
-            org.fossify.messages.helpers.NotificationHelper(this, onPublished, onFailed, onSuppressed).showMessageNotification(
+            org.fossify.messages.helpers.NotificationHelper(
+                this, onPublished, onFailed, onSuppressed,
+            ).showMessageNotification(
             messageId = messageId,
             address = address,
             body = body,
@@ -1509,18 +1511,7 @@ fun Context.syncThreadToLocal(
         strict = requireProvider,
         traceId = traceId
     )
-    // Older missing messages may lie outside the latest-message UI window.
-    val missingIds = requiredSmsIds - providerMessages.filterNot { it.isMMS }.map { it.id }.toSet()
-    if (missingIds.isNotEmpty()) {
-        val cursor = contentResolver.query(Sms.CONTENT_URI, null,
-            "${Sms.THREAD_ID}=? AND ${Sms._ID} IN (${missingIds.joinToString { "?" }})",
-            arrayOf(threadId.toString(), *missingIds.map { it.toString() }.toTypedArray()), null)
-            ?: error("sms_provider_cursor_unavailable")
-        cursor.use { while (it.moveToNext()) parseSmsFromCursor(it, providerMessages) }
-    }
-    if (requireProvider) check(providerMessages.filterNot { it.isMMS }.map { it.id }.containsAll(requiredSmsIds)) {
-        "recovery_messages_not_loaded"
-    }
+    loadRequiredRecoverySms(threadId, requiredSmsIds, providerMessages)
     getMessagesDB().runInTransaction {
         if (requireProvider) check(revision == org.fossify.messages.helpers.ConversationRefreshRevision.current()) {
             "recovery_snapshot_superseded"
@@ -1549,6 +1540,26 @@ fun Context.syncThreadToLocal(
         }
     }
     return localMessages
+}
+
+/** Fetch only the page's older missing SMS, rather than loading an entire historical thread. */
+private fun Context.loadRequiredRecoverySms(
+    threadId: Long,
+    requiredIds: Set<Long>,
+    messages: ArrayList<Message>,
+) {
+    if (requiredIds.isEmpty()) return
+    val missingIds = requiredIds - messages.filterNot { it.isMMS }.map { it.id }.toSet()
+    if (missingIds.isNotEmpty()) {
+        val selection = "${Sms.THREAD_ID}=? AND ${Sms._ID} IN (${missingIds.joinToString { "?" }})"
+        val args = (listOf(threadId.toString()) + missingIds.map { it.toString() }).toTypedArray()
+        val cursor = contentResolver.query(Sms.CONTENT_URI, null, selection, args, null)
+            ?: error("sms_provider_cursor_unavailable")
+        cursor.use { while (it.moveToNext()) parseSmsFromCursor(it, messages) }
+    }
+    check(messages.filterNot { it.isMMS }.map { it.id }.containsAll(requiredIds)) {
+        "recovery_messages_not_loaded"
+    }
 }
 
 fun Context.renameConversation(conversation: Conversation, newTitle: String): Conversation {
