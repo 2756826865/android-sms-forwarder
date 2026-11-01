@@ -21,6 +21,10 @@ internal class SmsIngressRouting(context: Context) {
                 .use { if (it.moveToFirst()) it.getString(0) else null }
         val current = digest()
         if (original == null || original == current) return true
+        if (original.startsWith("v2:") && original == digest(rawCredentials = true)) {
+            db.execSQL("UPDATE ingress_journal SET routing_digest=? WHERE event_key=?", arrayOf(current, key))
+            return true
+        }
         // Upgrade an unchanged v5 digest. Never silently accept an unprovable historical change.
         if (!original.startsWith("v2:") && original == digest(legacy = true)) {
             db.execSQL(
@@ -33,7 +37,7 @@ internal class SmsIngressRouting(context: Context) {
         return false
     }
 
-    fun digest(legacy: Boolean = false): String {
+    fun digest(legacy: Boolean = false, rawCredentials: Boolean = false): String {
         val text = buildString {
             for (name in
                 listOf("forwarding_rules", "multi_channel_forwarding", "pushplus_forwarding")) {
@@ -51,6 +55,12 @@ internal class SmsIngressRouting(context: Context) {
                                 value is Set<*> ->
                                     value.map { it.toString() }.sorted().joinToString("\u0000")
                                 !legacy && key == "channel_instances" -> canonicalChannels()
+                                !legacy && !rawCredentials && name == "pushplus_forwarding" && key == "token" ->
+                                    org.fossify.messages.forwarding.PushPlusConfig(app).getToken()
+                                !legacy && !rawCredentials && value is String && org.fossify.messages.forwarding.AndroidKeystoreCipher.looksLikeCiphertext(value) ->
+                                    org.fossify.messages.forwarding.AndroidKeystoreCipher.decrypt(value).also {
+                                        check(it.isNotEmpty()) { "routing_credential_unavailable" }
+                                    }
                                 else -> value.toString()
                             }
                         append(name.length)
@@ -68,7 +78,7 @@ internal class SmsIngressRouting(context: Context) {
             MessageDigest.getInstance("SHA-256").digest(text.toByteArray()).joinToString("") {
                 "%02x".format(it.toInt() and UBYTE_MASK)
             }
-        return if (legacy) hash else "v2:$hash"
+        return if (legacy) hash else if (rawCredentials) "v2:$hash" else "v3:$hash"
     }
 
     private fun canonicalChannels(): String =

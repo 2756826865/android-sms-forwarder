@@ -178,11 +178,30 @@ class ConversationsViewModel(application: Application) : AndroidViewModel(applic
                         }
     }
 
+    private var localRefreshJob: Job? = null
+
+    private fun refreshLocalSnapshot() {
+        localRefreshJob?.cancel()
+        localRefreshJob = viewModelScope.launch {
+            val context = getApplication<Application>()
+            val local = withContext(Dispatchers.IO) {
+                runCatching { context.conversationsDB.getAllRegular() }.getOrDefault(emptyList())
+            }
+            if (local.isNotEmpty()) {
+                _uiState.value = _uiState.value.copy(
+                    conversations = org.fossify.messages.helpers.sortConversations(local, context.config.pinnedConversations),
+                    isLoading = false,
+                )
+            }
+        }
+    }
+
     fun refresh(isInitial: Boolean = false) {
         val diagnostics = org.fossify.messages.helpers.SmsSyncDiagnostics.recent()
         // 首次加载不能被连续刷新事件反复取消，否则空页面会一直显示转圈。
         if (refreshJob?.isActive == true && !_uiState.value.initialLoaded) {
             refreshAfterInitialLoad = true
+            refreshLocalSnapshot()
             diagnostics?.log("refresh", "status=deferred_initial_in_progress")
             return
         }

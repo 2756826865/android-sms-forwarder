@@ -421,6 +421,8 @@ class MainActivity : SimpleActivity() {
     }
 
     override fun onDestroy() {
+        homeConversationHandler.removeCallbacks(homeConversationRefresh)
+        homeConversationRefreshPending = false
         super.onDestroy()
         try {
             if (bus?.isRegistered(eventSubscriber) == true) {
@@ -1197,6 +1199,18 @@ class MainActivity : SimpleActivity() {
         startActivity(Intent(applicationContext, AboutActivity::class.java))
     }
 
+    private val homeConversationHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var homeConversationRefreshPending = false
+    private val homeConversationRefresh = Runnable {
+        homeConversationRefreshPending = false
+        conversationsViewModel?.refresh(isInitial = false)
+    }
+    private fun requestHomeConversationRefresh() {
+        if (homeConversationRefreshPending) return
+        homeConversationRefreshPending = true
+        homeConversationHandler.postDelayed(homeConversationRefresh, 16L)
+    }
+
     private val eventSubscriber = object {
         @Subscribe(threadMode = ThreadMode.MAIN)
         fun verificationCode(event: Events.VerificationCodeReceived) {
@@ -1261,7 +1275,7 @@ class MainActivity : SimpleActivity() {
             fun refreshConversations(@Suppress("unused") event: Events.RefreshConversations) {
             if (!homeRefreshGate.request()) return
             if (config.useGatewayDeveloperUi) {
-                conversationsViewModel?.refresh(isInitial = false)
+                requestHomeConversationRefresh()
                 dashboardViewModel?.refreshAfterChange()
             } else {
                 initMessenger()
@@ -1272,7 +1286,7 @@ class MainActivity : SimpleActivity() {
         fun refreshMessages(@Suppress("unused") event: Events.RefreshMessages) {
             if (config.useGatewayDeveloperUi) {
                 if (!homeRefreshGate.request()) return
-                conversationsViewModel?.refresh(isInitial = false)
+                requestHomeConversationRefresh()
                 dashboardViewModel?.refreshAfterChange()
             }
         }

@@ -43,3 +43,15 @@ During the first batch a selective formatting script split code blocks; it was d
 ## Compatibility and rollback
 
 Never clear forwarding submission claims, unresolved paid-send records, original targets or retry owners. An external timeout is an unknown delivery result, not permission to resend. Unknown historical SIM slots remain unknown. Follow-receive sending does not fall back to a default SIM. Schema migrations preserve old owners; downgrading to an older SQLiteOpenHelper APK is not a safe rollback. Use a compatible forward-fix build.
+
+## Second review follow-up (local until branch CI verifies it)
+
+Restore finally-based wake-lock release and non-foreground completion registration. Replace incoming full-thread materialization with indexed latest-message and aggregate unread queries. Recovery gathers missing thread repairs and syncs each once outside the receipt lock, with a SQL page limit; do not checkpoint the page before its UI repairs finish. Incoming transactions advance the revision before commit, protecting against stale recovery snapshots.
+
+External recovery triggers use KEEP plus a delayed coalesced follow-up, while only a running worker may append a page continuation. Notification publication retries run under an independent unique worker. Persistent scan requests remain authoritative, including across process death; the periodic worker remains a recovery backstop.
+
+Coalesce foreground message/conversation events per frame without removing support for message-only events. During initial history loading, read a separate local snapshot without cancelling history. Thread resume re-reads messages instead of marking an unseen entire thread read. Visible-thread read acknowledgements and actual notification publication share bounded per-thread guards off the UI thread; successful UI synchronization cancels its old pending-sync notification.
+
+Normalize legacy encrypted credentials as well as modern channel JSON before routing comparison. Record encrypted spool write latency, and run cold/warm admission measurements in Android instrumentation. These measurements characterize the CI emulator, not vivo/other phone hardware. If both storage and service handoff fail, record an explicit unconfirmed-handoff error rather than treating a false service result as success.
+
+The two-second correlation boundary remains a conservative evidence policy: identical independent wire messages without distinguishing receiving evidence cannot be proven distinct by changing a timeout. Real delayed dual-broadcast and ambiguous-SIM acceptance remain required; no claim is made that these physical ambiguity cases or vendor process resurrection are eliminated.

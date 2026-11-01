@@ -1,5 +1,6 @@
 package org.fossify.messages.helpers
 
+import org.fossify.messages.extensions.messagesDB
 import android.annotation.SuppressLint
 import android.app.Notification
 import android.app.NotificationChannel
@@ -221,7 +222,11 @@ class NotificationHelper(
                 runCatching {
                     shortcut = context.shortcutHelper.createOrUpdateShortcut(threadId)
                     builder.setShortcutInfo(shortcut)
-                    notificationManager.notify(notificationId, builder.build())
+                    synchronized(SmsNotificationReadGuard.lock(threadId)) {
+                    if (context.messagesDB.getMessageWithId(messageId)?.read != true) {
+                        notificationManager.notify(notificationId, builder.build())
+                    } else { notificationManager.cancel(notificationId) }
+                }
                     onPosted()
                     LiveIslandCoordinator.afterNotify(context, liveIslandMessage, liveIslandKind)
                     context.shortcutHelper.reportReceiveMessageUsage(threadId)
@@ -229,11 +234,17 @@ class NotificationHelper(
             }
         } else {
             builder.setShortcutInfo(shortcut)
-            notificationManager.notify(notificationId, builder.build())
-            onPosted()
-            LiveIslandCoordinator.afterNotify(context, liveIslandMessage, liveIslandKind)
             ensureBackgroundThread {
-                context.shortcutHelper.reportReceiveMessageUsage(threadId)
+                runCatching {
+                    synchronized(SmsNotificationReadGuard.lock(threadId)) {
+                        if (context.messagesDB.getMessageWithId(messageId)?.read != true) {
+                            notificationManager.notify(notificationId, builder.build())
+                        } else { notificationManager.cancel(notificationId) }
+                    }
+                    onPosted()
+                    LiveIslandCoordinator.afterNotify(context, liveIslandMessage, liveIslandKind)
+                    context.shortcutHelper.reportReceiveMessageUsage(threadId)
+                }.onFailure { onFailed() }
             }
         }
     }

@@ -75,5 +75,20 @@ class IncomingConversationVisibilityTest(unittest.TestCase):
         self.db.execute("INSERT INTO messages VALUES(123,9,100,'incoming',0)")
         self.assertEqual(('incoming', 100), self.visible()[0][:2])
 
+class IncomingSummaryQueriesTest(unittest.TestCase):
+    def test_production_queries_exclude_recycled_and_count_only_unread_inbox(self):
+        import re
+        from pathlib import Path
+        source=(Path(__file__).resolve().parents[1]/'app/src/main/kotlin/org/fossify/messages/interfaces/MessagesDao.kt').read_text()
+        queries=re.findall(r'@Query\("""(.*?)"""\)\s*fun (getLatestNonRecycledMessage|countUnreadNonRecycledInboxMessages)',source,re.S)
+        self.assertEqual(len(queries),2)
+        with sqlite3.connect(':memory:') as db:
+            db.executescript('CREATE TABLE messages(id INTEGER PRIMARY KEY,thread_id INTEGER,date INTEGER,read INTEGER,type INTEGER);CREATE TABLE recycle_bin_messages(id INTEGER PRIMARY KEY);')
+            db.executemany('INSERT INTO messages VALUES(?,?,?,?,?)',[(1,4,100,0,1),(2,4,200,1,1),(3,4,200,0,1),(4,4,300,0,1),(5,9,999,0,1),(6,4,150,0,2)])
+            db.execute('INSERT INTO recycle_bin_messages VALUES(4)')
+            for query,name in queries:
+                self.assertEqual(db.execute(query,{'threadId':4}).fetchall(),
+                    [(3,4,200,0,1)] if name=='getLatestNonRecycledMessage' else [(2,)])
+
 if __name__ == '__main__':
     unittest.main()

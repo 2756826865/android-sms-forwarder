@@ -1,5 +1,6 @@
 package org.fossify.messages.messaging
 
+import org.fossify.messages.extensions.clearPendingSmsNotification
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
@@ -40,6 +41,8 @@ class IncomingSmsUiSyncWorker(context: Context, params: WorkerParameters) : Coro
             if (!canRead()) return@withContext retryOrFail("read permission unavailable")
             try {
                 if (syncMatchingThread(receivedAt, expectedHash)) {
+                    val event = inputData.getString("ingress_event").orEmpty()
+                    if (event.isNotEmpty()) applicationContext.clearPendingSmsNotification(event)
                     refreshMessages()
                     refreshConversations()
                     Log.i(TAG, "read-only local sync completed")
@@ -145,7 +148,8 @@ class IncomingSmsUiSyncWorker(context: Context, params: WorkerParameters) : Coro
             runCatching {
                 val baseData =
                     workDataOf(KEY_RECEIVED_AT to receivedAt,
-                        KEY_CONTENT_HASH to contentHash(address, body), KEY_SUBSCRIPTION to subscriptionId)
+                        KEY_CONTENT_HASH to contentHash(address, body), KEY_SUBSCRIPTION to subscriptionId,
+                        "ingress_event" to fingerprint)
                 val data =
                     if (providerMessageId > 0)
                         Data.Builder()

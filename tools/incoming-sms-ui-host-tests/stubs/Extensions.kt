@@ -11,3 +11,5 @@ fun Context.syncThreadToLocal(id:Long){
   if(!noConversationSync)conversations.add(id)
  }
 }
+
+fun android.content.Context.clearPendingSmsNotification(event: String) {}

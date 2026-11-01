@@ -128,4 +128,26 @@ class SmsIngressDeliveryTest {
             path.delete()
         }
     }
+    @Test fun encryptedAdmissionRecordsMeasuredStorageLatency() {
+        val context = object : ContextWrapper(ForwardingTestContext.context) {
+            private val folder = File(baseContext.cacheDir, "spool-benchmark-${UUID.randomUUID()}").apply { mkdirs() }
+            override fun getNoBackupFilesDir(): File = folder
+        }
+        val samples = mutableListOf<Long>()
+        repeat(20) {
+            val intent = android.content.Intent("test-only")
+                .putExtra(SmsIngressSpool.EXTRA_ID, UUID.randomUUID().toString())
+                .putExtra("pdus", arrayOf(byteArrayOf(1,2,3)))
+            val spool = SmsIngressSpool(context)
+            val start = android.os.SystemClock.elapsedRealtime()
+            spool.save(intent)
+            samples.add(android.os.SystemClock.elapsedRealtime() - start)
+            assertTrue(spool.hasPending())
+            spool.remove(intent)
+            assertFalse(spool.hasPending())
+        }
+        val sorted = samples.sorted()
+        println("Encrypted admission API=${android.os.Build.VERSION.SDK_INT}: cold=${samples.first()}ms p50=${sorted[9]}ms p95=${sorted[18]}ms max=${sorted.last()}ms")
+    }
+
 }

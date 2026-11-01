@@ -19,6 +19,7 @@ internal class SmsIngressSpool(private val context: Context) {
         "TooGenericExceptionCaught"
     ) // Roll back AtomicFile on every platform/storage exception.
     fun save(source: Intent) {
+        val started = android.os.SystemClock.elapsedRealtime()
         val id = source.getStringExtra(EXTRA_ID) ?: UUID.randomUUID().toString()
         require(java.util.UUID.fromString(id).toString() == id) { "invalid_spool_id" }
         @Suppress("DEPRECATION")
@@ -50,6 +51,8 @@ internal class SmsIngressSpool(private val context: Context) {
         try {
             output.write(encrypted)
             file.finishWrite(output)
+            context.getSharedPreferences("sms_ingress_spool_status", Context.MODE_PRIVATE).edit()
+                .putLong("last_write_ms", android.os.SystemClock.elapsedRealtime() - started).apply()
         } catch (error: Exception) {
             file.failWrite(output)
             throw error

@@ -132,8 +132,18 @@ open class IncomingSmsService : Service() {
                     .onFailure { Log.e(TAG, "minimal fallback after processing failure failed", it) }
                 runCatching { SmsRecoveryWorker.enqueueNow(applicationContext) }
                     .onFailure { error -> Log.w(TAG, "recovery enqueue failed", error) }
+                } finally {
+                    try {
+                        runCatching { wakeLock?.let { if (it.isHeld) it.release() } }
+                            .onFailure { Log.w(TAG, "wake lock release failed", it) }
+                        if (!foregroundStarted) {
+                            runCatching { SmsRecoveryWorker.enqueueNow(applicationContext) }
+                                .onFailure { Log.w(TAG, "completion recovery registration failed", it) }
+                        }
+                    } finally {
+                        stopSelfResult(startId)
+                    }
                 }
-                stopSelfResult(startId)
             }
         } catch (_: java.util.concurrent.RejectedExecutionException) {
             runCatching { SmsRecoveryWorker.enqueueNow(applicationContext) }
@@ -305,7 +315,7 @@ open class IncomingSmsService : Service() {
                 status = parts.last().status,
                 operationId = operationId,
                 // One durable alert claim covers both broadcast entrances and process recovery.
-                notify = !filteredOut,
+                notify = false,
                 eventKey = intent.getStringExtra(SmsIngressJournal.EXTRA_EVENT),
             )
         }.onFailure { error ->
@@ -554,8 +564,8 @@ open class IncomingSmsService : Service() {
 
         messagesDB.insertOrUpdate(message)
         syncThreadToLocal(threadId)
-        refreshMessages()
-        refreshConversations()
+        // Basic transaction already published this receipt's refresh.
+        if (eventKey == null) { refreshMessages(); refreshConversations() }
         
         operationId?.let { 
             ShadowRepository.recordStep(this@IncomingSmsService, it, "LOCAL_SYNC_OBSERVED", "SUCCESS")
@@ -1126,14 +1136,13 @@ open class IncomingSmsService : Service() {
                 subscriptionId = subscriptionId,
             )
             context.getMessagesDB().runInTransaction {
+                org.fossify.messages.helpers.ConversationRefreshRevision.changed()
                 val previous = context.messagesDB.getMessageWithId(messageId)
                 context.messagesDB.insertOrUpdate(message.copy(read = providerRead ?: previous?.read ?: message.read)
                 )
                 val old = context.conversationsDB.getConversationWithThreadId(threadId)
-                val rows = context.messagesDB.getNonRecycledThreadMessages(threadId)
-                val latest =
-                    rows.maxWithOrNull(compareBy<Message> { it.date }.thenBy { it.id }) ?: message
-                val unread = rows.count { !it.read && it.type == Telephony.Sms.MESSAGE_TYPE_INBOX }
+                val latest = context.messagesDB.getLatestNonRecycledMessage(threadId) ?: message
+                val unread = context.messagesDB.countUnreadNonRecycledInboxMessages(threadId)
                 context.conversationsDB.insertOrUpdate(
                     old?.copy(
                         snippet = latest.body,

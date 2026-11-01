@@ -47,7 +47,12 @@ internal object SmsBroadcastDispatcher {
             }
                 .onFailure {
                     Log.e("SmsIngress", "emergency persistence failed: ${it.javaClass.simpleName}")
-                    runCatching { IncomingSmsService.enqueue(app, copy) }
+                    val acceptedByService = runCatching { IncomingSmsService.enqueue(app, copy) }.getOrDefault(false)
+                    if (!acceptedByService) {
+                        app.getSharedPreferences("sms_ingress_spool_status", Context.MODE_PRIVATE).edit()
+                            .putString("error", "storage_and_service_handoff_failed").apply()
+                        Log.e("SmsIngress", "no durable handoff confirmed; storage and foreground service unavailable")
+                    }
                 }
             Unit
         }

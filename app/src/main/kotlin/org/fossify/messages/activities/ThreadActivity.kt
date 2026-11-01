@@ -237,7 +237,7 @@ class ThreadActivity : SimpleActivity() {
 
     private var threadId = 0L
     private var currentSIMCardIndex = 0
-    private var isActivityVisible = false
+    @Volatile private var isActivityVisible = false
     private var refreshedSinceSent = false
     private var threadItems: List<ThreadItem> = emptyList()
     private var bus: EventBus? = null
@@ -374,6 +374,7 @@ class ThreadActivity : SimpleActivity() {
         binding.threadCoordinator.setBackgroundColor(threadBg)
 
         isActivityVisible = true
+        refreshMessages()
 
         notificationManager.cancel(threadId.hashCode())
 
@@ -394,7 +395,7 @@ class ThreadActivity : SimpleActivity() {
                 }
             }
 
-            markThreadMessagesRead(threadId)
+            // Only messages actually loaded by the visible thread are marked read.
         }
 
         binding.messageHolder.root.setBackgroundColor(threadBg)
@@ -1613,11 +1614,19 @@ class ThreadActivity : SimpleActivity() {
             prevSIMId = message.subscriptionId
         }
 
-        if (unreadItems.isNotEmpty()) {
+        if (isActivityVisible && unreadItems.isNotEmpty()) {
             ensureBackgroundThread {
                 try {
-                    unreadItems.forEach { markMessageRead(it.id, it.isMMS) }
-                    conversationsDB.markRead(threadId)
+                    for (item in unreadItems) {
+                        if (!isActivityVisible) break
+                        synchronized(org.fossify.messages.helpers.SmsNotificationReadGuard.lock(threadId)) {
+                            if (isActivityVisible) {
+                                markMessageRead(item.id, item.isMMS)
+                                notificationManager.cancel(threadId.hashCode())
+                            }
+                        }
+                    }
+                    if (isActivityVisible) conversationsDB.markRead(threadId)
                 } catch (error: Exception) {
                     android.util.Log.w("ThreadActivity", "Mark-read failed", error)
                 } finally {

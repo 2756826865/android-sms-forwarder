@@ -62,8 +62,7 @@ class SmsRecoveryWorker(
         val journal = SmsIngressRecovery(applicationContext)
         SmsIngressSpool(applicationContext).drain()
         SmsIngressReview(applicationContext).reconcile()
-        val alerts = SmsIngressAlerts(applicationContext)
-        alerts.drain()
+        SmsAlertRecoveryWorker.enqueue(applicationContext)
         runCatching { SmsIngressMaintenance(applicationContext).clean() }
         val drainStarted = android.os.SystemClock.elapsedRealtime()
         for (intent in journal.pending()) {
@@ -87,7 +86,7 @@ class SmsRecoveryWorker(
         if (forcedSince > 0 && storedLastChecked > 0 && legacyRequest)
             scanState.request(forcedSince)
         val scanIdle = !scanState.hasRequest() && !scanState.hasActivePage()
-        val intakePending = journal.hasPending() || alerts.hasPending() ||
+        val intakePending = journal.hasPending() ||
             SmsIngressSpool(applicationContext).hasPending()
         if (inputData.getBoolean("v128_trigger", false) && scanIdle && !intakePending)
             return Result.success()
@@ -114,6 +113,7 @@ class SmsRecoveryWorker(
         // 扫描开始时读一次即可：扫描中自己新产生的记录不需要在本次扫描内立刻可见（每行只处理一次）。
         val forwardedMessageIds by lazy { readForwardedMessageIds() }
         var repairedAny = false
+        val threadIdsToSync = mutableSetOf<Long>()
 
         val projection = arrayOf(
             Telephony.Sms._ID,
@@ -141,7 +141,7 @@ class SmsRecoveryWorker(
                 projection,
                 selection,
                 args,
-                    "${Telephony.Sms.DATE} ASC, ${Telephony.Sms._ID} ASC",
+                    "${Telephony.Sms.DATE} ASC, ${Telephony.Sms._ID} ASC LIMIT ${SCAN_PAGE_SIZE + 1}",
             )?.use { cursor ->
                 val idIndex = cursor.getColumnIndexOrThrow(Telephony.Sms._ID)
                 val addressIndex = cursor.getColumnIndexOrThrow(Telephony.Sms.ADDRESS)
@@ -152,7 +152,6 @@ class SmsRecoveryWorker(
                 val subIndex = cursor.getColumnIndex(Telephony.Sms.SUBSCRIPTION_ID)
                 val readIndex = cursor.getColumnIndexOrThrow(Telephony.Sms.READ)
 
-                val threadIdsToSync = mutableSetOf<Long>()
                 val hasLocalConversation = mutableMapOf<Long, Boolean>()
                 ShadowRepository.incrementCounter(applicationContext, "RECOVERY_SCAN_STARTED")
                 
@@ -168,7 +167,6 @@ class SmsRecoveryWorker(
                         }
                         // Previous row is complete (including all its skip paths) before advancing
                         // its checkpoint.
-                        if (scanned > 0) scanState.checkpoint(page, lastDate, lastId)
                         scanned++
                         kotlinx.coroutines.yield()
                         synchronized(SmsIngressJournal.processLock) {
@@ -193,10 +191,10 @@ class SmsRecoveryWorker(
                             val isRead = cursor.getInt(readIndex) == 1
                             lastDate = date
                             lastId = id
-                            if (threadId > 0L) {
-                                applicationContext.syncThreadToLocal(threadId)
-                                refreshMessages()
-                                refreshConversations()
+                            if (threadId > 0L && (!alreadyLocal ||
+                                applicationContext.conversationsDB.getConversationWithThreadId(threadId) == null)) {
+                                threadIdsToSync.add(threadId)
+                                repairedAny = true
                             }
 
                             if (address.isBlank()) {
@@ -418,7 +416,6 @@ class SmsRecoveryWorker(
                     }
                 }
                     }
-                    if (scanned > 0) scanState.checkpoint(page, lastDate, lastId)
                     ShadowRepository.incrementCounter(applicationContext, "RECOVERY_SCAN_COMPLETED")
             } ?: error("sms_provider_cursor_unavailable")
         } catch (e: CancellationException) {
@@ -429,6 +426,14 @@ class SmsRecoveryWorker(
             return Result.retry()
         }
 
+        try {
+            for (threadId in threadIdsToSync.filter { it > 0L }) {
+                coroutineContext.ensureActive()
+                applicationContext.syncThreadToLocal(threadId)
+            }
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (error: Exception) { Log.w(TAG, "local recovery sync pending", error); return Result.retry() }
+        if (scanned > 0) scanState.checkpoint(page, lastDate, lastId)
         if (exhausted) {
             synchronized(SmsRecoveryScanState.lock) {
                 check(
@@ -446,7 +451,7 @@ class SmsRecoveryWorker(
         }
         val continueScan = !exhausted || scanState.hasRequest() || journal.hasReadyPending()
         if (continueScan) enqueueRunner(applicationContext, Data.EMPTY)
-        val retryPending = journal.hasPending() || alerts.hasPending() ||
+        val retryPending = journal.hasPending() ||
             SmsIngressSpool(applicationContext).hasPending()
         return if (!continueScan && retryPending) Result.retry() else Result.success()
     }
@@ -557,13 +562,13 @@ class SmsRecoveryWorker(
                     if (requested > 0 && stored > 0) minOf(requested, stored)
                     else if (stored > 0) stored else System.currentTimeMillis()
                 )
-            enqueueRunner(context, inputData)
+            enqueueRunner(context, inputData, continuation = false)
         }
 
-        private fun enqueueRunner(context: Context, inputData: Data) {
+        private fun enqueueRunner(context: Context, inputData: Data, continuation: Boolean = true) {
             WorkManager.getInstance(context).enqueueUniqueWork(
                 UNIQUE_NOW,
-                ExistingWorkPolicy.APPEND_OR_REPLACE,
+                if (continuation) ExistingWorkPolicy.APPEND_OR_REPLACE else ExistingWorkPolicy.KEEP,
                 OneTimeWorkRequestBuilder<SmsRecoveryWorker>().setInputData(
                             Data.Builder()
                                 .putAll(inputData)
@@ -571,6 +576,14 @@ class SmsRecoveryWorker(
                                 .build()
                         ).build(),
             )
+            if (!continuation) {
+                WorkManager.getInstance(context).enqueueUniqueWork(
+                    "$UNIQUE_NOW-follow-up", ExistingWorkPolicy.KEEP,
+                    OneTimeWorkRequestBuilder<SmsRecoveryWorker>()
+                        .setInitialDelay(2, TimeUnit.SECONDS)
+                        .setInputData(Data.Builder().putBoolean("v128_trigger", true).build()).build())
+            }
+
         }
 
         /**

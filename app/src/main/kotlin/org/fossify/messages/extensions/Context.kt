@@ -1488,6 +1488,7 @@ fun Context.syncThreadToLocal(
     traceId: String? = null,
 ): List<Message> {
     if (threadId == 0L) return emptyList()
+    val revision = org.fossify.messages.helpers.ConversationRefreshRevision.current()
     val limit = if (loadAll) Int.MAX_VALUE else MESSAGES_LIMIT
     val providerMessages = getMessages(
         threadId = threadId,
@@ -1497,8 +1498,10 @@ fun Context.syncThreadToLocal(
         strict = false,
         traceId = traceId
     )
-    providerMessages.chunked(100).forEach { batch ->
-        messagesDB.insertMessages(*batch.toTypedArray())
+    getMessagesDB().runInTransaction {
+        if (revision == org.fossify.messages.helpers.ConversationRefreshRevision.current()) {
+            providerMessages.chunked(100).forEach { batch -> messagesDB.insertMessages(*batch.toTypedArray()) }
+        }
     }
 
     val localMessages = messagesDB.getNonRecycledThreadMessages(threadId)
@@ -1510,7 +1513,11 @@ fun Context.syncThreadToLocal(
         .maxByOrNull { it.date }
         ?.let(::createConversationFromMessage)
     if (conversation != null) {
-        insertOrUpdateConversation(conversation)
+        getMessagesDB().runInTransaction {
+            if (revision == org.fossify.messages.helpers.ConversationRefreshRevision.current()) {
+                insertOrUpdateConversation(conversation)
+            }
+        }
     }
     return localMessages
 }
@@ -1617,4 +1624,8 @@ fun Context.copyToUri(src: Uri, dst: Uri) {
             input.copyTo(out)
         }
     }
+}
+
+fun Context.clearPendingSmsNotification(event: String) {
+    getSystemService(android.app.NotificationManager::class.java)?.cancel(event.hashCode())
 }

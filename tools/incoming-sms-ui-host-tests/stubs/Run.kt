@@ -70,7 +70,7 @@ fun main()= runBlocking {
     Ui.enqueue(c,"sender","test",1_000_000,2,"fingerprint")
     Ui.enqueue(c,"sender","test",1_000_000,2,"fingerprint")
  check(c.enqueued.size==2&&c.enqueued.map{it.first}.distinct()==listOf("sms-ui-sync-fingerprint"))
- check(c.enqueued.all{it.second==ExistingWorkPolicy.KEEP&&it.third.data.values.size==3&&it.third.data.values.values.none{v->v=="sender"||v=="test"}})
+ check(c.enqueued.all{it.second==ExistingWorkPolicy.KEEP&&it.third.data.values.size==4&&it.third.data.values.values.none{v->v=="sender"||v=="test"}})
     c = Context()
     c.rows = listOf(row(id = 123), row(id = 124, thread = 10))
     check(run(c) == "retry" && c.synced.isEmpty())

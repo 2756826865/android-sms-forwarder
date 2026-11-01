@@ -38,6 +38,7 @@ internal class SmsIngressAlerts(private val context: Context) {
             arrayOf<Any?>(key, KeyStoreHelper.encrypt(payload.toString()), createdAt, threadId),
         )
         publish(key)
+        SmsAlertRecoveryWorker.enqueue(context)
     }
 
     private fun published(key: String): Boolean =
