@@ -186,6 +186,88 @@ class SmsIngressDeliveryTest {
     }
 
     @Test
+    fun unreadableLegacyTokenStillStagesSmsAndNeverAuthorizesForwarding() {
+        val prefix = "routing-intake-${UUID.randomUUID()}-"
+        val context = object : ContextWrapper(ForwardingTestContext.context) {
+            override fun getApplicationContext(): Context = this
+            override fun getSharedPreferences(name: String, mode: Int) =
+                baseContext.getSharedPreferences(prefix + name, mode)
+        }
+        val legacy = context.getSharedPreferences("pushplus_forwarding", Context.MODE_PRIVATE)
+        val db = SmsIngressDatabase.get(context).writableDatabase
+        var eventKey: String? = null
+        try {
+            legacy.edit().putString("token", "unreadable-ciphertext").commit()
+            // 3GPP SMS-DELIVER PDU: +1234567890, text "hello".
+            val bytes = "00040A91214365870900006201101111110005E8329BFD06"
+                .chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+            assertNotNull(android.telephony.SmsMessage.createFromPdu(bytes, "3gpp"))
+            val source = android.content.Intent(android.provider.Telephony.Sms.Intents.SMS_DELIVER_ACTION)
+                .putExtra("pdus", arrayOf(bytes))
+                .putExtra("format", "3gpp")
+            val staged = SmsIngressJournal(context).stage(source)
+            eventKey = staged.getStringExtra(SmsIngressJournal.EXTRA_EVENT)
+            assertNotNull(eventKey)
+            val key = eventKey!!
+            val receipt = SmsIngressJournal(context).receipt(key)
+            assertNotNull(receipt)
+            db.rawQuery(
+                "SELECT routing_digest,payload FROM ingress_journal WHERE event_key=?", arrayOf(key),
+            ).use { c ->
+                assertTrue(c.moveToFirst())
+                assertEquals(SmsIngressRouting.UNAVAILABLE_SNAPSHOT, c.getString(0))
+                assertTrue(c.getString(1).isNotBlank())
+            }
+            assertFalse(SmsIngressRouting(context).allowed(key))
+            db.rawQuery("SELECT reason FROM ingress_journal WHERE event_key=?", arrayOf(key)).use { c ->
+                assertTrue(c.moveToFirst())
+                assertEquals("configuration_unavailable", c.getString(0))
+            }
+            // Restoring a secret must never re-route the old receipt to a new destination.
+            legacy.edit().remove("token").commit()
+            assertFalse(SmsIngressRouting(context).allowed(key))
+        } finally {
+            eventKey?.let { key ->
+                db.execSQL("DELETE FROM ingress_alias WHERE event_key=?", arrayOf(key))
+                db.execSQL("DELETE FROM ingress_timing WHERE event_key=?", arrayOf(key))
+                db.execSQL("DELETE FROM ingress_journal WHERE event_key=?", arrayOf(key))
+            }
+            legacy.edit().clear().commit()
+        }
+    }
+
+    @Test
+    fun routingFailureDoesNotOverwriteAnUncertainProviderWrite() {
+        val prefix = "routing-provider-${UUID.randomUUID()}-"
+        val context = object : ContextWrapper(ForwardingTestContext.context) {
+            override fun getApplicationContext(): Context = this
+            override fun getSharedPreferences(name: String, mode: Int) =
+                baseContext.getSharedPreferences(prefix + name, mode)
+        }
+        val legacy = context.getSharedPreferences("pushplus_forwarding", Context.MODE_PRIVATE)
+        val key = UUID.randomUUID().toString()
+        val db = SmsIngressDatabase.get(context).writableDatabase
+        try {
+            legacy.edit().putString("token", "unreadable-ciphertext").commit()
+            db.execSQL(
+                """INSERT INTO ingress_journal(event_key,pdu_hash,raw_sub,confirmed_sub,slot,
+                     evidence,observed_at,received_at,payload,routing_digest,reason)
+                   VALUES(?,?,?,?,?,?,?,?,?,?,?)""".trimIndent(),
+                arrayOf<Any?>(key, "pdu", -1, -1, -1, "test", 10, 10,
+                    "cipher", SmsIngressRouting.UNAVAILABLE_SNAPSHOT, "provider_result_uncertain"),
+            )
+            assertFalse(SmsIngressRouting(context).allowed(key))
+            db.rawQuery("SELECT reason FROM ingress_journal WHERE event_key=?", arrayOf(key)).use { c ->
+                assertTrue(c.moveToFirst())
+                assertEquals("provider_result_uncertain", c.getString(0))
+            }
+        } finally {
+            db.execSQL("DELETE FROM ingress_journal WHERE event_key=?", arrayOf(key))
+            legacy.edit().clear().commit()
+        }
+    }
+
+    @Test
     fun reencryptingTheSameTokenKeepsTheRoutingDigest() {
         val prefix = "routing-semantic-${UUID.randomUUID()}-"
         val context = object : ContextWrapper(ForwardingTestContext.context) {

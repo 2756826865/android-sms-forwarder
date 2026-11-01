@@ -38,6 +38,7 @@ data class SmsSyncResult(
 )
 
 private val historySyncRunning = java.util.concurrent.atomic.AtomicBoolean(false)
+private const val HISTORY_PAGE_SIZE = 500
 
 fun Context.syncSmsHistory(source: String, strict: Boolean = false): SmsSyncResult {
     val traceId = UUID.randomUUID().toString().take(8)
@@ -89,20 +90,29 @@ fun Context.syncSmsHistory(source: String, strict: Boolean = false): SmsSyncResu
             var minId = Long.MAX_VALUE
             while (true) {
                 val selection = if (minId == Long.MAX_VALUE) typeFilter else "$typeFilter AND ${Telephony.Sms._ID} < $minId"
-                val cursor = contentResolver.query(
-                    Telephony.Sms.CONTENT_URI,
-                    null,
-                    selection,
-                    null,
-                    "${Telephony.Sms._ID} DESC"
-                ) ?: throw IllegalStateException("SMS_NULL_CURSOR")
+                // Server-side page cap where supported. Some OEM providers reject
+                // LIMIT in sort order; keep the same cursor-side page cap as fallback.
+                val cursor = try {
+                    contentResolver.query(
+                        Telephony.Sms.CONTENT_URI, null, selection, null,
+                        "${Telephony.Sms._ID} DESC LIMIT $HISTORY_PAGE_SIZE",
+                    )
+                } catch (error: RuntimeException) {
+                    if (error is SecurityException) throw error
+                    Log.w("SmsSync", "Provider rejected bounded sorting; using cursor pagination", error)
+                    contentResolver.query(
+                        Telephony.Sms.CONTENT_URI, null, selection, null,
+                        "${Telephony.Sms._ID} DESC",
+                    )
+                } ?: throw IllegalStateException("SMS_NULL_CURSOR")
 
                 var rowsInPage = 0
                 var pageMinId = minId
 
                 cursor.use { c ->
-                    totalSms += c.count
-                    diagnostics?.log("business_cursor", "status=ok count=${c.count} uri=${Telephony.Sms.CONTENT_URI} selection=$selection sort=_id_desc projection=business")
+                    // Cursor.count may force an OEM provider to materialize the entire
+                    // history. Count the actual page only after traversal instead.
+                    diagnostics?.log("business_cursor", "status=ok page_limit=$HISTORY_PAGE_SIZE uri=${Telephony.Sms.CONTENT_URI} selection=$selection sort=_id_desc projection=business")
                     SmsSyncProgress.update(SmsSyncProgress.State(running = true, completed = processedCount, total = maxOf(totalSms, processedCount), failed = parseFailedCount))
                     val idCol = c.getColumnIndex(Telephony.Sms._ID)
                     val threadCol = c.getColumnIndex(Telephony.Sms.THREAD_ID)
@@ -115,7 +125,7 @@ fun Context.syncSmsHistory(source: String, strict: Boolean = false): SmsSyncResu
                     val subCol = c.getColumnIndex(Telephony.Sms.SUBSCRIPTION_ID)
                     val simCol = c.getColumnIndex("sim_id")
 
-                    while (c.moveToNext()) {
+                    while (rowsInPage < HISTORY_PAGE_SIZE && c.moveToNext()) {
                         rowsInPage++
                         val id = if (idCol >= 0) c.getLong(idCol) else 0L
                         val threadId = if (threadCol >= 0) c.getLong(threadCol) else 0L
@@ -198,6 +208,7 @@ fun Context.syncSmsHistory(source: String, strict: Boolean = false): SmsSyncResu
                         }
                     }
                 }
+                totalSms += rowsInPage
                 if (rowsInPage == 0) break
                 check(pageMinId < minId) { "SMS_SYNC_CURSOR_NOT_ADVANCING" }
                 minId = pageMinId

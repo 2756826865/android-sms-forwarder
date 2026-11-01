@@ -193,7 +193,7 @@ internal class SmsIngressStaging(
                 p.identity.observedAt,
                 p.now,
                 KeyStoreHelper.encrypt(payload.toString()),
-                SmsIngressRouting(app).digest(),
+                SmsIngressRouting(app).admissionDigest(),
             ),
         )
         val knownAlias =

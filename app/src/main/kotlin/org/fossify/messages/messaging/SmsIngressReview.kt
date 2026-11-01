@@ -15,7 +15,7 @@ internal class SmsIngressReview(private val context: Context) {
         db.rawQuery(
                 """
                 SELECT event_key,received_at,reason FROM ingress_journal WHERE done=0 AND reason IN
-                           ('provider_result_uncertain','payload_unreadable','configuration_changed')
+                           ('provider_result_uncertain','payload_unreadable','configuration_changed','configuration_unavailable')
                 UNION ALL SELECT event_key,created_at,'notification_pending' FROM ingress_alert
                 WHERE delivered=0 AND error!='' ORDER BY 2 LIMIT 20
                 """

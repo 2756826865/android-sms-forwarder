@@ -707,8 +707,6 @@ open class IncomingSmsService : Service() {
                     ?: (SmsIngressJournal(appContext).receipt(source)?.receivedAt
                             ?: System.currentTimeMillis())
                 val receipt = SmsIngressJournal(appContext).receipt(source)
-                val routingAllowed =
-                    receipt?.let { SmsIngressJournal(appContext).routingAllowed(it.key) } != false
                 val receivedAt = receipt?.receivedAt ?: System.currentTimeMillis()
                 val subscriptionId = resolveSubscriptionId(appContext, source)
                 val fingerprint = receipt?.key ?: fingerprint(address, body, sentAt, subscriptionId)
@@ -762,6 +760,9 @@ open class IncomingSmsService : Service() {
                     SmsRecoveryWorker.enqueueNow(appContext)
                 }
                 if (insertedMessageId < 0L) {
+                    // Do not claim a routing failure until Provider persistence was attempted.
+                    val routingAllowed =
+                        receipt?.let { SmsIngressJournal(appContext).routingAllowed(it.key) } != false
                     filteredOut = isFilteredForReceive(appContext, address, body)
                     if (!filteredOut && receipt != null) {
                         org.fossify.messages.messaging.SmsIngressAlerts(appContext)
@@ -824,6 +825,10 @@ open class IncomingSmsService : Service() {
                     )
                 }
 
+                // Basic Provider/Room storage precedes routing verification. A broken
+                // forwarding configuration cannot suppress receipt persistence.
+                val routingAllowed =
+                    receipt?.let { SmsIngressJournal(appContext).routingAllowed(it.key) } != false
                 filteredOut = isFilteredForReceive(appContext, address, body)
                 if (!filteredOut && receipt != null) {
                     org.fossify.messages.messaging.SmsIngressAlerts(appContext).enqueue(

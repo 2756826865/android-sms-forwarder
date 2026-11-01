@@ -1,6 +1,7 @@
 package org.fossify.messages.messaging
 
 import android.content.Context
+import android.util.Log
 import java.security.MessageDigest
 import org.fossify.messages.forwarding.MultiForwardConfig
 import org.json.JSONArray
@@ -12,6 +13,19 @@ internal class SmsIngressRouting(context: Context) {
     private val db
         get() = SmsIngressDatabase.get(app).writableDatabase
 
+    /**
+     * A damaged forwarding credential must never stop an incoming SMS from reaching
+     * the encrypted receipt journal. An unavailable snapshot permanently disables
+     * automatic forwarding for this receipt, even if credentials are later replaced.
+     */
+    fun admissionDigest(): String =
+        try {
+            digest()
+        } catch (error: Exception) {
+            Log.w(TAG, "Routing snapshot unavailable; SMS admission remains enabled", error)
+            UNAVAILABLE_SNAPSHOT
+        }
+
     fun allowed(key: String): Boolean {
         val original =
             db.rawQuery(
@@ -19,21 +33,37 @@ internal class SmsIngressRouting(context: Context) {
                     arrayOf(key),
                 )
                 .use { if (it.moveToFirst()) it.getString(0) else null }
-        val current = digest()
-        if (original == null || original == current) return true
-        if (original.startsWith("v2:") && original == digest(rawCredentials = true)) {
-            db.execSQL("UPDATE ingress_journal SET routing_digest=? WHERE event_key=?", arrayOf(current, key))
-            return true
+        if (original == UNAVAILABLE_SNAPSHOT) return block(key, "configuration_unavailable")
+
+        try {
+            val current = digest()
+            if (original == null || original == current) return true
+            if (original.startsWith("v2:") && original == digest(rawCredentials = true)) {
+                db.execSQL("UPDATE ingress_journal SET routing_digest=? WHERE event_key=?", arrayOf(current, key))
+                return true
+            }
+            // Upgrade an unchanged v5 digest only when equivalence is provable.
+            if (!original.startsWith("v2:") && original == digest(legacy = true)) {
+                db.execSQL(
+                    "UPDATE ingress_journal SET routing_digest=? WHERE event_key=?",
+                    arrayOf(current, key),
+                )
+                return true
+            }
+        } catch (error: Exception) {
+            Log.w(TAG, "Routing snapshot cannot be verified; forwarding paused", error)
+            return block(key, "configuration_unavailable")
         }
-        // Upgrade an unchanged v5 digest. Never silently accept an unprovable historical change.
-        if (!original.startsWith("v2:") && original == digest(legacy = true)) {
-            db.execSQL(
-                "UPDATE ingress_journal SET routing_digest=? WHERE event_key=?",
-                arrayOf(current, key),
-            )
-            return true
-        }
-        SmsIngressJournal(app).reason(key, "configuration_changed")
+        return block(key, "configuration_changed")
+    }
+
+    private fun block(key: String, reason: String): Boolean {
+        // A failed or ambiguous Provider write outranks routing review. Do not
+        // hide the Provider failure behind a secondary configuration warning.
+        db.execSQL(
+            "UPDATE ingress_journal SET reason=? WHERE event_key=? AND reason NOT IN ('provider_result_uncertain','payload_unreadable')",
+            arrayOf(reason, key),
+        )
         return false
     }
 
@@ -116,6 +146,8 @@ internal class SmsIngressRouting(context: Context) {
         }
 
     companion object {
+        internal const val UNAVAILABLE_SNAPSHOT = "v3:unavailable"
+        private const val TAG = "SmsIngressRouting"
         private const val UBYTE_MASK = 0xff
     }
 }

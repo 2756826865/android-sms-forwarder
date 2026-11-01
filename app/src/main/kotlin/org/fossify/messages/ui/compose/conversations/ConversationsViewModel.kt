@@ -209,7 +209,6 @@ class ConversationsViewModel(application: Application) : AndroidViewModel(applic
         refreshJob?.cancel()
         refreshJob = viewModelScope.launch {
             diagnostics?.log("refresh", "status=started initial=$isInitial")
-            if (!isInitial) delay(300)
             val context = getApplication<Application>()
             val isDefault = org.fossify.messages.helpers.DeviceCompatHelper.isDefaultSmsApp(context)
             val isNotificationDenied = org.fossify.messages.helpers.DeviceCompatHelper.isNotificationSmsDenied(context)
@@ -240,6 +239,9 @@ class ConversationsViewModel(application: Application) : AndroidViewModel(applic
                 )
             }
 
+            // Publish committed Room messages immediately; only the expensive Provider
+            // reconciliation is debounced. Foreground SMS display must not wait for it.
+            if (!isInitial) delay(300)
             val loadingWatchdog = launch {
                 delay(15_000)
                 if (_uiState.value.isLoading && _uiState.value.conversations.isEmpty()) {
