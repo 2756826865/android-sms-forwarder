@@ -47,6 +47,9 @@ interface MessagesDao {
     @Query("SELECT id FROM messages")
     fun getAllIds(): List<Long>
 
+    @Query("SELECT id FROM messages WHERE id IN (:ids)")
+    fun getExistingIds(ids: List<Long>): List<Long>
+
     @Query("SELECT messages.* FROM messages LEFT OUTER JOIN recycle_bin_messages ON messages.id = recycle_bin_messages.id WHERE recycle_bin_messages.id IS NOT NULL")
     fun getAllRecycleBinMessages(): List<Message>
 
@@ -79,6 +82,11 @@ interface MessagesDao {
     @Query("""SELECT COUNT(*) FROM messages LEFT JOIN recycle_bin_messages r ON messages.id=r.id
         WHERE r.id IS NULL AND messages.thread_id=:threadId AND messages.read=0 AND messages.type=1""")
     fun countUnreadNonRecycledInboxMessages(threadId: Long): Int
+
+    @Query("""SELECT m.* FROM messages m LEFT JOIN recycle_bin_messages r ON m.id=r.id
+        WHERE r.id IS NULL AND m.thread_id=:threadId AND m.read=0 AND m.type=1
+        ORDER BY m.date DESC,m.id DESC LIMIT 1""")
+    fun getLatestUnreadInboxMessage(threadId: Long): Message?
 
     @Query("SELECT messages.* FROM messages LEFT OUTER JOIN recycle_bin_messages ON messages.id = recycle_bin_messages.id WHERE recycle_bin_messages.id IS NOT NULL AND thread_id = :threadId")
     fun getThreadMessagesFromRecycleBin(threadId: Long): List<Message>

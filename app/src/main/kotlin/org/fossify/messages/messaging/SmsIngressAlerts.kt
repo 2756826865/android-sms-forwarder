@@ -137,6 +137,9 @@ internal class SmsIngressAlerts(private val context: Context) {
                 }
                     .also { release() }
             },
+            onSuppressed = {
+                runCatching { delivered(key) }.also { release() }
+            },
             onFailed = {
                 defer(key, "notification_publish_failed")
                 release()

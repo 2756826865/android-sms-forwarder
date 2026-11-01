@@ -150,4 +150,59 @@ class SmsIngressDeliveryTest {
         println("Encrypted admission API=${android.os.Build.VERSION.SDK_INT}: cold=${samples.first()}ms p50=${sorted[9]}ms p95=${sorted[18]}ms max=${sorted.last()}ms")
     }
 
+    @Test
+    fun routingDigestDoesNotMigrateLegacyTokenOrDeleteUnreadableCredentials() {
+        val prefix = "routing-pure-${UUID.randomUUID()}-"
+        val context = object : ContextWrapper(ForwardingTestContext.context) {
+            override fun getApplicationContext(): Context = this
+            override fun getSharedPreferences(name: String, mode: Int) =
+                baseContext.getSharedPreferences(prefix + name, mode)
+        }
+        val legacy = context.getSharedPreferences("pushplus_forwarding", Context.MODE_PRIVATE)
+        val multi = context.getSharedPreferences("multi_channel_forwarding", Context.MODE_PRIVATE)
+        try {
+            org.fossify.messages.forwarding.PushPlusConfig(context).saveToken("same-routing-token")
+            check(legacy.getString("token", "").orEmpty().isNotBlank())
+            multi.edit().clear().commit() // Real legacy-only migration state.
+            val before = legacy.all.toMap()
+            val routing = SmsIngressRouting(context)
+            val first = routing.digest()
+            assertEquals(first, routing.digest())
+            assertEquals(before, legacy.all)
+            assertTrue(multi.all.isEmpty())
+
+            legacy.edit().putString("token", "unreadable-ciphertext").commit()
+            val invalid = legacy.all.toMap()
+            try {
+                routing.digest()
+                fail("Unavailable legacy credentials must not produce a new routing identity")
+            } catch (_: IllegalStateException) { }
+            assertEquals(invalid, legacy.all)
+            assertTrue(multi.all.isEmpty())
+        } finally {
+            legacy.edit().clear().commit()
+            multi.edit().clear().commit()
+        }
+    }
+
+    @Test
+    fun reencryptingTheSameTokenKeepsTheRoutingDigest() {
+        val prefix = "routing-semantic-${UUID.randomUUID()}-"
+        val context = object : ContextWrapper(ForwardingTestContext.context) {
+            override fun getApplicationContext(): Context = this
+            override fun getSharedPreferences(name: String, mode: Int) =
+                baseContext.getSharedPreferences(prefix + name, mode)
+        }
+        val config = org.fossify.messages.forwarding.PushPlusConfig(context)
+        try {
+            config.saveToken("same-routing-token")
+            val first = SmsIngressRouting(context).digest()
+            config.saveToken("same-routing-token")
+            assertEquals(first, SmsIngressRouting(context).digest())
+        } finally {
+            context.getSharedPreferences("pushplus_forwarding", Context.MODE_PRIVATE).edit().clear().commit()
+            context.getSharedPreferences("multi_channel_forwarding", Context.MODE_PRIVATE).edit().clear().commit()
+        }
+    }
+
 }

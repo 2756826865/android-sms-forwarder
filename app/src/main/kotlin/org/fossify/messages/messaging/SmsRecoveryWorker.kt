@@ -114,6 +114,7 @@ class SmsRecoveryWorker(
         val forwardedMessageIds by lazy { readForwardedMessageIds() }
         var repairedAny = false
         val threadIdsToSync = mutableSetOf<Long>()
+        val requiredSmsIds = mutableMapOf<Long, MutableSet<Long>>()
 
         val projection = arrayOf(
             Telephony.Sms._ID,
@@ -152,7 +153,17 @@ class SmsRecoveryWorker(
                 val subIndex = cursor.getColumnIndex(Telephony.Sms.SUBSCRIPTION_ID)
                 val readIndex = cursor.getColumnIndexOrThrow(Telephony.Sms.READ)
 
-                val hasLocalConversation = mutableMapOf<Long, Boolean>()
+                // One bounded Room lookup per table, before taking the receipt-processing lock.
+                val pageIds = mutableListOf<Long>()
+                val pageThreads = mutableSetOf<Long>()
+                while (cursor.moveToNext()) {
+                    pageIds.add(cursor.getLong(idIndex))
+                    pageThreads.add(cursor.getLong(threadIndex))
+                }
+                cursor.moveToPosition(-1)
+                val localIds = applicationContext.messagesDB.getExistingIds(pageIds).toSet()
+                val localThreads = applicationContext.conversationsDB
+                    .getExistingThreadIds(pageThreads.toList()).toSet()
                 ShadowRepository.incrementCounter(applicationContext, "RECOVERY_SCAN_STARTED")
                 
                 while (cursor.moveToNext()) {
@@ -172,11 +183,12 @@ class SmsRecoveryWorker(
                         synchronized(SmsIngressJournal.processLock) {
                             val id = cursor.getLong(idIndex)
                             val alreadyLocal =
-                                applicationContext.messagesDB.getMessageWithId(id) != null
+                                id in localIds
                             val address = cursor.getString(addressIndex).orEmpty()
                     val body = cursor.getString(bodyIndex).orEmpty()
                     val date = cursor.getLong(dateIndex)
                     val threadId = cursor.getLong(threadIndex)
+                    if (!alreadyLocal && threadId > 0L) requiredSmsIds.getOrPut(threadId) { mutableSetOf() }.add(id)
                     val rawSubscriptionId = if (subIndex >= 0) {
                         cursor.getInt(subIndex)
                     } else {
@@ -192,7 +204,7 @@ class SmsRecoveryWorker(
                             lastDate = date
                             lastId = id
                             if (threadId > 0L && (!alreadyLocal ||
-                                applicationContext.conversationsDB.getConversationWithThreadId(threadId) == null)) {
+                                threadId !in localThreads)) {
                                 threadIdsToSync.add(threadId)
                                 repairedAny = true
                             }
@@ -213,9 +225,7 @@ class SmsRecoveryWorker(
                             // forwarded/filtered
                             // messages; keep forwarding and command replay decisions below
                             // unchanged.
-                            if (alreadyLocal && threadId > 0L && !hasLocalConversation.getOrPut(threadId) {
-                            applicationContext.conversationsDB.getConversationWithThreadId(threadId) != null
-                        }) {
+                            if (alreadyLocal && threadId > 0L && threadId !in localThreads) {
                         threadIdsToSync.add(threadId)
                         repairedAny = true
                     }
@@ -420,7 +430,16 @@ class SmsRecoveryWorker(
             } ?: error("sms_provider_cursor_unavailable")
             for (threadId in threadIdsToSync.filter { it > 0L }) {
                 coroutineContext.ensureActive()
-                applicationContext.syncThreadToLocal(threadId)
+                applicationContext.syncThreadToLocal(threadId,
+                    requiredSmsIds = requiredSmsIds[threadId].orEmpty(), requireProvider = true)
+                check(applicationContext.conversationsDB.getConversationWithThreadId(threadId) != null) {
+                    "recovery_conversation_not_saved"
+                }
+                check(requiredSmsIds[threadId].orEmpty().all {
+                    applicationContext.messagesDB.getMessageWithId(it)?.let { message ->
+                        message.threadId == threadId && !message.isMMS
+                    } == true
+                }) { "recovery_messages_not_saved" }
             }
         } catch (e: CancellationException) {
             // WorkManager 取消（协程取消）必须原样传播，否则会被误当成扫描失败而 retry。

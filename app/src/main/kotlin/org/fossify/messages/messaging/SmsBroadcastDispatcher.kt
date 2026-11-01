@@ -34,6 +34,13 @@ internal object SmsBroadcastDispatcher {
             java.util.concurrent.ThreadFactory { task -> Thread(task, "sms-ingress-fallback") },
         )
 
+    // Reserve immediate admission for a failed spool/service handoff. No queued broadcast tokens.
+    private val emergencyExecutor = ThreadPoolExecutor(
+        2, 2, THREAD_KEEP_ALIVE_SECONDS, TimeUnit.SECONDS,
+        java.util.concurrent.SynchronousQueue(),
+        java.util.concurrent.ThreadFactory { task -> Thread(task, "sms-ingress-emergency") },
+    )
+
     // Framework/OEM boundary: retain durable state and report unclassified platform failures.
     fun dispatch(context: Context, source: Intent, pending: BroadcastReceiver.PendingResult) {
         val app = context.applicationContext
@@ -41,27 +48,38 @@ internal object SmsBroadcastDispatcher {
             Intent(source)
                 .putExtra(SmsIngressSpool.EXTRA_ID, java.util.UUID.randomUUID().toString())
                 .putExtra(SmsIngressSpool.EXTRA_RECEIVED_AT, System.currentTimeMillis())
+        val finished = java.util.concurrent.atomic.AtomicBoolean(false)
+        fun finish() { if (finished.compareAndSet(false, true)) pending.finish() }
+        var handedOff = false
         val persist = {
             runCatching {
                 SmsIngressSpool(app).save(copy)
+                handedOff = true
             }
                 .onFailure {
                     Log.e("SmsIngress", "emergency persistence failed: ${it.javaClass.simpleName}")
                     val acceptedByService = runCatching { IncomingSmsService.enqueue(app, copy) }.getOrDefault(false)
+                    handedOff = acceptedByService
                     if (!acceptedByService) {
                         app.getSharedPreferences("sms_ingress_spool_status", Context.MODE_PRIVATE).edit()
                             .putString("error", "storage_and_service_handoff_failed").apply()
-                        Log.e("SmsIngress", "no durable handoff confirmed; storage and foreground service unavailable")
+                        Log.w("SmsIngress", "storage and service unavailable; attempting protected Journal admission")
                     }
                 }
             Unit
         }
         val accepted =
             DurableIngressHandoff.dispatch(
-                executor,
+                java.util.concurrent.Executor { task ->
+                    if (handedOff) executor.execute(task) else emergencyExecutor.execute(task)
+                },
                 process = {
                     runCatching {
-                        val staged = SmsIngressJournal(app).stage(copy)
+                        val staged = try {
+                            SmsIngressJournal(app).stage(copy)
+                        } finally {
+                            finish()
+                        }
                         SmsIngressSpool(app).remove(copy)
                         runCatching { SmsKeepAliveService.ensureStarted(app) }
                         if (!IncomingSmsService.enqueue(app, staged)) {
@@ -83,9 +101,13 @@ internal object SmsBroadcastDispatcher {
                     runCatching { SmsRecoveryWorker.enqueueNow(app) }
                 },
                 persist = persist,
-                finish = pending::finish,
+                finish = { if (handedOff) finish() },
             )
-        if (!accepted) Log.w("SmsIngress", "processing queue full; encrypted receipt retained")
+        if (!accepted) {
+            finish()
+            Log.w("SmsIngress", if (handedOff) "processing queue full; recovery handoff retained"
+                else "emergency admission full; no durable handoff confirmed")
+        }
         runCatching { SmsRecoveryWorker.enqueueNow(app) }
     }
 }

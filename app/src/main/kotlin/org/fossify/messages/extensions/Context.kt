@@ -146,8 +146,14 @@ fun Context.getMessages(
         }
 
         // 优先尝试按 threadId 查询
-        queryCursor(uri, projection, selection, selectionArgs, sortOrder, showErrors = true) { cursor ->
-            parseSmsFromCursor(cursor, messages)
+        if (strict) {
+            val cursor = contentResolver.query(uri, projection, selection, selectionArgs, sortOrder)
+                ?: error("sms_provider_cursor_unavailable")
+            cursor.use { while (it.moveToNext()) parseSmsFromCursor(it, messages) }
+        } else {
+            queryCursor(uri, projection, selection, selectionArgs, sortOrder, showErrors = true) { cursor ->
+                parseSmsFromCursor(cursor, messages)
+            }
         }
 
         // 小米/HyperOS 兼容性兜底：
@@ -494,7 +500,9 @@ fun Context.getConversations(
             selection,
             selectionArgs,
             sortOrder,
-            onCursor = { c -> diagnostics?.optional("thread_cursor") {
+            onCursor = { c ->
+                if (strict && c == null) error("thread_provider_cursor_unavailable")
+                diagnostics?.optional("thread_cursor") {
                 diagnostics.log("thread_cursor", if (c == null) "status=null_cursor" else "status=ok count=${c.count}")
             } }
         ) { cursor ->
@@ -1247,10 +1255,11 @@ fun Context.showReceivedMessageNotification(
     bitmap: Bitmap?,
     onPublished: () -> Unit = {},
     onFailed: () -> Unit = {},
+    onSuppressed: () -> Unit = {},
 ) {
     val posted = Handler(Looper.getMainLooper()).post {
         runCatching {
-            org.fossify.messages.helpers.NotificationHelper(this, onPublished, onFailed).showMessageNotification(
+            org.fossify.messages.helpers.NotificationHelper(this, onPublished, onFailed, onSuppressed).showMessageNotification(
             messageId = messageId,
             address = address,
             body = body,
@@ -1486,6 +1495,8 @@ fun Context.syncThreadToLocal(
     loadAll: Boolean = false,
     refreshConversation: Boolean = true,
     traceId: String? = null,
+    requiredSmsIds: Set<Long> = emptySet(),
+    requireProvider: Boolean = false,
 ): List<Message> {
     if (threadId == 0L) return emptyList()
     val revision = org.fossify.messages.helpers.ConversationRefreshRevision.current()
@@ -1495,10 +1506,25 @@ fun Context.syncThreadToLocal(
         address = address,
         includeScheduledMessages = false,
         limit = limit,
-        strict = false,
+        strict = requireProvider,
         traceId = traceId
     )
+    // Older missing messages may lie outside the latest-message UI window.
+    val missingIds = requiredSmsIds - providerMessages.filterNot { it.isMMS }.map { it.id }.toSet()
+    if (missingIds.isNotEmpty()) {
+        val cursor = contentResolver.query(Sms.CONTENT_URI, null,
+            "${Sms.THREAD_ID}=? AND ${Sms._ID} IN (${missingIds.joinToString { "?" }})",
+            arrayOf(threadId.toString(), *missingIds.map { it.toString() }.toTypedArray()), null)
+            ?: error("sms_provider_cursor_unavailable")
+        cursor.use { while (it.moveToNext()) parseSmsFromCursor(it, providerMessages) }
+    }
+    if (requireProvider) check(providerMessages.filterNot { it.isMMS }.map { it.id }.containsAll(requiredSmsIds)) {
+        "recovery_messages_not_loaded"
+    }
     getMessagesDB().runInTransaction {
+        if (requireProvider) check(revision == org.fossify.messages.helpers.ConversationRefreshRevision.current()) {
+            "recovery_snapshot_superseded"
+        }
         if (revision == org.fossify.messages.helpers.ConversationRefreshRevision.current()) {
             providerMessages.chunked(100).forEach { batch -> messagesDB.insertMessages(*batch.toTypedArray()) }
         }
@@ -1508,12 +1534,15 @@ fun Context.syncThreadToLocal(
     // The conversation-list refresh has already loaded and saved provider metadata.
     // Incoming-message/recovery callers keep the default and refresh their one thread.
     if (!refreshConversation) return localMessages
-    val providerConversation = getConversations(threadId).firstOrNull()
+    val providerConversation = getConversations(threadId, strict = requireProvider).firstOrNull()
     val conversation = providerConversation ?: localMessages.filterNot { it.isScheduled }
         .maxByOrNull { it.date }
         ?.let(::createConversationFromMessage)
     if (conversation != null) {
         getMessagesDB().runInTransaction {
+            if (requireProvider) check(revision == org.fossify.messages.helpers.ConversationRefreshRevision.current()) {
+                "recovery_snapshot_superseded"
+            }
             if (revision == org.fossify.messages.helpers.ConversationRefreshRevision.current()) {
                 insertOrUpdateConversation(conversation)
             }

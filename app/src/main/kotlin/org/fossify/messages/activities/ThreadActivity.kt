@@ -143,6 +143,7 @@ import org.fossify.messages.extensions.indexOfFirstOrNull
 import org.fossify.messages.extensions.isGifMimeType
 import org.fossify.messages.extensions.isImageMimeType
 import org.fossify.messages.extensions.launchConversationDetails
+import org.fossify.messages.extensions.getMessagesDB
 import org.fossify.messages.extensions.markMessageRead
 import org.fossify.messages.extensions.markThreadMessagesRead
 import org.fossify.messages.extensions.moveConversationToRecycleBin
@@ -375,8 +376,6 @@ class ThreadActivity : SimpleActivity() {
 
         isActivityVisible = true
         refreshMessages()
-
-        notificationManager.cancel(threadId.hashCode())
 
         ensureBackgroundThread {
             val newConv = conversationsDB.getConversationWithThreadId(threadId)
@@ -1622,11 +1621,19 @@ class ThreadActivity : SimpleActivity() {
                         synchronized(org.fossify.messages.helpers.SmsNotificationReadGuard.lock(threadId)) {
                             if (isActivityVisible) {
                                 markMessageRead(item.id, item.isMMS)
-                                notificationManager.cancel(threadId.hashCode())
+                                if (messagesDB.countUnreadNonRecycledInboxMessages(threadId) == 0) {
+                                    notificationManager.cancel(threadId.hashCode())
+                                }
                             }
                         }
                     }
-                    if (isActivityVisible) conversationsDB.markRead(threadId)
+                    synchronized(org.fossify.messages.helpers.SmsNotificationReadGuard.lock(threadId)) {
+                        getMessagesDB().runInTransaction {
+                            if (isActivityVisible && messagesDB.countUnreadNonRecycledInboxMessages(threadId) == 0) {
+                                conversationsDB.markRead(threadId)
+                            }
+                        }
+                    }
                 } catch (error: Exception) {
                     android.util.Log.w("ThreadActivity", "Mark-read failed", error)
                 } finally {
@@ -2194,10 +2201,6 @@ class ThreadActivity : SimpleActivity() {
 
         refreshedSinceSent = true
         allMessagesFetched = false
-
-        if (isActivityVisible) {
-            notificationManager.cancel(threadId.hashCode())
-        }
 
         ensureBackgroundThread {
             val messageSnapshot = messages.toSortedMessages()

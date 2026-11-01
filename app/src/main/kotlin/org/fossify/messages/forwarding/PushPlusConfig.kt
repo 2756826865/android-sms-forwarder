@@ -58,6 +58,12 @@ class PushPlusConfig(private val context: Context) {
         prefs.edit().putString(KEY_TOKEN, TokenCipher.encrypt(token.trim())).apply()
     }
 
+    /** Pure legacy-field decoding for routing snapshots; never migrates or removes credentials. */
+    internal fun readLegacyTokenForRouting(stored: String): String =
+        TokenCipher.decrypt(stored).also {
+            check(it.isNotEmpty() || stored.isEmpty()) { "routing_credential_unavailable" }
+        }
+
     fun getToken(): String {
         val multiToken = multiConfig.pushPlusToken()
         if (multiToken.isNotBlank()) return multiToken
@@ -103,7 +109,9 @@ private object TokenCipher {
         val iv = bytes.copyOfRange(0, 12)
         val encrypted = bytes.copyOfRange(12, bytes.size)
         val cipher = Cipher.getInstance(TRANSFORMATION)
-        cipher.init(Cipher.DECRYPT_MODE, getOrCreateKey(), GCMParameterSpec(128, iv))
+        val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        val key = keyStore.getKey(KEY_ALIAS, null) as? SecretKey ?: return@runCatching ""
+        cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, iv))
         String(cipher.doFinal(encrypted), StandardCharsets.UTF_8)
     }.getOrDefault("")
 

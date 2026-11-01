@@ -90,5 +90,18 @@ class IncomingSummaryQueriesTest(unittest.TestCase):
                 self.assertEqual(db.execute(query,{'threadId':4}).fetchall(),
                     [(3,4,200,0,1)] if name=='getLatestNonRecycledMessage' else [(2,)])
 
+class NotificationUnreadSelectionTest(unittest.TestCase):
+    def test_reading_old_message_keeps_newer_unread_candidate(self):
+        source = (DAO / 'MessagesDao.kt').read_text()
+        query = dict((name, sql) for sql, name in re.findall(r'@Query\("""(.*?)"""\)\s*fun (\w+)', source, re.S))['getLatestUnreadInboxMessage']
+        with sqlite3.connect(':memory:') as db:
+            db.executescript('CREATE TABLE messages(id INTEGER PRIMARY KEY,thread_id INTEGER,date INTEGER,read INTEGER,type INTEGER);CREATE TABLE recycle_bin_messages(id INTEGER PRIMARY KEY);')
+            db.executemany('INSERT INTO messages VALUES(?,?,?,?,?)', [(10,4,100,0,1),(11,4,100,0,1),(12,4,200,0,1),(13,4,300,0,2)])
+            db.execute('INSERT INTO recycle_bin_messages VALUES(12)')
+            db.execute('UPDATE messages SET read=1 WHERE id=10')
+            self.assertEqual(11, db.execute(query, {'threadId':4}).fetchone()[0])
+            db.execute('UPDATE messages SET read=1 WHERE id=11')
+            self.assertIsNone(db.execute(query, {'threadId':4}).fetchone())
+
 if __name__ == '__main__':
     unittest.main()

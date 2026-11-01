@@ -35,6 +35,7 @@ class NotificationHelper(
     private val context: Context,
     private val onPosted: () -> Unit = {},
     private val onFailed: () -> Unit = {},
+    private val onSuppressed: () -> Unit = {},
 ) {
 
     private val notificationManager = context.notificationManager
@@ -216,36 +217,32 @@ class NotificationHelper(
         )
         val liveIslandKind = LiveIslandCoordinator.applyToBuilder(context, builder, liveIslandMessage)
 
-        var shortcut = context.shortcutHelper.getShortcut(threadId)
-        if (shortcut == null) {
-            ensureBackgroundThread {
-                runCatching {
-                    shortcut = context.shortcutHelper.createOrUpdateShortcut(threadId)
-                    builder.setShortcutInfo(shortcut)
-                    synchronized(SmsNotificationReadGuard.lock(threadId)) {
-                    if (context.messagesDB.getMessageWithId(messageId)?.read != true) {
+        ensureBackgroundThread {
+            runCatching {
+                val shortcut = context.shortcutHelper.getShortcut(threadId)
+                    ?: context.shortcutHelper.createOrUpdateShortcut(threadId)
+                builder.setShortcutInfo(shortcut)
+                val posted = synchronized(SmsNotificationReadGuard.lock(threadId)) {
+                    val message = context.messagesDB.getMessageWithId(messageId)
+                    val newestUnread = context.messagesDB.getLatestUnreadInboxMessage(threadId)
+                    val superseded = message != null && newestUnread != null &&
+                        (newestUnread.date > message.date ||
+                            (newestUnread.date == message.date && newestUnread.id > message.id))
+                    if (message?.read == true || superseded) {
+                        false
+                    } else {
                         notificationManager.notify(notificationId, builder.build())
-                    } else { notificationManager.cancel(notificationId) }
-                }
-                    onPosted()
-                    LiveIslandCoordinator.afterNotify(context, liveIslandMessage, liveIslandKind)
-                    context.shortcutHelper.reportReceiveMessageUsage(threadId)
-                }.onFailure { onFailed() }
-            }
-        } else {
-            builder.setShortcutInfo(shortcut)
-            ensureBackgroundThread {
-                runCatching {
-                    synchronized(SmsNotificationReadGuard.lock(threadId)) {
-                        if (context.messagesDB.getMessageWithId(messageId)?.read != true) {
-                            notificationManager.notify(notificationId, builder.build())
-                        } else { notificationManager.cancel(notificationId) }
+                        true
                     }
+                }
+                if (posted) {
                     onPosted()
                     LiveIslandCoordinator.afterNotify(context, liveIslandMessage, liveIslandKind)
                     context.shortcutHelper.reportReceiveMessageUsage(threadId)
-                }.onFailure { onFailed() }
-            }
+                } else {
+                    onSuppressed()
+                }
+            }.onFailure { onFailed() }
         }
     }
 

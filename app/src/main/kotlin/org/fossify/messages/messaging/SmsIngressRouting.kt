@@ -75,7 +75,7 @@ when {
                                     value.map { it.toString() }.sorted().joinToString("\u0000")
                                 !legacy && key == "channel_instances" -> canonicalChannels()
                                 !legacy && !rawCredentials && isPushPlusToken(name, key) ->
-                                    org.fossify.messages.forwarding.PushPlusConfig(app).getToken()
+                                    org.fossify.messages.forwarding.PushPlusConfig(app).readLegacyTokenForRouting(value.toString())
                                 !legacy && !rawCredentials && value is String && org.fossify.messages.forwarding.AndroidKeystoreCipher.looksLikeCiphertext(value) ->
                                     org.fossify.messages.forwarding.AndroidKeystoreCipher.decrypt(value).also {
                                         check(it.isNotEmpty()) { "routing_credential_unavailable" }

@@ -55,3 +55,16 @@ Coalesce foreground message/conversation events per frame without removing suppo
 Normalize legacy encrypted credentials as well as modern channel JSON before routing comparison. Record encrypted spool write latency, and run cold/warm admission measurements in Android instrumentation. These measurements characterize the CI emulator, not vivo/other phone hardware. If both storage and service handoff fail, record an explicit unconfirmed-handoff error rather than treating a false service result as success.
 
 The two-second correlation boundary remains a conservative evidence policy: identical independent wire messages without distinguishing receiving evidence cannot be proven distinct by changing a timeout. Real delayed dual-broadcast and ambiguous-SIM acceptance remain required; no claim is made that these physical ambiguity cases or vendor process resurrection are eliminated.
+
+
+## Third review: pure snapshots and confirmed recovery repairs
+
+Routing snapshots decode the stored legacy PushPlus field without migration, deletion or key creation. Android instrumentation covers a legacy-only configuration, an unreadable credential, and re-encryption of the same token. Historical digest upgrades still require the unchanged old digest as evidence.
+
+Recovery preloads bounded page-local Room IDs before taking the receipt lock. Thread repairs use strict Provider reads, fetch older missing SMS IDs explicitly, reject superseded revisions, and verify required messages plus conversation metadata before checkpointing. Provider failure or a skipped revision is a retry, not successful progress. Page continuation remains one continuation per active page; it is not an external per-broadcast append chain.
+
+An old read notification is suppressed without cancelling the shared thread notification. Actual publication and suppression have separate acknowledgements, so suppression does not trigger the published-notification popup. Read acknowledgements cancel the thread notification only after no unread inbox messages remain; initial page refresh no longer cancels before read acknowledgement. A replaceable delayed notification wakeup closes the primary KEEP worker completion window without appending unbounded work.
+
+When spool persistence and service admission both fail, a reserved nonqueued executor attempts Journal persistence while retaining the asynchronous broadcast token until staging finishes. If Journal encryption/storage also fails, or immediate emergency admission is exhausted, there is no confirmed durable copy: this remains an explicitly diagnosed terminal intake failure, not a claimed guarantee under total storage failure.
+
+The third-review local SQL suite contains 61 cases; phone lifecycle, OEM killing and physically indistinguishable dual broadcasts remain device acceptance requirements. A successful older commit's CI is never substituted for the final pushed commit.

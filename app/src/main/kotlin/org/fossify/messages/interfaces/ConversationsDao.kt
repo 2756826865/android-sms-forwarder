@@ -32,6 +32,9 @@ interface ConversationsDao {
     @Query("SELECT * FROM conversations WHERE thread_id = :threadId")
     fun getConversationWithThreadId(threadId: Long): Conversation?
 
+    @Query("SELECT thread_id FROM conversations WHERE thread_id IN (:threadIds)")
+    fun getExistingThreadIds(threadIds: List<Long>): List<Long>
+
     @Query("SELECT * FROM conversations WHERE read = 0")
     fun getUnreadConversations(): List<Conversation>
 
