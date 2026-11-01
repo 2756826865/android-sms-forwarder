@@ -1245,25 +1245,29 @@ fun Context.showReceivedMessageNotification(
     body: String,
     threadId: Long,
     bitmap: Bitmap?,
+    onPublished: () -> Unit = {},
+    onFailed: () -> Unit = {},
 ) {
-    Handler(Looper.getMainLooper()).post {
+    val posted = Handler(Looper.getMainLooper()).post {
         runCatching {
-            notificationHelper.showMessageNotification(
+            org.fossify.messages.helpers.NotificationHelper(this, onPublished, onFailed).showMessageNotification(
             messageId = messageId,
             address = address,
             body = body,
             threadId = threadId,
             bitmap = bitmap,
-            sender = senderName
+            sender = senderName,
         )
         }
             .onFailure {
+                onFailed()
                 android.util.Log.w(
                     "IncomingSmsUi",
                     "notification unavailable: ${it.javaClass.simpleName}",
                 )
             }
     }
+    if (!posted) onFailed()
 }
 
 fun Context.getNameFromAddress(address: String, privateCursor: Cursor?): String {

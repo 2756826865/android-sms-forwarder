@@ -13,6 +13,7 @@ internal class SmsIngressDatabase private constructor(context: Context) :
         createJournal(db)
         createExecutionSnapshots(db)
         createTiming(db)
+        createAlerts(db)
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -25,6 +26,13 @@ internal class SmsIngressDatabase private constructor(context: Context) :
             db.execSQL(
                 "ALTER TABLE ingress_journal ADD COLUMN routing_digest TEXT NOT NULL DEFAULT ''"
             )
+        if (oldVersion < DELIVERY_VERSION) {
+            if (oldVersion >= SNAPSHOTS_VERSION)
+                db.execSQL(
+                    "ALTER TABLE ingress_execution_sim ADD COLUMN created_at INTEGER NOT NULL DEFAULT 0"
+                )
+            createAlerts(db)
+        }
     }
 
     private fun createJournal(db: SQLiteDatabase) {
@@ -48,7 +56,8 @@ internal class SmsIngressDatabase private constructor(context: Context) :
 
     private fun createExecutionSnapshots(db: SQLiteDatabase) {
         db.execSQL(
-            "CREATE TABLE ingress_execution_sim(request_id TEXT PRIMARY KEY NOT NULL,snapshot TEXT NOT NULL)"
+            """CREATE TABLE ingress_execution_sim(request_id TEXT PRIMARY KEY NOT NULL,snapshot TEXT NOT NULL,
+                created_at INTEGER NOT NULL DEFAULT 0)""".trimIndent()
         )
     }
 
@@ -62,12 +71,24 @@ internal class SmsIngressDatabase private constructor(context: Context) :
         )
     }
 
+    private fun createAlerts(db: SQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE ingress_alert(event_key TEXT PRIMARY KEY NOT NULL,payload TEXT,
+                        created_at INTEGER NOT NULL,thread_id INTEGER NOT NULL,delivered INTEGER NOT NULL DEFAULT 0,
+                        error TEXT NOT NULL DEFAULT '',next_attempt_at INTEGER NOT NULL DEFAULT 0)
+            """
+                .trimIndent()
+        )
+    }
+
     companion object {
         private const val JOURNAL_VERSION = 2
         private const val SNAPSHOTS_VERSION = 3
         private const val ROUTING_VERSION = 4
         private const val TIMING_VERSION = 5
-        private const val DATABASE_VERSION = TIMING_VERSION
+        private const val DELIVERY_VERSION = 6
+        private const val DATABASE_VERSION = DELIVERY_VERSION
         private val instances = mutableMapOf<String, SmsIngressDatabase>()
 
         @Synchronized

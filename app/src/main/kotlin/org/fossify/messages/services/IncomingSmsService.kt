@@ -287,6 +287,13 @@ open class IncomingSmsService : Service() {
             ShadowRepository.recordStep(this, operationId, "FILTER_MATCHED", "OBSERVED")
         }
 
+        if (!filteredOut) {
+            SmsIngressJournal(this).receipt(intent)?.let { receipt ->
+                org.fossify.messages.messaging.SmsIngressAlerts(this).enqueue(
+                    receipt.key, insertedMessageId, address, body, resolvedThreadId)
+            }
+        }
+
         runCatching {
             updateLocalDatabaseAndNotify(
                 address = address,
@@ -554,30 +561,13 @@ open class IncomingSmsService : Service() {
             ShadowRepository.recordStep(this@IncomingSmsService, it, "LOCAL_SYNC_OBSERVED", "SUCCESS")
         }
 
-        if (notify && (eventKey == null || SmsIngressJournal(this).claimNotification(eventKey))) {
-            runCatching {
-                org.fossify.messages.autofill.SmsAutofillAccessibilityService.onNewVerificationSms(
-                    this,
-                    body,
-                )
-            }
-            org.fossify.messages.helpers.IncomingCodeAlerts.popup(
-                this,
-                address,
-                body,
-                "sms-$messageId",
-            )
-            showReceivedMessageNotification(
-                messageId = messageId,
-                address = address,
-                senderName = senderName,
-                body = body,
-                threadId = threadId,
-                bitmap = getNotificationBitmap(photoUri),
-            )
-
-            operationId?.let { 
-                ShadowRepository.recordStep(this@IncomingSmsService, it, "NOTIFICATION_OBSERVED", "SUCCESS")
+        if (notify) {
+            if (eventKey != null) {
+                org.fossify.messages.messaging.SmsIngressAlerts(this).enqueue(
+                    eventKey, messageId, address, body, threadId, senderName)
+            } else {
+                showReceivedMessageNotification(messageId, address, senderName, body, threadId,
+                    getNotificationBitmap(photoUri))
             }
         }
     }
@@ -637,7 +627,7 @@ open class IncomingSmsService : Service() {
         private const val KEY_RECENT_FINGERPRINTS = "recent_fingerprints"
         private const val MAX_RECENT_FINGERPRINTS = 100
         private const val DUPLICATE_WINDOW_MS = 24 * 60 * 60 * 1000L
-        /** 降级路径总预算：goAsync 窗口约 10s，留 2s 余量。 */
+        /** 普通接收阶段预算；持久化恢复重放不受此门限限制。 */
         private const val MINIMAL_BUDGET_MS = 8_000L
         private val duplicateLock = Any()
 
@@ -669,22 +659,11 @@ open class IncomingSmsService : Service() {
         }
 
         /**
-         * 降级路径：前台服务启动失败时，在广播的 goAsync 窗口内同步完成"不丢短信"的最小工作集。
-         *
-         * 按序完成（总预算 [MINIMAL_BUDGET_MS] = 8s，goAsync 窗口约 10s，留 2s 余量）：
-         * 1. 写系统短信库（[persistWithRetry]，3 次重试），失败则 [SmsRecoveryWorker.enqueueNow]
-         * 2. [wasPersisted] / [markPersisted] 幂等去重（SMS_DELIVER 与 SMS_RECEIVED 双发时防重复入库）
-         * 3. 写本地 Room + [org.fossify.messages.extensions.syncThreadToLocal]（失败只记日志，不阻塞）
-         * 4. 入队转发 [MultiChannelForwardWorker.enqueueSingle]，并应用**廉价规则子集** （渠道/实例与规则模板，见
-         *    [evaluateCheapRules]）
-         *
-         * 第 3、4 步各自前置 [MINIMAL_BUDGET_MS] 闸门；被闸门拦下时入队 [SmsRecoveryWorker] 补偿，
-         * 由恢复路径补转发（恢复路径用"是否登记过转发"而非"是否入过库"判重，见 SmsRecoveryWorker）。
-         *
-         * 明确不做（会 ANR，留给 SmsRecoveryWorker 补做）：联系人查询（含 blockUnknownNumbers）、
-         * 通知、自动回复、远程指令消费、验证码提取、悬浮胶囊。
-         *
-         * 本函数不会向调用方抛异常：任何失败都会记日志并触发补偿，避免异常穿透 onReceive 导致 SMS_DELIVER 广播未被消费、短信彻底丢失。
+         * Serial degraded processing over a durable ingress receipt. Provider uncertainty is
+         * reconciled before any insert; basic Room data precedes contact enrichment. Filtering
+         * matches FULL, and alerts use a separate durable publication outbox. Ordinary intake
+         * limits expensive phases to a short budget; Worker replay finishes those phases without
+         * reusing that budget. Original queue/submission/billing owners remain authoritative.
          */
         fun processMinimal(context: Context, source: Intent) =
             synchronized(SmsIngressJournal.processLock) {
@@ -700,6 +679,7 @@ open class IncomingSmsService : Service() {
         private fun processMinimalOwned(context: Context, source: Intent) {
             val appContext = context.applicationContext
             val startedAt = System.currentTimeMillis()
+            val recovery = source.getBooleanExtra(SmsIngressJournal.EXTRA_REPLAY, false)
             try {
                 val parts = Telephony.Sms.Intents.getMessagesFromIntent(source)
                 if (parts.isEmpty()) {
@@ -773,23 +753,9 @@ open class IncomingSmsService : Service() {
                 }
                 if (insertedMessageId < 0L) {
                     filteredOut = isFilteredForReceive(appContext, address, body)
-                    if (
-                        !filteredOut &&
-                            receipt != null &&
-                            SmsIngressJournal(appContext).claimNotification(receipt.key)
-                    ) {
-                        runCatching {
-                            org.fossify.messages.helpers.IncomingCodeAlerts.showUnstored(
-                                appContext,
-                                address,
-                                body,
-                                receipt.key,
-                            )
-                        }
-                            .onFailure {
-                                SmsIngressJournal(appContext)
-                                    .phase(receipt.key, "alert_unavailable")
-                            }
+                    if (!filteredOut && receipt != null) {
+                        org.fossify.messages.messaging.SmsIngressAlerts(appContext)
+                            .enqueue(receipt.key, insertedMessageId, address, body, 0L)
                     }
                     // Provider 写入失败时转发是最后一份拷贝：SmsRecoveryWorker 扫的是 Provider，
                     // 没写进去的消息它不会发现，因此这里仍然必须入队转发（除非被用户规则拦截）。
@@ -821,7 +787,8 @@ open class IncomingSmsService : Service() {
                     ?: requestedThreadId
 
                 // 3. 本地 Room + 会话同步（不做联系人查询，姓名直接用号码兜底）
-                if (System.currentTimeMillis() - startedAt < MINIMAL_BUDGET_MS) {
+                if (org.fossify.messages.messaging.RecoveryExecutionPolicy.mayContinue(
+                        recovery, System.currentTimeMillis() - startedAt, MINIMAL_BUDGET_MS)) {
                     runCatching {
                         writeLocalMessageMinimal(
                             context = appContext,
@@ -848,44 +815,20 @@ open class IncomingSmsService : Service() {
                 }
 
                 filteredOut = isFilteredForReceive(appContext, address, body)
-                if (
-                    !filteredOut &&
-                        receipt != null &&
-                        SmsIngressJournal(appContext).claimNotification(receipt.key)
-                ) {
-                    runCatching {
-                        org.fossify.messages.autofill.SmsAutofillAccessibilityService
-                            .onNewVerificationSms(appContext, body)
-                    }
-                    appContext.showReceivedMessageNotification(
-                        insertedMessageId,
-                        address,
-                        address,
-                        body,
-                        resolvedMinimalThreadId,
-                        appContext.getNotificationBitmap(""),
-                    )
-                    org.fossify.messages.helpers.IncomingCodeAlerts.popup(
-                        appContext,
-                        address,
-                        body,
-                        receipt.key,
-                    )
+                if (!filteredOut && receipt != null) {
+                    org.fossify.messages.messaging.SmsIngressAlerts(appContext).enqueue(
+                        receipt.key, insertedMessageId, address, body, resolvedMinimalThreadId)
                 }
 
-                // 4. 入队转发（命中用户过滤规则时除外）。
-                //    这里必须和第 3 步一样先过预算闸门：enqueueForwardingFallback 第一行就是
-                //    ChannelRepository.getInstance(context)，冷进程下会跑 refresh()
-                //    （detectConfiguredWeComStreams → RemoteSourceRepository → 按字段逐个
-                //    Keystore decryptSensitiveConfig）+ importLegacyChannels()，实测数百毫秒～数秒，
-                //    绝不是"毫秒级"，顶穿 goAsync 的 10s 窗口就是 ANR。
-                //    闸门拦截后消息已在系统短信库中，入队补偿扫描由 SmsRecoveryWorker 接手转发。
+                // Ordinary intake may defer an expensive phase; durable Worker replay must finish
+                // it instead of repeatedly deferring behind its own Provider ownership marker.
                 var budgetBlockedForwarding = false
                 if (filteredOut) {
                     Log.i(TAG, "minimal: skipped forwarding for filtered sender $address (id=$insertedMessageId)")
                 } else if (!routingAllowed) {
                     budgetBlockedForwarding = true
-                } else if (System.currentTimeMillis() - startedAt >= MINIMAL_BUDGET_MS) {
+                } else if (!org.fossify.messages.messaging.RecoveryExecutionPolicy.mayContinue(
+                        recovery, System.currentTimeMillis() - startedAt, MINIMAL_BUDGET_MS)) {
                     Log.w(
                         TAG,
                         "minimal: skipped forwarding (id=$insertedMessageId), budget exhausted " +
@@ -937,20 +880,7 @@ open class IncomingSmsService : Service() {
             }
         }
 
-        /**
-         * "廉价"过滤：只做 SharedPreferences 上的字符串匹配与系统屏蔽号判定， 绝不触碰联系人库（那才会吃掉 goAsync 的 8 秒预算）。
-         *
-         * 顺序与 [IncomingSmsService.isFiltered] 完全一致：白名单 → 应用黑名单 → 关键词 → 系统屏蔽号。FULL 路径在此之上再追加
-         * blockUnknownNumbers 的联系人查询。
-         *
-         * **已知差异（P2-C，接受现状）**：`blockUnknownNumbers` 只在 FULL 路径生效。 MINIMAL（降级）与
-         * RECOVERY（恢复）两条路径都**不做**联系人查询，因此"拦截未知号码" 在这两条路径上不生效——代价是联系人库查询可能吃掉整个 goAsync 预算 / 拖慢
-         * Worker， 收益不足以抵消。三条路径在**廉价子集**（白名单/黑名单/关键词/系统屏蔽号）上完全一致。
-         *
-         * 关于 [Context.isNumberBlocked]：它对传入的号码列表做纯内存比对 + 正则， 本身不查库；默认参数 getBlockedNumbers()
-         * 仅在"本应用是默认拨号器"时才去查 系统 BlockedNumberContract（一张极小的表，不是联系人库），否则直接返回空列表。
-         * 本应用是短信应用、几乎不可能是默认拨号器，因此这里实际是微秒级短路，安全可放入降级路径。
-         */
+        /** Shared receive filter. All paths persist basic local data before contact lookups. */
         fun isFilteredForReceive(context: Context, address: String, body: String): Boolean {
             if (isFilteredCheap(context, address, body)) return true
             val isWhitelisted = context.config.isNumberWhitelisted(address)

@@ -35,46 +35,52 @@ internal object SmsBroadcastDispatcher {
         )
 
     // Framework/OEM boundary: retain durable state and report unclassified platform failures.
-    @Suppress("TooGenericExceptionCaught")
     fun dispatch(context: Context, source: Intent, pending: BroadcastReceiver.PendingResult) {
         val app = context.applicationContext
-        try {
-            executor.execute {
-                var fallback: Intent? = null
-                try {
-                    val staged = SmsIngressJournal(app).stage(source)
-                    // Register recovery before requesting a service: a successful request is not a
-                    // completed handoff.
-                    runCatching { SmsRecoveryWorker.enqueueNow(app) }
+        val copy =
+            Intent(source)
+                .putExtra(SmsIngressSpool.EXTRA_ID, java.util.UUID.randomUUID().toString())
+                .putExtra(SmsIngressSpool.EXTRA_RECEIVED_AT, System.currentTimeMillis())
+        val persist = {
+            runCatching {
+                SmsIngressSpool(app).save(copy)
+            }
+                .onFailure {
+                    Log.e("SmsIngress", "emergency persistence failed: ${it.javaClass.simpleName}")
+                    runCatching { IncomingSmsService.enqueue(app, copy) }
+                }
+            Unit
+        }
+        val accepted =
+            DurableIngressHandoff.dispatch(
+                executor,
+                process = {
+                    runCatching {
+                        val staged = SmsIngressJournal(app).stage(copy)
+                        SmsIngressSpool(app).remove(copy)
+                        runCatching { SmsKeepAliveService.ensureStarted(app) }
+                        if (!IncomingSmsService.enqueue(app, staged)) {
+                            try {
+                                fallbackExecutor.execute {
+                                    runCatching { IncomingSmsService.processMinimal(app, staged) }
+                                }
+                            } catch (_: java.util.concurrent.RejectedExecutionException) {
+                                Log.w("SmsIngress", "fallback busy; journal retained")
+                            }
+                        }
+                    }
                         .onFailure {
                             Log.w(
                                 "SmsIngress",
-                                "recovery registration failed: ${it.javaClass.simpleName}",
+                                "staged processing deferred: ${it.javaClass.simpleName}",
                             )
                         }
-                    runCatching { SmsKeepAliveService.ensureStarted(app) }
-                    if (!IncomingSmsService.enqueue(app, staged)) fallback = staged
-                } catch (error: Exception) {
-                    Log.e("SmsIngress", "handoff failed: ${error.javaClass.simpleName}")
                     runCatching { SmsRecoveryWorker.enqueueNow(app) }
-                } finally {
-                    pending.finish()
-                }
-                // The durable handoff is complete. Do not hold a broadcast token during database
-                // retries.
-                fallback?.let { intent ->
-                    try {
-                        fallbackExecutor.execute {
-                            runCatching { IncomingSmsService.processMinimal(app, intent) }
-                        }
-                    } catch (_: java.util.concurrent.RejectedExecutionException) {
-                        Log.w("SmsIngress", "fallback busy; durable receipt retained for recovery")
-                    }
-                }
-            }
-        } catch (_: java.util.concurrent.RejectedExecutionException) {
-            Log.e("SmsIngress", "handoff capacity exhausted")
-            pending.finish()
-        }
+                },
+                persist = persist,
+                finish = pending::finish,
+            )
+        if (!accepted) Log.w("SmsIngress", "processing queue full; encrypted receipt retained")
+        runCatching { SmsRecoveryWorker.enqueueNow(app) }
     }
 }

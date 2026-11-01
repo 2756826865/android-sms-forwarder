@@ -54,12 +54,23 @@ internal class SmsIngressStaging(
             val parsed = parse(source)
             db.beginTransaction()
             try {
-                val key = findKey(parsed) ?: parsed.alias.also { insertReceipt(it, parsed) }
+                val key =
+                    findSpoolKey(source)
+                        ?: findKey(parsed)
+                        ?: java.util.UUID.randomUUID().toString().also {
+                            insertReceipt(it, parsed)
+                        }
                 supplement(key, parsed.identity)
                 db.execSQL(
-                    "INSERT OR IGNORE INTO ingress_alias(alias,event_key) VALUES(?,?)",
+                    "INSERT OR REPLACE INTO ingress_alias(alias,event_key) VALUES(?,?)",
                     arrayOf(parsed.alias, key),
                 )
+                source.getStringExtra(SmsIngressSpool.EXTRA_ID)?.let { id ->
+                    db.execSQL(
+                        "INSERT OR IGNORE INTO ingress_alias(alias,event_key) VALUES(?,?)",
+                        arrayOf("spool:$id", key),
+                    )
+                }
                 db.setTransactionSuccessful()
                 Intent(source).putExtra(SmsIngressJournal.EXTRA_EVENT, key)
             } finally {
@@ -98,16 +109,38 @@ internal class SmsIngressStaging(
             hash,
             identity,
             alias,
-            System.currentTimeMillis(),
+            source.getLongExtra(SmsIngressSpool.EXTRA_RECEIVED_AT, System.currentTimeMillis()),
             Text(address, body, sentAt),
         )
     }
 
-    private fun findKey(p: Parsed): String? {
-        val direct =
-            db.rawQuery("SELECT event_key FROM ingress_alias WHERE alias=?", arrayOf(p.alias)).use {
+    private fun findSpoolKey(source: Intent): String? {
+        val id = source.getStringExtra(SmsIngressSpool.EXTRA_ID) ?: return null
+        return db.rawQuery(
+                "SELECT event_key FROM ingress_alias WHERE alias=?",
+                arrayOf("spool:$id"),
+            )
+            .use {
                 if (it.moveToFirst()) it.getString(0) else null
             }
+    }
+
+    private fun findKey(p: Parsed): String? {
+        val direct =
+            db.rawQuery(
+                    """
+                    SELECT j.event_key FROM ingress_alias a JOIN ingress_journal j ON j.event_key=a.event_key
+                                   WHERE a.alias=? AND j.pdu_hash=? AND j.received_at BETWEEN ? AND ?
+                    """
+                        .trimIndent(),
+                    arrayOf(
+                        p.alias,
+                        p.hash,
+                        (p.now - PAIR_WINDOW_MS).toString(),
+                        (p.now + PAIR_WINDOW_MS).toString(),
+                    ),
+                )
+                .use { if (it.moveToFirst()) it.getString(0) else null }
         if (direct != null) return direct
         return db.rawQuery(
                 """
@@ -163,7 +196,11 @@ internal class SmsIngressStaging(
                 SmsIngressRouting(app).digest(),
             ),
         )
-        if (IncomingSmsService.wasPersisted(app, p.alias)) bindLegacyReceipt(key, p)
+        val knownAlias =
+            db.rawQuery("SELECT 1 FROM ingress_alias WHERE alias=?", arrayOf(p.alias)).use {
+                it.moveToFirst()
+            }
+        if (!knownAlias && IncomingSmsService.wasPersisted(app, p.alias)) bindLegacyReceipt(key, p)
     }
 
     private fun bindLegacyReceipt(key: String, p: Parsed) {

@@ -86,7 +86,7 @@ internal object SmsProviderPersistence {
         error("短信 Provider 写入失败")
     }
 
-    private fun findProviderReceipt(
+    fun findProviderReceipt(
         context: Context,
         address: String,
         body: String,

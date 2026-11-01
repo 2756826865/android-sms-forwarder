@@ -26,11 +26,22 @@ class IngressJournalSqlTest(unittest.TestCase):
  def test_write_attempt_survives_restart_without_success(self):
   self.receipt();self.db.execute("UPDATE ingress_journal SET provider_attempted=1 WHERE event_key='event'")
   self.assertEqual(self.db.execute('SELECT provider_attempted,provider_id,done FROM ingress_journal').fetchone(),(1,-1,0))
- def test_notification_claim_is_at_most_once(self):
-  self.receipt()
-  stmt='UPDATE ingress_journal SET notification_claimed=1 WHERE event_key=? AND notification_claimed=0'
-  self.assertEqual(self.db.execute(stmt,('event',)).rowcount,1)
-  self.assertEqual(self.db.execute(stmt,('event',)).rowcount,0)
+ def publication_updates(self):
+  src=(SRC/'SmsIngressAlerts.kt').read_text()
+  return (re.search(r'"(UPDATE ingress_alert SET delivered=1[^"\n]+)"',src).group(1),
+          re.search(r'"(UPDATE ingress_journal SET notification_claimed=1[^"\n]+)"',src).group(1))
+ def test_publication_acknowledgement_is_idempotent(self):
+  self.receipt();self.db.execute("INSERT INTO ingress_alert(event_key,payload,created_at,thread_id) VALUES('event','cipher',100,4)")
+  for _ in range(2):
+   for sql in self.publication_updates():self.db.execute(sql,('event',))
+  self.assertEqual(self.db.execute('SELECT delivered,payload FROM ingress_alert').fetchone(),(1,None))
+  self.assertEqual(self.db.execute('SELECT notification_claimed FROM ingress_journal').fetchone()[0],1)
+ def test_failed_ack_transaction_keeps_the_replay_payload(self):
+  self.receipt();self.db.execute("INSERT INTO ingress_alert(event_key,payload,created_at,thread_id) VALUES('event','cipher',100,4)")
+  self.db.commit();self.db.execute('BEGIN')
+  self.db.execute(self.publication_updates()[0],('event',));self.db.rollback()
+  self.assertEqual(self.db.execute('SELECT delivered,payload FROM ingress_alert').fetchone(),(0,'cipher'))
+  self.assertEqual(self.db.execute('SELECT notification_claimed FROM ingress_journal').fetchone()[0],0)
  def test_completion_releases_payload_preserves_identity(self):
   self.receipt();self.db.execute("INSERT INTO ingress_alias VALUES('alias','event')")
   self.db.execute("UPDATE ingress_journal SET done=1,payload=NULL,reason='' WHERE event_key='event'")
@@ -41,8 +52,8 @@ class IngressJournalSqlTest(unittest.TestCase):
   self.db.execute("UPDATE ingress_journal SET confirmed_sub=42,slot=1 WHERE event_key='event' AND confirmed_sub<0")
   self.assertEqual(self.db.execute('SELECT event_key FROM ingress_alias').fetchone(),('event',))
  def test_execution_snapshot_is_frozen(self):
-  self.db.execute("INSERT OR IGNORE INTO ingress_execution_sim VALUES('request','old-snapshot')")
-  self.db.execute("INSERT OR IGNORE INTO ingress_execution_sim VALUES('request','new-snapshot')")
+  self.db.execute("INSERT OR IGNORE INTO ingress_execution_sim(request_id,snapshot) VALUES('request','old-snapshot')")
+  self.db.execute("INSERT OR IGNORE INTO ingress_execution_sim(request_id,snapshot) VALUES('request','new-snapshot')")
   self.assertEqual(self.db.execute('SELECT snapshot FROM ingress_execution_sim').fetchone(),('old-snapshot',))
  def test_provider_reuse_is_not_an_owned_new_receipt(self):
   self.receipt();self.db.execute("UPDATE ingress_journal SET provider_id=1 WHERE event_key='event'")
@@ -61,4 +72,61 @@ class IngressJournalSqlTest(unittest.TestCase):
  def test_ambiguous_pending_events_remain_separate(self):
   self.receipt(key='first',sub=-1);self.receipt(key='second',sub=-1)
   self.assertEqual(len(self.paired(42)),2)
+ def alias_query(self):
+  src=(SRC/'SmsIngressStaging.kt').read_text()
+  return re.search(r'"""\s*(SELECT j.event_key FROM ingress_alias.*?)"""',src,re.S).group(1)
+ def test_alias_requires_same_pdu_and_recent_receipt(self):
+  self.receipt();self.db.execute("INSERT INTO ingress_alias VALUES('same-fingerprint','event')")
+  query=self.alias_query()
+  self.assertEqual(self.db.execute(query,('same-fingerprint','different-pdu','0','200')).fetchall(),[])
+  self.assertEqual(self.db.execute(query,('same-fingerprint','pdu','10000','14000')).fetchall(),[])
+  self.assertEqual(self.db.execute(query,('same-fingerprint','pdu','0','200')).fetchall(),[('event',)])
+ def test_alias_rotation_preserves_old_receipt(self):
+  self.receipt('old');self.receipt('new',received=10000)
+  self.db.execute("INSERT OR REPLACE INTO ingress_alias VALUES('same-fingerprint','old')")
+  self.db.execute("INSERT OR REPLACE INTO ingress_alias VALUES('same-fingerprint','new')")
+  self.assertEqual(self.db.execute('SELECT COUNT(*) FROM ingress_journal').fetchone()[0],2)
+  self.assertEqual(self.db.execute('SELECT event_key FROM ingress_alias').fetchone()[0],'new')
+ def test_spool_replay_keeps_the_original_owner(self):
+  self.receipt();self.db.execute("INSERT OR IGNORE INTO ingress_alias VALUES('spool:uuid','event')")
+  self.db.execute("INSERT OR IGNORE INTO ingress_alias VALUES('spool:uuid','new-owner')")
+  self.assertEqual(self.db.execute("SELECT event_key FROM ingress_alias WHERE alias='spool:uuid'").fetchone(),('event',))
+ def test_alert_is_pending_until_actual_publish_acknowledgement(self):
+  self.receipt()
+  self.db.execute("INSERT OR IGNORE INTO ingress_alert(event_key,payload,created_at,thread_id) VALUES('event','cipher',100,4)")
+  # A crash before publish leaves both payload and acknowledgement intact for retry.
+  self.assertEqual(self.db.execute('SELECT delivered,payload FROM ingress_alert').fetchone(),(0,'cipher'))
+  self.assertEqual(self.db.execute('SELECT notification_claimed FROM ingress_journal').fetchone()[0],0)
+  self.db.execute("INSERT OR IGNORE INTO ingress_alert(event_key,payload,created_at,thread_id) VALUES('event','new-cipher',101,4)")
+  self.assertEqual(self.db.execute('SELECT COUNT(*),thread_id,payload FROM ingress_alert').fetchone(),(1,4,'cipher'))
+ def test_v5_snapshot_migration_preserves_frozen_content(self):
+  self.db.execute('DROP TABLE ingress_execution_sim')
+  self.db.execute('CREATE TABLE ingress_execution_sim(request_id TEXT PRIMARY KEY,snapshot TEXT NOT NULL)')
+  self.db.execute("INSERT INTO ingress_execution_sim VALUES('retry','frozen')")
+  self.db.execute('ALTER TABLE ingress_execution_sim ADD COLUMN created_at INTEGER NOT NULL DEFAULT 0')
+  self.assertEqual(self.db.execute('SELECT * FROM ingress_execution_sim').fetchone(),('retry','frozen',0))
+ def test_review_dismissal_does_not_remove_provider_or_history_owner(self):
+  self.receipt();self.db.execute("UPDATE ingress_journal SET reason='configuration_changed'")
+  src=(SRC/'SmsIngressReview.kt').read_text()
+  sql=re.search(r'"""\s*(UPDATE ingress_journal SET done=1.*?)"""',src,re.S).group(1)
+  self.db.execute(sql,('event','configuration_changed'))
+  self.assertEqual(self.db.execute('SELECT done,payload,reason FROM ingress_journal').fetchone(),(1,None,'review_dismissed'))
+  self.assertEqual(self.db.execute('SELECT work_id FROM ingress').fetchone()[0],'old-owner')
+
+ def test_cleanup_selects_only_completed_alert_free_rows(self):
+  self.receipt('done');self.receipt('pending');self.receipt('alert')
+  self.db.execute("UPDATE ingress_journal SET sim_snapshot='snapshot',evidence='test'")
+  self.db.execute("UPDATE ingress_journal SET done=1 WHERE event_key!='pending'")
+  self.db.execute("INSERT INTO ingress_alert(event_key,payload,created_at,thread_id) VALUES('alert','cipher',100,4)")
+  src=(SRC/'SmsIngressMaintenance.kt').read_text()
+  sql=re.search(r'"""\s*(SELECT event_key FROM ingress_journal WHERE done=1.*?)"""',src,re.S).group(1)
+  self.assertEqual(self.db.execute(sql,('10000','')).fetchall(),[('done',)])
+ def test_uncertain_review_rotates_after_a_failed_lookup(self):
+  self.receipt('first');self.receipt('second')
+  self.db.execute("UPDATE ingress_journal SET reason='provider_result_uncertain'")
+  self.db.execute("INSERT INTO ingress_timing VALUES('first','provider_review',1000)")
+  src=(SRC/'SmsIngressReview.kt').read_text()
+  sql=re.search(r'"""\s*(SELECT j.event_key,j.received_at,j.reason FROM ingress_journal j.*?)"""',src,re.S).group(1)
+  self.assertEqual(self.db.execute(sql).fetchall()[0][0],'second')
+
 if __name__=='__main__':unittest.main()

@@ -61,6 +61,7 @@ fun SmsChainDiagnosticsCard() {
         OperationsSection("链路诊断") {
         Text(if (checkedAt > 0) "最近检查：${DateFormat.getDateTimeInstance().format(Date(checkedAt))}" else "尚未检查", style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
         Text("仅显示步骤和状态，不显示号码、正文或凭据；通道受理不等于设备送达。")
+        IngressReviewActions()
         OutlinedButton(enabled = !loading, onClick = {
             loading = true
             scope.launch {

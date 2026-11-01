@@ -34,20 +34,10 @@ internal class SmsIngressRecovery(context: Context) {
                                 SmsIngressJournal(app).reason(key, "payload_unreadable")
                                 continue
                             }
-                            val p = JSONObject(clear)
-                            val a = p.getJSONArray("pdus")
-                            add(
-                                Intent(p.getString("action"))
-                                    .putExtra("format", p.optString("format"))
-                                    .putExtra(
-                                        "pdus",
-                                        Array(a.length()) {
-                                            Base64.decode(a.getString(it), Base64.NO_WRAP)
-                                        },
-                                    )
-                                    .putExtra(SmsIngressJournal.EXTRA_EVENT, key)
-                                    .putExtra(SmsIngressJournal.EXTRA_REPLAY, true)
-                            )
+                            runCatching { decodeIntent(clear, key) }
+                                .onSuccess { add(it) }
+                                .onFailure { SmsIngressJournal(app).reason(key, "payload_unreadable") }
+
                         }
                     }
                 }
@@ -126,6 +116,14 @@ internal class SmsIngressRecovery(context: Context) {
             }
 
     companion object {
+        fun decodeIntent(clear: String, key: String): Intent {
+            val p = JSONObject(clear)
+            val a = p.getJSONArray("pdus")
+            return Intent(p.getString("action")).putExtra("format", p.optString("format"))
+                .putExtra("pdus", Array(a.length()) { Base64.decode(a.getString(it), Base64.NO_WRAP) })
+                .putExtra(SmsIngressJournal.EXTRA_EVENT, key).putExtra(SmsIngressJournal.EXTRA_REPLAY, true)
+        }
+
         private const val RECOVERY_BATCH_SIZE = 16
         private const val HANDOFF_GRACE_MS = 10_000L
     }

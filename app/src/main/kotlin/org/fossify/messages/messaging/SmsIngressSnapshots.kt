@@ -30,8 +30,8 @@ internal class SmsIngressSnapshots(context: Context) {
     ): ForwardingSimSnapshot =
         synchronized(SmsIngressStaging.lock) {
             db.execSQL(
-                "INSERT OR IGNORE INTO ingress_execution_sim(request_id,snapshot) VALUES(?,?)",
-                arrayOf(requestId, encodeSnapshot(snapshot)),
+                "INSERT OR IGNORE INTO ingress_execution_sim(request_id,snapshot,created_at) VALUES(?,?,?)",
+                arrayOf<Any?>(requestId, encodeSnapshot(snapshot), System.currentTimeMillis()),
             )
             db.rawQuery(
                     "SELECT snapshot FROM ingress_execution_sim WHERE request_id=?",

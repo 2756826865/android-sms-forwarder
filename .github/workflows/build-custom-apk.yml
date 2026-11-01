@@ -66,6 +66,34 @@ jobs:
           python3 tools/incoming-sms-ui-host-tests/run.py
           ./gradlew :app:testCoreDebugUnitTest :app:compileCoreDebugAndroidTestKotlin :app:assembleCoreDebug
 
+      - name: Enable emulator acceleration for 1.2.8 regressions
+        if: github.ref == 'refs/heads/1.2.8'
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run ingress database regressions on Android 15
+        if: github.ref == 'refs/heads/1.2.8'
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          ram-size: 1536M
+          disable-animations: true
+          script: ./gradlew :app:connectedCoreDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=org.fossify.messages.messaging.SmsIngressDeliveryTest,org.fossify.messages.messaging.SmsIngressJournalTest,org.fossify.messages.messaging.SmsIngressIdentityTest,org.fossify.messages.messaging.SmsRecoveryScanStateTest
+
+      - name: Upload ingress instrumented test reports
+        if: always() && github.ref == 'refs/heads/1.2.8'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ingress-1.2.8-android-test-reports
+          path: |
+            app/build/reports/androidTests/**
+            app/build/outputs/androidTest-results/**
+          if-no-files-found: ignore
+
       - name: Build signed release APK
         env:
           SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}

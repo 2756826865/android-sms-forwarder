@@ -30,7 +30,11 @@ import org.fossify.messages.receivers.DeleteSmsReceiver
 import org.fossify.messages.receivers.DirectReplyReceiver
 import org.fossify.messages.receivers.MarkAsReadReceiver
 
-class NotificationHelper(private val context: Context) {
+class NotificationHelper(
+    private val context: Context,
+    private val onPosted: () -> Unit = {},
+    private val onFailed: () -> Unit = {},
+) {
 
     private val notificationManager = context.notificationManager
     private val soundUri get() = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
@@ -214,15 +218,19 @@ class NotificationHelper(private val context: Context) {
         var shortcut = context.shortcutHelper.getShortcut(threadId)
         if (shortcut == null) {
             ensureBackgroundThread {
-                shortcut = context.shortcutHelper.createOrUpdateShortcut(threadId)
-                builder.setShortcutInfo(shortcut)
-                notificationManager.notify(notificationId, builder.build())
-                LiveIslandCoordinator.afterNotify(context, liveIslandMessage, liveIslandKind)
-                context.shortcutHelper.reportReceiveMessageUsage(threadId)
+                runCatching {
+                    shortcut = context.shortcutHelper.createOrUpdateShortcut(threadId)
+                    builder.setShortcutInfo(shortcut)
+                    notificationManager.notify(notificationId, builder.build())
+                    onPosted()
+                    LiveIslandCoordinator.afterNotify(context, liveIslandMessage, liveIslandKind)
+                    context.shortcutHelper.reportReceiveMessageUsage(threadId)
+                }.onFailure { onFailed() }
             }
         } else {
             builder.setShortcutInfo(shortcut)
             notificationManager.notify(notificationId, builder.build())
+            onPosted()
             LiveIslandCoordinator.afterNotify(context, liveIslandMessage, liveIslandKind)
             ensureBackgroundThread {
                 context.shortcutHelper.reportReceiveMessageUsage(threadId)

@@ -2,8 +2,11 @@ package org.fossify.messages.messaging
 
 import android.content.Context
 import java.security.MessageDigest
+import org.fossify.messages.forwarding.MultiForwardConfig
+import org.json.JSONArray
+import org.json.JSONObject
 
-/** Reject changed routing rather than re-route an interrupted event through today's settings. */
+/** Compare semantic destinations/rendering; runtime service switches are not routing changes. */
 internal class SmsIngressRouting(context: Context) {
     private val app = context.applicationContext
     private val db
@@ -15,29 +18,41 @@ internal class SmsIngressRouting(context: Context) {
                     "SELECT routing_digest FROM ingress_journal WHERE event_key=?",
                     arrayOf(key),
                 )
-                .use {
-                    if (it.moveToFirst()) it.getString(0) else null
-                }
-        if (original == null || original == digest()) return true
+                .use { if (it.moveToFirst()) it.getString(0) else null }
+        val current = digest()
+        if (original == null || original == current) return true
+        // Upgrade an unchanged v5 digest. Never silently accept an unprovable historical change.
+        if (!original.startsWith("v2:") && original == digest(legacy = true)) {
+            db.execSQL(
+                "UPDATE ingress_journal SET routing_digest=? WHERE event_key=?",
+                arrayOf(current, key),
+            )
+            return true
+        }
         SmsIngressJournal(app).reason(key, "configuration_changed")
         return false
     }
 
-    fun digest(): String {
+    fun digest(legacy: Boolean = false): String {
         val text = buildString {
             for (name in
                 listOf("forwarding_rules", "multi_channel_forwarding", "pushplus_forwarding")) {
                 app.getSharedPreferences(name, Context.MODE_PRIVATE).all.toSortedMap().forEach {
                     (key, value) ->
-                    if (
-                        !key.contains("log", true) &&
-                            !key.contains("status", true) &&
-                            !key.startsWith("last", true)
-                    ) {
+                    val included =
+                        if (legacy)
+                            !key.contains("log", true) &&
+                                !key.contains("status", true) &&
+                                !key.startsWith("last", true)
+                        else RoutingDigestPolicy.includes(name, key)
+                    if (included) {
                         val normalized =
-                            if (value is Set<*>)
-                                value.map { it.toString() }.sorted().joinToString("\u0000")
-                            else value.toString()
+                            when {
+                                value is Set<*> ->
+                                    value.map { it.toString() }.sorted().joinToString("\u0000")
+                                !legacy && key == "channel_instances" -> canonicalChannels()
+                                else -> value.toString()
+                            }
                         append(name.length)
                             .append(':')
                             .append(name)
@@ -49,10 +64,40 @@ internal class SmsIngressRouting(context: Context) {
                 }
             }
         }
-        return MessageDigest.getInstance("SHA-256").digest(text.toByteArray()).joinToString("") {
-            "%02x".format(it.toInt() and UBYTE_MASK)
-        }
+        val hash =
+            MessageDigest.getInstance("SHA-256").digest(text.toByteArray()).joinToString("") {
+                "%02x".format(it.toInt() and UBYTE_MASK)
+            }
+        return if (legacy) hash else "v2:$hash"
     }
+
+    private fun canonicalChannels(): String =
+        MultiForwardConfig(app)
+            .channelInstances()
+            .sortedBy { it.id }
+            .joinToString("\u0000") { item ->
+                listOf(
+                        item.id,
+                        item.channelType,
+                        item.enabled.toString(),
+                        canonicalJson(JSONObject(item.configJson)),
+                    )
+                    .joinToString("\u0001")
+            }
+
+    private fun canonicalJson(value: Any?): String =
+        when (value) {
+            is JSONObject ->
+                value.keys().asSequence().sorted().joinToString(prefix = "{", postfix = "}") {
+                    JSONObject.quote(it) + ":" + canonicalJson(value.get(it))
+                }
+            is JSONArray ->
+                (0 until value.length()).joinToString(prefix = "[", postfix = "]") {
+                    canonicalJson(value.get(it))
+                }
+            is String -> JSONObject.quote(value)
+            else -> value.toString()
+        }
 
     companion object {
         private const val UBYTE_MASK = 0xff

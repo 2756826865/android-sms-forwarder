@@ -60,7 +60,11 @@ class SmsRecoveryWorker(
     @Suppress("LongMethod", "CyclomaticComplexMethod", "NestedBlockDepth")
     private suspend fun runScan(): Result {
         val journal = SmsIngressRecovery(applicationContext)
-        journal.cleanCompleted()
+        SmsIngressSpool(applicationContext).drain()
+        SmsIngressReview(applicationContext).reconcile()
+        val alerts = SmsIngressAlerts(applicationContext)
+        alerts.drain()
+        runCatching { SmsIngressMaintenance(applicationContext).clean() }
         val drainStarted = android.os.SystemClock.elapsedRealtime()
         for (intent in journal.pending()) {
             coroutineContext.ensureActive()
@@ -83,7 +87,9 @@ class SmsRecoveryWorker(
         if (forcedSince > 0 && storedLastChecked > 0 && legacyRequest)
             scanState.request(forcedSince)
         val scanIdle = !scanState.hasRequest() && !scanState.hasActivePage()
-        if (inputData.getBoolean("v128_trigger", false) && scanIdle && !journal.hasPending())
+        val intakePending = journal.hasPending() || alerts.hasPending() ||
+            SmsIngressSpool(applicationContext).hasPending()
+        if (inputData.getBoolean("v128_trigger", false) && scanIdle && !intakePending)
             return Result.success()
         val installAt =
             applicationContext.packageManager
@@ -440,7 +446,9 @@ class SmsRecoveryWorker(
         }
         val continueScan = !exhausted || scanState.hasRequest() || journal.hasReadyPending()
         if (continueScan) enqueueRunner(applicationContext, Data.EMPTY)
-        return if (!continueScan && journal.hasPending()) Result.retry() else Result.success()
+        val retryPending = journal.hasPending() || alerts.hasPending() ||
+            SmsIngressSpool(applicationContext).hasPending()
+        return if (!continueScan && retryPending) Result.retry() else Result.success()
     }
 
     /**

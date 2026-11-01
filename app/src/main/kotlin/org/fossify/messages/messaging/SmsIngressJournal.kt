@@ -69,15 +69,6 @@ internal class SmsIngressJournal(context: Context) {
             arrayOf(key),
         )
 
-    fun claimNotification(key: String): Boolean =
-        db.compileStatement(
-                "UPDATE ingress_journal SET notification_claimed=1 WHERE event_key=? AND notification_claimed=0"
-            )
-            .use {
-                it.bindString(1, key)
-                it.executeUpdateDelete() == 1
-            }
-
     fun phase(key: String, name: String) {
         runCatching {
             db.execSQL(

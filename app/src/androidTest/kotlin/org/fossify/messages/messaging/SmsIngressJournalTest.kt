@@ -33,8 +33,10 @@ class SmsIngressJournalTest {
         journal.providerResult(key, 42)
         assertTrue(SmsIngressRecovery(context).ownsProvider(42, 10000))
         assertFalse(SmsIngressRecovery(context).ownsProvider(42, 20000))
-        assertTrue(journal.claimNotification(key))
-        assertFalse(journal.claimNotification(key))
+        db.rawQuery("SELECT notification_claimed FROM ingress_journal WHERE event_key=?", arrayOf(key)).use {
+            assertTrue(it.moveToFirst())
+            assertEquals(0, it.getInt(0)) // Provider ownership is not a notification publication acknowledgement.
+        }
         journal.complete(key)
         assertTrue(journal.receipt(key)!!.done)
     }
