@@ -1,9 +1,6 @@
 package org.fossify.messages.ui.compose.conversations
 
 import android.app.Application
-import android.app.role.RoleManager
-import android.os.Build
-import android.provider.Telephony
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
@@ -16,19 +13,20 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.fossify.messages.extensions.deleteConversation
-import org.fossify.messages.extensions.moveConversationToRecycleBin
-import org.fossify.messages.messaging.cancelScheduleSendPendingIntent
 import org.fossify.commons.extensions.notificationManager
-import org.fossify.messages.extensions.getConversations
-import org.fossify.messages.models.Conversation
-import org.fossify.messages.extensions.messagesDB
-import org.fossify.messages.extensions.conversationsDB
 import org.fossify.messages.extensions.config
-import org.fossify.messages.extensions.syncThreadToLocal
+import org.fossify.messages.extensions.conversationsDB
+import org.fossify.messages.extensions.deleteConversation
+import org.fossify.messages.extensions.getConversations
+import org.fossify.messages.extensions.getMessagesDB
 import org.fossify.messages.extensions.markThreadMessagesRead
-import org.fossify.messages.helpers.syncSmsHistory
+import org.fossify.messages.extensions.messagesDB
+import org.fossify.messages.extensions.moveConversationToRecycleBin
+import org.fossify.messages.extensions.syncThreadToLocal
 import org.fossify.messages.helpers.SmsSyncProgress
+import org.fossify.messages.helpers.syncSmsHistory
+import org.fossify.messages.messaging.cancelScheduleSendPendingIntent
+import org.fossify.messages.models.Conversation
 
 data class ConversationsUiState(
     val conversations: List<Conversation> = emptyList(),
@@ -53,7 +51,8 @@ class ConversationsViewModel(application: Application) : AndroidViewModel(applic
 
     fun search(text: String) {
         searchJob?.cancel()
-        if (text.isBlank()) { _uiState.value = _uiState.value.copy(searchThreadIds = emptySet(), searchStatus = "搜索联系人/号码及已同步短信正文"); return }
+        if (text.isBlank()) { _uiState.value = _uiState.value.copy(searchThreadIds = emptySet(), searchStatus = "搜索联系人/号码及已同步短信正文")
+            return }
         searchJob = viewModelScope.launch {
             delay(250)
             _uiState.value = _uiState.value.copy(searchThreadIds = emptySet(), searchStatus = "正在搜索已同步正文…")
@@ -78,7 +77,8 @@ class ConversationsViewModel(application: Application) : AndroidViewModel(applic
                         "请先设为默认短信应用，再删除会话"
                     }
                     if (context.config.useRecycleBin) {
-                        // Include unsynced history, so moving a thread does not remove only its cached page.
+                        // Include unsynced history, so moving a thread does not remove only its
+                        // cached page.
                         context.syncThreadToLocal(threadId, loadAll = true)
                         context.moveConversationToRecycleBin(threadId)
                         check(context.messagesDB.getNonRecycledThreadMessages(threadId).isEmpty()) {
@@ -157,6 +157,27 @@ class ConversationsViewModel(application: Application) : AndroidViewModel(applic
         }
     }
 
+    private fun storeFreshProviderThreads(
+        context: android.content.Context,
+        threads: Collection<Conversation>,
+        providerRevision: Long,
+    ) {
+                        for (thread in threads) {
+                        context.getMessagesDB().runInTransaction {
+                                val current =
+                                    context.conversationsDB.getConversationWithThreadId(
+                                        thread.threadId
+                                    )
+                                if (
+                                    org.fossify.messages.helpers.ConversationRefreshRevision
+                                        .current() == providerRevision &&
+                                        (current == null || current.date <= thread.date)
+                                )
+                                    context.conversationsDB.insertOrUpdate(thread)
+                            }
+                        }
+    }
+
     fun refresh(isInitial: Boolean = false) {
         val diagnostics = org.fossify.messages.helpers.SmsSyncDiagnostics.recent()
         // 首次加载不能被连续刷新事件反复取消，否则空页面会一直显示转圈。
@@ -209,16 +230,18 @@ class ConversationsViewModel(application: Application) : AndroidViewModel(applic
                     )
                 }
             }
+            val providerRevision =
+                org.fossify.messages.helpers.ConversationRefreshRevision.current()
             val provider = try {
                 withContext(Dispatchers.IO) {
                     val threads = context.getConversations(strict = false, diagnostics = diagnostics)
-                    // If local DB is empty, run history sync to populate local messages and threads
-                    if (cached.isEmpty() && threads.isNotEmpty()) {
+                        // If local DB is empty, run history sync to populate local messages and
+                        // threads
+                        if (cached.isEmpty() && threads.isNotEmpty()) {
                         context.syncSmsHistory("compose_initial_sync")
                     }
-                    for (thread in threads) {
-                        context.conversationsDB.insertOrUpdate(thread)
-                    }
+                        kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                    storeFreshProviderThreads(context, threads, providerRevision)
                     threads
                 }
             } catch (error: CancellationException) {
@@ -238,9 +261,18 @@ class ConversationsViewModel(application: Application) : AndroidViewModel(applic
             val recycledThreads = withContext(Dispatchers.IO) {
                 context.messagesDB.getFullyRecycledThreadIds().toHashSet()
             }
-            diagnostics?.conversations("refresh_provider", provider)
-            diagnostics?.conversations("refresh_merged", org.fossify.messages.helpers.mergeConversationSources(provider, cached))
-            val rawList = org.fossify.messages.helpers.mergeConversationSources(provider, cached)
+            val freshLocal =
+                withContext(Dispatchers.IO) {
+                    context.conversationsDB.getAllRegular()
+                }
+            val safeProvider =
+                if (
+                    org.fossify.messages.helpers.ConversationRefreshRevision.current() ==
+                        providerRevision
+                )
+                    provider
+                else emptyList()
+            val rawList = org.fossify.messages.helpers.mergeConversationSources(safeProvider, freshLocal)
                 .filterNot { it.threadId in recycledThreads }
             val list = org.fossify.messages.helpers.sortConversations(
                 rawList,

@@ -6,13 +6,13 @@ import android.app.AppOpsManager
 import android.app.NotificationManager
 import android.app.role.RoleManager
 import android.content.Intent
-import android.net.Uri
 import android.content.pm.PackageManager
 import android.content.pm.ShortcutInfo
 import android.content.pm.ShortcutManager
 import android.content.res.ColorStateList
 import android.graphics.drawable.Icon
 import android.graphics.drawable.LayerDrawable
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Process
@@ -28,7 +28,6 @@ import androidx.appcompat.content.res.AppCompatResources
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
-import org.fossify.commons.dialogs.PermissionRequiredDialog
 import org.fossify.commons.extensions.adjustAlpha
 import org.fossify.commons.extensions.appLockManager
 import org.fossify.commons.extensions.applyColorFilter
@@ -39,26 +38,19 @@ import org.fossify.commons.extensions.beVisible
 import org.fossify.commons.extensions.beVisibleIf
 import org.fossify.commons.extensions.convertToBitmap
 import org.fossify.commons.extensions.getInternalStoragePath
-import org.fossify.messages.extensions.getOptionalPrivateContactsCursor as getMyContactsCursor
-import org.fossify.commons.extensions.getProperPrimaryColor
 import org.fossify.commons.extensions.getProperTextColor
+import org.fossify.commons.extensions.hasPermission
 import org.fossify.commons.extensions.hideKeyboard
 import org.fossify.commons.extensions.onTextChangeListener
-import org.fossify.commons.extensions.openNotificationSettings
-import org.fossify.commons.extensions.hasPermission
 import org.fossify.commons.extensions.toast
 import org.fossify.commons.extensions.underlineText
 import org.fossify.commons.extensions.updateSDCardPath
 import org.fossify.commons.extensions.viewBinding
 import org.fossify.commons.helpers.LOWER_ALPHA
 import org.fossify.commons.helpers.MyContactsContentProvider
-import org.fossify.commons.helpers.PERMISSION_READ_CONTACTS
-import org.fossify.commons.helpers.PERMISSION_READ_PHONE_STATE
 import org.fossify.commons.helpers.PERMISSION_READ_SMS
-import org.fossify.commons.helpers.PERMISSION_SEND_SMS
 import org.fossify.commons.helpers.SHORT_ANIMATION_DURATION
 import org.fossify.commons.helpers.ensureBackgroundThread
-import org.fossify.commons.helpers.isQPlus
 import org.fossify.messages.BuildConfig
 import org.fossify.messages.R
 import org.fossify.messages.adapters.ConversationsAdapter
@@ -72,19 +64,20 @@ import org.fossify.messages.extensions.config
 import org.fossify.messages.extensions.conversationsDB
 import org.fossify.messages.extensions.createConversationFromMessage
 import org.fossify.messages.extensions.getConversations
+import org.fossify.messages.extensions.getOptionalPrivateContactsCursor as getMyContactsCursor
 import org.fossify.messages.extensions.insertOrUpdateConversation
 import org.fossify.messages.extensions.markThreadMessagesRead
 import org.fossify.messages.extensions.messagesDB
 import org.fossify.messages.extensions.showSmsStyled
 import org.fossify.messages.extensions.syncThreadToLocal
-import org.fossify.messages.helpers.syncSmsHistory
+import org.fossify.messages.helpers.PhoneNumberDisplayHelper
 import org.fossify.messages.helpers.SEARCHED_MESSAGE_ID
 import org.fossify.messages.helpers.THREAD_ID
-import org.fossify.messages.helpers.THREAD_TITLE
 import org.fossify.messages.helpers.THREAD_NUMBER
-import org.fossify.messages.helpers.PhoneNumberDisplayHelper
+import org.fossify.messages.helpers.THREAD_TITLE
 import org.fossify.messages.helpers.YellowPageHelper
 import org.fossify.messages.helpers.formatConversationDate
+import org.fossify.messages.helpers.syncSmsHistory
 import org.fossify.messages.messaging.SmsRecoveryWorker
 import org.fossify.messages.models.Conversation
 import org.fossify.messages.models.Events
@@ -107,6 +100,8 @@ import org.greenrobot.eventbus.EventBus
 import org.greenrobot.eventbus.Subscribe
 import org.greenrobot.eventbus.ThreadMode
 
+private const val VERIFICATION_POPUP_RADIUS_DP = 24
+
 class MainActivity : SimpleActivity() {
     private val homeRefreshGate = org.fossify.messages.helpers.HomeRefreshGate()
     override var isSearchBarEnabled = false
@@ -116,6 +111,7 @@ class MainActivity : SimpleActivity() {
     private val ROLE_STATE_SETTLE_DELAY_MS = 500L
     private val DEFAULT_SMS_LOST_NOTIFICATION_ID = 19082
 
+    private var verificationCodeDialog: AlertDialog? = null
     private var storedTextColor = 0
     private var storedFontSize = 0
     private var storedHomeListDensity = 0
@@ -255,8 +251,8 @@ class MainActivity : SimpleActivity() {
     }
 
     /**
-     * The gateway UI returns from onCreate before the classic initialization path. Request only
-     * the permissions shared by both UIs and refresh Compose state without touching classic views.
+     * The gateway UI returns from onCreate before the classic initialization path. Request only the
+     * permissions shared by both UIs and refresh Compose state without touching classic views.
      */
     private fun ensureGatewaySmsPermissions() {
         handlePermission(PERMISSION_READ_SMS) { hasReadSms ->
@@ -415,6 +411,8 @@ class MainActivity : SimpleActivity() {
     }
 
     override fun onPause() {
+        verificationCodeDialog?.dismiss()
+        verificationCodeDialog = null
         homeRefreshGate.pause()
         super.onPause()
         if (!config.useGatewayDeveloperUi) {
@@ -1201,7 +1199,66 @@ class MainActivity : SimpleActivity() {
 
     private val eventSubscriber = object {
         @Subscribe(threadMode = ThreadMode.MAIN)
-        fun refreshConversations(@Suppress("unused") event: Events.RefreshConversations) {
+        fun verificationCode(event: Events.VerificationCodeReceived) {
+                if (
+                    config.useGatewayDeveloperUi ||
+                        !lifecycle.currentState.isAtLeast(
+                            androidx.lifecycle.Lifecycle.State.RESUMED
+                        )
+                )
+                    return
+                verificationCodeDialog?.dismiss()
+                verificationCodeDialog =
+                    AlertDialog.Builder(this@MainActivity)
+                        .setTitle("短信验证码")
+                        .setMessage(event.code)
+                        .setPositiveButton("复制验证码") { _, _ ->
+                            sendBroadcast(
+                                Intent(
+                                        this@MainActivity,
+                                        org.fossify.messages.receivers
+                                                .CopyVerificationCodeReceiver::class
+                                            .java,
+                                    )
+                                    .setAction(
+                                        org.fossify.messages.receivers.CopyVerificationCodeReceiver
+                                            .ACTION_COPY_CODE
+                                    )
+                                    .putExtra(
+                                        org.fossify.messages.receivers.CopyVerificationCodeReceiver
+                                            .EXTRA_CODE,
+                                        event.code,
+                                    )
+                            )
+                        }
+                        .setNegativeButton("关闭", null)
+                        .create()
+                        .also { dialog ->
+                            dialog.setOnShowListener {
+                                val fg = getProperTextColor()
+                                dialog
+                                    .findViewById<android.widget.TextView>(android.R.id.message)
+                                    ?.setTextColor(fg)
+                                val titleId =
+                                    resources.getIdentifier("alertTitle", "id", packageName)
+                                dialog
+                                    .findViewById<android.widget.TextView>(titleId)
+                                    ?.setTextColor(fg)
+                                dialog.window?.setBackgroundDrawable(
+                                    android.graphics.drawable.GradientDrawable().apply {
+                                        setColor(config.backgroundColor)
+                                        cornerRadius =
+                                            VERIFICATION_POPUP_RADIUS_DP *
+                                                resources.displayMetrics.density
+                                    }
+                                )
+                            }
+                            dialog.show()
+                        }
+            }
+
+            @Subscribe(threadMode = ThreadMode.MAIN)
+            fun refreshConversations(@Suppress("unused") event: Events.RefreshConversations) {
             if (!homeRefreshGate.request()) return
             if (config.useGatewayDeveloperUi) {
                 conversationsViewModel?.refresh(isInitial = false)

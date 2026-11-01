@@ -2,14 +2,11 @@ package org.fossify.messages.forwarding
 
 import android.annotation.SuppressLint
 import android.content.Context
-import org.fossify.messages.extensions.getNameAndPhotoFromPhoneNumber
-import org.fossify.messages.extensions.subscriptionManagerCompat
 import android.telephony.SubscriptionInfo
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-
-data class ForwardingSimSnapshot(val slotIndex: Int, val description: String, val receiverNumber: String, val customLabel: String)
+import org.fossify.messages.extensions.getNameAndPhotoFromPhoneNumber
 
 data class ForwardingPayload(val title: String, val content: String)
 
@@ -30,19 +27,8 @@ object ForwardingMessageFormatter {
             if (snapshot.customLabel.isBlank() || snapshot.slotIndex < 0) return content
             describeSim(snapshot)
         } else {
-            val resolvedInfo = if (subscriptionId >= 0) {
-                resolveSimInfo(context, subscriptionId)
-            } else {
-                runCatching {
-                    try {
-                        val activeList = context.subscriptionManagerCompat().activeSubscriptionInfoList
-                        if (activeList?.size == 1) activeList[0] else null
-                    } catch (_: SecurityException) {
-                        null // Do not guess a SIM when the OS denies subscription access.
-                    }
-                }.getOrNull()
-            }
-            val slot = resolvedInfo?.simSlotIndex?.takeIf { it >= 0 } ?: return content
+            val resolvedInfo = resolveSimInfo(context, subscriptionId)
+                val slot = resolvedInfo?.simSlotIndex?.takeIf { it >= 0 } ?: return content
             val label = config.customSimLabel(slot)
             if (label.isBlank()) return content
             SimLabelPresentation.describeSlot(slot, label)
@@ -303,7 +289,9 @@ object ForwardingMessageFormatter {
         return org.fossify.messages.messaging.SubscriptionResolver.findActiveInfo(context, subscriptionId)
     }
 
-    /** Old queued snapshots also use the same display format, without changing their receive slot. */
+    /**
+     * Old queued snapshots also use the same display format, without changing their receive slot.
+     */
     fun describeSim(snapshot: ForwardingSimSnapshot): String =
         if (snapshot.customLabel.isBlank()) snapshot.description
         else SimLabelPresentation.describeSlot(snapshot.slotIndex, snapshot.customLabel)
@@ -318,23 +306,33 @@ object ForwardingMessageFormatter {
     fun captureSim(context: Context, subscriptionId: Int): ForwardingSimSnapshot {
         val config = MultiForwardConfig(context)
         val info = resolveSimInfo(context, subscriptionId)
-            ?: if (subscriptionId < 0) {
-                runCatching {
-                    try {
-                        val activeList = context.subscriptionManagerCompat().activeSubscriptionInfoList
-                        if (activeList?.size == 1) activeList[0] else null
-                    } catch (_: SecurityException) {
-                        null // Do not guess a SIM when the OS denies subscription access.
-                    }
-                }.getOrNull()
-            } else null
-        val slot = info?.simSlotIndex?.takeIf { it >= 0 } ?: -1
+        val slot =
+            org.fossify.messages.messaging.ReceivingSubscriptionReader.slotForSubscription(
+                context,
+                subscriptionId,
+            ) ?: -1
         val custom = config.customSimLabel(slot)
         val carrier = info?.carrierName?.toString()?.takeIf(String::isNotBlank) ?: info?.displayName?.toString().orEmpty()
-        val description = SimLabelPresentation.describeSlot(slot, custom, carrier)
+        val description =
+            if (slot >= 0) SimLabelPresentation.describeSlot(slot, custom, carrier)
+            else {
+                val reason =
+                    if (subscriptionId < 0) "缺少已确认的接收身份"
+                    else if (
+                        context.checkSelfPermission(android.Manifest.permission.READ_PHONE_STATE) !=
+                            android.content.pm.PackageManager.PERMISSION_GRANTED
+                    )
+                        "电话权限未授予"
+                    else "订阅不可用或读取失败"
+                "未知接收卡（$reason）"
+            }
         @Suppress("DEPRECATION")
         val number = config.customSimNumber(slot).ifBlank { info?.number.orEmpty() }
-        return ForwardingSimSnapshot(slot, description, number, custom)
+        return ForwardingSimSnapshot(slot, description, number, custom,
+            subscriptionId,
+            source = "active_subscription",
+            observedAt = System.currentTimeMillis(),
+        )
     }
 
     @SuppressLint("MissingPermission")

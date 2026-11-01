@@ -7,7 +7,7 @@ check=Path(os.environ.get('WHITELIST_TEST_DEPS', str(Path(tempfile.gettempdir())
 android=Path(os.environ['ANDROID_JAR'])
 (check/'classes').mkdir(parents=True,exist_ok=True)
 classpath=':'.join(map(str,list(check.glob('*.jar'))+[android]))
-files=['BotWhitelistRequest','DingTalkWhitelistRequest','DingTalkStreamClient','WeComStreamClient','FeishuStreamClient','FeishuBotIdentity','FeishuMessageText','TelegramRemotePoller']
+files=['BotWhitelistRequest','DingTalkWhitelistRequest','DingTalkStreamClient','WeComStreamClient','FeishuStreamClient','FeishuBotIdentity','FeishuMessageText','TelegramRemotePoller','ReconnectWakeup','StreamReconnectBackoff']
 tests=['DingTalkWhitelistRequestTest','DingTalkWhitelistRoutingTest','BotWhitelistRoutingTest']
 source=[str(root/'app/src/main/kotlin/org/fossify/messages/remote'/f'{name}.kt') for name in files]
 source += [str(root/'app/src/test/kotlin/org/fossify/messages/remote'/f'{name}.kt') for name in tests]

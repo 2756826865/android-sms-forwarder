@@ -5,13 +5,11 @@ import android.content.Context
 import android.content.Intent
 import android.provider.Telephony
 import android.util.Log
-import org.fossify.messages.services.IncomingSmsService
-import org.fossify.messages.services.SmsKeepAliveService
 
 /**
- * Immediately hands the protected SMS broadcast to a foreground service.
- * Database, contact, notification and forwarding work must not run in the
- * receiver's short execution window, especially while an OEM device is asleep.
+ * Immediately hands the protected SMS broadcast to a foreground service. Database, contact,
+ * notification and forwarding work must not run in the receiver's short execution window,
+ * especially while an OEM device is asleep.
  */
 class SmsReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -21,28 +19,11 @@ class SmsReceiver : BroadcastReceiver() {
             return
         }
         Log.i(TAG, "received $action; handing off to IncomingSmsService")
-        val appContext = context.applicationContext
-        // goAsync 必须最先拿到，且 ensureStarted / enqueue / processMinimal 全部放进 try：
-        // 任何一步抛异常都不能阻止 finally 里的 pending.finish()，否则广播令牌泄漏。
-        // 同时保证 goAsync 之前的语句抛异常时不会跳过降级路径（那会让兜底在最该生效时失效）。
-        val pending = goAsync()
-        try {
-            // 保活服务只是锦上添花：它若抛异常绝不能连累降级路径，否则兜底在最该生效时失效。
-            runCatching { SmsKeepAliveService.ensureStarted(appContext) }
-                .onFailure { Log.w(TAG, "keep-alive service start failed", it) }
-            val accepted = try {
-                IncomingSmsService.enqueue(appContext, intent)
-            } catch (error: Exception) {
-                Log.e(TAG, "incoming service handoff failed; using minimal processing", error)
-                false
-            }
-            if (!accepted) {
-                Log.w(TAG, "foreground service rejected; running degraded minimal path")
-                IncomingSmsService.processMinimal(appContext, intent)
-            }
-        } finally {
-            pending.finish()
-        }
+        org.fossify.messages.messaging.SmsBroadcastDispatcher.dispatch(
+            context,
+            Intent(intent),
+            goAsync(),
+        )
     }
 
     private companion object {

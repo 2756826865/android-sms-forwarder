@@ -28,3 +28,5 @@ outputs/
 
 __pycache__/
 !tools/incoming-sms-ui-host-tests/run.py
+
+!scripts/test_ingress_journal_sql.py

@@ -2,11 +2,6 @@ package org.fossify.messages.remote
 
 import android.content.Context
 import android.util.Log
-import org.fossify.messages.BuildConfig
-import org.fossify.messages.forwarding.MultiForwardConfig
-import org.fossify.messages.remote.repository.RemoteSourceConnectionState
-import org.fossify.messages.remote.repository.RemoteSourceRepository
-import org.fossify.messages.remote.repository.RemoteSourceType
 import java.io.BufferedReader
 import java.io.BufferedWriter
 import java.io.InputStreamReader
@@ -16,11 +11,18 @@ import java.nio.charset.StandardCharsets
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.net.ssl.SSLSocket
 import javax.net.ssl.SSLSocketFactory
+import org.fossify.messages.BuildConfig
+import org.fossify.messages.forwarding.MultiForwardConfig
+import org.fossify.messages.remote.repository.RemoteSourceConnectionState
+import org.fossify.messages.remote.repository.RemoteSourceRepository
+import org.fossify.messages.remote.repository.RemoteSourceType
 
 class EmailRemoteCommandPoller(
     private val context: Context,
-    private val sourceInstanceId: String? = null
+    private val sourceInstanceId: String? = null,
+    private val isCurrent: () -> Boolean = { true },
 ) {
+    private val networkWakeup = ReconnectWakeup()
     private val running = AtomicBoolean(false)
     private var loopThread: Thread? = null
     private val activeSocket = java.util.concurrent.atomic.AtomicReference<Socket?>()
@@ -30,7 +32,7 @@ class EmailRemoteCommandPoller(
         loopThread = Thread {
             onStatus("已启动邮箱 IMAP 轮询监听…")
             var consecutiveErrors = 0
-            while (running.get()) {
+            while (running.get() && isCurrent()) {
                 try {
                     val processed = pollOnce(onStatus)
                     consecutiveErrors = 0
@@ -54,7 +56,7 @@ class EmailRemoteCommandPoller(
                 }
 
                 try {
-                    Thread.sleep(sleepTime)
+                        networkWakeup.await(sleepTime)
                 } catch (_: InterruptedException) {
                     break
                 }
@@ -66,8 +68,15 @@ class EmailRemoteCommandPoller(
         }
     }
 
+    fun onNetworkChanged() {
+        if (!running.get()) return
+        runCatching { activeSocket.getAndSet(null)?.close() }
+        networkWakeup.signal()
+    }
+
     fun stop() {
         running.set(false)
+        networkWakeup.signal()
         loopThread?.interrupt()
         loopThread = null
         try {
@@ -87,7 +96,8 @@ class EmailRemoteCommandPoller(
         val user = instance.optString("user")
         val pass = instance.optString("pass")
         if (host.isBlank() || user.isBlank() || pass.isBlank()) {
-            repo.updateConnectionState(instance.id, RemoteSourceConnectionState.CONFIG_REQUIRED)
+            if (isCurrent())
+                repo.updateConnectionState(instance.id, RemoteSourceConnectionState.CONFIG_REQUIRED)
             return 0
         }
 
@@ -137,7 +147,8 @@ class EmailRemoteCommandPoller(
                     val err = "IMAP 登录失败：${loginResp.lastOrNull()}"
                     config.appendEmailRemoteLog(err)
                     onStatus(err)
-                    repo.updateConnectionState(instance.id, RemoteSourceConnectionState.ERROR, errorMessage = err)
+                    if (isCurrent())
+                        repo.updateConnectionState(instance.id, RemoteSourceConnectionState.ERROR, errorMessage = err)
                     return 0
                 }
 
@@ -162,7 +173,8 @@ class EmailRemoteCommandPoller(
 
                 val selectResp = send("SELECT INBOX")
                 check(isTaggedOk(selectResp)) { "IMAP SELECT INBOX 失败：${selectResp.lastOrNull()}" }
-                repo.updateConnectionState(instance.id, RemoteSourceConnectionState.READY)
+                if (isCurrent())
+                    repo.updateConnectionState(instance.id, RemoteSourceConnectionState.READY)
                 onStatus("IMAP 连接就绪，正在检查收件箱…")
                 val uidValidity = selectResp.asSequence()
                     .mapNotNull { UID_VALIDITY_REGEX.find(it)?.groupValues?.getOrNull(1) }
@@ -224,7 +236,8 @@ class EmailRemoteCommandPoller(
             val err = "轮询失败：${e.message ?: e.javaClass.simpleName}"
             config.appendEmailRemoteLog(err)
             onStatus(err)
-            repo.updateConnectionState(instance.id, RemoteSourceConnectionState.ERROR, errorMessage = err)
+            if (isCurrent())
+                repo.updateConnectionState(instance.id, RemoteSourceConnectionState.ERROR, errorMessage = err)
             throw e
         } finally {
             if (socket != null) {
@@ -235,6 +248,7 @@ class EmailRemoteCommandPoller(
     }
 
     private fun handleEmailCommand(rawContent: String, sender: String, messageId: String, activeInstanceId: String) {
+        if (!isCurrent()) return
         val config = MultiForwardConfig(context)
         val envelope = RemoteCommandEnvelope(
             sourceType = RemoteSourceType.EMAIL,

@@ -10,7 +10,7 @@ GUARD = (ROOT/'forwarding/SmsDirectSendGuard.kt').read_text()
 INGRESS = (ROOT/'messaging/SmsIngressIdentity.kt').read_text()
 
 def constant(source, name):
-    return re.search(r'const val '+name+r' = "([^"]+)"', source).group(1)
+    return re.search(r'const val '+name+r'\s*=\s*"([^"]+)"', source).group(1)
 
 class IntegrationSqlTest(unittest.TestCase):
     def setUp(self): self.db = sqlite3.connect(':memory:')
@@ -30,8 +30,8 @@ class IntegrationSqlTest(unittest.TestCase):
         self.assertEqual(self.db.execute('SELECT phase,message_uri,record_id FROM sms_direct_claims').fetchone(), ('unknown','',''))
         self.assertEqual(self.db.execute("INSERT OR IGNORE INTO sms_direct_claims(claim_key,claimed_at) VALUES('old',2)").rowcount, 0)
     def match(self):
-        query = re.search(r'find\("""(SELECT work_id, received_at FROM ingress.*?)"""', INGRESS, re.S).group(1)
-        return self.db.execute(query.replace('$opposite', 'provider_id IS NULL AND fingerprint IS NOT NULL'), ('hash','1','8000','12000','0','0')).fetchall()
+        query = re.search(r'find\(\s*"""\s*(SELECT work_id, received_at FROM ingress.*?)"""', INGRESS, re.S).group(1)
+        return self.db.execute(query.replace('$opposite', 'provider_id IS NULL AND fingerprint IS NOT NULL'), ('hash','1','1','8000','12000','0','0')).fetchall()
     def create_ingress(self):
         self.db.execute(constant(INGRESS, 'CREATE'))
         self.db.execute('INSERT INTO ingress VALUES(?,?,?,?,?,?,?,?)', ('first','fp',None,'hash',10,10000,1,None))

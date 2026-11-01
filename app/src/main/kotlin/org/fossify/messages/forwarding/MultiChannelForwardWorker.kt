@@ -11,15 +11,6 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.OutOfQuotaPolicy
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.Response
-import okhttp3.WebSocket
-import okhttp3.WebSocketListener
-import org.fossify.messages.messaging.sendMessageCompat
-import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
@@ -27,18 +18,27 @@ import java.nio.charset.StandardCharsets
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.Response
+import okhttp3.WebSocket
+import okhttp3.WebSocketListener
 import org.fossify.commons.extensions.notificationManager
 import org.fossify.messages.extensions.conversationsDB
 import org.fossify.messages.extensions.markThreadMessagesRead
-import org.fossify.messages.helpers.refreshConversations
 import org.fossify.messages.helpers.ShadowRepository
+import org.fossify.messages.helpers.refreshConversations
+import org.fossify.messages.messaging.sendMessageCompat
 import org.fossify.messages.models.ForwardingShadowAttempt
+import org.json.JSONObject
 
 class MultiChannelForwardWorker(
     appContext: Context,
@@ -49,11 +49,21 @@ class MultiChannelForwardWorker(
     private var smsDirectPreviouslyStarted = false
     private var smsDirectSource = ""
 
+    private var effectiveSim: ForwardingSimSnapshot? = null
+
     private fun receivedSimSnapshot(): ForwardingSimSnapshot? {
+        effectiveSim?.let {
+            return it
+        }
         if (!inputData.getBoolean(KEY_SIM_CAPTURED, false)) return null // Older queued work stays compatible.
         return ForwardingSimSnapshot(
             inputData.getInt(KEY_SIM_SLOT, -1), inputData.getString(KEY_SIM_LABEL).orEmpty(),
-            inputData.getString(KEY_SIM_NUMBER).orEmpty(), inputData.getString(KEY_SIM_CUSTOM).orEmpty()
+            inputData.getString(KEY_SIM_NUMBER).orEmpty(), inputData.getString(KEY_SIM_CUSTOM).orEmpty(),
+            inputData.getInt(KEY_SIM_SUB, inputData.getInt(KEY_SUBSCRIPTION_ID, -1)),
+            inputData.getString(KEY_SIM_STATUS)
+                ?: if (inputData.getInt(KEY_SIM_SLOT, -1) >= 0) "CONFIRMED" else "UNKNOWN",
+            inputData.getString(KEY_SIM_SOURCE) ?: "legacy",
+            inputData.getLong(KEY_SIM_OBSERVED, 0L)
         )
     }
 
@@ -65,6 +75,21 @@ class MultiChannelForwardWorker(
         val safeRetry = runAttemptCount > 0 && (store.record(historyId)?.status == ForwardingHistoryStore.STATUS_RETRY ||
             (inputData.getString(KEY_TARGET_CHANNEL) == ForwardingChannels.SMS_DIRECT &&
                 SmsDirectBillingPolicy.canResumePreparation(store.smsPhase(historyId))))
+        val original = receivedSimSnapshot() ?: ForwardingSimSnapshot(-1, "未知接收卡", "", "")
+        val record = store.record(historyId)
+        val firstAttempt = runAttemptCount == 0 && (record?.attempts ?: 0) == 0
+        val unresolvedSim =
+            original.slotIndex < 0 && !inputData.getBoolean(KEY_BODY_ALREADY_RENDERED, false)
+        val candidate =
+            if (firstAttempt && unresolvedSim) {
+                org.fossify.messages.messaging
+                    .SmsIngressSnapshots(applicationContext)
+                    .snapshotForWork(record?.workId.orEmpty()) ?: original
+            } else original
+        effectiveSim =
+            org.fossify.messages.messaging
+                .SmsIngressSnapshots(applicationContext)
+                .freezeExecutionSnapshot(id.toString(), candidate)
         if (!store.claimSubmissionExecution(id.toString(), safeRetry)) {
             if (store.record(historyId)?.status !in setOf(ForwardingHistoryStore.STATUS_SUCCESS,
                     ForwardingHistoryStore.STATUS_FAILED, ForwardingHistoryStore.STATUS_SKIPPED))
@@ -139,8 +164,22 @@ class MultiChannelForwardWorker(
         )
     }
 
+    @Suppress("TooGenericExceptionCaught") // WorkManager foreground promotion is an OS boundary.
+    private suspend fun promoteForeground() {
+        try {
+            setForeground(getForegroundInfo())
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            Log.w(
+                TAG,
+                "foreground unavailable: ${error.javaClass.simpleName}; continuing as quota-bound work",
+            )
+        }
+    }
+
     private suspend fun performWork(): Result = withContext(Dispatchers.IO) {
-        setForeground(getForegroundInfo())
+            promoteForeground()
         val config = MultiForwardConfig(applicationContext)
         val targetChannel = inputData.getString(KEY_TARGET_CHANNEL).orEmpty()
         val isTest = inputData.getBoolean(KEY_IS_TEST, false)
@@ -149,7 +188,9 @@ class MultiChannelForwardWorker(
         val sender = inputData.getString(KEY_SENDER).orEmpty()
         val body = inputData.getString(KEY_BODY).orEmpty()
         val receivedAt = inputData.getLong(KEY_RECEIVED_AT, System.currentTimeMillis())
-        val subscriptionId = inputData.getInt(KEY_SUBSCRIPTION_ID, -1)
+        val subscriptionId =
+                effectiveSim?.subscriptionId?.takeIf { it >= 0 }
+                    ?: inputData.getInt(KEY_SUBSCRIPTION_ID, -1)
         val threadId = inputData.getLong(KEY_THREAD_ID, 0L)
         val operationId = inputData.getString(KEY_OPERATION_ID)
 
@@ -276,8 +317,9 @@ class MultiChannelForwardWorker(
                 history.markSkipped(historyRecordId, "原目标类型已改变，停止本次补偿或重试")
                 return@withContext Result.success()
             }
-            // Safe one-hop fallback: only missing/disabled/unconfigured primary, before API submission.
-            if (!isTest && !originalTargetOnly &&
+                // Safe one-hop fallback: only missing/disabled/unconfigured primary, before API
+                // submission.
+                if (!isTest && !originalTargetOnly &&
                 (instance == null || !instance.enabled || !instance.hasDispatchConfiguration()) &&
                 !inputData.getBoolean("fallback_hop", false) && inputData.getString(KEY_GROUP_PLAN).isNullOrBlank()) {
                 val backup = ForwardingFallbackConfig(applicationContext).resolve(targetInstanceId, config.channelInstances())
@@ -589,7 +631,9 @@ class MultiChannelForwardWorker(
                     ruleAllowedChannels.contains(instance.channelType)
                 )
             if (!isInstanceTargeted) continue
-            if (!isTest && instance.channelType == ForwardingChannels.SMS_DIRECT &&
+                    val smsDirect = !isTest && instance.channelType == ForwardingChannels.SMS_DIRECT
+                    if (
+                        smsDirect &&
                 instance.optBoolean("onlyOnNoNetwork", config.smsDirectOnlyOnNoNetwork) && isNetworkAvailable()
             ) {
                 skippedReasons += "${instance.name}：网络已通过系统验证，跳过仅断网短信直发"
@@ -776,8 +820,9 @@ class MultiChannelForwardWorker(
         }
 
         val allFailuresArePermanent = failures.isNotEmpty() && failures.all { isPermanentError(it) }
-        // Retrying the whole Worker after one channel succeeded would submit that channel again.
-        val canRetry = !smsDirectAttempted && !isTest && !outcomeUnknown && inputData.getString(KEY_GROUP_PLAN).isNullOrBlank() && successes.isEmpty() && !allFailuresArePermanent && runAttemptCount < 2
+            // Retrying the whole Worker after one channel succeeded would submit that channel
+            // again.
+            val canRetry = !smsDirectAttempted && !isTest && !outcomeUnknown && inputData.getString(KEY_GROUP_PLAN).isNullOrBlank() && successes.isEmpty() && !allFailuresArePermanent && runAttemptCount < 2
 
         when {
             outcomeUnknown -> {
@@ -1414,6 +1459,10 @@ class MultiChannelForwardWorker(
         private const val KEY_BODY = "body"
         private const val KEY_RECEIVED_AT = "received_at"
         private const val KEY_SUBSCRIPTION_ID = "subscription_id"
+        private const val KEY_SIM_SUB = "received_sim_subscription"
+        private const val KEY_SIM_STATUS = "received_sim_status"
+        private const val KEY_SIM_SOURCE = "received_sim_source"
+        private const val KEY_SIM_OBSERVED = "received_sim_observed"
         private const val KEY_SIM_CAPTURED = "sim_captured"
         private const val KEY_SIM_SLOT = "received_sim_slot"
         private const val KEY_SIM_LABEL = "received_sim_label"
@@ -1641,12 +1690,17 @@ class MultiChannelForwardWorker(
                 subscriptionId = subscriptionId,
                 isTest = isTest,
             )
-            // Existing delivery owners keep their state; duplicate events must not reopen a finished task.
+            // Existing delivery owners keep their state; duplicate events must not reopen a
+            // finished task.
             if (history.record(historyRecordId)?.let { it.status != ForwardingHistoryStore.STATUS_QUEUED || it.attempts > 0 } == true) return
             Log.d(TAG, "enqueueSingle: channel=$targetChannel, instance=$targetInstanceId, historyId=$historyRecordId, workId=$uniqueId")
             val safeBody = WorkPayloadText.fitUtf8(body, 6000)
             val delaySeconds = if (!isTest) multiConfig.forwardingDelaySeconds else 0
-            val capturedSim = originalSim ?: ForwardingMessageFormatter.captureSim(context, subscriptionId)
+            val capturedSim = originalSim
+                    ?: org.fossify.messages.messaging
+                        .SmsIngressSnapshots(context)
+                        .snapshotForWork(uniqueId)
+                    ?: ForwardingMessageFormatter.captureSim(context, subscriptionId)
             val retryPayload = JSONObject()
                 .put("sender", sender.take(256)).put("body", safeBody).put("receivedAt", receivedAt)
                 .put("subscriptionId", subscriptionId).put("channel", targetChannel)
@@ -1663,6 +1717,10 @@ class MultiChannelForwardWorker(
                     KEY_RECEIVED_AT to receivedAt,
                     KEY_SUBSCRIPTION_ID to subscriptionId,
                     KEY_SIM_CAPTURED to true,
+                    KEY_SIM_SUB to capturedSim.subscriptionId,
+                    KEY_SIM_STATUS to capturedSim.status,
+                    KEY_SIM_SOURCE to capturedSim.source,
+                    KEY_SIM_OBSERVED to capturedSim.observedAt,
                     KEY_SIM_SLOT to capturedSim.slotIndex,
                     KEY_SIM_LABEL to capturedSim.description.take(100),
                     KEY_SIM_NUMBER to capturedSim.receiverNumber.take(64),

@@ -13,11 +13,20 @@ sealed class RemoteProcessResult {
 }
 object RemoteCommandProcessor {
  var calls=0
- fun process(context:Context,envelope:RemoteCommandEnvelope):RemoteProcessResult {calls++;return RemoteProcessResult.Rejected("UNLISTED")}
+ fun process(context:Context,envelope:RemoteCommandEnvelope):RemoteProcessResult {calls++
+        return RemoteProcessResult.Rejected("UNLISTED")}
 }
 data class RemoteControlPendingReceipt(val sourceInstanceId:String,val requester:String,val commandId:String="")
-class EmailRemoteCommandPoller(context:Context,sourceInstanceId:String) { fun stop(){}; fun start(intervalMs:Long=60000,onStatus:(String)->Unit){} }
+class EmailRemoteCommandPoller(context:Context,sourceInstanceId:String,
+    isCurrent: () -> Boolean = { true },
+) { fun stop(){}
+
+    fun onNetworkChanged() {}
+
+    fun start(intervalMs:Long=60000,onStatus:(String)->Unit){} }
 class WebSocketRemoteClient(context:Context,sourceInstanceId:String,onStatus:(String)->Unit) {
- fun start(){}; fun stop(){}
+ fun start(){}
+ fun stop(){}
+ fun onNetworkChanged(){}
  companion object {fun sendReceiptOverSocket(id:String,status:String,body:String,sourceId:String)=false}
 }

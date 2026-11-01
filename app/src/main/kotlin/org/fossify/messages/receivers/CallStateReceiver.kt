@@ -4,7 +4,9 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.telephony.TelephonyManager
-import android.telephony.SubscriptionManager
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -14,14 +16,8 @@ import org.fossify.messages.forwarding.ForwardingMessageFormatter
 import org.fossify.messages.forwarding.MultiChannelForwardWorker
 import org.fossify.messages.forwarding.MultiForwardConfig
 import org.fossify.messages.forwarding.repository.ChannelRepository
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
-/**
- * 纯本地电话状态与未接来电广播监听器
- * 支持 goAsync 异步派发与 SharedPreferences 暂态持久化（防进程被杀导致状态丢失）
- */
+/** 纯本地电话状态与未接来电广播监听器 支持 goAsync 异步派发与 SharedPreferences 暂态持久化（防进程被杀导致状态丢失） */
 class CallStateReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -32,8 +28,9 @@ class CallStateReceiver : BroadcastReceiver() {
 
         val stateStr = intent.getStringExtra(TelephonyManager.EXTRA_STATE) ?: return
         val incomingNumber = intent.getStringExtra(TelephonyManager.EXTRA_INCOMING_NUMBER).orEmpty()
-        val subId = intent.getIntExtra(SubscriptionManager.EXTRA_SUBSCRIPTION_INDEX, -1)
-            .takeIf { it >= 0 } ?: intent.getIntExtra("subscription", -1)
+        val subId =
+            org.fossify.messages.messaging.ReceivingSubscriptionReader.read(context, intent)
+                .confirmedSubscriptionId ?: -1
 
         val now = System.currentTimeMillis()
         val prefs = context.getSharedPreferences(PREFS_TRANSIENT, Context.MODE_PRIVATE)
@@ -43,9 +40,14 @@ class CallStateReceiver : BroadcastReceiver() {
                 val num = incomingNumber.ifBlank { prefs.getString(KEY_LAST_NUMBER, "").orEmpty() }
                 val existingRingStart = prefs.getLong(KEY_RING_START, 0L)
                 val rememberedSubId = prefs.getInt(KEY_RECEIVING_SUB, -1)
+                val identityConflict =
+                    prefs.getBoolean("receiving_conflict", false) ||
+                        (rememberedSubId >= 0 && subId >= 0 && rememberedSubId != subId)
                 prefs.edit()
+                    .putBoolean("receiving_conflict", identityConflict)
                     .putString(KEY_LAST_NUMBER, num)
-                    .putInt(KEY_RECEIVING_SUB, rememberedSubId.takeIf { it >= 0 } ?: subId)
+                    .putInt(KEY_RECEIVING_SUB,
+                        if (identityConflict) -1 else rememberedSubId.takeIf { it >= 0 } ?: subId)
                     // Android may deliver the same state twice, with and without a number.
                     .putLong(KEY_RING_START, existingRingStart.takeIf { it > 0L } ?: now)
                     .putBoolean(KEY_ANSWERED, false)
@@ -64,7 +66,10 @@ class CallStateReceiver : BroadcastReceiver() {
                 val isAnswered = prefs.getBoolean(KEY_ANSWERED, false)
                 val callStart = prefs.getLong(KEY_CALL_START, 0L)
                 val number = incomingNumber.ifBlank { prefs.getString(KEY_LAST_NUMBER, "").orEmpty() }
-                val receivingSubId = prefs.getInt(KEY_RECEIVING_SUB, -1).takeIf { it >= 0 } ?: subId
+                val identityConflict = prefs.getBoolean("receiving_conflict", false)
+                val receivingSubId =
+                    if (identityConflict) -1
+                    else prefs.getInt(KEY_RECEIVING_SUB, -1).takeIf { it >= 0 } ?: subId
 
                 // 立即重置暂态缓存
                 prefs.edit().clear().apply()
@@ -75,6 +80,16 @@ class CallStateReceiver : BroadcastReceiver() {
 
                     CoroutineScope(Dispatchers.IO).launch {
                         try {
+                            val confirmedCallSub =
+                                if (identityConflict) -1
+                                else
+                                    org.fossify.messages.messaging.ReceivingCallIdentity.resolve(
+                                        appContext,
+                                        number,
+                                        ringStart,
+                                        now,
+                                        receivingSubId,
+                                    )
                             val ringDurationSeconds = ((now - ringStart) / 1000).coerceAtLeast(1)
                             val wasMissed = !isAnswered
 
@@ -86,7 +101,7 @@ class CallStateReceiver : BroadcastReceiver() {
                                     callerNumber = number,
                                     isMissed = true,
                                     durationSeconds = ringDurationSeconds,
-                                    subId = receivingSubId,
+                                    subId = confirmedCallSub,
                                     timestamp = now
                                 )
                             } else if (!wasMissed && callConfig.forwardAnsweredCall) {
@@ -96,7 +111,7 @@ class CallStateReceiver : BroadcastReceiver() {
                                     callerNumber = number,
                                     isMissed = false,
                                     durationSeconds = callDuration,
-                                    subId = receivingSubId,
+                                    subId = confirmedCallSub,
                                     timestamp = now
                                 )
                             }

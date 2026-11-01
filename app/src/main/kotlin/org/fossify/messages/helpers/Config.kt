@@ -17,6 +17,10 @@ class Config(context: Context) : BaseConfig(context) {
 
     fun getUseSIMIdAtNumber(number: String) = prefs.getInt(USE_SIM_ID_PREFIX + number, 0)
 
+    var showVerificationCodePopup: Boolean
+        get() = prefs.getBoolean("show_verification_code_popup", true)
+        set(value) = prefs.edit().putBoolean("show_verification_code_popup", value).apply()
+
     var hideFromRecentTasks: Boolean
         get() = prefs.getBoolean(HIDE_FROM_RECENT_TASKS, false)
         set(value) = prefs.edit().putBoolean(HIDE_FROM_RECENT_TASKS, value).apply()

@@ -50,6 +50,8 @@
     <application
         android:name=".App"
         android:allowBackup="true"
+        android:fullBackupContent="@xml/ingress_backup_rules"
+        android:dataExtractionRules="@xml/ingress_data_extraction_rules"
         android:appCategory="productivity"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_launcher_name"

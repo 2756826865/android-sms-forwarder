@@ -1247,7 +1247,8 @@ fun Context.showReceivedMessageNotification(
     bitmap: Bitmap?,
 ) {
     Handler(Looper.getMainLooper()).post {
-        notificationHelper.showMessageNotification(
+        runCatching {
+            notificationHelper.showMessageNotification(
             messageId = messageId,
             address = address,
             body = body,
@@ -1255,6 +1256,13 @@ fun Context.showReceivedMessageNotification(
             bitmap = bitmap,
             sender = senderName
         )
+        }
+            .onFailure {
+                android.util.Log.w(
+                    "IncomingSmsUi",
+                    "notification unavailable: ${it.javaClass.simpleName}",
+                )
+            }
     }
 }
 

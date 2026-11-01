@@ -119,6 +119,7 @@ fun refreshMessages() {
 }
 
 fun refreshConversations() {
+    ConversationRefreshRevision.changed()
     EventBus.getDefault().post(Events.RefreshConversations())
 }
 

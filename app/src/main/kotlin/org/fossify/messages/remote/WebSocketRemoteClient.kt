@@ -4,22 +4,22 @@ package org.fossify.messages.remote
 
 import android.content.Context
 import android.util.Log
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.Response
-import okhttp3.WebSocket
-import okhttp3.WebSocketListener
-import org.fossify.messages.forwarding.MultiForwardConfig
-import org.fossify.messages.forwarding.ForwardingUrlPolicy
-import org.fossify.messages.remote.repository.RemoteSourceConnectionState
-import org.fossify.messages.remote.repository.RemoteSourceRepository
-import org.fossify.messages.remote.repository.RemoteSourceType
-import org.json.JSONObject
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.Response
+import okhttp3.WebSocket
+import okhttp3.WebSocketListener
+import org.fossify.messages.forwarding.ForwardingUrlPolicy
+import org.fossify.messages.forwarding.MultiForwardConfig
+import org.fossify.messages.remote.repository.RemoteSourceConnectionState
+import org.fossify.messages.remote.repository.RemoteSourceRepository
+import org.fossify.messages.remote.repository.RemoteSourceType
+import org.json.JSONObject
 
 class WebSocketRemoteClient(
     context: Context,
@@ -33,6 +33,8 @@ class WebSocketRemoteClient(
         .pingInterval(20, TimeUnit.SECONDS)
         .build()
     private var webSocket: WebSocket? = null
+    private val connectionGeneration = java.util.concurrent.atomic.AtomicLong()
+    private val networkWakeup = ReconnectWakeup()
     private val running = AtomicBoolean(false)
     private val isAuthenticated = AtomicBoolean(false)
 
@@ -76,7 +78,7 @@ class WebSocketRemoteClient(
                 }
                 if (running.get()) {
                     try {
-                        Thread.sleep(retryDelayMs)
+                        networkWakeup.await(retryDelayMs)
                     } catch (_: InterruptedException) {
                         break
                     }
@@ -89,15 +91,24 @@ class WebSocketRemoteClient(
         }
     }
 
+    fun onNetworkChanged() {
+        if (!running.get()) return
+        webSocket?.cancel()
+        networkWakeup.signal()
+    }
+
     fun stop() {
         running.set(false)
+        connectionGeneration.incrementAndGet()
+        networkWakeup.signal()
         isAuthenticated.set(false)
         webSocket?.close(1000, "Client stopped")
         webSocket = null
-        sourceInstanceId?.let { activeClients.remove(it) }
+        sourceInstanceId?.let { activeClients.remove(it, this) }
     }
 
     private fun connectAndListen(url: String, token: String, activeInstanceId: String) {
+        val connectionToken = connectionGeneration.incrementAndGet()
         val latch = CountDownLatch(1)
         val policyUrl = when {
             url.startsWith("wss://") -> "https://${url.removePrefix("wss://")}"
@@ -114,7 +125,10 @@ class WebSocketRemoteClient(
         val repo = RemoteSourceRepository.getInstance(context)
         webSocket = http.newWebSocket(requestBuilder.build(), object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
-                // 无 Token 时由用户明确选择无鉴权模式；配置 Token 时必须等待应用层 auth_ok，
+                        if (!running.get() || connectionGeneration.get() != connectionToken) {
+                            return
+                        }
+                        // 无 Token 时由用户明确选择无鉴权模式；配置 Token 时必须等待应用层 auth_ok，
                 // 不能仅凭 HTTP Upgrade 成功就开放远程发信门禁。
                 val noAuthMode = token.isBlank()
                 isAuthenticated.set(noAuthMode)
@@ -129,18 +143,28 @@ class WebSocketRemoteClient(
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
-                if (running.get()) {
+                if (!running.get() || connectionGeneration.get() != connectionToken) {
+                            return
+                        }
+                        if (running.get()) {
                     handleIncomingJson(text, activeInstanceId)
                 }
             }
 
             override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
-                isAuthenticated.set(false)
+                        if (!running.get() || connectionGeneration.get() != connectionToken) {
+                            return
+                        }
+                        isAuthenticated.set(false)
                 webSocket.close(code, reason)
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-                isAuthenticated.set(false)
+                        if (!running.get() || connectionGeneration.get() != connectionToken) {
+                            latch.countDown()
+                            return
+                        }
+                        isAuthenticated.set(false)
                 if (running.get()) {
                     onStatus("连接已关闭：$reason")
                     if (activeInstanceId.isNotBlank()) {
@@ -151,7 +175,11 @@ class WebSocketRemoteClient(
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                isAuthenticated.set(false)
+                        if (!running.get() || connectionGeneration.get() != connectionToken) {
+                            latch.countDown()
+                            return
+                        }
+                        isAuthenticated.set(false)
                 if (running.get()) {
                     val err = "连接异常：${t.message ?: t.javaClass.simpleName}"
                     onStatus(err)

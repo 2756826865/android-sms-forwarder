@@ -2,6 +2,9 @@ package org.fossify.messages.remote
 
 import android.content.Context
 import android.util.Log
+import java.security.MessageDigest
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -11,19 +14,18 @@ import org.fossify.messages.remote.repository.RemoteSourceConnectionState
 import org.fossify.messages.remote.repository.RemoteSourceRepository
 import org.fossify.messages.remote.repository.RemoteSourceType
 import org.json.JSONObject
-import java.security.MessageDigest
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicBoolean
 
 class TelegramRemotePoller(
     private val context: Context,
     private val sourceInstanceId: String? = null,
     private val onStatus: (String) -> Unit,
+    private val isCurrent: () -> Boolean = { true },
 ) {
     private val http = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(35, TimeUnit.SECONDS)
         .build()
+    private val networkWakeup = ReconnectWakeup()
     private val running = AtomicBoolean(false)
     private val whitelistReplies = BotWhitelistReplyLimiter()
     private var lastUpdateId = 0L
@@ -36,19 +38,20 @@ class TelegramRemotePoller(
         lastUpdateId = offsetPrefs.getLong(offsetKey(), 0L)
         Thread {
             onStatus("已启动 Telegram Bot 长轮询 (offset=$lastUpdateId)…")
-            while (running.get()) {
+            while (running.get() && isCurrent()) {
                 try {
                     pollUpdates()
                 } catch (e: Throwable) {
                     Log.e(TAG, "TG poll error", e)
                     val err = "轮询异常：${e.message ?: e.javaClass.simpleName}"
                     onStatus(err)
-                    sourceInstanceId?.let { id ->
+                    sourceInstanceId?.takeIf { isCurrent() }
+                        ?.let { id ->
                         RemoteSourceRepository.getInstance(context)
                             .updateConnectionState(id, RemoteSourceConnectionState.ERROR, errorMessage = err)
                     }
                     try {
-                        Thread.sleep(5_000)
+                        networkWakeup.await(5_000)
                     } catch (_: InterruptedException) {
                         break
                     }
@@ -61,8 +64,16 @@ class TelegramRemotePoller(
         }
     }
 
+    fun onNetworkChanged() {
+        if (!running.get()) return
+        http.dispatcher.cancelAll()
+        networkWakeup.signal()
+    }
+
     fun stop() {
         running.set(false)
+        networkWakeup.signal()
+        http.dispatcher.cancelAll()
     }
 
     private var webhookChecked = false
@@ -108,13 +119,14 @@ class TelegramRemotePoller(
         val repo = RemoteSourceRepository.getInstance(context)
         val instance = sourceInstanceId?.let { repo.getSourceById(it) }
         if (instance == null || !instance.enabled) {
-            Thread.sleep(5_000)
+            networkWakeup.await(5_000)
             return
         }
 
         val token = instance.optString("botToken")
         if (token.isBlank()) {
             onStatus("缺少 Telegram Bot Token")
+            if (isCurrent())
             repo.updateConnectionState(instance.id, RemoteSourceConnectionState.CONFIG_REQUIRED)
             Thread.sleep(10_000)
             return
@@ -136,7 +148,8 @@ class TelegramRemotePoller(
             if (!response.isSuccessful || body.isBlank()) {
                 val err = "HTTP ${response.code}: $body"
                 onStatus(err)
-                repo.updateConnectionState(instance.id, RemoteSourceConnectionState.ERROR, errorCode = response.code, errorMessage = err)
+                if (isCurrent())
+                    repo.updateConnectionState(instance.id, RemoteSourceConnectionState.ERROR, errorCode = response.code, errorMessage = err)
                 return
             }
             val json = JSONObject(body)
@@ -144,15 +157,18 @@ class TelegramRemotePoller(
                 val desc = json.optString("description")
                 val err = "TG API 错误：$desc"
                 onStatus(err)
-                repo.updateConnectionState(instance.id, RemoteSourceConnectionState.ERROR, errorMessage = err)
+                if (isCurrent())
+                    repo.updateConnectionState(instance.id, RemoteSourceConnectionState.ERROR, errorMessage = err)
                 return
             }
 
             // 标记连接在线就绪
-            repo.updateConnectionState(instance.id, RemoteSourceConnectionState.READY)
+            if (isCurrent())
+                repo.updateConnectionState(instance.id, RemoteSourceConnectionState.READY)
 
             val result = json.optJSONArray("result") ?: return
             for (i in 0 until result.length()) {
+                if (!running.get()) return
                 val update = result.optJSONObject(i) ?: continue
                 val updateId = update.optLong("update_id", 0L)
                 val processResult = processUpdate(update, baseUrl, token, instance.id)
@@ -225,6 +241,7 @@ class TelegramRemotePoller(
             )
         )
 
+        if (!isCurrent()) return UpdateProcessResult.RETRYABLE_FAILURE
         val config = MultiForwardConfig(context)
         return try {
             when (val result = RemoteCommandProcessor.process(context, envelope)) {
@@ -257,9 +274,7 @@ class TelegramRemotePoller(
         private const val TAG = "TelegramRemotePoller"
         private const val PREFS_OFFSET = "tg_remote_offset"
 
-        /**
-         * 发送 Telegram 回复，返回真实的 HTTP 执行结果（同步执行，必须在后台线程/Worker中调用）
-         */
+        /** 发送 Telegram 回复，返回真实的 HTTP 执行结果（同步执行，必须在后台线程/Worker中调用） */
         fun sendReply(context: Context, chatId: String, text: String, sourceInstanceId: String): Boolean {
             if (chatId.isBlank() || text.isBlank() || sourceInstanceId.isBlank()) return false
             val repo = RemoteSourceRepository.getInstance(context)

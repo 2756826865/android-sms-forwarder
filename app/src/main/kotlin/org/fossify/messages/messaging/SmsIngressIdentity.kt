@@ -1,17 +1,16 @@
 package org.fossify.messages.messaging
 
 import android.content.Context
-import android.database.sqlite.SQLiteDatabase
-import android.database.sqlite.SQLiteOpenHelper
 import java.security.MessageDigest
 
-/** Durable correlation aliases, not delivery receipts. Never stores sender or SMS body.
- * A missing sent time only permits a unique, same-subscription match within two seconds.
- * Ambiguous matches remain separate: prefer a visible duplicate over losing a real SMS.
+/**
+ * Durable correlation aliases, not delivery receipts. Never stores sender or SMS body. A missing
+ * sent time only permits a unique, same-subscription match within two seconds. Ambiguous matches
+ * remain separate: prefer a visible duplicate over losing a real SMS.
  */
 internal class SmsIngressIdentity(context: Context) {
     data class Identity(val workId: String, val receivedAt: Long)
-    private val helper = Database(context.applicationContext)
+    private val helper = SmsIngressDatabase.get(context)
     fun broadcast(address: String, body: String, sentAt: Long, receivedAt: Long, sub: Int,
                   fingerprint: String, providerId: Long = -1): Identity =
         resolve(address, body, sentAt, receivedAt, sub, fingerprint, providerId)
@@ -37,26 +36,32 @@ internal class SmsIngressIdentity(context: Context) {
                 find("SELECT work_id, received_at FROM ingress WHERE fingerprint=?", arrayOf(it)).singleOrNull()
             }
             val byProvider = if (providerId > 0) find(
-                "SELECT work_id, received_at FROM ingress WHERE provider_id=? AND provider_date=? AND content_hash=? AND sub_id=?",
-                arrayOf(providerId.toString(), receivedAt.toString(), hash, sub.toString())).singleOrNull() else null
+                "SELECT work_id, received_at FROM ingress WHERE provider_id=? AND provider_date=? AND content_hash=?",
+                arrayOf(providerId.toString(), receivedAt.toString(), hash)).singleOrNull() else null
             // Preserve the old owner when a provider reuses a deleted row ID.
             if (providerId > 0 && byProvider == null) db.execSQL(
                 "UPDATE ingress SET provider_id=NULL, provider_date=NULL WHERE provider_id=?", arrayOf(providerId))
             var identity = byFingerprint ?: byProvider
-            if (identity == null && sub >= 0) {
+            if (identity == null) {
                 val opposite = if (fingerprint == null) "provider_id IS NULL AND fingerprint IS NOT NULL"
                     else "fingerprint IS NULL AND provider_id IS NOT NULL"
-                identity = find("""SELECT work_id, received_at FROM ingress WHERE content_hash=? AND sub_id=?
+                identity = find(
+                            """SELECT work_id, received_at FROM ingress WHERE content_hash=? AND (sub_id=? OR sub_id<0 OR CAST(? AS INTEGER)<0)
                     AND $opposite AND received_at BETWEEN ? AND ?
-                    AND (sent_at<=0 OR CAST(? AS INTEGER)<=0 OR sent_at=?) LIMIT 2""".trimIndent(),
-                    arrayOf(hash, sub.toString(), (receivedAt - 2000).toString(), (receivedAt + 2000).toString(),
+                    AND (sent_at<=0 OR CAST(? AS INTEGER)<=0 OR sent_at=?) LIMIT 2"""
+                                .trimIndent(),
+                    arrayOf(hash,
+                        sub.toString(), sub.toString(),
+                        (receivedAt - 2000).toString(), (receivedAt + 2000).toString(),
                         sentAt.toString(), sentAt.toString())).singleOrNull()
             }
             if (identity == null) {
                 val base = if (providerId > 0) "sms-$providerId" else "sms-minimal-$fingerprint"
                 val owner = if (find("SELECT work_id, received_at FROM ingress WHERE work_id=?", arrayOf(base)).isEmpty()) base
                     else "$base-${hash("$hash:$receivedAt:$sub").take(16)}"
-                db.execSQL("INSERT INTO ingress VALUES(?,?,?,?,?,?,?,?)",
+                db.execSQL(
+                    """INSERT INTO ingress(work_id,fingerprint,provider_id,content_hash,sent_at,
+                        received_at,sub_id,provider_date) VALUES(?,?,?,?,?,?,?,?)""".trimIndent(),
                     arrayOf<Any?>(owner, fingerprint, providerId.takeIf { it > 0 }, hash, sentAt, receivedAt, sub,
                         receivedAt.takeIf { providerId > 0 }))
                 identity = Identity(owner, receivedAt)
@@ -69,14 +74,8 @@ internal class SmsIngressIdentity(context: Context) {
             }
             db.setTransactionSuccessful()
             return identity
-        } finally { db.endTransaction(); helper.close() }
-    }
-    private class Database(context: Context) : SQLiteOpenHelper(context, "sms_ingress_identity.db", null, 1) {
-        override fun onCreate(db: SQLiteDatabase) {
-            db.execSQL(CREATE)
-            db.execSQL("CREATE INDEX ingress_content ON ingress(content_hash,sub_id,received_at)")
+        } finally { db.endTransaction()
         }
-        override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
     }
     companion object {
         private val lock = Any()

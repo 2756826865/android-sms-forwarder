@@ -1,43 +1,31 @@
 package org.fossify.messages.ui.compose.navigation
 
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Message
-import androidx.compose.material.icons.rounded.BarChart
-import androidx.compose.material.icons.rounded.Extension
-import androidx.compose.material.icons.rounded.Settings
-import androidx.compose.material.icons.rounded.Rule
-import org.fossify.messages.ui.compose.ksu.FloatingBottomBarItem
-import top.yukonga.miuix.kmp.blur.layerBackdrop
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.only
-import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.BarChart
+import androidx.compose.material.icons.rounded.Extension
+import androidx.compose.material.icons.rounded.Message
+import androidx.compose.material.icons.rounded.Rule
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -47,9 +35,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.fossify.messages.ui.compose.conversations.ConversationsScreen
@@ -57,9 +43,11 @@ import org.fossify.messages.ui.compose.conversations.ConversationsViewModel
 import org.fossify.messages.ui.compose.dashboard.DashboardScreen
 import org.fossify.messages.ui.compose.diagnostics.OperationsScreen
 import org.fossify.messages.ui.compose.forwarding.ChannelHubScreen
+import org.fossify.messages.ui.compose.ksu.FloatingBottomBarItem
 import org.fossify.messages.ui.dashboard.DashboardViewModel
 import org.fossify.messages.ui.diagnostics.DiagnosticsViewModel
 import org.fossify.messages.ui.messages.MessageCenterViewModel
+import top.yukonga.miuix.kmp.blur.layerBackdrop
 
 enum class GatewayTab(val title: String, val emoji: String) {
     MESSAGES("信息", "💬"),
@@ -77,7 +65,9 @@ private fun GatewayTab.navigationIcon() = when (this) {
     GatewayTab.RULES -> Icons.Rounded.Rule
 }
 
-/** Space reserved by gateway pages for the floating dock itself (system navigation inset excluded). */
+/**
+ * Space reserved by gateway pages for the floating dock itself (system navigation inset excluded).
+ */
 val GatewayDockContentPadding = 96.dp
 
 /** Extra lift applied to page FABs so they stay above the floating dock. */
@@ -94,6 +84,7 @@ fun GatewayApp(
     onRequestDefaultSmsRole: () -> Unit = {},
     onSwitchToClassic: () -> Unit = {}
 ) {
+    IncomingVerificationPopup()
     val dockBackdrop = if (android.os.Build.VERSION.SDK_INT >= 33) top.yukonga.miuix.kmp.blur.rememberLayerBackdrop() else null
     var selectedTab by remember { mutableStateOf(GatewayTab.MESSAGES) }
     var settingsTarget by remember { mutableStateOf<String?>(null) }
@@ -131,7 +122,9 @@ fun GatewayApp(
                     GatewayTab.DASHBOARD -> DashboardScreen(
                         viewModel = dashboardViewModel,
                         onRequestDefaultSms = onRequestDefaultSmsRole,
-                        onNavigateToOperations = { settingsTarget = "保活设置"; settingsRequest++; selectedTab = GatewayTab.OPERATIONS },
+                        onNavigateToOperations = { settingsTarget = "保活设置"
+                                settingsRequest++
+                                selectedTab = GatewayTab.OPERATIONS },
                         onSwitchToClassic = onSwitchToClassic
                     )
                     GatewayTab.CHANNELS -> ChannelHubScreen(
@@ -165,7 +158,9 @@ fun GatewayApp(
                     androidx.compose.material3.NavigationBar(Modifier.align(Alignment.BottomCenter)) {
                         tabs.forEach { tab ->
                             NavigationBarItem(selected = selectedTab == tab,
-                                onClick = { selectedTab = tab; if (tab == GatewayTab.OPERATIONS) { settingsTarget = null; settingsRequest = 0 } },
+                                onClick = { selectedTab = tab
+                                    if (tab == GatewayTab.OPERATIONS) { settingsTarget = null
+                                        settingsRequest = 0 } },
                                 icon = { androidx.compose.material3.Icon(tab.navigationIcon(), null) },
                                 label = { Text(tab.title) })
                         }
@@ -175,7 +170,9 @@ fun GatewayApp(
                         shape = CircleShape, color = MaterialTheme.colorScheme.surface, shadowElevation = 8.dp) {
                         Row(Modifier.fillMaxWidth().padding(4.dp)) {
                             tabs.forEach { tab ->
-                                Surface(onClick = { selectedTab = tab; if (tab == GatewayTab.OPERATIONS) { settingsTarget = null; settingsRequest = 0 } }, shape = CircleShape,
+                                Surface(onClick = { selectedTab = tab
+                                        if (tab == GatewayTab.OPERATIONS) { settingsTarget = null
+                                            settingsRequest = 0 } }, shape = CircleShape,
                                     color = if (selectedTab == tab) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else Color.Transparent,
                                     modifier = Modifier.weight(1f).height(56.dp)) {
                                     Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
@@ -193,7 +190,9 @@ fun GatewayApp(
                         .fillMaxWidth()
                         .padding(start = 28.dp, end = 28.dp, bottom = safeBottom + 8.dp),
                     selectedIndex = tabs.indexOf(selectedTab).coerceAtLeast(0),
-                    onSelected = { selectedTab = tabs[it]; if (selectedTab == GatewayTab.OPERATIONS) { settingsTarget = null; settingsRequest = 0 } },
+                    onSelected = { selectedTab = tabs[it]
+                            if (selectedTab == GatewayTab.OPERATIONS) { settingsTarget = null
+                                settingsRequest = 0 } },
                     backdrop = dockBackdrop,
                     tabsCount = tabs.size,
                     isBlurEnabled = org.fossify.messages.ui.compose.theme.LocalAppearance.current.blur && android.os.Build.VERSION.SDK_INT >= 33
@@ -214,5 +213,80 @@ fun GatewayApp(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun IncomingVerificationPopup() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val owner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    var code by remember { mutableStateOf<String?>(null) }
+    androidx.compose.runtime.DisposableEffect(owner) {
+        val subscriber =
+            object {
+                @org.greenrobot.eventbus.Subscribe(
+                    threadMode = org.greenrobot.eventbus.ThreadMode.MAIN
+                )
+                fun onCode(event: org.fossify.messages.models.Events.VerificationCodeReceived) {
+                    if (
+                        owner.lifecycle.currentState.isAtLeast(
+                            androidx.lifecycle.Lifecycle.State.RESUMED
+                        )
+                    ) {
+                        code = event.code
+                    }
+                }
+            }
+        val observer =
+            androidx.lifecycle.LifecycleEventObserver { _, event ->
+                if (event == androidx.lifecycle.Lifecycle.Event.ON_PAUSE) code = null
+            }
+        owner.lifecycle.addObserver(observer)
+        org.greenrobot.eventbus.EventBus.getDefault().register(subscriber)
+        onDispose {
+            owner.lifecycle.removeObserver(observer)
+            org.greenrobot.eventbus.EventBus.getDefault().unregister(subscriber)
+        }
+    }
+    code?.let { value ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { code = null },
+            shape = RoundedCornerShape(24.dp),
+            containerColor = MaterialTheme.colorScheme.surface,
+            titleContentColor = MaterialTheme.colorScheme.onSurface,
+            textContentColor = MaterialTheme.colorScheme.onSurface,
+            title = { Text("短信验证码") },
+            text = { Text(value) },
+            confirmButton = {
+                androidx.compose.material3.TextButton(
+                    onClick = {
+                        context.sendBroadcast(
+                            android.content
+                                .Intent(
+                                    context,
+                                    org.fossify.messages.receivers
+                                            .CopyVerificationCodeReceiver::class
+                                        .java,
+                                )
+                                .setAction(
+                                    org.fossify.messages.receivers.CopyVerificationCodeReceiver
+                                        .ACTION_COPY_CODE
+                                )
+                                .putExtra(
+                                    org.fossify.messages.receivers.CopyVerificationCodeReceiver
+                                        .EXTRA_CODE,
+                                    value,
+                                )
+                        )
+                        code = null
+                    }
+                ) {
+                    Text("复制验证码")
+                }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { code = null }) { Text("关闭") }
+            },
+        )
     }
 }

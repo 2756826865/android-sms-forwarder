@@ -2,10 +2,12 @@ package org.fossify.messages.remote.runtime
 
 import android.content.Context
 import android.util.Log
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 import org.fossify.messages.forwarding.MultiForwardConfig
-import org.fossify.messages.remote.DingTalkStreamClient
 import org.fossify.messages.remote.BotWhitelistReplyLimiter
 import org.fossify.messages.remote.BotWhitelistRequest
+import org.fossify.messages.remote.DingTalkStreamClient
 import org.fossify.messages.remote.EmailRemoteCommandPoller
 import org.fossify.messages.remote.FeishuStreamClient
 import org.fossify.messages.remote.RemoteControlPendingReceipt
@@ -21,8 +23,6 @@ import org.fossify.messages.services.EmailRemoteControlService
 import org.fossify.messages.services.FeishuRemoteControlService
 import org.fossify.messages.services.TelegramRemoteControlService
 import org.fossify.messages.services.WebSocketRemoteControlService
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * 远程指令来源唯一运行时管理器
@@ -35,6 +35,25 @@ import java.util.concurrent.atomic.AtomicBoolean
  * 5. 动态响应实例的新增、修改、启用、禁用与删除。
  */
 class RemoteSourceRuntimeManager private constructor(private val appContext: Context) {
+    private val networkMonitor = RemoteNetworkMonitor(appContext) { networkChanged() }
+
+    @Synchronized
+    private fun networkChanged() {
+        for (handle in runningHandles.values.toList()) {
+            if (!isHandleActive(handle)) continue
+            when (handle) {
+                is RuntimeHandle.Telegram -> handle.poller.onNetworkChanged()
+                is RuntimeHandle.WebSocket -> handle.client.onNetworkChanged()
+                is RuntimeHandle.Email -> handle.poller.onNetworkChanged()
+                is RuntimeHandle.DingTalk -> handle.client.onNetworkChanged()
+                is RuntimeHandle.WeCom -> handle.client.onNetworkChanged()
+                // Feishu's SDK owns automatic reconnect; do not start a competing SDK connection.
+                is RuntimeHandle.Feishu -> Unit
+                is RuntimeHandle.Passive -> Unit
+            }
+        }
+    }
+
     private val whitelistReplies = BotWhitelistReplyLimiter()
     private val whitelistReplyExecutor = java.util.concurrent.ThreadPoolExecutor(
         1, 1, 30, java.util.concurrent.TimeUnit.SECONDS,
@@ -113,9 +132,7 @@ class RemoteSourceRuntimeManager private constructor(private val appContext: Con
 
     private val runningHandles = ConcurrentHashMap<String, RuntimeHandle>()
 
-    /**
-     * 计算实例配置的特征指纹，用于检测配置是否被用户修改
-     */
+    /** 计算实例配置的特征指纹，用于检测配置是否被用户修改 */
     private fun computeConfigFingerprint(instance: RemoteSourceInstance): String {
         return "${instance.type.name}#${instance.configJson}#${instance.customCommandPrefix}#" +
             "${instance.whitelistEnabled}#" +
@@ -170,12 +187,11 @@ class RemoteSourceRuntimeManager private constructor(private val appContext: Con
         }
 
         // 3. 联动前台守护服务状态 (仅依据 Repository 事实源)
+        networkMonitor.update(runnableSources.any { it.type != RemoteSourceType.SMS })
         if (startForegroundServices) syncForegroundServices(runnableSources)
     }
 
-    /**
-     * 启动指定来源实例
-     */
+    /** 启动指定来源实例 */
     @Synchronized
     fun startSource(instance: RemoteSourceInstance) {
         if (!instance.enabled || !instance.hasValidCredentials()) return
@@ -192,14 +208,20 @@ class RemoteSourceRuntimeManager private constructor(private val appContext: Con
                 repo.updateConnectionState(instance.id, RemoteSourceConnectionState.READY)
             }
             RemoteSourceType.TELEGRAM -> {
+                var handleRef: RuntimeHandle.Telegram? = null
                 val poller = TelegramRemotePoller(
                     context = appContext,
                     sourceInstanceId = instance.id,
-                    onStatus = { status ->
-                        MultiForwardConfig(appContext).appendTelegramRemoteLog("[${instance.name}] $status")
+                        isCurrent = { handleRef?.let(::isHandleActive) == true },
+                        onStatus = { status ->
+                            if (handleRef?.let(::isHandleActive) != true)
+                                return@TelegramRemotePoller
+                            MultiForwardConfig(appContext).appendTelegramRemoteLog("[${instance.name}] $status")
                     }
                 )
-                runningHandles[instance.id] = RuntimeHandle.Telegram(instance.id, fingerprint, poller)
+                val handle = RuntimeHandle.Telegram(instance.id, fingerprint, poller)
+                handleRef = handle
+                runningHandles[instance.id] = handle
                 poller.start()
             }
             RemoteSourceType.WEBSOCKET -> {
@@ -381,7 +403,9 @@ class RemoteSourceRuntimeManager private constructor(private val appContext: Con
             }
             RemoteSourceType.EMAIL -> {
                 var handleRef: RuntimeHandle.Email? = null
-                val poller = EmailRemoteCommandPoller(appContext, sourceInstanceId = instance.id)
+                val poller = EmailRemoteCommandPoller(appContext, sourceInstanceId = instance.id,
+                        isCurrent = { handleRef?.let(::isHandleActive) == true },
+                    )
                 val handle = RuntimeHandle.Email(instance.id, fingerprint, poller)
                 handleRef = handle
                 runningHandles[instance.id] = handle
@@ -431,9 +455,7 @@ class RemoteSourceRuntimeManager private constructor(private val appContext: Con
         return !handle.isStopped.get() && runningHandles[handle.instanceId] === handle
     }
 
-    /**
-     * 停止指定来源实例
-     */
+    /** 停止指定来源实例 */
     @Synchronized
     fun stopSource(instanceId: String) {
         val handle = runningHandles.remove(instanceId)
@@ -450,9 +472,7 @@ class RemoteSourceRuntimeManager private constructor(private val appContext: Con
         }
     }
 
-    /**
-     * 原路回执派发 (严格依据 sourceInstanceId 路由，禁止 cross-instance 回退)
-     */
+    /** 原路回执派发 (严格依据 sourceInstanceId 路由，禁止 cross-instance 回退) */
     fun sendDirectReceipt(pending: RemoteControlPendingReceipt, status: String, body: String): Boolean {
         val sourceInstanceId = pending.sourceInstanceId
         if (sourceInstanceId.isBlank()) return false
@@ -545,7 +565,8 @@ class RemoteSourceRuntimeManager private constructor(private val appContext: Con
                 } finally {
                     restoringAfterServiceRestart.set(false)
                 }
-            }.apply { name = "remote-source-restore"; start() }
+            }.apply { name = "remote-source-restore"
+                    start() }
         }
 
         @Volatile

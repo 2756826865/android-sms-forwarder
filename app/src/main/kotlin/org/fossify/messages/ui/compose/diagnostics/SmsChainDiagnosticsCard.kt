@@ -95,6 +95,7 @@ fun SmsChainDiagnosticsCard() {
                         val chainReport = if (operations.isEmpty()) "暂无影子记录，请检查影子记录开关。"
                         else operationReports.joinToString("\n\n")
                         listOf(DiagnosticPanel("SIM 卡位映射", org.fossify.messages.messaging.SubscriptionResolver.describeMapping(context), "本次读取"),
+                            DiagnosticPanel("接收与恢复", receivingRecoverySummary(context), "本地观察"),
                             DiagnosticPanel("配置体检", auditReport, if (issues.isEmpty()) "检查范围内正常" else "发现${issues.size}项", issues.isNotEmpty()),
                             DiagnosticPanel("待发队列", queueReport, "待调度${works.count { it.state == androidx.work.WorkInfo.State.ENQUEUED }}"),
                             DiagnosticPanel("短信链路记录", chainReport, if (operations.isEmpty()) "暂无记录" else "${operations.size}条"),
@@ -161,4 +162,16 @@ private fun DiagnosticBadge(label: String, warning: Boolean = false) {
             style = androidx.compose.material3.MaterialTheme.typography.labelMedium,
             color = if (warning) colors.onErrorContainer else colors.onSecondaryContainer)
     }
+}
+
+private fun receivingRecoverySummary(context: android.content.Context): String {
+    val p = context.getSharedPreferences("receiving_identity_diagnostics", android.content.Context.MODE_PRIVATE)
+    val identity = "状态=${p.getString("status", "未观察")}；来源=${p.getString("source", "")}；原因=${p.getString("reason", "")}"
+    return listOf(
+        identity,
+        org.fossify.messages.services.SmsKeepAliveService.observedStatus(context),
+        org.fossify.messages.messaging.SmsRecoveryScanState(context).observedStatus(),
+        org.fossify.messages.messaging.SmsIngressRecovery(context).statusSummary(),
+        org.fossify.messages.messaging.SmsIngressRecovery(context).phaseSummary(),
+    ).joinToString("\n")
 }

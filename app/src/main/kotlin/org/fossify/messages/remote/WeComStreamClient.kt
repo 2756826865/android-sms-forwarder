@@ -3,12 +3,6 @@
 package org.fossify.messages.remote
 
 import android.util.Log
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.Response
-import okhttp3.WebSocket
-import okhttp3.WebSocketListener
-import org.json.JSONObject
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
@@ -18,51 +12,30 @@ import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.Response
+import okhttp3.WebSocket
+import okhttp3.WebSocketListener
+import org.json.JSONObject
 
 /**
  * 企业微信官方智能机器人 WebSocket 长连接客户端。
  *
  * 协议严格以 WeCom 官方开源 SDK (aibot-node-sdk / wecom-aibot-python-sdk) 源码为唯一依据。
  * 1. 默认 WebSocket URL：wss://openws.work.weixin.qq.com
- * 2. 鉴权帧：
- *    cmd: "aibot_subscribe"
- *    headers: { "req_id": "aibot_subscribe_..." }
- *    body: { "bot_id": "...", "secret": "..." }
- * 3. 心跳帧：
- *    cmd: "ping"
- *    headers: { "req_id": "ping_..." }
- *    body: {}
- *    间隔 30 秒，未收到 pong 计数累加，>= 2 时触发重连。
- * 4. 消息回调帧：
- *    cmd: "aibot_msg_callback"
- *    headers: { "req_id": "..." }
- *    body: {
- *       "msgid": "...",
- *       "chattype": "single" | "group",
- *       "chatid": "...",
- *       "from": { "userid": "..." },
- *       "msgtype": "text",
- *       "text": { "content": "..." }
- *    }
- * 5. 被动回复：
- *    cmd: "aibot_respond_msg"
- *    headers: { "req_id": [回调中收到的原始 req_id] }
- *    body: {
- *       "msgtype": "stream",
- *       "stream": { "id": "...", "finish": true, "content": "..." }
- *    }
- * 6. 主动推送：
- *    cmd: "aibot_send_msg"
- *    headers: { "req_id": "aibot_send_msg_..." }
- *    body: {
- *       "chatid": "...",
- *       "msgtype": "markdown",
- *       "markdown": { "content": "..." }
- *    }
- * 7. 事件帧 (服务端踢线通知)：
- *    cmd: "aibot_event_callback"
- *    body: { "event": { "eventtype": "disconnected_event" } }
- *    当相同 bot_id 建立新连接时触发，此时必须停止重连并标记下线。
+ * 2. 鉴权帧： cmd: "aibot_subscribe" headers: { "req_id": "aibot_subscribe_..." } body: { "bot_id":
+ *    "...", "secret": "..." }
+ * 3. 心跳帧： cmd: "ping" headers: { "req_id": "ping_..." } body: {} 间隔 30 秒，未收到 pong 计数累加，>= 2 时触发重连。
+ * 4. 消息回调帧： cmd: "aibot_msg_callback" headers: { "req_id": "..." } body: { "msgid": "...",
+ *    "chattype": "single" | "group", "chatid": "...", "from": { "userid": "..." }, "msgtype":
+ *    "text", "text": { "content": "..." } }
+ * 5. 被动回复： cmd: "aibot_respond_msg" headers: { "req_id": [回调中收到的原始 req_id] } body: { "msgtype":
+ *    "stream", "stream": { "id": "...", "finish": true, "content": "..." } }
+ * 6. 主动推送： cmd: "aibot_send_msg" headers: { "req_id": "aibot_send_msg_..." } body: { "chatid":
+ *    "...", "msgtype": "markdown", "markdown": { "content": "..." } }
+ * 7. 事件帧 (服务端踢线通知)： cmd: "aibot_event_callback" body: { "event": { "eventtype":
+ *    "disconnected_event" } } 当相同 bot_id 建立新连接时触发，此时必须停止重连并标记下线。
  */
 class WeComStreamClient(
     private val botId: String,
@@ -88,6 +61,8 @@ class WeComStreamClient(
         .build()
 
     private val reconnectBackoff = StreamReconnectBackoff()
+    private val connectionGeneration = java.util.concurrent.atomic.AtomicLong()
+    private val networkWakeup = ReconnectWakeup()
     private val running = AtomicBoolean(false)
     private val isAuthenticated = AtomicBoolean(false)
     private val isKickedOff = AtomicBoolean(false)
@@ -118,8 +93,16 @@ class WeComStreamClient(
         connectLoop()
     }
 
+    fun onNetworkChanged() {
+        if (!running.get()) return
+        webSocket?.cancel()
+        networkWakeup.signal()
+    }
+
     fun stop() {
         running.set(false)
+        connectionGeneration.incrementAndGet()
+        networkWakeup.signal()
         isAuthenticated.set(false)
         stopHeartbeat()
         pendingAcks.clear()
@@ -145,7 +128,7 @@ class WeComStreamClient(
 
                 if (running.get() && !isKickedOff.get()) {
                     try {
-                        Thread.sleep(reconnectBackoff.nextDelayMillis())
+                        networkWakeup.await(reconnectBackoff.nextDelayMillis())
                     } catch (_: InterruptedException) {
                         break
                     }
@@ -159,6 +142,7 @@ class WeComStreamClient(
     }
 
     private fun connectAndListen() {
+        val connectionToken = connectionGeneration.incrementAndGet()
         stopHeartbeat()
         webSocket?.close(1000, "Reconnecting")
         webSocket = null
@@ -168,7 +152,10 @@ class WeComStreamClient(
 
         webSocket = http.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(ws: WebSocket, response: Response) {
-                if (!running.get() || isKickedOff.get()) {
+                if (!running.get() || connectionGeneration.get() != connectionToken) {
+                            return
+                        }
+                        if (!running.get() || isKickedOff.get()) {
                     ws.close(1000, "Closed")
                     return
                 }
@@ -177,21 +164,35 @@ class WeComStreamClient(
             }
 
             override fun onMessage(ws: WebSocket, text: String) {
-                if (!running.get()) return
+                if (!running.get() || connectionGeneration.get() != connectionToken) {
+                            return
+                        }
+                        if (!running.get()) return
                 handleFrame(ws, text)
             }
 
             override fun onClosing(ws: WebSocket, code: Int, reason: String) {
-                ws.close(1000, null)
+                        if (!running.get() || connectionGeneration.get() != connectionToken) {
+                            return
+                        }
+                        ws.close(1000, null)
                 closeLatch.countDown()
             }
 
             override fun onClosed(ws: WebSocket, code: Int, reason: String) {
-                closeLatch.countDown()
+                        if (!running.get() || connectionGeneration.get() != connectionToken) {
+                            closeLatch.countDown()
+                            return
+                        }
+                        closeLatch.countDown()
             }
 
             override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
-                Log.w(TAG, "WebSocket failure: ${t.message}")
+                        if (!running.get() || connectionGeneration.get() != connectionToken) {
+                            closeLatch.countDown()
+                            return
+                        }
+                        Log.w(TAG, "WebSocket failure: ${t.message}")
                 closeLatch.countDown()
             }
         })
@@ -394,8 +395,7 @@ class WeComStreamClient(
     }
 
     /**
-     * 原路回复被动响应。
-     * 官方协议：cmd = "aibot_respond_msg"，headers = { req_id: <回调的req_id> }，body = stream 类型
+     * 原路回复被动响应。 官方协议：cmd = "aibot_respond_msg"，headers = { req_id: <回调的req_id> }，body = stream 类型
      */
     fun sendReply(callbackReqId: String, content: String): Boolean {
         if (!isAuthenticated.get()) return false
@@ -442,8 +442,8 @@ class WeComStreamClient(
     }
 
     /**
-     * 主动向群聊或私聊推送消息。
-     * 官方协议：cmd = "aibot_send_msg"，headers = { req_id }，body = { chatid, msgtype: "markdown", markdown: { content } }
+     * 主动向群聊或私聊推送消息。 官方协议：cmd = "aibot_send_msg"，headers = { req_id }，body = { chatid, msgtype:
+     * "markdown", markdown: { content } }
      */
     fun isReady(): Boolean = running.get() && isAuthenticated.get() && webSocket != null
 

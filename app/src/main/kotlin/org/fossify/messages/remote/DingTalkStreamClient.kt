@@ -1,6 +1,8 @@
 package org.fossify.messages.remote
 
 import android.util.Log
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -10,8 +12,6 @@ import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import org.json.JSONArray
 import org.json.JSONObject
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicBoolean
 
 class DingTalkStreamClient(
     private val clientId: String,
@@ -27,6 +27,8 @@ class DingTalkStreamClient(
         .pingInterval(20, TimeUnit.SECONDS)
         .build()
     private var webSocket: WebSocket? = null
+    private val connectionGeneration = java.util.concurrent.atomic.AtomicLong()
+    private val networkWakeup = ReconnectWakeup()
     private val running = AtomicBoolean(false)
 
     fun start() {
@@ -34,8 +36,16 @@ class DingTalkStreamClient(
         connectLoop()
     }
 
+    fun onNetworkChanged() {
+        if (!running.get()) return
+        webSocket?.cancel()
+        networkWakeup.signal()
+    }
+
     fun stop() {
         running.set(false)
+        connectionGeneration.incrementAndGet()
+        networkWakeup.signal()
         webSocket?.close(1000, "client stop")
         webSocket = null
     }
@@ -62,7 +72,7 @@ class DingTalkStreamClient(
                 }
                 if (running.get()) {
                     try {
-                        Thread.sleep(backoff.nextDelayMillis())
+                        networkWakeup.await(backoff.nextDelayMillis())
                     } catch (_: InterruptedException) {
                         break
                     }
@@ -76,6 +86,7 @@ class DingTalkStreamClient(
     }
 
     private fun openAndListen(backoff: StreamReconnectBackoff) {
+        val connectionToken = connectionGeneration.incrementAndGet()
         webSocket?.close(1000, "reconnecting")
         webSocket = null
         val openResult = openConnection()
@@ -86,31 +97,48 @@ class DingTalkStreamClient(
         val request = Request.Builder().url(wsUrl).build()
         webSocket = http.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
-                if (running.get()) {
+                if (!running.get() || connectionGeneration.get() != connectionToken) {
+                            return
+                        }
+                        if (running.get()) {
                     backoff.onConnected()
                     onStatus("已连接 · 等待机器人消息")
                 }
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
-                if (running.get()) {
+                if (!running.get() || connectionGeneration.get() != connectionToken) {
+                            return
+                        }
+                        if (running.get()) {
                     handleMessage(webSocket, text)
                 }
             }
 
             override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
-                webSocket.close(code, reason)
+                        if (!running.get() || connectionGeneration.get() != connectionToken) {
+                            return
+                        }
+                        webSocket.close(code, reason)
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-                if (running.get()) {
+                        if (!running.get() || connectionGeneration.get() != connectionToken) {
+                            latch.countDown()
+                            return
+                        }
+                        if (running.get()) {
                     onStatus("连接已断开：$reason")
                 }
                 latch.countDown()
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                if (running.get()) {
+                        if (!running.get() || connectionGeneration.get() != connectionToken) {
+                            latch.countDown()
+                            return
+                        }
+                        if (running.get()) {
                     val msg = t.message ?: t.javaClass.simpleName
                     val tip = if (msg.contains("connection abort", ignoreCase = true)) {
                         "连接被服务端终止 · 请检查钉钉开放平台后台【消息接收模式】是否已选为【Stream模式】"
@@ -190,7 +218,8 @@ class DingTalkStreamClient(
 
                 val identityKind = DingTalkWhitelistRequest.parseKind(content)
                 if (identityKind != null) {
-                    // ACK before the HTTP reply; an unlisted user's ID request must not reach the SMS path.
+                    // ACK before the HTTP reply; an unlisted user's ID request must not reach the
+                    // SMS path.
                     reply(webSocket, messageId, JSONObject().put("response", JSONObject.NULL))
                     onWhitelistRequest(
                         DingTalkWhitelistRequest(

@@ -15,11 +15,16 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
-import androidx.work.workDataOf
+import java.util.concurrent.CancellationException
+import java.util.concurrent.TimeUnit
+import kotlin.coroutines.coroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import org.fossify.messages.extensions.conversationsDB
 import org.fossify.messages.extensions.getNameAndPhotoFromPhoneNumber
 import org.fossify.messages.extensions.getNotificationBitmap
 import org.fossify.messages.extensions.messagesDB
-import org.fossify.messages.extensions.conversationsDB
 import org.fossify.messages.extensions.showReceivedMessageNotification
 import org.fossify.messages.extensions.syncThreadToLocal
 import org.fossify.messages.forwarding.ForwardingChannels
@@ -30,15 +35,11 @@ import org.fossify.messages.forwarding.ForwardingRulesConfig
 import org.fossify.messages.forwarding.MultiChannelForwardWorker
 import org.fossify.messages.forwarding.MultiForwardConfig
 import org.fossify.messages.forwarding.PushPlusConfig
-import org.fossify.messages.forwarding.PushPlusWorker
 import org.fossify.messages.forwarding.RuleTemplateMode
+import org.fossify.messages.helpers.ShadowRepository
 import org.fossify.messages.helpers.refreshConversations
 import org.fossify.messages.helpers.refreshMessages
-import org.fossify.messages.remote.RemoteSmsCommandProcessor
 import org.fossify.messages.services.IncomingSmsService
-import java.util.concurrent.CancellationException
-import java.util.concurrent.TimeUnit
-import org.fossify.messages.helpers.ShadowRepository
 
 /** Repairs SMS broadcasts delayed or suppressed by aggressive OEM background policies. */
 class SmsRecoveryWorker(
@@ -46,7 +47,26 @@ class SmsRecoveryWorker(
     params: WorkerParameters,
 ) : CoroutineWorker(appContext, params) {
 
-    override suspend fun doWork(): Result {
+    override suspend fun doWork(): Result = scanMutex.withLock {
+        try {
+            runScan()
+        } finally {
+            if (isStopped) Log.i(TAG, "recovery stopped reason=$stopReason; checkpoint retained")
+        }
+    }
+
+    // Legacy channel dispatch remains in one place so queue/receipt semantics are not rewritten in
+    // this repair.
+    @Suppress("LongMethod", "CyclomaticComplexMethod", "NestedBlockDepth")
+    private suspend fun runScan(): Result {
+        val journal = SmsIngressRecovery(applicationContext)
+        journal.cleanCompleted()
+        val drainStarted = android.os.SystemClock.elapsedRealtime()
+        for (intent in journal.pending()) {
+            coroutineContext.ensureActive()
+            if (android.os.SystemClock.elapsedRealtime() - drainStarted >= DRAIN_BUDGET_MS) break
+            IncomingSmsService.processMinimal(applicationContext, intent)
+        }
         if (ContextCompat.checkSelfPermission(applicationContext, Manifest.permission.READ_SMS) !=
             PackageManager.PERMISSION_GRANTED
         ) return Result.success()
@@ -56,24 +76,29 @@ class SmsRecoveryWorker(
 
         val prefs = applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val now = System.currentTimeMillis()
-        // 首次安装（水位不存在）时只登记水位、不回溯：否则新装用户第一次扫描就会把过去 N 天的
-        // 历史短信全量转发到所有通道并执行其中的远程指令（P0-5 短信轰炸）。
         val storedLastChecked = prefs.getLong(KEY_LAST_CHECKED, 0L)
-        // 首次运行 = 水位尚未登记（新装 / prefs 被清）。此时一律只登记水位，不回放任何历史短信。
-        val firstRun = storedLastChecked <= 0L
-        val lastChecked = if (firstRun) now else storedLastChecked
-        val baseSince = if (firstRun) {
-            now
-        } else {
-            (lastChecked - OVERLAP_MS).coerceAtLeast(now - MAX_LOOKBACK_MS)
-        }
-        // 一次性深回溯入参（见 enqueueFullResync）。只影响本次扫描，不写回水位。
-        // 首次运行时忽略该入参：开机广播 / 回前台都会触发 FullResync，若不忽略，新装用户在
-        // 首次扫描时仍会回放 FULL_RESYNC_LOOKBACK_MS 内的历史短信（场景 B 的残留路径）。
-        val forcedSince = if (firstRun) 0L else inputData.getLong(KEY_FORCED_SINCE, 0L)
-        val since = if (forcedSince > 0L) minOf(baseSince, forcedSince) else baseSince
+        val scanState = SmsRecoveryScanState(applicationContext)
+        val forcedSince = inputData.getLong(KEY_FORCED_SINCE, 0L)
+        val legacyRequest = runAttemptCount == 0 && !inputData.getBoolean("v128_trigger", false)
+        if (forcedSince > 0 && storedLastChecked > 0 && legacyRequest)
+            scanState.request(forcedSince)
+        val scanIdle = !scanState.hasRequest() && !scanState.hasActivePage()
+        if (inputData.getBoolean("v128_trigger", false) && scanIdle && !journal.hasPending())
+            return Result.success()
+        val installAt =
+            applicationContext.packageManager
+                .getPackageInfo(applicationContext.packageName, 0)
+                .firstInstallTime
+        val page = scanState.begin(storedLastChecked, now, installAt)
+        val since = page.date
+        val scanStarted = android.os.SystemClock.elapsedRealtime()
+        var scanned = 0
+        var lastDate = page.date
+        var lastId = page.id
+        var exhausted = true
         // 只取 id 列，避免数万条短信时把整表（含正文）加载进内存导致 OOM
-        val localIds by lazy { applicationContext.messagesDB.getAllIds().toHashSet() }
+        val forwardedWorkIds by lazy {
+            ForwardingHistoryStore(applicationContext).workIds().toSet() }
         // P1-A：恢复扫描**不能**只用 "id in localIds" 判重。
         // 降级路径的步骤 3（写 Room）与步骤 4（入队转发）各有独立的预算闸门：步骤 3 成功、步骤 4
         // 被闸门拦掉时，消息已经在 Room 里却**从未入队转发**。此时只用 id 判重会让恢复扫描永远
@@ -82,7 +107,6 @@ class SmsRecoveryWorker(
         // 排队记录只证明已登记，不能证明已送达；无法证明安全的旧任务会标记未知，等待用户核实。
         // 扫描开始时读一次即可：扫描中自己新产生的记录不需要在本次扫描内立刻可见（每行只处理一次）。
         val forwardedMessageIds by lazy { readForwardedMessageIds() }
-        var newestSeen = lastChecked
         var repairedAny = false
 
         val projection = arrayOf(
@@ -95,8 +119,13 @@ class SmsRecoveryWorker(
             Telephony.Sms.SUBSCRIPTION_ID,
             Telephony.Sms.READ,
         )
-        val selection = "${Telephony.Sms.TYPE}=? AND ${Telephony.Sms.DATE}>?"
-        val args = arrayOf(Telephony.Sms.MESSAGE_TYPE_INBOX.toString(), since.toString())
+        val selection =
+            "${Telephony.Sms.TYPE}=? AND (${Telephony.Sms.DATE}>? OR " +
+                "(${Telephony.Sms.DATE}=? AND ${Telephony.Sms._ID}>?)) AND ${Telephony.Sms.DATE}<=?"
+        val args = arrayOf(Telephony.Sms.MESSAGE_TYPE_INBOX.toString(), since.toString(),
+                since.toString(),
+                page.id.toString(),
+                page.until.toString())
 
         // 显式 try/catch 而非 runCatching：runCatching 会把 CancellationException 一起吞掉，
         // 使 WorkManager 的取消无法正常传播（协程取消语义被破坏）。这里先原样重抛。
@@ -106,7 +135,7 @@ class SmsRecoveryWorker(
                 projection,
                 selection,
                 args,
-                "${Telephony.Sms.DATE} ASC",
+                    "${Telephony.Sms.DATE} ASC, ${Telephony.Sms._ID} ASC",
             )?.use { cursor ->
                 val idIndex = cursor.getColumnIndexOrThrow(Telephony.Sms._ID)
                 val addressIndex = cursor.getColumnIndexOrThrow(Telephony.Sms.ADDRESS)
@@ -122,32 +151,65 @@ class SmsRecoveryWorker(
                 ShadowRepository.incrementCounter(applicationContext, "RECOVERY_SCAN_STARTED")
                 
                 while (cursor.moveToNext()) {
-                    val id = cursor.getLong(idIndex)
-                    val address = cursor.getString(addressIndex).orEmpty()
+                        coroutineContext.ensureActive()
+                        if (
+                            scanned >= SCAN_PAGE_SIZE ||
+                                android.os.SystemClock.elapsedRealtime() - scanStarted >=
+                                    SCAN_BUDGET_MS
+                        ) {
+                            exhausted = false
+                            break
+                        }
+                        // Previous row is complete (including all its skip paths) before advancing
+                        // its checkpoint.
+                        if (scanned > 0) scanState.checkpoint(page, lastDate, lastId)
+                        scanned++
+                        kotlinx.coroutines.yield()
+                        synchronized(SmsIngressJournal.processLock) {
+                            val id = cursor.getLong(idIndex)
+                            val alreadyLocal =
+                                applicationContext.messagesDB.getMessageWithId(id) != null
+                            val address = cursor.getString(addressIndex).orEmpty()
                     val body = cursor.getString(bodyIndex).orEmpty()
                     val date = cursor.getLong(dateIndex)
                     val threadId = cursor.getLong(threadIndex)
-                    val subscriptionId = if (subIndex >= 0) {
+                    val rawSubscriptionId = if (subIndex >= 0) {
                         cursor.getInt(subIndex)
                     } else {
                         SubscriptionManager.INVALID_SUBSCRIPTION_ID
                     }
-                    val isRead = cursor.getInt(readIndex) == 1
-                    newestSeen = maxOf(newestSeen, date)
-                    
-                    if (address.isBlank()) {
+                    val subscriptionId =
+                                ReceivingProviderIdentity.confirmedSubscription(
+                                    applicationContext,
+                                    id,
+                                    rawSubscriptionId,
+                                )
+                            val isRead = cursor.getInt(readIndex) == 1
+                            lastDate = date
+                            lastId = id
+                            if (threadId > 0L) {
+                                applicationContext.syncThreadToLocal(threadId)
+                                refreshMessages()
+                                refreshConversations()
+                            }
+
+                            if (address.isBlank()) {
                         ShadowRepository.incrementCounter(applicationContext, "RECOVERY_ITEM_SKIPPED")
-                        continue
-                    }
+                                return@synchronized
+                            }
 
                     val ingress = SmsIngressIdentity(applicationContext).provider(address, body,
                         if (sentIndex >= 0) cursor.getLong(sentIndex) else 0L, date, subscriptionId, id)
                     val uniqueId = ingress.workId
-                    val alreadyLocal = id in localIds
-                    // A previous sync may have written the message but failed before creating
-                    // conversation metadata. Repair that UI-only gap even for forwarded/filtered
-                    // messages; keep forwarding and command replay decisions below unchanged.
-                    if (alreadyLocal && threadId > 0L && !hasLocalConversation.getOrPut(threadId) {
+                            if (journal.ownsProvider(id, date) || journal.completedWork(uniqueId))
+                                return@synchronized
+                            // A previous sync may have written the message but failed before
+                            // creating
+                            // conversation metadata. Repair that UI-only gap even for
+                            // forwarded/filtered
+                            // messages; keep forwarding and command replay decisions below
+                            // unchanged.
+                            if (alreadyLocal && threadId > 0L && !hasLocalConversation.getOrPut(threadId) {
                             applicationContext.conversationsDB.getConversationWithThreadId(threadId) != null
                         }) {
                         threadIdsToSync.add(threadId)
@@ -158,7 +220,7 @@ class SmsRecoveryWorker(
                     // 见 IncomingSmsService.isFilteredCheap 的注释）。
                     // 必须放在转发之前：否则降级路径命中过滤、且 Room 写入被预算闸门跳过时，
                     // 这条短信会被本轮扫描当成"新短信"，绕过用户规则直接转发到 TG / Webhook / 邮件。
-                    val filteredOut = IncomingSmsService.isFilteredCheap(applicationContext, address, body)
+                    val filteredOut = IncomingSmsService.isFilteredForReceive(applicationContext, address, body)
 
                     if (filteredOut) {
                         // 三路径统一语义：过滤只决定"是否转发/通知"，不决定"是否入库"。
@@ -169,22 +231,29 @@ class SmsRecoveryWorker(
                             threadIdsToSync.add(threadId)
                             repairedAny = true
                         }
-                        continue
-                    }
+                                return@synchronized
+                            }
 
-                    if (uniqueId == "sms-$id" && id in forwardedMessageIds) {
-                        if (!alreadyLocal) { threadIdsToSync.add(threadId); repairedAny = true }
+                            val providerAlreadyForwarded =
+                                uniqueId == "sms-$id" && id in forwardedMessageIds
+                            val ownerAlreadyForwarded = forwardedWorkIds.any {
+                                it == uniqueId || it.startsWith("$uniqueId-")
+                            }
+                            if (providerAlreadyForwarded || ownerAlreadyForwarded) {
+                        if (!alreadyLocal) { threadIdsToSync.add(threadId)
+                                    repairedAny = true }
                         ShadowRepository.incrementCounter(applicationContext, "RECOVERY_ITEM_SKIPPED")
-                        continue
-                    }
+                                return@synchronized
+                            }
 
                     // alreadyLocal 但没登记过转发 = 降级路径"写了 Room 却没来得及转发"（P1-A 的洞）。
                     // 这种情形只补转发，**不重复通知、不消费远程指令**：降级路径本来就把这两件事
                     // 列为"明确不做"，恢复路径无权替它补做决定——远程指令会真的发出短信，是风险
                     // 最高的操作，宁可不执行（缺一次指令是 fail-safe，误执行不是）。
                     val backfillForwardingOnly = alreadyLocal || ingress.workId.startsWith("sms-minimal-")
-                    // Suppressing command/notification replay must not suppress missing UI data.
-                    if (!alreadyLocal && threadId > 0L) threadIdsToSync.add(threadId)
+                            // Suppressing command/notification replay must not suppress missing UI
+                            // data.
+                            if (!alreadyLocal && threadId > 0L) threadIdsToSync.add(threadId)
                     if (backfillForwardingOnly) {
                         ShadowRepository.incrementCounter(applicationContext, "RECOVERY_FORWARD_BACKFILLED")
                     } else {
@@ -200,11 +269,22 @@ class SmsRecoveryWorker(
                         if (pushPlus.enabled) add(ForwardingChannels.PUSHPLUS)
                         addAll(multiConfig.enabledChannelIds())
                     }
-                    val simSlotIndex = resolveSimSlotIndex(subscriptionId)
-                    // P2-E：与 FULL 路径一样传 resolveContent，否则规则配了自定义模板时，
+                    val historicalSim =
+                                org.fossify.messages.forwarding.ForwardingSimSnapshot(
+                                    -1,
+                                    "未知接收卡（历史卡槽不可核验）",
+                                    "",
+                                    "",
+                                    subscriptionId,
+                                    source = "provider_recovery",
+                                    observedAt = date,
+                                )
+                            val simSlotIndex: Int? = null
+                            // P2-E：与 FULL 路径一样传 resolveContent，否则规则配了自定义模板时，
                     // 恢复补发的正文会退回默认模板（与正常链路不一致）。
                     val ruleDecision = if (rulesConfig.enabled) {
-                        ForwardingRuleEngine(rulesConfig.rules).evaluate(
+                        ForwardingRuleEngine(rulesConfig.rules) { date }
+                                        .evaluate(
                             sender = address,
                             body = body,
                             subscriptionId = subscriptionId,
@@ -222,7 +302,8 @@ class SmsRecoveryWorker(
                                         body = text,
                                         receivedAt = date,
                                         subscriptionId = subscriptionId,
-                                    )
+                                                        simSnapshot = historicalSim,
+                                                    )
                                 } else {
                                     ForwardingMessageFormatter.format(
                                         context = applicationContext,
@@ -230,6 +311,7 @@ class SmsRecoveryWorker(
                                         body = text,
                                         receivedAt = date,
                                         subscriptionId = subscriptionId,
+                                                            simSnapshot = historicalSim,
                                     ).content
                                 }
                             },
@@ -238,33 +320,15 @@ class SmsRecoveryWorker(
                         null
                     }
                     if (ruleDecision?.blockedChannels?.isNotEmpty() == true) {
-                        val decisionTime = java.text.SimpleDateFormat("MM-dd HH:mm:ss", java.util.Locale.getDefault())
-                            .format(java.util.Date())
                         val blockedNames = ruleDecision.blockedChannels
                             .map(ForwardingChannels::displayName)
                             .joinToString("、")
                         rulesConfig.lastDecision = "补偿恢复 · $address · $blockedNames · ${ruleDecision.reason}"
                     }
-                    val remoteCommandAllowed = !rulesConfig.affectsRemoteCommands() ||
-                        !rulesConfig.enabled ||
-                        rulesConfig.rules.none { it.enabled } ||
-                        ruleDecision?.matchedRules?.isNotEmpty() == true
-                    // 补转发场景不消费远程指令（理由见 backfillForwardingOnly 处注释）。
-                    val remoteCommandConsumed = if (backfillForwardingOnly) {
-                        false
-                    } else {
-                        RemoteSmsCommandProcessor.tryConsume(
-                            context = applicationContext,
-                            sender = address,
-                            body = body,
-                            subscriptionId = subscriptionId,
-                            messageTimestamp = date,
-                            messageId = id,
-                            allowExecution = remoteCommandAllowed,
-                        )
-                    }
+                            // Historical recovery never executes remote commands.
+                            val remoteCommandConsumed = false
 
-                    if (!remoteCommandConsumed && ruleDecision != null) {
+                            if (!remoteCommandConsumed && ruleDecision != null) {
                         val history = ForwardingHistoryStore(applicationContext)
                         ruleDecision.blockedChannels
                             .intersect(enabledForwardChannels)
@@ -281,15 +345,15 @@ class SmsRecoveryWorker(
                             }
                     }
 
-                    val allowedForwardChannels = ruleDecision?.allowedChannels
-                    if (!remoteCommandConsumed && (multiConfig.anyEnabled() || pushPlus.enabled)) {
+                            if (!remoteCommandConsumed && (multiConfig.anyEnabled() || pushPlus.enabled)) {
                         val targets = ruleDecision?.targets.orEmpty()
                         if (targets.isNotEmpty()) {
                             // P2-E：与 FULL 路径一致——按规则生成的目标精准投递，并携带规则渲染后的正文
                             // （`bodyAlreadyRendered = true`，避免 Worker 再用默认模板覆盖）。
                             targets.forEach { target ->
                                 MultiChannelForwardWorker.enqueueSingle(
-                                    context = applicationContext,
+                                            originalSim = historicalSim,
+                                            context = applicationContext,
                                     sender = address,
                                     body = target.renderedContent,
                                     receivedAt = ingress.receivedAt,
@@ -316,7 +380,8 @@ class SmsRecoveryWorker(
                                 receivedAt = ingress.receivedAt, subscriptionId = subscriptionId,
                                 uniqueId = uniqueId, operationId = null, ruleDecision = ruleDecision,
                                 threadId = threadId,
-                            )
+                                        originalSim = historicalSim,
+                                    )
                         }
                     }
 
@@ -346,15 +411,10 @@ class SmsRecoveryWorker(
                         )
                     }
                 }
-                
-                // 对本轮扫描出的 threadId 批量去重后执行同步，避免查询放大
-                threadIdsToSync.forEach { threadId ->
-                    ShadowRepository.incrementCounter(applicationContext, "LEGACY_RECOVERY_ACTION_OBSERVED")
-                    applicationContext.syncThreadToLocal(threadId)
-                }
-                
-                ShadowRepository.incrementCounter(applicationContext, "RECOVERY_SCAN_COMPLETED")
-            }
+                    }
+                    if (scanned > 0) scanState.checkpoint(page, lastDate, lastId)
+                    ShadowRepository.incrementCounter(applicationContext, "RECOVERY_SCAN_COMPLETED")
+            } ?: error("sms_provider_cursor_unavailable")
         } catch (e: CancellationException) {
             // WorkManager 取消（协程取消）必须原样传播，否则会被误当成扫描失败而 retry。
             throw e
@@ -363,19 +423,31 @@ class SmsRecoveryWorker(
             return Result.retry()
         }
 
-        prefs.edit().putLong(KEY_LAST_CHECKED, newestSeen).apply()
+        if (exhausted) {
+            synchronized(SmsRecoveryScanState.lock) {
+                check(
+                    prefs.edit().putLong(KEY_LAST_CHECKED,
+                            maxOf(prefs.getLong(KEY_LAST_CHECKED, 0L), page.until),
+                        )
+                        .commit()
+                )
+                scanState.complete(page)
+            }
+        }
         if (repairedAny) {
             refreshMessages()
             refreshConversations()
         }
-        return Result.success()
+        val continueScan = !exhausted || scanState.hasRequest() || journal.hasReadyPending()
+        if (continueScan) enqueueRunner(applicationContext, Data.EMPTY)
+        return if (!continueScan && journal.hasPending()) Result.retry() else Result.success()
     }
 
     /**
      * 读出"已登记过转发入队"的短信 id 集合（P1-A 判重依据）。
      *
-     * workId 约定为 `sms-<messageId>`，或其后缀变体
-     * `sms-<messageId>-<instanceId | channel | ruleId8-actionId8>`——见各处 enqueue 调用点。
+     * workId 约定为 `sms-<messageId>`，或其后缀变体 `sms-<messageId>-<instanceId | channel |
+     * ruleId8-actionId8>`——见各处 enqueue 调用点。
      *
      * 为什么用 [ForwardingHistoryStore] 而不是另建存储：`MultiChannelForwardWorker.enqueueSingle`
      * 在**入队时**（不是执行时）就会 `registerQueued(workId = uniqueId)`，所以"历史里存在该前缀
@@ -409,9 +481,8 @@ class SmsRecoveryWorker(
     /**
      * 补转发之后确保留下"已登记转发"的痕迹。
      *
-     * 正常情形由 [MultiChannelForwardWorker.enqueueSingle] 自己写；但当所有渠道都被规则拦掉、
-     * 或渠道实例不可用时，一次 enqueue 都不会发生，也就没有痕迹 → 下一轮扫描会再次尝试补发
-     * （周期任务每 15 分钟一次）。这里补一条 `registerSkipped` 把它标记为"已处理"。
+     * 正常情形由 [MultiChannelForwardWorker.enqueueSingle] 自己写；但当所有渠道都被规则拦掉、 或渠道实例不可用时，一次 enqueue
+     * 都不会发生，也就没有痕迹 → 下一轮扫描会再次尝试补发 （周期任务每 15 分钟一次）。这里补一条 `registerSkipped` 把它标记为"已处理"。
      */
     private fun ensureForwardingMarker(
         uniqueId: String,
@@ -440,38 +511,12 @@ class SmsRecoveryWorker(
         }
     }
 
-    private fun resolveSimSlotIndex(subscriptionId: Int): Int? {
-        if (ContextCompat.checkSelfPermission(applicationContext, Manifest.permission.READ_PHONE_STATE) !=
-            PackageManager.PERMISSION_GRANTED
-        ) return null
-        return runCatching {
-            val manager = applicationContext.getSystemService(SubscriptionManager::class.java)
-            val info = manager?.getActiveSubscriptionInfo(subscriptionId)
-            if (info != null && info.simSlotIndex >= 0) {
-                info.simSlotIndex
-            } else {
-                val activeList = manager?.activeSubscriptionInfoList
-                if (activeList?.size == 1 && activeList[0].simSlotIndex >= 0) {
-                    activeList[0].simSlotIndex
-                } else null
-            }
-        }.getOrNull()
-    }
-
-    private fun buildMultiChannelAllowedChannels(
-        rulesConfig: ForwardingRulesConfig,
-        allowedForwardChannels: Set<String>?,
-        multiConfig: MultiForwardConfig,
-    ): Set<String>? {
-        if (!rulesConfig.enabled) return null
-        var channels = allowedForwardChannels ?: emptySet()
-        if (rulesConfig.scope == ForwardingRulesConfig.SCOPE_FORWARDING_ONLY && multiConfig.smsDirectEnabled) {
-            channels = channels + ForwardingChannels.SMS_DIRECT
-        }
-        return channels
-    }
-
     companion object {
+        private val scanMutex = Mutex()
+        private const val PERIODIC_MINUTES = 15L
+        private const val DRAIN_BUDGET_MS = 5000L
+        private const val SCAN_PAGE_SIZE = 100
+        private const val SCAN_BUDGET_MS = 15_000L
         private const val TAG = "SmsRecoveryWorker"
         /** 转发 workId 前缀约定：`sms-<messageId>`（含后缀变体）。 */
         private const val SMS_WORK_ID_PREFIX = "sms-"
@@ -482,12 +527,9 @@ class SmsRecoveryWorker(
         private const val UNIQUE_NOW = "sms-recovery-now"
         private const val UNIQUE_PERIODIC = "sms-recovery-periodic"
         private const val KEY_FORCED_SINCE = "forced_since"
-        private const val OVERLAP_MS = 60 * 1000L
-        /** 水位落后于当前时间时（OEM 冻结 / doze / 关机）最多回补的时间跨度。 */
-        private const val MAX_LOOKBACK_MS = 6 * 60 * 60 * 1000L
 
         fun schedule(context: Context) {
-            val request = PeriodicWorkRequestBuilder<SmsRecoveryWorker>(15, TimeUnit.MINUTES).build()
+            val request = PeriodicWorkRequestBuilder<SmsRecoveryWorker>(PERIODIC_MINUTES, TimeUnit.MINUTES).build()
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(
                 UNIQUE_PERIODIC,
                 // KEEP (而非 UPDATE)：App.kt 与 MainActivity 每次冷启动都会调用 schedule()，
@@ -499,33 +541,44 @@ class SmsRecoveryWorker(
         }
 
         fun enqueueNow(context: Context, inputData: Data = Data.EMPTY) {
+            val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            val stored = prefs.getLong(KEY_LAST_CHECKED, 0L)
+            val requested = inputData.getLong(KEY_FORCED_SINCE, 0L)
+            SmsRecoveryScanState(context)
+                .request(
+                    if (requested > 0 && stored > 0) minOf(requested, stored)
+                    else if (stored > 0) stored else System.currentTimeMillis()
+                )
+            enqueueRunner(context, inputData)
+        }
+
+        private fun enqueueRunner(context: Context, inputData: Data) {
             WorkManager.getInstance(context).enqueueUniqueWork(
                 UNIQUE_NOW,
-                ExistingWorkPolicy.REPLACE,
-                OneTimeWorkRequestBuilder<SmsRecoveryWorker>().setInputData(inputData).build(),
+                ExistingWorkPolicy.APPEND_OR_REPLACE,
+                OneTimeWorkRequestBuilder<SmsRecoveryWorker>().setInputData(
+                            Data.Builder()
+                                .putAll(inputData)
+                                .putBoolean("v128_trigger", true)
+                                .build()
+                        ).build(),
             )
         }
 
         /**
-         * Force a longer lookback (for screen-off swallow / missed SMS_DELIVER).
-         *
-         * 深回溯以「一次性入参」下发给本次任务，**不再回拨 [KEY_LAST_CHECKED] 水位**：
-         * 回拨水位会把补偿窗口持久化，下一次扫描会对同一批历史短信再次全量转发（P0-5 短信轰炸），
-         * 且该路径由开机广播与前台恢复自动触发，无法限流。改为入参后，水位始终按实际扫到的
-         * 最新时间单向前进，深回溯范围固定为 [FULL_RESYNC_LOOKBACK_MS]。
+         * Request all unfinished work from persisted checkpoints; no misleading fixed "full"
+         * window.
          */
         fun enqueueFullResync(context: Context) {
             enqueueNow(
-                context,
-                workDataOf(KEY_FORCED_SINCE to (System.currentTimeMillis() - FULL_RESYNC_LOOKBACK_MS)),
-            )
+                context)
         }
 
         /**
          * 回前台 / 解锁补偿同步入口。
          *
-         * 与 [enqueueFullResync] 的区别是带最小间隔节流：用户频繁切前台时不会反复触发重量级扫描，
-         * 但首次调用 (无节流记录) 必定执行，保证升级后第一次回前台一定能补偿。
+         * 与 [enqueueFullResync] 的区别是带最小间隔节流：用户频繁切前台时不会反复触发重量级扫描， 但首次调用 (无节流记录)
+         * 必定执行，保证升级后第一次回前台一定能补偿。
          */
         fun enqueueForegroundResync(
             context: Context,
@@ -541,10 +594,8 @@ class SmsRecoveryWorker(
 
         fun markObserved(context: Context, receivedAt: Long) {
             val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            val previous = prefs.getLong(KEY_LAST_CHECKED, 0L)
-            if (receivedAt > previous) prefs.edit().putLong(KEY_LAST_CHECKED, receivedAt).apply()
+            // Receipt observation must never skip an unscanned interval.
+            prefs.edit().putLong("last_observed", receivedAt).apply()
         }
-
-        private const val FULL_RESYNC_LOOKBACK_MS = 60 * 60 * 1000L
     }
 }

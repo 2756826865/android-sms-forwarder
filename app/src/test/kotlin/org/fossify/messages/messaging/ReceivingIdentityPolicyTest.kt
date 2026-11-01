@@ -54,4 +54,26 @@ class ReceivingIdentityPolicyTest {
             ReceivingIdentityPolicy.ActiveSubscription(7, 0), ReceivingIdentityPolicy.ActiveSubscription(8, 0)
         )).confirmedSubscriptionId)
     }
+
+    @Test
+    fun ambiguousVendorNumbersCannotBeInterpretedAsSlots() {
+        val result = resolve(mapOf("sim_id" to 1, "simnum" to 1))
+        assertNull(result.confirmedSubscriptionId)
+        assertNull(result.slotIndex)
+    }
+
+    @Test
+    fun knownSubscriptionWithAmbiguousSlotDoesNotMatchSlotRules() {
+        val result =
+            resolve(
+                mapOf("subscription" to 7),
+                cards =
+                    listOf(
+                        ReceivingIdentityPolicy.ActiveSubscription(7, 0),
+                        ReceivingIdentityPolicy.ActiveSubscription(42, 0),
+                    ),
+            )
+        assertEquals(7, result.confirmedSubscriptionId)
+        assertNull(result.slotIndex)
+    }
 }
