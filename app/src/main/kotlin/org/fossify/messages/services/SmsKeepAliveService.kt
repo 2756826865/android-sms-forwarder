@@ -127,6 +127,9 @@ class SmsKeepAliveService : Service() {
         retireLegacyServices(this)
         return try {
             val state = snapshot(applicationContext)
+            // Explicit re-entry also follows notification permission/channel changes. A prior
+            // notify may have been suppressed by the system even when its text is unchanged.
+            lastText = null
             reconcile(state, startId)
             if (state.required)
                 RemoteSourceRuntimeManager.restoreAfterServiceRestart(applicationContext)
