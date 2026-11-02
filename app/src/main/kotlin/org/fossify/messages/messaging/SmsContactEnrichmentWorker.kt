@@ -21,8 +21,8 @@ class SmsContactEnrichmentWorker(context: Context, params: WorkerParameters) :
     @Suppress("TooGenericExceptionCaught") // Contacts/Room failures retain this independent retry.
     override suspend fun doWork(): Result {
         val id = inputData.getLong("message_id", -1)
-        val message = applicationContext.messagesDB.getMessageWithId(id) ?: return Result.success()
         return try {
+            val message = applicationContext.messagesDB.getMessageWithId(id) ?: return Result.success()
             val contact =
                 applicationContext.getNameAndPhotoFromPhoneNumber(message.senderPhoneNumber)
             applicationContext.getMessagesDB().runInTransaction {

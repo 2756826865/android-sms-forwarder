@@ -64,6 +64,7 @@ jobs:
           python3 scripts/test_forwarding_integration_sql.py
           python3 scripts/test_ingress_journal_sql.py
           python3 tools/incoming-sms-ui-host-tests/run.py
+          python3 tools/contact-enrichment-host-tests/run.py
           ./gradlew :app:testCoreDebugUnitTest :app:compileCoreDebugAndroidTestKotlin :app:assembleCoreDebug
 
       - name: Enable emulator acceleration for 1.2.8 regressions

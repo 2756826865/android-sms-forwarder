@@ -10,8 +10,12 @@ import java.util.concurrent.TimeUnit
 import org.fossify.messages.services.IncomingSmsService
 import org.fossify.messages.services.SmsKeepAliveService
 
-/** No database or fallback processing runs on the broadcast main thread. */
+/** Durable work stays on bounded I/O executors; framework tokens have an independent deadline. */
 internal object SmsBroadcastDispatcher {
+    private const val BROADCAST_BUDGET_MS = 8_000L
+    private val deadlineScheduler = java.util.concurrent.ScheduledThreadPoolExecutor(1,
+        java.util.concurrent.ThreadFactory { task -> Thread(task, "sms-broadcast-deadline") },
+    ).apply { setRemoveOnCancelPolicy(true) }
     private const val ADMISSION_THREADS = 4
     private const val HANDOFF_CAPACITY = 64
     private const val FALLBACK_CAPACITY = 32
@@ -58,7 +62,11 @@ internal object SmsBroadcastDispatcher {
             Intent(source)
                 .putExtra(SmsIngressSpool.EXTRA_ID, java.util.UUID.randomUUID().toString())
                 .putExtra(SmsIngressSpool.EXTRA_RECEIVED_AT, System.currentTimeMillis())
-        val admission = Runnable { dispatchPersisted(app, copy, pending) }
+        val lease = BroadcastLease(deadlineScheduler, BROADCAST_BUDGET_MS, pending::finish) {
+            Log.e("SmsIngress", "broadcast deadline expired; durable admission not yet confirmed")
+            recordUnconfirmed(app, "broadcast_deadline_unconfirmed")
+        }
+        val admission = Runnable { dispatchPersisted(app, copy, lease) }
         try {
             admissionExecutor.execute(admission)
         } catch (_: java.util.concurrent.RejectedExecutionException) {
@@ -75,20 +83,41 @@ internal object SmsBroadcastDispatcher {
                         }, "sms-ingress-overflow").start()
                     } catch (error: Exception) {
                         overflowAdmissionBusy.set(false)
-                        Log.e("SmsIngress", "overflow thread unavailable; inline admission", error)
-                        admission.run()
+                        Log.e("SmsIngress", "overflow thread unavailable; durable intake unconfirmed", error)
+                        rejectAdmission(app, copy, lease)
                     }
                 } else {
-                    Log.e("SmsIngress", "all admission threads saturated; inline durable fallback")
-                    admission.run()
+                    Log.e("SmsIngress", "all admission threads saturated; durable intake unconfirmed")
+                    rejectAdmission(app, copy, lease)
                 }
             }
         }
     }
 
-    private fun dispatchPersisted(app: Context, copy: Intent, pending: BroadcastReceiver.PendingResult) {
-        val finished = java.util.concurrent.atomic.AtomicBoolean(false)
-        fun finish() { if (finished.compareAndSet(false, true)) pending.finish() }
+    private fun recordUnconfirmed(app: Context, reason: String) {
+        try {
+            fallbackExecutor.execute {
+                runCatching {
+                    app.getSharedPreferences("sms_ingress_spool_status", Context.MODE_PRIVATE)
+                        .edit().putString("error", reason)
+                        .putLong("last_failure_at", System.currentTimeMillis()).apply()
+                }
+            }
+        } catch (_: java.util.concurrent.RejectedExecutionException) {
+            Log.w("SmsIngress", "failure status queue saturated; see admission error log")
+        }
+    }
+
+    private fun rejectAdmission(app: Context, copy: Intent, lease: BroadcastLease) {
+        try {
+            recordUnconfirmed(app, "admission_capacity_exhausted")
+            // This request is best effort, never durable confirmation. No main-thread disk IO.
+            runCatching { IncomingSmsService.enqueue(app, copy) }
+        } finally { lease.complete() }
+    }
+
+    private fun dispatchPersisted(app: Context, copy: Intent, lease: BroadcastLease) {
+        fun finish() = lease.complete()
         var spoolSaved = false
         var journalSaved = false
         try {

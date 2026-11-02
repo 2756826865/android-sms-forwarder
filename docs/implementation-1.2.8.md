@@ -79,3 +79,12 @@ Both home UIs observe Room invalidation with lifecycle cleanup and cancel supers
 Historical import commits each 500-row page independently, inserts only missing records to avoid replacing live receipt state, checks receipt revision before page/metadata commits, and yields between pages. An interrupted import keeps committed pages and does not mark full import complete. OEM fallback limits cursor consumption but cannot force provider-side query planning.
 
 Regression additions exercise actual production display-only SQL and Room invalidation. The integrated branch workflow runs selected ingress instrumentation on Android 15 and 16 before one release APK build. No OEM-specific behavior is claimed from emulator results. Main and formal Release remain untouched.
+
+
+## Release-readiness follow-up after 6341d88
+
+Both home UIs now use a shared coalescing refresh runner. Invalidations never cancel an active Room read: they request one subsequent read. A continuous stream therefore still publishes periodically, while pause/clear cancellation stops the owning job and resume can read dirty state again.
+
+Each broadcast receives an independent eight-second framework lease before entering admission queues. Durable admission remains on bounded I/O pools; the main-thread disk fallback is removed. If queued or stalled I/O exceeds the lease, the framework token is released once and an unconfirmed-admission error is reported. The in-memory task may still persist afterwards, but a timeout/service start is never described as a successful durable handoff. Full storage failure or exhausted resources cannot guarantee retention; no cancellation attempts to interrupt Keystore/AtomicFile during commit. Error persistence is best effort on a bounded background executor.
+
+The complete contact enrichment operation, including first Room access, is inside bounded retry handling; cancellation propagates unchanged. The new host harness compiles the production Worker and injects first-read, contact and transaction failures, terminal failures and cancellation at each stage (18 scenarios). Five JVM regressions exercise continuous invalidations, follow-up reads, pause/resume and exactly-once broadcast lease completion. Existing SQL/UI/device regressions remain required before the integrated test APK is accepted.

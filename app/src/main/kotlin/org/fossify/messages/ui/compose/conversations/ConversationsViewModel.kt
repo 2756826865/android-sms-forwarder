@@ -144,12 +144,12 @@ class ConversationsViewModel(application: Application) : AndroidViewModel(applic
 
     private val roomObserver = object : androidx.room.InvalidationTracker.Observer("messages", "conversations", "recycle_bin_messages") {
         override fun onInvalidated(tables: Set<String>) {
-            viewModelScope.launch { refreshLocalSnapshot() }
+            refreshLocalSnapshot()
         }
     }
 
     override fun onCleared() {
-        localRefreshJob?.cancel()
+        localSnapshots.cancel()
         getApplication<Application>().getMessagesDB().invalidationTracker.removeObserver(roomObserver)
         super.onCleared()
     }
@@ -192,19 +192,13 @@ class ConversationsViewModel(application: Application) : AndroidViewModel(applic
                         }
     }
 
-    private var localRefreshJob: Job? = null
-
-    private fun refreshLocalSnapshot() {
-        localRefreshJob?.cancel()
-        localRefreshJob = viewModelScope.launch {
-            // Coalesce Room invalidations from receipt, conversation and contact
-            // display writes without delaying Provider persistence or notifications.
-            kotlinx.coroutines.delay(60)
+    private val localSnapshots by lazy {
+        org.fossify.messages.helpers.CoalescingRefresh(viewModelScope) {
             val context = getApplication<Application>()
             val local = withContext(Dispatchers.IO) {
                 runCatching { context.conversationsDB.getAllRegular() }.getOrNull()
-            } ?: return@launch
-            if (local.isNotEmpty() || _uiState.value.initialLoaded) {
+            }
+            if (local != null && (local.isNotEmpty() || _uiState.value.initialLoaded)) {
                 _uiState.value = _uiState.value.copy(
                     conversations = org.fossify.messages.helpers.sortConversations(
                         local, context.config.pinnedConversations),
@@ -212,6 +206,10 @@ class ConversationsViewModel(application: Application) : AndroidViewModel(applic
                 )
             }
         }
+    }
+    private fun refreshLocalSnapshot() {
+        // Legacy foreground refresh callers may enter from an I/O thread.
+        viewModelScope.launch { localSnapshots.request() }
     }
 
     fun refresh(isInitial: Boolean = false) {

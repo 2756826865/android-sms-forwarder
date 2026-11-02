@@ -151,22 +151,22 @@ class MainActivity : SimpleActivity() {
         if (config.useGatewayDeveloperUi) ensureGatewaySmsPermissions() else askPermissions()
     }
 
-    @SuppressLint("InlinedApi")
-    private var roomSnapshotJob: kotlinx.coroutines.Job? = null
     private var roomSnapshotDirty = false
-    private fun scheduleRoomSnapshot() {
-        roomSnapshotJob?.cancel()
-        roomSnapshotJob = lifecycleScope.launch {
-            kotlinx.coroutines.delay(60)
-            if (isFinishing || isDestroyed || config.useGatewayDeveloperUi ||
-                !lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) return@launch
-            val snapshot = withContext(kotlinx.coroutines.Dispatchers.IO) {
-                runCatching { ArrayList(conversationsDB.getAllRegular()) }.getOrNull()
-            } ?: return@launch
-            roomSnapshotDirty = false
-            setupConversations(snapshot, cached = true)
+    private val roomSnapshots by lazy {
+        org.fossify.messages.helpers.CoalescingRefresh(lifecycleScope) {
+            if (!isFinishing && !isDestroyed && !config.useGatewayDeveloperUi &&
+                lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) {
+                val snapshot = withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    runCatching { ArrayList(conversationsDB.getAllRegular()) }.getOrNull()
+                }
+                if (snapshot != null) {
+                    roomSnapshotDirty = false
+                    setupConversations(snapshot, cached = true)
+                }
+            }
         }
     }
+    private fun scheduleRoomSnapshot() = roomSnapshots.request()
     private val conversationObserver = object : androidx.room.InvalidationTracker.Observer("messages", "conversations", "recycle_bin_messages") {
         override fun onInvalidated(tables: Set<String>) {
             runOnUiThread {
@@ -443,7 +443,7 @@ class MainActivity : SimpleActivity() {
     }
 
     override fun onPause() {
-        roomSnapshotJob?.cancel()
+        roomSnapshots.cancel()
         verificationCodeDialog?.dismiss()
         verificationCodeDialog = null
         homeRefreshGate.pause()
@@ -455,7 +455,7 @@ class MainActivity : SimpleActivity() {
 
     override fun onDestroy() {
         getMessagesDB().invalidationTracker.removeObserver(conversationObserver)
-        roomSnapshotJob?.cancel()
+        roomSnapshots.cancel()
         homeConversationHandler.removeCallbacks(homeConversationRefresh)
         homeConversationRefreshPending = false
         super.onDestroy()
