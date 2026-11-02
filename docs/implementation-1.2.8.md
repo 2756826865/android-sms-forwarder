@@ -68,3 +68,14 @@ An old read notification is suppressed without cancelling the shared thread noti
 When spool persistence and service admission both fail, a reserved nonqueued executor attempts Journal persistence while retaining the asynchronous broadcast token until staging finishes. If Journal encryption/storage also fails, or immediate emergency admission is exhausted, there is no confirmed durable copy: this remains an explicitly diagnosed terminal intake failure, not a claimed guarantee under total storage failure.
 
 The third-review local SQL suite contains 61 cases; phone lifecycle, OEM killing and physically indistinguishable dual broadcasts remain device acceptance requirements. A successful older commit's CI is never substituted for the final pushed commit.
+
+
+## Unified follow-up after 0c7f2d8
+
+Broadcast admission performs spool encryption and recovery registration on a bounded I/O executor, retaining goAsync ownership until durable spool/service/Journal handoff. A reserved immediate executor and service fallback cover admission saturation; complete storage/key/service failure remains explicit, never disguised as persistence.
+
+Both home UIs observe Room invalidation with lifecycle cleanup and cancel superseded local snapshot jobs. Local notifications do not invoke Provider reconciliation. Provider validation remains on existing foreground/manual paths. Contact enrichment is independent KEEP work keyed by message ID, scheduled after the minimal receipt transaction for FULL and degraded paths. It updates only sender display columns and noncustom nongroup conversation title/photo, preserving body/read/SIM and forwarding decisions.
+
+Historical import commits each 500-row page independently, inserts only missing records to avoid replacing live receipt state, checks receipt revision before page/metadata commits, and yields between pages. An interrupted import keeps committed pages and does not mark full import complete. OEM fallback limits cursor consumption but cannot force provider-side query planning.
+
+Regression additions exercise actual production display-only SQL and Room invalidation. The integrated branch workflow runs selected ingress instrumentation on Android 15 and 16 before one release APK build. No OEM-specific behavior is claimed from emulator results. Main and formal Release remain untouched.

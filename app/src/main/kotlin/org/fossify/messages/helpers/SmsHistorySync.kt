@@ -9,6 +9,7 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import org.fossify.commons.models.PhoneNumber
 import org.fossify.commons.models.SimpleContact
+import org.fossify.messages.extensions.getMessagesDB
 import org.fossify.messages.extensions.config
 import org.fossify.messages.extensions.conversationsDB
 import org.fossify.messages.extensions.createConversationFromMessage
@@ -89,6 +90,8 @@ fun Context.syncSmsHistory(source: String, strict: Boolean = false): SmsSyncResu
         for (typeFilter in typeSelections) {
             var minId = Long.MAX_VALUE
             while (true) {
+                if (Thread.currentThread().isInterrupted) throw java.util.concurrent.CancellationException("history interrupted")
+                val pageRevision = ConversationRefreshRevision.current()
                 val selection = if (minId == Long.MAX_VALUE) typeFilter else "$typeFilter AND ${Telephony.Sms._ID} < $minId"
                 // Server-side page cap where supported. Some OEM providers reject
                 // LIMIT in sort order; keep the same cursor-side page cap as fallback.
@@ -199,15 +202,17 @@ fun Context.syncSmsHistory(source: String, strict: Boolean = false): SmsSyncResu
                             running = true, completed = processedCount, total = maxOf(totalSms, processedCount), failed = parseFailedCount
                         ))
 
-                        if (batch.size >= 1000) {
-                            diagnostics?.beforeBatch(this, batch)
-                            messagesDB.insertMessages(*batch.toTypedArray())
-                            writtenCount += batch.size
-                            diagnostics?.afterBatch(this, batch)
-                            batch.clear()
-                        }
+
                     }
                 }
+                // Commit each page before moving its cursor. A concurrent receipt invalidates
+                // this snapshot rather than allowing old read/body/SIM data to replace it.
+                getMessagesDB().runInTransaction {
+                    check(pageRevision == ConversationRefreshRevision.current()) { "HISTORY_SNAPSHOT_SUPERSEDED" }
+                    writtenCount += batch.count { messagesDB.insertOrIgnore(it) != -1L }
+                }
+                batch.clear()
+                Thread.yield()
                 totalSms += rowsInPage
                 if (rowsInPage == 0) break
                 check(pageMinId < minId) { "SMS_SYNC_CURSOR_NOT_ADVANCING" }
@@ -216,21 +221,16 @@ fun Context.syncSmsHistory(source: String, strict: Boolean = false): SmsSyncResu
         }
 
         diagnostics?.businessEnd(totalSms, processedCount, readCount, parseFailedCount)
-        if (batch.isNotEmpty()) {
-            diagnostics?.beforeBatch(this, batch)
-            messagesDB.insertMessages(*batch.toTypedArray())
-            writtenCount += batch.size
-            diagnostics?.afterBatch(this, batch)
-            batch.clear()
-        }
-
         // 2. Sync MMS messages if any
+        val metadataRevision = ConversationRefreshRevision.current()
         val mmsMessages = getMMS(threadId = null, strict = true)
         if (mmsMessages.isNotEmpty()) {
             mmsMessages.chunked(200).forEach { mmsBatch ->
                 diagnostics?.beforeBatch(this, mmsBatch)
-                messagesDB.insertMessages(*mmsBatch.toTypedArray())
-                writtenCount += mmsBatch.size
+                getMessagesDB().runInTransaction {
+                    check(metadataRevision == ConversationRefreshRevision.current()) { "HISTORY_SNAPSHOT_SUPERSEDED" }
+                    writtenCount += mmsBatch.count { messagesDB.insertOrIgnore(it) != -1L }
+                }
                 diagnostics?.afterBatch(this, mmsBatch)
             }
         }
@@ -240,7 +240,10 @@ fun Context.syncSmsHistory(source: String, strict: Boolean = false): SmsSyncResu
         diagnostics?.conversations("sync_provider", conversations)
         conversations.chunked(200).forEach { convBatch ->
             convBatch.forEach { conv ->
-                insertOrUpdateConversation(conv)
+                getMessagesDB().runInTransaction {
+                    check(metadataRevision == ConversationRefreshRevision.current()) { "HISTORY_SNAPSHOT_SUPERSEDED" }
+                    insertOrUpdateConversation(conv)
+                }
                 threadsUpdatedCount++
             }
         }
@@ -248,7 +251,10 @@ fun Context.syncSmsHistory(source: String, strict: Boolean = false): SmsSyncResu
         // 4. Fill any missing conversation summaries for remaining threads
         messagesDB.getLatestMessagesWithoutConversation().forEach { msg ->
             createConversationFromMessage(msg)?.let { conv ->
-                insertOrUpdateConversation(conv)
+                getMessagesDB().runInTransaction {
+                    check(metadataRevision == ConversationRefreshRevision.current()) { "HISTORY_SNAPSHOT_SUPERSEDED" }
+                    insertOrUpdateConversation(conv)
+                }
                 threadsUpdatedCount++
             }
         }

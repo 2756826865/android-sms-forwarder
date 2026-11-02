@@ -1,5 +1,6 @@
 package org.fossify.messages.ui.compose.conversations
 
+import org.fossify.messages.extensions.getMessagesDB
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -141,7 +142,19 @@ class ConversationsViewModel(application: Application) : AndroidViewModel(applic
         }
     }
 
+    private val roomObserver = object : androidx.room.InvalidationTracker.Observer("messages", "conversations", "recycle_bin_messages") {
+        override fun onInvalidated(tables: Set<String>) {
+            viewModelScope.launch { refreshLocalSnapshot() }
+        }
+    }
+
+    override fun onCleared() {
+        getApplication<Application>().getMessagesDB().invalidationTracker.removeObserver(roomObserver)
+        super.onCleared()
+    }
+
     init {
+        getApplication<Application>().getMessagesDB().invalidationTracker.addObserver(roomObserver)
         refresh(isInitial = true)
     }
 
@@ -185,9 +198,9 @@ class ConversationsViewModel(application: Application) : AndroidViewModel(applic
         localRefreshJob = viewModelScope.launch {
             val context = getApplication<Application>()
             val local = withContext(Dispatchers.IO) {
-                runCatching { context.conversationsDB.getAllRegular() }.getOrDefault(emptyList())
-            }
-            if (local.isNotEmpty() && !_uiState.value.initialLoaded) {
+                runCatching { context.conversationsDB.getAllRegular() }.getOrNull()
+            } ?: return@launch
+            if (local.isNotEmpty() || _uiState.value.initialLoaded) {
                 _uiState.value = _uiState.value.copy(
                     conversations = org.fossify.messages.helpers.sortConversations(
                         local, context.config.pinnedConversations),
@@ -287,14 +300,7 @@ class ConversationsViewModel(application: Application) : AndroidViewModel(applic
                 withContext(Dispatchers.IO) {
                     context.conversationsDB.getAllRegular()
                 }
-            val safeProvider =
-                if (
-                    org.fossify.messages.helpers.ConversationRefreshRevision.current() ==
-                        providerRevision
-                )
-                    provider
-                else emptyList()
-            val rawList = org.fossify.messages.helpers.mergeConversationSources(safeProvider, freshLocal)
+            val rawList = org.fossify.messages.helpers.mergeConversationSources(emptyList(), freshLocal)
                 .filterNot { it.threadId in recycledThreads }
             val list = org.fossify.messages.helpers.sortConversations(
                 rawList,

@@ -315,4 +315,37 @@ class SmsIngressDeliveryTest {
         }
     }
 
+    @Test
+    fun roomDisplayUpdatesInvalidateObserversWithoutReplacingReceiptState() {
+        val db = androidx.room.Room.inMemoryDatabaseBuilder(
+            ForwardingTestContext.context,
+            org.fossify.messages.databases.MessagesDatabase::class.java,
+        ).allowMainThreadQueries().build()
+        val changed = java.util.concurrent.CountDownLatch(1)
+        val observer = object : androidx.room.InvalidationTracker.Observer("conversations") {
+            override fun onInvalidated(tables: Set<String>) { changed.countDown() }
+        }
+        try {
+            // Open before registration so invalidation triggers are installed for the transaction.
+            db.openHelper.writableDatabase
+            db.invalidationTracker.addObserver(observer)
+            db.runInTransaction {
+                db.openHelper.writableDatabase.execSQL("INSERT INTO conversations(thread_id,snippet,date,read,title,photo_uri,is_group_conversation,phone_number,is_scheduled,uses_custom_title,archived,unread_count) VALUES(42,'latest',123,0,'123','',0,'123',0,0,0,2)")
+            }
+            assertTrue("Room did not publish the committed row", changed.await(5, java.util.concurrent.TimeUnit.SECONDS))
+            db.runInTransaction {
+                db.openHelper.writableDatabase.execSQL("UPDATE conversations SET title='contact',photo_uri='photo' WHERE thread_id=42")
+            }
+            db.openHelper.writableDatabase.query("SELECT snippet,read,unread_count FROM conversations WHERE thread_id=42").use {
+                assertTrue(it.moveToFirst())
+                assertEquals("latest", it.getString(0))
+                assertEquals(0, it.getInt(1))
+                assertEquals(2, it.getInt(2))
+            }
+        } finally {
+            db.invalidationTracker.removeObserver(observer)
+            db.close()
+        }
+    }
+
 }

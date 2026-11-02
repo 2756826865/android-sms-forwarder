@@ -12,6 +12,7 @@ import org.fossify.messages.services.SmsKeepAliveService
 
 /** No database or fallback processing runs on the broadcast main thread. */
 internal object SmsBroadcastDispatcher {
+    private const val ADMISSION_THREADS = 4
     private const val HANDOFF_CAPACITY = 64
     private const val FALLBACK_CAPACITY = 32
     private const val THREAD_KEEP_ALIVE_SECONDS = 30L
@@ -41,6 +42,12 @@ internal object SmsBroadcastDispatcher {
         java.util.concurrent.ThreadFactory { task -> Thread(task, "sms-ingress-emergency") },
     )
 
+    private val admissionExecutor = ThreadPoolExecutor(
+        2, ADMISSION_THREADS, THREAD_KEEP_ALIVE_SECONDS, TimeUnit.SECONDS,
+        ArrayBlockingQueue<Runnable>(HANDOFF_CAPACITY),
+        java.util.concurrent.ThreadFactory { task -> Thread(task, "sms-ingress-admission") },
+    )
+
     // Framework/OEM boundary: retain durable state and report unclassified platform failures.
     fun dispatch(context: Context, source: Intent, pending: BroadcastReceiver.PendingResult) {
         val app = context.applicationContext
@@ -48,6 +55,21 @@ internal object SmsBroadcastDispatcher {
             Intent(source)
                 .putExtra(SmsIngressSpool.EXTRA_ID, java.util.UUID.randomUUID().toString())
                 .putExtra(SmsIngressSpool.EXTRA_RECEIVED_AT, System.currentTimeMillis())
+        val admission = Runnable { dispatchPersisted(app, copy, pending) }
+        try {
+            admissionExecutor.execute(admission)
+        } catch (_: java.util.concurrent.RejectedExecutionException) {
+            try { emergencyExecutor.execute(admission) }
+            catch (_: java.util.concurrent.RejectedExecutionException) {
+                val serviceAccepted = runCatching { IncomingSmsService.enqueue(app, copy) }.getOrDefault(false)
+                Log.e("SmsIngress", if (serviceAccepted) "admission busy; service fallback accepted"
+                    else "admission capacity exhausted; no durable receipt confirmed")
+                pending.finish()
+            }
+        }
+    }
+
+    private fun dispatchPersisted(app: Context, copy: Intent, pending: BroadcastReceiver.PendingResult) {
         val finished = java.util.concurrent.atomic.AtomicBoolean(false)
         fun finish() { if (finished.compareAndSet(false, true)) pending.finish() }
         var handedOff = false

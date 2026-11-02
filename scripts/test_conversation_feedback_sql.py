@@ -103,5 +103,17 @@ class NotificationUnreadSelectionTest(unittest.TestCase):
             db.execute('UPDATE messages SET read=1 WHERE id=11')
             self.assertIsNone(db.execute(query, {'threadId':4}).fetchone())
 
+class EnrichmentIsolationTest(unittest.TestCase):
+    def test_contact_update_preserves_newer_receipt_and_user_title(self):
+        with sqlite3.connect(':memory:') as db:
+            db.executescript("CREATE TABLE messages(id INTEGER, sender_phone_number TEXT,sender_name TEXT,sender_photo_uri TEXT,body TEXT,read INTEGER,subscription_id INTEGER);CREATE TABLE conversations(thread_id INTEGER,phone_number TEXT,title TEXT,photo_uri TEXT,uses_custom_title INTEGER,is_group_conversation INTEGER,read INTEGER,unread_count INTEGER,snippet TEXT);")
+            db.execute("INSERT INTO messages VALUES(1,'123','123','','new',1,7)")
+            db.execute("INSERT INTO conversations VALUES(4,'123','mine','',1,0,0,2,'newer')")
+            for filename in ['MessagesDao.kt','ConversationsDao.kt']:
+                query = next(sql for sql,name in re.findall(r'@Query\("([^"\n]+)"\)\s*fun (\w+)', (DAO/filename).read_text()) if name=='updateSenderDisplay')
+                db.execute(query, {'id':1,'threadId':4,'address':'123','name':'contact','photo':'image'})
+            self.assertEqual(('new',1,7,'contact'),db.execute('SELECT body,read,subscription_id,sender_name FROM messages').fetchone())
+            self.assertEqual(('mine',0,2,'newer'),db.execute('SELECT title,read,unread_count,snippet FROM conversations').fetchone())
+
 if __name__ == '__main__':
     unittest.main()

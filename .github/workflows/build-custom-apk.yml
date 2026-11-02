@@ -84,6 +84,27 @@ jobs:
           disable-animations: true
           script: ./gradlew :app:connectedCoreDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=org.fossify.messages.messaging.SmsIngressDeliveryTest,org.fossify.messages.messaging.SmsIngressJournalTest,org.fossify.messages.messaging.SmsIngressIdentityTest,org.fossify.messages.messaging.SmsRecoveryScanStateTest
 
+      - name: Preserve Android 15 instrumented reports
+        if: always() && github.ref == 'refs/heads/1.2.8'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ingress-1.2.8-api35-reports
+          path: |
+            app/build/reports/androidTests/**
+            app/build/outputs/androidTest-results/**
+          if-no-files-found: ignore
+
+      - name: Run ingress regressions on Android 16
+        if: github.ref == 'refs/heads/1.2.8'
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          ram-size: 1536M
+          disable-animations: true
+          script: ./gradlew :app:connectedCoreDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=org.fossify.messages.messaging.SmsIngressDeliveryTest,org.fossify.messages.messaging.SmsIngressJournalTest,org.fossify.messages.messaging.SmsIngressIdentityTest,org.fossify.messages.messaging.SmsRecoveryScanStateTest
+
       - name: Upload ingress instrumented test reports
         if: always() && github.ref == 'refs/heads/1.2.8'
         uses: actions/upload-artifact@v4

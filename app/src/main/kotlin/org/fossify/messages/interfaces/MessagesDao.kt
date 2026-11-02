@@ -32,6 +32,9 @@ interface MessagesDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun insertMessages(vararg message: Message)
 
+    @Query("UPDATE messages SET sender_name=:name, sender_photo_uri=:photo WHERE id=:id AND sender_phone_number=:address")
+    fun updateSenderDisplay(id: Long, address: String, name: String, photo: String)
+
     @Query("SELECT * FROM messages")
     fun getAll(): List<Message>
 

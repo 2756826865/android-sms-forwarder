@@ -1,5 +1,9 @@
 package org.fossify.messages.activities
 
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.fossify.messages.extensions.getMessagesDB
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.AppOpsManager
@@ -148,8 +152,25 @@ class MainActivity : SimpleActivity() {
     }
 
     @SuppressLint("InlinedApi")
+    private var roomSnapshotJob: kotlinx.coroutines.Job? = null
+    private val conversationObserver = object : androidx.room.InvalidationTracker.Observer("messages", "conversations", "recycle_bin_messages") {
+        override fun onInvalidated(tables: Set<String>) {
+            runOnUiThread {
+                if (isFinishing || isDestroyed || config.useGatewayDeveloperUi) return@runOnUiThread
+                roomSnapshotJob?.cancel()
+                roomSnapshotJob = lifecycleScope.launch {
+                    val snapshot = withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        runCatching { ArrayList(conversationsDB.getAllRegular()) }.getOrNull()
+                    } ?: return@launch
+                    setupConversations(snapshot, cached = true)
+                }
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        getMessagesDB().invalidationTracker.addObserver(conversationObserver)
 
         // 1. 初始化基础会话
         initializeAppSession()
@@ -421,6 +442,8 @@ class MainActivity : SimpleActivity() {
     }
 
     override fun onDestroy() {
+        getMessagesDB().invalidationTracker.removeObserver(conversationObserver)
+        roomSnapshotJob?.cancel()
         homeConversationHandler.removeCallbacks(homeConversationRefresh)
         homeConversationRefreshPending = false
         super.onDestroy()
@@ -749,11 +772,17 @@ class MainActivity : SimpleActivity() {
     private fun getNewConversations(cachedConversations: ArrayList<Conversation>) {
         val privateCursor = getMyContactsCursor(favoritesOnly = false, withPhoneNumbersOnly = true)
         ensureBackgroundThread {
+            val revision = org.fossify.messages.helpers.ConversationRefreshRevision.current()
+            fun applyIfFresh(action: () -> Unit) {
+                getMessagesDB().runInTransaction {
+                    if (revision == org.fossify.messages.helpers.ConversationRefreshRevision.current()) action()
+                }
+            }
             val privateContacts = MyContactsContentProvider.getSimpleContacts(this, privateCursor)
             val conversations = getConversations(privateContacts = privateContacts)
 
             conversations.forEach { providerConversation ->
-                insertOrUpdateConversation(providerConversation)
+                applyIfFresh { insertOrUpdateConversation(providerConversation) }
                 if (cachedConversations.none { it.threadId == providerConversation.threadId }) {
                     cachedConversations.add(providerConversation)
                 }
@@ -766,20 +795,20 @@ class MainActivity : SimpleActivity() {
                 val isTemporaryThread = cachedConversation.isScheduled
                 val isConversationDeleted = threadId !in providerThreadIds
                 if (isConversationDeleted && !isTemporaryThread && !messagesDB.hasThreadMessages(threadId)) {
-                    conversationsDB.deleteThreadId(threadId)
+                    applyIfFresh { conversationsDB.deleteThreadId(threadId) }
                 }
 
                 val newConversation =
                     conversations.find { it.phoneNumber == cachedConversation.phoneNumber }
                 if (isTemporaryThread && newConversation != null) {
-                    conversationsDB.deleteThreadId(threadId)
+                    applyIfFresh { conversationsDB.deleteThreadId(threadId) }
                     messagesDB.getScheduledThreadMessages(threadId)
                         .forEach { message ->
-                            messagesDB.insertOrUpdate(
-                                message.copy(threadId = newConversation.threadId)
-                            )
+                            applyIfFresh {
+                                messagesDB.insertOrUpdate(message.copy(threadId = newConversation.threadId))
+                            }
                         }
-                    insertOrUpdateConversation(newConversation, cachedConversation)
+                    applyIfFresh { insertOrUpdateConversation(newConversation, cachedConversation) }
                 }
             }
 
@@ -790,7 +819,7 @@ class MainActivity : SimpleActivity() {
                     )
                 }
                 if (conv != null) {
-                    insertOrUpdateConversation(conv)
+                    applyIfFresh { insertOrUpdateConversation(conv) }
                 }
             }
 

@@ -304,25 +304,6 @@ open class IncomingSmsService : Service() {
             }
         }
 
-        runCatching {
-            updateLocalDatabaseAndNotify(
-                address = address,
-                body = body,
-                date = receivedAt,
-                messageId = insertedMessageId,
-                threadId = resolvedThreadId,
-                subscriptionId = subscriptionId,
-                status = parts.last().status,
-                operationId = operationId,
-                // One durable alert claim covers both broadcast entrances and process recovery.
-                notify = false,
-                eventKey = intent.getStringExtra(SmsIngressJournal.EXTRA_EVENT),
-            )
-        }.onFailure { error ->
-            Log.w(TAG, "local refresh failed: ${error.javaClass.simpleName}")
-            IncomingSmsUiSyncWorker.enqueue(applicationContext, address, body, receivedAt,
-                subscriptionId, fingerprint, insertedMessageId)
-        }
 
         val ingress = SmsIngressIdentity(this).broadcast(address, body, sentAt, receivedAt,
             subscriptionId, fingerprint, insertedMessageId)
@@ -512,75 +493,6 @@ open class IncomingSmsService : Service() {
 
     private fun isFiltered(address: String, body: String): Boolean =
         isFilteredForReceive(this, address, body)
-
-    private fun updateLocalDatabaseAndNotify(
-        address: String,
-        body: String,
-        date: Long,
-        messageId: Long,
-        threadId: Long,
-        subscriptionId: Int,
-        status: Int,
-        operationId: String? = null,
-        /** false 时只入库、不弹通知（命中过滤规则的短信走这条路）。 */
-        notify: Boolean = true,
-        eventKey: String? = null,
-    ) {
-        // Contact enrichment must never prevent the original SMS from being stored.
-        val contact = runCatching { getNameAndPhotoFromPhoneNumber(address) }.getOrNull()
-        val photoUri = contact?.photoUri.orEmpty()
-        val senderName = runCatching {
-            getMyContactsCursor(favoritesOnly = false, withPhoneNumbersOnly = true).use {
-                getNameFromAddress(address, it)
-            }
-        }.getOrDefault(contact?.name.orEmpty().ifBlank { address })
-        val participant = SimpleContact(
-            rawId = 0,
-            contactId = 0,
-            name = senderName,
-            photoUri = photoUri,
-            phoneNumbers = arrayListOf(
-                PhoneNumber(value = address, type = 0, label = "", normalizedNumber = address),
-            ),
-            birthdays = ArrayList(),
-            anniversaries = ArrayList(),
-        )
-        val message = Message(
-            id = messageId,
-            body = body,
-            type = Telephony.Sms.MESSAGE_TYPE_INBOX,
-            status = status,
-            participants = arrayListOf(participant),
-            date = (date / 1000).toInt(),
-            read = messagesDB.getMessageWithId(messageId)?.read ?: false,
-            threadId = threadId,
-            isMMS = false,
-            attachment = null,
-            senderPhoneNumber = address,
-            senderName = senderName,
-            senderPhotoUri = photoUri,
-            subscriptionId = subscriptionId,
-        )
-
-        messagesDB.insertOrUpdate(message)
-        syncThreadToLocal(threadId)
-        // Basic transaction already published this receipt's refresh.
-        if (eventKey == null) { refreshMessages(); refreshConversations() }
-        
-        operationId?.let { 
-            ShadowRepository.recordStep(this@IncomingSmsService, it, "LOCAL_SYNC_OBSERVED", "SUCCESS")
-        }
-
-        if (notify) {
-            if (eventKey != null) {
-                org.fossify.messages.messaging.SmsIngressAlerts(this).enqueue(
-                    eventKey, messageId, address, body, threadId, senderName)
-            } else {
-                showReceivedMessageNotification(messageId, address, senderName, body, threadId,
-                    getNotificationBitmap(photoUri))
-            }
-        }
-    }
 
     private fun startInForeground() {
         val manager = getSystemService(NotificationManager::class.java)
@@ -1173,6 +1085,9 @@ open class IncomingSmsService : Service() {
             refreshMessages()
             refreshConversations()
             eventKey?.let { SmsIngressJournal(context).phase(it, "refresh_published") }
+            runCatching {
+                org.fossify.messages.messaging.SmsContactEnrichmentWorker.enqueue(context, messageId)
+            }.onFailure { Log.w(TAG, "contact enrichment deferred", it) }
         }
 
         fun resolveSubscriptionId(context: Context, intent: Intent): Int =

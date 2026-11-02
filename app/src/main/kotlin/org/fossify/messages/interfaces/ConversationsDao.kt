@@ -35,6 +35,9 @@ interface ConversationsDao {
     @Query("SELECT thread_id FROM conversations WHERE thread_id IN (:threadIds)")
     fun getExistingThreadIds(threadIds: List<Long>): List<Long>
 
+    @Query("UPDATE conversations SET title=:name,photo_uri=:photo WHERE thread_id=:threadId AND phone_number=:address AND uses_custom_title=0 AND is_group_conversation=0")
+    fun updateSenderDisplay(threadId: Long, address: String, name: String, photo: String)
+
     @Query("SELECT * FROM conversations WHERE read = 0")
     fun getUnreadConversations(): List<Conversation>
 
