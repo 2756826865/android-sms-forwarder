@@ -363,7 +363,7 @@ class MainActivity : SimpleActivity() {
             diagnosticsViewModel?.loadDiagnostics()
             if (hasPermission(PERMISSION_READ_SMS)) {
                 ensureBackgroundThread {
-                    if (conversationsDB.getAllRegular().isEmpty()) {
+                    if (!config.fullHistorySyncedV2 || conversationsDB.getAllRegular().isEmpty()) {
                         syncSmsHistory("resume_initial_sync")
                     }
                     conversationsViewModel?.refresh(isInitial = false)

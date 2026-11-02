@@ -272,7 +272,7 @@ class ConversationsViewModel(application: Application) : AndroidViewModel(applic
                     val threads = context.getConversations(strict = false, diagnostics = diagnostics)
                         // If local DB is empty, run history sync to populate local messages and
                         // threads
-                        if (cached.isEmpty() && threads.isNotEmpty()) {
+                        if ((!context.config.fullHistorySyncedV2 || cached.isEmpty()) && threads.isNotEmpty()) {
                         context.syncSmsHistory("compose_initial_sync")
                     }
                         kotlinx.coroutines.currentCoroutineContext().ensureActive()
