@@ -60,6 +60,13 @@ class SmsRecoveryWorker(
     @Suppress("LongMethod", "CyclomaticComplexMethod", "NestedBlockDepth")
     private suspend fun runScan(): Result {
         val journal = SmsIngressRecovery(applicationContext)
+        // Migrate confirmed legacy outcomes before the first history compaction.
+        // Unknown/queued attempts without a known request are not safe proof.
+        runCatching {
+            SmsForwardingProof(applicationContext).backfillKnownHistory(
+                ForwardingHistoryStore(applicationContext),
+            )
+        }.onFailure { Log.w(TAG, "forwarding proof migration deferred", it) }
         SmsIngressSpool(applicationContext).drain()
         SmsIngressReview(applicationContext).reconcile()
         SmsAlertRecoveryWorker.enqueue(applicationContext)

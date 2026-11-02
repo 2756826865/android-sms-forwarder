@@ -153,4 +153,20 @@ class IngressJournalSqlTest(unittest.TestCase):
   self.assertIn('ingress_forwarding_proof',src)
   self.assertNotIn('body TEXT',src)
 
+ def test_forwarding_proof_comes_after_confirmed_admission(self):
+  root=SRC
+  code=(root/'SmsForwardingProof.kt').read_text()
+  history=(root.parent/'forwarding'/'ForwardingHistoryStore.kt').read_text()
+  scheduler=(root.parent/'forwarding'/'ForwardingWorkScheduler.kt').read_text()
+  self.assertIn('private val app = context.applicationContext',code)
+  start=history.index('fun registerQueued(')
+  end=history.index('fun recordVerifiedSubmission(',start)
+  self.assertNotIn('recordSmsQueueEvidence(workId, isTest)',history[start:end])
+  self.assertIn('history.recordVerifiedSubmission(recordId)',scheduler)
+  self.assertIn('works.any { it.id.toString() == requestId }',scheduler)
+ def test_admission_overflow_does_not_unconditionally_run_on_main_thread(self):
+  src=(SRC/'SmsBroadcastDispatcher.kt').read_text()
+  self.assertIn('overflowAdmissionBusy.compareAndSet(false, true)',src)
+  self.assertIn('sms-ingress-overflow',src)
+
 if __name__=='__main__':unittest.main()

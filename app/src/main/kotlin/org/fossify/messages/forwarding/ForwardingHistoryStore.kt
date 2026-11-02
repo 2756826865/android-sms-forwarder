@@ -266,10 +266,7 @@ class ForwardingHistoryStore(context: Context) {
         val existing = readRecord(db, recordId)
         // KEEP may retain an older WorkRequest. A duplicate event must not reset
         // its attempts, result, error or retry payload before enqueue completes.
-        if (existing != null) {
-            recordSmsQueueEvidence(workId, isTest)
-            return@synchronized recordId
-        }
+        if (existing != null) return@synchronized recordId
         val record = ForwardingHistoryRecord(
             recordId = recordId,
             workId = workId,
@@ -294,17 +291,25 @@ class ForwardingHistoryStore(context: Context) {
             db.execSQL("DELETE FROM history WHERE status IN ('success','failed','skipped','unknown') AND record_id NOT IN (SELECT record_id FROM history ORDER BY updated_at DESC, record_id DESC LIMIT $MAX_RECORDS)")
             db.setTransactionSuccessful()
         } finally { db.endTransaction() }
-        // A compact proof survives the 2,000-row completed-history retention.
-        // Failure to write proof must not stop an already registered queue task.
-        recordSmsQueueEvidence(workId, isTest)
+        // registerQueued is NOT a verified WorkManager admission. It must not
+        // suppress future recovery if the process dies before scheduling.
         notifyChanged()
         recordId
+    }
+
+    /**
+     * Called only with a verified WorkManager request or an actual worker/skip
+     * decision. A failed proof write never changes the delivery history owner.
+     */
+    fun recordVerifiedSubmission(recordId: String) = synchronized(lock) {
+        val record = readRecord(database, recordId) ?: return@synchronized
+        recordSmsQueueEvidence(record.workId, record.isTest)
     }
 
     private fun recordSmsQueueEvidence(workId: String, isTest: Boolean) {
         if (isTest || !workId.startsWith("sms-")) return
         runCatching { SmsForwardingProof(appContext).record(workId) }
-            .onFailure { Log.w("ForwardingHistory", "durable SMS queue proof unavailable", it) }
+            .onFailure { Log.w("ForwardingHistory", "verified SMS proof unavailable", it) }
     }
 
     fun registerSkipped(
@@ -328,13 +333,17 @@ class ForwardingHistoryStore(context: Context) {
         markSkipped(recordId, detail)
     }
 
-    fun markRunning(recordId: String) = update(recordId) {
-        if (smsPhase(recordId) in setOf("sent", "failed")) it else it.copy(
-            status = STATUS_RUNNING,
-            attempts = it.attempts + 1,
-            detail = "正在发送",
-            updatedAt = System.currentTimeMillis(),
-        )
+    fun markRunning(recordId: String) {
+        update(recordId) {
+            if (smsPhase(recordId) in setOf("sent", "failed")) it else it.copy(
+                status = STATUS_RUNNING,
+                attempts = it.attempts + 1,
+                detail = "正在发送",
+                updatedAt = System.currentTimeMillis(),
+            )
+        }
+        // A running worker is direct evidence of WorkManager admission.
+        recordVerifiedSubmission(recordId)
     }
 
     fun markEnqueued(recordId: String) = update(recordId) {
@@ -350,9 +359,12 @@ class ForwardingHistoryStore(context: Context) {
         else it
     }
 
-    fun markSuccess(recordId: String, detail: String) = update(recordId) {
-        if (smsPhase(recordId) in setOf("sent", "failed")) it
-        else it.copy(status = STATUS_SUCCESS, detail = detail, updatedAt = System.currentTimeMillis())
+    fun markSuccess(recordId: String, detail: String) {
+        update(recordId) {
+            if (smsPhase(recordId) in setOf("sent", "failed")) it
+            else it.copy(status = STATUS_SUCCESS, detail = detail, updatedAt = System.currentTimeMillis())
+        }
+        recordVerifiedSubmission(recordId)
     }
 
     fun markRetry(recordId: String, detail: String) = update(recordId) {
@@ -369,8 +381,12 @@ class ForwardingHistoryStore(context: Context) {
         else it.copy(status = STATUS_FAILED, detail = detail, updatedAt = System.currentTimeMillis())
     }
 
-    fun markSkipped(recordId: String, detail: String) = update(recordId) {
-        it.copy(status = STATUS_SKIPPED, detail = detail, updatedAt = System.currentTimeMillis())
+    fun markSkipped(recordId: String, detail: String) {
+        update(recordId) {
+            it.copy(status = STATUS_SKIPPED, detail = detail, updatedAt = System.currentTimeMillis())
+        }
+        // Explicit filter/disabled-target decisions are authoritative skips.
+        recordVerifiedSubmission(recordId)
     }
 
     fun clear() = synchronized(lock) {

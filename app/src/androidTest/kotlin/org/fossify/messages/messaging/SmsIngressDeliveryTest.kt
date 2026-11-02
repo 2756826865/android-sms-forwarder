@@ -380,6 +380,51 @@ class SmsIngressDeliveryTest {
     }
 
     @Test
+    fun queuedHistoryIsNotAcceptedAsDurableForwardingProof() {
+        val history = org.fossify.messages.forwarding.ForwardingHistoryStore(
+            ForwardingTestContext.context,
+        )
+        val owner = "sms-" + (UUID.randomUUID().mostSignificantBits and Long.MAX_VALUE)
+        val proof = SmsForwardingProof(ForwardingTestContext.context)
+        val recordId = history.registerQueued(
+            workId = owner,
+            channel = "system",
+            sender = "10086",
+            body = "test",
+            receivedAt = System.currentTimeMillis(),
+            subscriptionId = -1,
+            isTest = false,
+        )
+        try {
+            assertFalse(proof.hasAny(owner))
+            history.markEnqueueFailed(recordId)
+            assertFalse(proof.hasAny(owner))
+            // A directly observed, explicit skip is safe even without a network request.
+            history.markSkipped(recordId, "filtered")
+            assertTrue(proof.hasAny(owner))
+        } finally {
+            val db = SmsIngressDatabase.get(ForwardingTestContext.context).writableDatabase
+            db.execSQL("DELETE FROM ingress_forwarding_proof WHERE work_id=?", arrayOf(owner))
+        }
+    }
+
+    @Test
+    fun historicalProofBackfillRejectsUnconfirmedQueuedAndUnknown() {
+        fun record(status: String, attempts: Int) =
+            org.fossify.messages.forwarding.ForwardingHistoryRecord(
+                "id", "sms-991", "system", "10086", "test", 10, -1,
+                status, attempts, "", 10, false,
+            )
+        val store = org.fossify.messages.forwarding.ForwardingHistoryStore
+        assertFalse(SmsForwardingProof.hasProvenOutcome(record(store.STATUS_QUEUED, 0)))
+        assertFalse(SmsForwardingProof.hasProvenOutcome(record(store.STATUS_UNKNOWN, 0)))
+        assertFalse(SmsForwardingProof.hasProvenOutcome(record(store.STATUS_FAILED, 0)))
+        assertTrue(SmsForwardingProof.hasProvenOutcome(record(store.STATUS_SKIPPED, 0)))
+        assertTrue(SmsForwardingProof.hasProvenOutcome(record(store.STATUS_SUCCESS, 0)))
+        assertTrue(SmsForwardingProof.hasProvenOutcome(record(store.STATUS_RUNNING, 1)))
+    }
+
+    @Test
     fun contactEnrichmentHasBoundedRetries() {
         assertTrue(SmsContactRetryPolicy.shouldRetry(0))
         assertTrue(SmsContactRetryPolicy.shouldRetry(2))

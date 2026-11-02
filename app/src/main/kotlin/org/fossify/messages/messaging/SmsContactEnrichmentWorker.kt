@@ -51,6 +51,8 @@ class SmsContactEnrichmentWorker(context: Context, params: WorkerParameters) :
                         .edit()
                         .putLong("last_failure_at", System.currentTimeMillis())
                         .putString("last_failure_reason", error.javaClass.simpleName)
+                        .putLong("last_failure_message_id", id)
+                        .putInt("last_failure_attempts", runAttemptCount + 1)
                         .apply()
                 }
                 Log.w("SmsContactEnrichment", "contact display enrichment exhausted bounded retries", error)

@@ -76,6 +76,9 @@ internal object ForwardingWorkScheduler {
                 if (history.retryPayload(recordId)?.optString("queueRequestId") != requestId) return
             }
             history.settleSubmission(requestId)
+            // The exact request UUID is present in WorkManager. Only now can
+            // a durable proof be used for provider-recovery de-duplication.
+            history.recordVerifiedSubmission(recordId)
             if (accepted) history.markEnqueued(recordId) else history.markEnqueueFailed(recordId)
         } else if (works.isEmpty()) {
             history.markEnqueueFailed(recordId)

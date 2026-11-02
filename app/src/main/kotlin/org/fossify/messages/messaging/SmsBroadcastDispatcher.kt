@@ -42,6 +42,9 @@ internal object SmsBroadcastDispatcher {
         java.util.concurrent.ThreadFactory { task -> Thread(task, "sms-ingress-emergency") },
     )
 
+    // One emergency thread prevents ordinary broadcast-main-thread disk IO when
+    // the bounded pools overflow. Never create unbounded overflow threads.
+    private val overflowAdmissionBusy = java.util.concurrent.atomic.AtomicBoolean(false)
     private val admissionExecutor = ThreadPoolExecutor(
         2, ADMISSION_THREADS, THREAD_KEEP_ALIVE_SECONDS, TimeUnit.SECONDS,
         ArrayBlockingQueue<Runnable>(HANDOFF_CAPACITY),
@@ -61,10 +64,24 @@ internal object SmsBroadcastDispatcher {
         } catch (_: java.util.concurrent.RejectedExecutionException) {
             try { emergencyExecutor.execute(admission) }
             catch (_: java.util.concurrent.RejectedExecutionException) {
-                // Last-resort backpressure runs only when BOTH bounded pools are
-                // saturated. Never release a broadcast token for a mere Service start.
-                Log.w("SmsIngress", "admission capacity exhausted; using inline durable admission")
-                admission.run()
+                // Keep the PendingResult alive on a reserved overflow thread.
+                // If even that slot is busy, inline admission is the last remaining
+                // durable alternative; report this platform saturation explicitly.
+                if (overflowAdmissionBusy.compareAndSet(false, true)) {
+                    try {
+                        Thread({
+                            try { admission.run() }
+                            finally { overflowAdmissionBusy.set(false) }
+                        }, "sms-ingress-overflow").start()
+                    } catch (error: Exception) {
+                        overflowAdmissionBusy.set(false)
+                        Log.e("SmsIngress", "overflow thread unavailable; inline admission", error)
+                        admission.run()
+                    }
+                } else {
+                    Log.e("SmsIngress", "all admission threads saturated; inline durable fallback")
+                    admission.run()
+                }
             }
         }
     }
