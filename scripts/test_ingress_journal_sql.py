@@ -136,7 +136,7 @@ class IngressJournalSqlTest(unittest.TestCase):
   self.assertIn('bounded SMS scan rejected by Provider; retrying ordered query',src)
  def test_spool_telemetry_cannot_fail_durable_admission(self):
   src=(SRC/'SmsIngressSpool.kt').read_text()
-  self.assertIn('file.finishWrite(output)\\n        } catch',src)
-  self.assertIn('runCatching {\\n            context.getSharedPreferences("sms_ingress_spool_status"',src)
+  self.assertIn('file.finishWrite(output)\n        } catch',src)
+  self.assertIn('runCatching {\n            context.getSharedPreferences("sms_ingress_spool_status"',src)
 
 if __name__=='__main__':unittest.main()
