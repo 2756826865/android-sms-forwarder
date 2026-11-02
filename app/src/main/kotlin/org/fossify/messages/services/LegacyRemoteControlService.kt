@@ -52,7 +52,7 @@ abstract class LegacyRemoteControlService(private val legacyId: Int) : Service()
                 )
             else startForeground(legacyId, notification)
             if (
-                SmsKeepAliveService.ensureStarted(this) != SmsKeepAliveService.StartResult.REQUESTED
+                SmsKeepAliveService.ensureStarted(this) != SmsKeepAliveService.Companion.StartResult.REQUESTED
             ) {
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
