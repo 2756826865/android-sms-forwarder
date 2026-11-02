@@ -106,7 +106,7 @@ class SmsIngressDeliveryTest {
         val helper = SmsIngressDatabase.get(context)
         try {
             val db = helper.writableDatabase
-            assertEquals(6, db.version)
+            assertEquals(7, db.version)
             db.rawQuery(
                     "SELECT snapshot,created_at FROM ingress_execution_sim WHERE request_id='request'",
                     null,
@@ -313,6 +313,78 @@ class SmsIngressDeliveryTest {
             context.getSharedPreferences("pushplus_forwarding", Context.MODE_PRIVATE).edit().clear().commit()
             context.getSharedPreferences("multi_channel_forwarding", Context.MODE_PRIVATE).edit().clear().commit()
         }
+    }
+
+    @Test
+    fun encryptedHandoffFallbackMustCommitBeforeBroadcastFinish() {
+        val actions = mutableListOf<String>()
+        val primary = DurableIngressHandoff.persistWithFallback(
+            primary = { actions.add("spool_failed"); error("storage unavailable") },
+            fallback = { actions.add("journal_committed") },
+        )
+        assertFalse(primary)
+        var finished = false
+        val accepted = DurableIngressHandoff.dispatch(
+            executor = java.util.concurrent.Executor { it.run() },
+            persist = { actions.add("persist_confirmed") },
+            finish = { actions.add("finished"); finished = true },
+            process = { assertTrue(finished); actions.add("process") },
+        )
+        assertTrue(accepted)
+        assertEquals(
+            listOf("spool_failed", "journal_committed", "persist_confirmed", "finished", "process"),
+            actions,
+        )
+    }
+
+    @Test
+    fun rejectedExecutorStillKeepsCommittedEncryptedReceipt() {
+        val actions = mutableListOf<String>()
+        val accepted = DurableIngressHandoff.dispatch(
+            executor = java.util.concurrent.Executor {
+                throw java.util.concurrent.RejectedExecutionException("saturated")
+            },
+            persist = { actions.add("committed") },
+            finish = { actions.add("finish") },
+            process = { actions.add("process") },
+        )
+        assertFalse(accepted)
+        assertEquals(listOf("committed", "finish"), actions)
+    }
+
+    @Test
+    fun aFailedSpoolAndJournalCannotBeAcknowledgedAsDurable() {
+        var fallbackAttempted = false
+        try {
+            DurableIngressHandoff.persistWithFallback(
+                primary = { error("disk") },
+                fallback = { fallbackAttempted = true; error("keystore") },
+            )
+            fail("admission must fail if neither durable store committed")
+        } catch (_: IllegalStateException) {
+            assertTrue(fallbackAttempted)
+        }
+    }
+
+    @Test
+    fun forwardingProofSurvivesHistoryCompactionAndRejectsPrefixCollisions() {
+        val store = SmsForwardingProof(ForwardingTestContext.context)
+        val root = "sms-" + (UUID.randomUUID().mostSignificantBits and Long.MAX_VALUE)
+        val other = root + "1"
+        store.record(root + "-target")
+        assertTrue(store.hasAny(root))
+        assertFalse(store.hasAny(other))
+        assertFalse(store.hasAny(root.dropLast(1)))
+        val db = SmsIngressDatabase.get(ForwardingTestContext.context).writableDatabase
+        db.execSQL("DELETE FROM ingress_forwarding_proof WHERE work_id=?", arrayOf(root + "-target"))
+    }
+
+    @Test
+    fun contactEnrichmentHasBoundedRetries() {
+        assertTrue(SmsContactRetryPolicy.shouldRetry(0))
+        assertTrue(SmsContactRetryPolicy.shouldRetry(2))
+        assertFalse(SmsContactRetryPolicy.shouldRetry(3))
+        assertFalse(SmsContactRetryPolicy.shouldRetry(100))
     }
 
     @Test

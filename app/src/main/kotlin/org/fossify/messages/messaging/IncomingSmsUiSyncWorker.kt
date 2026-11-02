@@ -120,7 +120,9 @@ class IncomingSmsUiSyncWorker(context: Context, params: WorkerParameters) : Coro
                     matchingId = id
                     matchingThread = thread
                 }
-                if (cursor.count > 256 && providerId <= 0) return false
+                // One lookahead row detects an ambiguous oversized result without
+                // forcing OEM providers to materialize the entire cursor count.
+                if (providerId <= 0 && inspected == 256 && cursor.moveToNext()) return false
             }
         if (matchingId <= 0L) return false
         applicationContext.syncThreadToLocal(matchingThread)

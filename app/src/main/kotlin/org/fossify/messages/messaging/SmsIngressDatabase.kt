@@ -14,6 +14,7 @@ internal class SmsIngressDatabase private constructor(context: Context) :
         createExecutionSnapshots(db)
         createTiming(db)
         createAlerts(db)
+        createForwardingProof(db)
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -33,6 +34,7 @@ internal class SmsIngressDatabase private constructor(context: Context) :
                 )
             createAlerts(db)
         }
+        if (oldVersion < FORWARDING_PROOF_VERSION) createForwardingProof(db)
     }
 
     private fun createJournal(db: SQLiteDatabase) {
@@ -82,13 +84,20 @@ internal class SmsIngressDatabase private constructor(context: Context) :
         )
     }
 
+    private fun createForwardingProof(db: SQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS ingress_forwarding_proof(work_id TEXT PRIMARY KEY NOT NULL, created_at INTEGER NOT NULL)"
+        )
+    }
+
     companion object {
+        private const val FORWARDING_PROOF_VERSION = 7
         private const val JOURNAL_VERSION = 2
         private const val SNAPSHOTS_VERSION = 3
         private const val ROUTING_VERSION = 4
         private const val TIMING_VERSION = 5
         private const val DELIVERY_VERSION = 6
-        private const val DATABASE_VERSION = DELIVERY_VERSION
+        private const val DATABASE_VERSION = FORWARDING_PROOF_VERSION
         private val instances = mutableMapOf<String, SmsIngressDatabase>()
 
         @Synchronized

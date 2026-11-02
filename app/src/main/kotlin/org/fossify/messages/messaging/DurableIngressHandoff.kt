@@ -9,6 +9,16 @@ import java.util.concurrent.atomic.AtomicBoolean
  * token.
  */
 internal object DurableIngressHandoff {
+    /** Commit the encrypted spool, or commit the Journal BEFORE acknowledging intake. */
+    fun persistWithFallback(primary: () -> Unit, fallback: () -> Unit): Boolean =
+        try {
+            primary()
+            true
+        } catch (_: Exception) {
+            fallback()
+            false
+        }
+
     fun dispatch(
         executor: Executor,
         process: () -> Unit,

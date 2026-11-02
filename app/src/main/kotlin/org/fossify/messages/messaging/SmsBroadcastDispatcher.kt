@@ -61,10 +61,10 @@ internal object SmsBroadcastDispatcher {
         } catch (_: java.util.concurrent.RejectedExecutionException) {
             try { emergencyExecutor.execute(admission) }
             catch (_: java.util.concurrent.RejectedExecutionException) {
-                val serviceAccepted = runCatching { IncomingSmsService.enqueue(app, copy) }.getOrDefault(false)
-                Log.e("SmsIngress", if (serviceAccepted) "admission busy; service fallback accepted"
-                    else "admission capacity exhausted; no durable receipt confirmed")
-                pending.finish()
+                // Last-resort backpressure runs only when BOTH bounded pools are
+                // saturated. Never release a broadcast token for a mere Service start.
+                Log.w("SmsIngress", "admission capacity exhausted; using inline durable admission")
+                admission.run()
             }
         }
     }
@@ -72,37 +72,28 @@ internal object SmsBroadcastDispatcher {
     private fun dispatchPersisted(app: Context, copy: Intent, pending: BroadcastReceiver.PendingResult) {
         val finished = java.util.concurrent.atomic.AtomicBoolean(false)
         fun finish() { if (finished.compareAndSet(false, true)) pending.finish() }
-        var handedOff = false
-        val persist = {
-            runCatching {
-                SmsIngressSpool(app).save(copy)
-                handedOff = true
-            }
-                .onFailure {
-                    Log.e("SmsIngress", "emergency persistence failed: ${it.javaClass.simpleName}")
-                    val acceptedByService = runCatching { IncomingSmsService.enqueue(app, copy) }.getOrDefault(false)
-                    handedOff = acceptedByService
-                    if (!acceptedByService) {
-                        app.getSharedPreferences("sms_ingress_spool_status", Context.MODE_PRIVATE).edit()
-                            .putString("error", "storage_and_service_handoff_failed").apply()
-                        Log.w("SmsIngress", "storage and service unavailable; attempting protected Journal admission")
-                    }
-                }
-            Unit
-        }
-        val accepted =
-            DurableIngressHandoff.dispatch(
-                java.util.concurrent.Executor { task ->
-                    if (handedOff) executor.execute(task) else emergencyExecutor.execute(task)
+        var spoolSaved = false
+        var journalSaved = false
+        try {
+            val accepted = DurableIngressHandoff.dispatch(
+                executor = java.util.concurrent.Executor { task ->
+                    if (spoolSaved) executor.execute(task) else emergencyExecutor.execute(task)
                 },
-                process = {
-                    runCatching {
-                        val staged = try {
+                persist = {
+                    spoolSaved = DurableIngressHandoff.persistWithFallback(
+                        primary = { SmsIngressSpool(app).save(copy) },
+                        fallback = {
+                            // Must be committed before the PendingResult is released.
                             SmsIngressJournal(app).stage(copy)
-                        } finally {
-                            finish()
-                        }
-                        SmsIngressSpool(app).remove(copy)
+                            journalSaved = true
+                        },
+                    )
+                },
+                finish = { finish() },
+                process = {
+                    try {
+                        val staged = SmsIngressJournal(app).stage(copy)
+                        if (spoolSaved) SmsIngressSpool(app).remove(copy)
                         runCatching { SmsKeepAliveService.ensureStarted(app) }
                         if (!IncomingSmsService.enqueue(app, staged)) {
                             try {
@@ -110,26 +101,30 @@ internal object SmsBroadcastDispatcher {
                                     runCatching { IncomingSmsService.processMinimal(app, staged) }
                                 }
                             } catch (_: java.util.concurrent.RejectedExecutionException) {
-                                Log.w("SmsIngress", "fallback busy; journal retained")
+                                Log.w("SmsIngress", "fallback busy; committed Journal retained")
                             }
                         }
+                    } catch (error: Exception) {
+                        Log.w("SmsIngress", "durable intake processing deferred", error)
+                    } finally {
+                        runCatching { SmsRecoveryWorker.enqueueNow(app) }
                     }
-                        .onFailure {
-                            Log.w(
-                                "SmsIngress",
-                                "staged processing deferred: ${it.javaClass.simpleName}",
-                            )
-                        }
-                    runCatching { SmsRecoveryWorker.enqueueNow(app) }
                 },
-                persist = persist,
-                finish = { if (handedOff) finish() },
             )
-        if (!accepted) {
+            if (!accepted) Log.w("SmsIngress", "processing queue saturated; durable intake retained")
+        } catch (error: Throwable) {
+            Log.e("SmsIngress", "durable admission failed", error)
+            // A Service start request is only best effort, never a persistence ACK.
+            if (!spoolSaved && !journalSaved) {
+                runCatching { IncomingSmsService.enqueue(app, copy) }
+                runCatching {
+                    app.getSharedPreferences("sms_ingress_spool_status", Context.MODE_PRIVATE)
+                        .edit().putString("error", "spool_and_journal_unavailable").apply()
+                }
+            }
+        } finally {
             finish()
-            Log.w("SmsIngress", if (handedOff) "processing queue full; recovery handoff retained"
-                else "emergency admission full; no durable handoff confirmed")
+            if (spoolSaved || journalSaved) runCatching { SmsRecoveryWorker.enqueueNow(app) }
         }
-        runCatching { SmsRecoveryWorker.enqueueNow(app) }
     }
 }

@@ -7,6 +7,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 import org.fossify.messages.models.Events
 import org.greenrobot.eventbus.EventBus
+import org.fossify.messages.messaging.SmsForwardingProof
+import android.util.Log
 
 data class ForwardingHistoryRecord(
     val recordId: String,
@@ -264,7 +266,10 @@ class ForwardingHistoryStore(context: Context) {
         val existing = readRecord(db, recordId)
         // KEEP may retain an older WorkRequest. A duplicate event must not reset
         // its attempts, result, error or retry payload before enqueue completes.
-        if (existing != null) return@synchronized recordId
+        if (existing != null) {
+            recordSmsQueueEvidence(workId, isTest)
+            return@synchronized recordId
+        }
         val record = ForwardingHistoryRecord(
             recordId = recordId,
             workId = workId,
@@ -289,8 +294,17 @@ class ForwardingHistoryStore(context: Context) {
             db.execSQL("DELETE FROM history WHERE status IN ('success','failed','skipped','unknown') AND record_id NOT IN (SELECT record_id FROM history ORDER BY updated_at DESC, record_id DESC LIMIT $MAX_RECORDS)")
             db.setTransactionSuccessful()
         } finally { db.endTransaction() }
+        // A compact proof survives the 2,000-row completed-history retention.
+        // Failure to write proof must not stop an already registered queue task.
+        recordSmsQueueEvidence(workId, isTest)
         notifyChanged()
         recordId
+    }
+
+    private fun recordSmsQueueEvidence(workId: String, isTest: Boolean) {
+        if (isTest || !workId.startsWith("sms-")) return
+        runCatching { SmsForwardingProof(appContext).record(workId) }
+            .onFailure { Log.w("ForwardingHistory", "durable SMS queue proof unavailable", it) }
     }
 
     fun registerSkipped(

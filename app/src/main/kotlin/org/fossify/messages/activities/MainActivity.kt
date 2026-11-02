@@ -153,17 +153,27 @@ class MainActivity : SimpleActivity() {
 
     @SuppressLint("InlinedApi")
     private var roomSnapshotJob: kotlinx.coroutines.Job? = null
+    private var roomSnapshotDirty = false
+    private fun scheduleRoomSnapshot() {
+        roomSnapshotJob?.cancel()
+        roomSnapshotJob = lifecycleScope.launch {
+            kotlinx.coroutines.delay(60)
+            if (isFinishing || isDestroyed || config.useGatewayDeveloperUi ||
+                !lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) return@launch
+            val snapshot = withContext(kotlinx.coroutines.Dispatchers.IO) {
+                runCatching { ArrayList(conversationsDB.getAllRegular()) }.getOrNull()
+            } ?: return@launch
+            roomSnapshotDirty = false
+            setupConversations(snapshot, cached = true)
+        }
+    }
     private val conversationObserver = object : androidx.room.InvalidationTracker.Observer("messages", "conversations", "recycle_bin_messages") {
         override fun onInvalidated(tables: Set<String>) {
             runOnUiThread {
                 if (isFinishing || isDestroyed || config.useGatewayDeveloperUi) return@runOnUiThread
-                roomSnapshotJob?.cancel()
-                roomSnapshotJob = lifecycleScope.launch {
-                    val snapshot = withContext(kotlinx.coroutines.Dispatchers.IO) {
-                        runCatching { ArrayList(conversationsDB.getAllRegular()) }.getOrNull()
-                    } ?: return@launch
-                    setupConversations(snapshot, cached = true)
-                }
+                roomSnapshotDirty = true
+                if (lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED))
+                    scheduleRoomSnapshot()
             }
         }
     }
@@ -352,6 +362,7 @@ class MainActivity : SimpleActivity() {
 
     override fun onResume() {
         super.onResume()
+        if (roomSnapshotDirty && !config.useGatewayDeveloperUi) scheduleRoomSnapshot()
         org.fossify.messages.messaging.SmsRoleDiagnostics.observe(this, "home-resume")
         val deferredHomeRefresh = homeRefreshGate.resume()
         // 回前台补偿同步必须在 UI 模式分流之前执行：开发者版 UI 是默认模式 (config.useGatewayDeveloperUi 默认 true)，
@@ -432,6 +443,7 @@ class MainActivity : SimpleActivity() {
     }
 
     override fun onPause() {
+        roomSnapshotJob?.cancel()
         verificationCodeDialog?.dismiss()
         verificationCodeDialog = null
         homeRefreshGate.pause()

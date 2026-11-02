@@ -149,6 +149,7 @@ class ConversationsViewModel(application: Application) : AndroidViewModel(applic
     }
 
     override fun onCleared() {
+        localRefreshJob?.cancel()
         getApplication<Application>().getMessagesDB().invalidationTracker.removeObserver(roomObserver)
         super.onCleared()
     }
@@ -196,6 +197,9 @@ class ConversationsViewModel(application: Application) : AndroidViewModel(applic
     private fun refreshLocalSnapshot() {
         localRefreshJob?.cancel()
         localRefreshJob = viewModelScope.launch {
+            // Coalesce Room invalidations from receipt, conversation and contact
+            // display writes without delaying Provider persistence or notifications.
+            kotlinx.coroutines.delay(60)
             val context = getApplication<Application>()
             val local = withContext(Dispatchers.IO) {
                 runCatching { context.conversationsDB.getAllRegular() }.getOrNull()

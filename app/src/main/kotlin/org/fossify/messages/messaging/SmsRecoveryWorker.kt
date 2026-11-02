@@ -263,7 +263,11 @@ class SmsRecoveryWorker(
                             val ownerAlreadyForwarded = forwardedWorkIds.any {
                                 it == uniqueId || it.startsWith("$uniqueId-")
                             }
-                            if (providerAlreadyForwarded || ownerAlreadyForwarded) {
+                            // Do not auto-send again merely because old history was
+                            // compacted. This proof is separate from the message owner.
+                            val durableDecision =
+                                SmsForwardingProof(applicationContext).hasAny(uniqueId)
+                            if (providerAlreadyForwarded || ownerAlreadyForwarded || durableDecision) {
                         if (!alreadyLocal) { threadIdsToSync.add(threadId)
                                     repairedAny = true }
                         ShadowRepository.incrementCounter(applicationContext, "RECOVERY_ITEM_SKIPPED")

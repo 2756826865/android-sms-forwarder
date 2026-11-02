@@ -139,4 +139,18 @@ class IngressJournalSqlTest(unittest.TestCase):
   self.assertIn('file.finishWrite(output)\n        } catch',src)
   self.assertIn('runCatching {\n            context.getSharedPreferences("sms_ingress_spool_status"',src)
 
+ def test_ui_repair_does_not_force_full_cursor_count(self):
+  src=(SRC/'IncomingSmsUiSyncWorker.kt').read_text()
+  self.assertNotIn('cursor.count',src)
+  self.assertIn('inspected == 256 && cursor.moveToNext()',src)
+ def test_service_acceptance_is_not_durable_receipt(self):
+  src=(SRC/'SmsBroadcastDispatcher.kt').read_text()
+  self.assertNotIn('handedOff = acceptedByService',src)
+  self.assertIn('admission.run()',src)
+  self.assertIn('persistWithFallback(',src)
+ def test_permanent_forwarding_proof_keeps_content_out(self):
+  src=(SRC/'SmsForwardingProof.kt').read_text()
+  self.assertIn('ingress_forwarding_proof',src)
+  self.assertNotIn('body TEXT',src)
+
 if __name__=='__main__':unittest.main()
