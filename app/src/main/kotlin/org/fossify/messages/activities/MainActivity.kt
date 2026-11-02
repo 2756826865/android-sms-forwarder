@@ -1256,7 +1256,7 @@ class MainActivity : SimpleActivity() {
         @Subscribe(threadMode = ThreadMode.MAIN)
         fun verificationCode(event: Events.VerificationCodeReceived) {
                 if (
-                    config.useGatewayDeveloperUi ||
+                    !config.showVerificationCodePopup || config.useGatewayDeveloperUi ||
                         !lifecycle.currentState.isAtLeast(
                             androidx.lifecycle.Lifecycle.State.RESUMED
                         )

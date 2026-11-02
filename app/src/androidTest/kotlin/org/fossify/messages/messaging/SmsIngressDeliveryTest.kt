@@ -465,4 +465,44 @@ class SmsIngressDeliveryTest {
         }
     }
 
+    @Test
+    fun liveIslandProvidersDoNotExpireTheWholeSmsNotification() {
+        val context = ForwardingTestContext.context
+        val providers = listOf(
+            org.fossify.messages.helpers.liveisland.XiaomiHyperIslandProvider(),
+            org.fossify.messages.helpers.liveisland.OppoFluidCloudProvider(),
+            org.fossify.messages.helpers.liveisland.AndroidLiveUpdateProvider(),
+        )
+        for (provider in providers) {
+            val builder = androidx.core.app.NotificationCompat.Builder(context, "island-timeout-test")
+                .setSmallIcon(android.R.drawable.ic_dialog_info)
+            provider.applyToBuilder(context, builder,
+                org.fossify.messages.helpers.liveisland.LiveIslandMessage(77,"sender","message","ticker",null))
+            val notification = builder.build()
+            assertEquals(provider.kind.toString(), 0L, notification.timeoutAfter)
+            if (provider is org.fossify.messages.helpers.liveisland.XiaomiHyperIslandProvider) {
+                val extra = notification.extras.getString("miui.focus.param")
+                assertNotNull(extra)
+                val island = org.json.JSONObject(extra!!).getJSONObject("param_v2").getJSONObject("param_island")
+                assertEquals(8, island.getInt("islandTimeout"))
+            }
+        }
+    }
+
+    @Test
+    fun bothSettingsConsumersSeeTheSameVerificationPopupPreference() {
+        val context = ForwardingTestContext.context
+        val first = org.fossify.messages.helpers.Config.newInstance(context)
+        val second = org.fossify.messages.helpers.Config.newInstance(context)
+        val original = first.showVerificationCodePopup
+        try {
+            first.showVerificationCodePopup = false
+            assertFalse(second.showVerificationCodePopup)
+            second.showVerificationCodePopup = true
+            assertTrue(first.showVerificationCodePopup)
+        } finally {
+            first.showVerificationCodePopup = original
+        }
+    }
+
 }

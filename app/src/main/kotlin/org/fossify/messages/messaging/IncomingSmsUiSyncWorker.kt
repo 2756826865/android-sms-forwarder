@@ -125,10 +125,13 @@ class IncomingSmsUiSyncWorker(context: Context, params: WorkerParameters) : Coro
                 if (providerId <= 0 && inspected == 256 && cursor.moveToNext()) return false
             }
         if (matchingId <= 0L) return false
-        applicationContext.syncThreadToLocal(matchingThread)
+        applicationContext.syncThreadToLocal(
+            matchingThread, requiredSmsIds = setOf(matchingId), requireProvider = true,
+        )
         // syncThreadToLocal tolerates Provider failures; do not treat a no-op as a repair.
-        return applicationContext.messagesDB.getMessageWithId(matchingId)?.threadId == matchingThread &&
-            applicationContext.conversationsDB.getConversationWithThreadId(matchingThread) != null
+        return applicationContext.messagesDB.getMessageWithId(matchingId)?.let {
+            it.threadId == matchingThread && !it.isMMS
+        } == true && applicationContext.conversationsDB.getConversationWithThreadId(matchingThread) != null
     }
 
     companion object {

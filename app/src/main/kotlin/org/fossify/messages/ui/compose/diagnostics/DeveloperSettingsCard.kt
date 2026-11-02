@@ -7,6 +7,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import org.fossify.messages.R
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import org.fossify.messages.activities.RecycleBinConversationsActivity
 import org.fossify.messages.extensions.config
 
@@ -14,6 +18,7 @@ import org.fossify.messages.extensions.config
 fun DeveloperSettingsCard() {
     val context = LocalContext.current
     val config = context.config
+    var codePopup by remember { mutableStateOf(config.showVerificationCodePopup) }
     var liveIsland by remember { mutableStateOf(config.enableLiveIsland) }
     var recycleEnabled by remember { mutableStateOf(config.useRecycleBin) }
     var density by remember { mutableStateOf(config.homeListDensity) }
@@ -30,6 +35,18 @@ fun DeveloperSettingsCard() {
                 Switch(liveIsland, onCheckedChange = { liveIsland = it; config.enableLiveIsland = it })
             }
             Text("系统支持和相关权限仍需在设备设置中满足。", style = MaterialTheme.typography.bodySmall)
+            val popupLabel = stringResource(R.string.settings_verification_code_popup)
+            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Text(popupLabel, Modifier.weight(1f))
+                Switch(codePopup, onCheckedChange = {
+                    codePopup = it
+                    config.showVerificationCodePopup = it
+                }, modifier = Modifier.semantics { contentDescription = popupLabel })
+            }
+            Text(
+                stringResource(R.string.settings_verification_code_popup_summary),
+                style = MaterialTheme.typography.bodySmall,
+            )
             Text("会话显示密度（两版共用）：$density 行", style = MaterialTheme.typography.bodyMedium)
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 listOf(4, 6, 8, 10).forEach { n -> FilterChip(selected = density == n, onClick = { density = n; config.homeListDensity = n }, label = { Text("$n") }) }

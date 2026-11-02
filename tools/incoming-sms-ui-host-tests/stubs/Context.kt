@@ -12,6 +12,10 @@ class Context {
  var delayQueries=0
     var throwQuery:Exception?=null
     var throwRead:Exception?=null
+ var syncLimit=Int.MAX_VALUE
+ var throwSync:Exception?=null
+ val requiredRequests=mutableListOf<Set<Long>>()
+ val strictRequests=mutableListOf<Boolean>()
  var noConversationSync=false
  val conversations=mutableSetOf<Long>()
  var rows=emptyList<Map<String,Any?>>()
@@ -23,7 +27,7 @@ class Context {
  fun update():Nothing=error("System Provider update forbidden")
  fun delete():Nothing=error("System Provider delete forbidden")
 }
-data class LocalMessage(val id:Long,val threadId:Long)
+data class LocalMessage(val id:Long,val threadId:Long,val isMMS:Boolean=false)
 class Resolver(val c:Context) {
  fun query(uri:String,projection:Array<String>,selection:String?,args:Array<String>?,order:String?):Cursor? {
   c.queries++

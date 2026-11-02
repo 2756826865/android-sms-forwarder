@@ -83,7 +83,24 @@ fun main()= runBlocking {
     c = Context()
     Ui.enqueue(c, "sender", "test", 1_000_000, 2, "fingerprint", 124)
     check(c.enqueued.single().third.data.getLong(Ui.KEY_PROVIDER_ID, -1) == 124L)
+    // A matched older row must survive the normal latest-50-message UI window.
+    for (knownProvider in listOf(false, true)) {
+        c = Context()
+        c.syncLimit = 50
+        c.rows = (1L..60L).map { row(id=it,body=if(it==1L) "test" else "new$it") }
+        val targetData = if(knownProvider) Data.Builder().putAll(data()).putLong(Ui.KEY_PROVIDER_ID,1).build() else data()
+        check(run(c,d=targetData)=="success")
+        check(c.local[1L]?.threadId==9L && c.requiredRequests.single()==setOf(1L))
+        check(c.strictRequests.single())
+    }
+    c = Context(); c.rows=listOf(row()); c.throwSync=IllegalStateException("Provider unavailable during strict sync")
+    check(run(c)=="retry" && c.local.isEmpty())
+    check(run(c,12)=="failure" && c.local.isEmpty())
+    c = Context(); c.rows=listOf(row()); c.throwSync=kotlinx.coroutines.CancellationException("sync cancelled")
+    var syncCancelled=false
+    try { run(c) } catch (_: kotlinx.coroutines.CancellationException) { syncCancelled=true }
+    check(syncCancelled && c.synced.size==1)
     println(
-        "Actual read-only UI worker: 20 scenarios passed; Provider and WorkManager simulated, no SMS sent"
+        "Actual read-only UI worker: 25 scenarios passed; Provider and WorkManager simulated, no SMS sent"
     )
 }

@@ -50,6 +50,12 @@ class SettingsActivity : SimpleActivity() {
     }
 
     private fun bindToggles() {
+        binding.settingsVerificationCodePopupSwitch.setOnCheckedChangeListener { _, checked ->
+            config.showVerificationCodePopup = checked
+        }
+        binding.settingsVerificationCodePopupHolder.setOnClickListener {
+            binding.settingsVerificationCodePopupSwitch.toggle()
+        }
         binding.settingsHideRecentTasksSwitch.setOnCheckedChangeListener { _, hidden ->
             if (config.hideFromRecentTasks != hidden &&
                 !org.fossify.messages.helpers.RecentTasksVisibility.setHidden(this, hidden)) {
@@ -67,6 +73,7 @@ class SettingsActivity : SimpleActivity() {
     }
 
     private fun refreshToggleStates() {
+        binding.settingsVerificationCodePopupSwitch.isChecked = config.showVerificationCodePopup
         binding.settingsHideRecentTasksSwitch.isChecked = config.hideFromRecentTasks
         binding.settingsHomeBottomNavSwitch.isChecked = config.showHomeBottomNavigation
         binding.settingsLiveIslandSwitch.isChecked = config.enableLiveIsland

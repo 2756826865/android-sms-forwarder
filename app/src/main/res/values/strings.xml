@@ -683,4 +683,6 @@
     <string name="settings_hide_recent_tasks_summary">隐藏本应用的任务卡片，关闭可恢复显示；不等于后台保活。隐藏后可从桌面图标重新打开，部分系统需重新锁定任务。</string>
     <string name="settings_hide_recent_tasks_apply_failed">设置已保存，系统暂未应用；请重新打开应用后检查</string>
     <string name="about_special_statement">特别声明</string>
+    <string name="settings_verification_code_popup">验证码弹窗</string>
+    <string name="settings_verification_code_popup_summary">首页在前台时显示验证码与复制按钮；关闭不影响后台通知或短信转发。</string>
 </resources>

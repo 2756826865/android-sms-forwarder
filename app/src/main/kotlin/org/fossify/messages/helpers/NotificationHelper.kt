@@ -8,6 +8,7 @@ import android.app.NotificationManager.IMPORTANCE_HIGH
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.os.Bundle
 import android.graphics.Bitmap
 import android.media.AudioAttributes
 import android.media.AudioManager
@@ -224,13 +225,22 @@ class NotificationHelper(
                 builder.setShortcutInfo(shortcut)
                 val posted = synchronized(SmsNotificationReadGuard.lock(threadId)) {
                     val message = context.messagesDB.getMessageWithId(messageId)
-                    val newestUnread = context.messagesDB.getLatestUnreadInboxMessage(threadId)
-                    val superseded = message != null && newestUnread != null &&
-                        (newestUnread.date > message.date ||
-                            (newestUnread.date == message.date && newestUnread.id > message.id))
+                    val candidate = SmsNotificationStamp(threadId, messageId, message?.date?.toLong() ?: -1L)
+                    val active = notificationManager.activeNotifications
+                        .firstOrNull { it.id == notificationId }?.notification?.extras
+                    val prior = active?.takeIf { it.containsKey(POSTED_SMS_THREAD) }?.let {
+                        SmsNotificationStamp(it.getLong(POSTED_SMS_THREAD),
+                            it.getLong(POSTED_SMS_ID), it.getLong(POSTED_SMS_DATE))
+                    }
+                    val superseded = candidate.isSupersededBy(prior)
                     if (message?.read == true || superseded) {
                         false
                     } else {
+                        builder.addExtras(Bundle().apply {
+                            putLong(POSTED_SMS_THREAD, threadId)
+                            putLong(POSTED_SMS_ID, messageId)
+                            putLong(POSTED_SMS_DATE, candidate.dateSeconds)
+                        })
                         notificationManager.notify(notificationId, builder.build())
                         true
                     }
@@ -342,4 +352,10 @@ class NotificationHelper(
             emptyList()
         }
     }
+    companion object {
+        private const val POSTED_SMS_THREAD = "org.fossify.messages.posted.thread"
+        private const val POSTED_SMS_ID = "org.fossify.messages.posted.id"
+        private const val POSTED_SMS_DATE = "org.fossify.messages.posted.date"
+    }
+
 }

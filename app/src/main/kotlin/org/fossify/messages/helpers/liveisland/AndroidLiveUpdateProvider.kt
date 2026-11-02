@@ -28,7 +28,6 @@ class AndroidLiveUpdateProvider : LiveIslandProvider {
     ) {
         builder.setOngoing(true)
         builder.setOnlyAlertOnce(true)
-        builder.setTimeoutAfter(ISLAND_DISMISS_MS)
         if (Build.VERSION.SDK_INT >= 36) {
             builder.setRequestPromotedOngoing(true)
             builder.setStyle(
@@ -39,7 +38,4 @@ class AndroidLiveUpdateProvider : LiveIslandProvider {
         }
     }
 
-    companion object {
-        private const val ISLAND_DISMISS_MS = 8_000L
-    }
 }

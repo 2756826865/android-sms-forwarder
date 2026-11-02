@@ -29,7 +29,7 @@ class OppoFluidCloudProvider : LiveIslandProvider {
         builder: NotificationCompat.Builder,
         message: LiveIslandMessage,
     ) {
-        builder.setTimeoutAfter(ISLAND_DISMISS_MS)
+        // Fluid-cloud presentation is independent of the SMS notification lifetime.
     }
 
     override fun afterNotify(context: Context, message: LiveIslandMessage) {
@@ -91,7 +91,6 @@ class OppoFluidCloudProvider : LiveIslandProvider {
         private const val DEFAULT_AUTHORITY = "IntelligentIntent"
         private const val METHOD_SHARE_INTENT = "shareIntent"
         private const val ACTION_CREATE = 0
-        private const val ISLAND_DISMISS_MS = 8_000L
         private const val MAX_FIELD = 80
         // Placeholder IDs; replace after OPPO open-platform registration.
         private const val PLACEHOLDER_LAUNCHER_SERVICE_ID = "999800001"

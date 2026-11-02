@@ -25,7 +25,6 @@ class XiaomiHyperIslandProvider : LiveIslandProvider {
                 putString(MIUI_FOCUS_PARAM, islandParams)
             },
         )
-        builder.setTimeoutAfter(ISLAND_DISMISS_MS)
     }
 
     private fun buildIslandParams(message: LiveIslandMessage): String {
@@ -69,7 +68,6 @@ class XiaomiHyperIslandProvider : LiveIslandProvider {
 
     companion object {
         private const val MIUI_FOCUS_PARAM = "miui.focus.param"
-        private const val ISLAND_DISMISS_MS = 8_000L
         private const val ISLAND_TIMEOUT_SECONDS = 8
         private const val MAX_FIELD = 80
         private const val MAX_TICKER = 24

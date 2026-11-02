@@ -1,5 +1,6 @@
 package org.fossify.messages.ui.compose.navigation
 
+import org.fossify.messages.extensions.config
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -229,7 +230,7 @@ private fun IncomingVerificationPopup() {
                 )
                 fun onCode(event: org.fossify.messages.models.Events.VerificationCodeReceived) {
                     if (
-                        owner.lifecycle.currentState.isAtLeast(
+                        context.config.showVerificationCodePopup && owner.lifecycle.currentState.isAtLeast(
                             androidx.lifecycle.Lifecycle.State.RESUMED
                         )
                     ) {
