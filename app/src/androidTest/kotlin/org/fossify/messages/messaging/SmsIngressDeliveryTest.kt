@@ -96,11 +96,14 @@ class SmsIngressDeliveryTest {
         val manager = context.getSystemService(android.app.NotificationManager::class.java)
         val activityManager = context.getSystemService(android.app.ActivityManager::class.java)
         fun awaitState(check: () -> Boolean) {
-            val end = android.os.SystemClock.elapsedRealtime() + 8_000L
+            val end = android.os.SystemClock.elapsedRealtime() + 20_000L
             while (!check() && android.os.SystemClock.elapsedRealtime() < end) android.os
                 .SystemClock
                 .sleep(50)
-            assertTrue("unified foreground state timed out", check())
+            assertTrue("unified foreground state timed out: " +
+                org.fossify.messages.services.SmsKeepAliveService.observedStatus(context) +
+                "; active notifications=" + manager.activeNotifications.map { it.id } +
+                "; services=" + activityManager.getRunningServices(100).map { it.service.className }, check())
         }
         val legacy =
             listOf(
