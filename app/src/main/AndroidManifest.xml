@@ -405,7 +405,7 @@
             android:stopWithTask="false">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Maintains reliable incoming SMS handling and user-configured forwarding on OEM Android builds" />
+                android:value="Maintains user-enabled SMS guarding and remote command listeners in one foreground service" />
         </service>
 
         <service

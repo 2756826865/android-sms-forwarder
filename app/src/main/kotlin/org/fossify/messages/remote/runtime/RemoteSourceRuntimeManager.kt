@@ -18,11 +18,6 @@ import org.fossify.messages.remote.repository.RemoteSourceConnectionState
 import org.fossify.messages.remote.repository.RemoteSourceInstance
 import org.fossify.messages.remote.repository.RemoteSourceRepository
 import org.fossify.messages.remote.repository.RemoteSourceType
-import org.fossify.messages.services.DingTalkRemoteControlService
-import org.fossify.messages.services.EmailRemoteControlService
-import org.fossify.messages.services.FeishuRemoteControlService
-import org.fossify.messages.services.TelegramRemoteControlService
-import org.fossify.messages.services.WebSocketRemoteControlService
 
 /**
  * 远程指令来源唯一运行时管理器
@@ -188,7 +183,7 @@ class RemoteSourceRuntimeManager private constructor(private val appContext: Con
 
         // 3. 联动前台守护服务状态 (仅依据 Repository 事实源)
         networkMonitor.update(runnableSources.any { it.type != RemoteSourceType.SMS })
-        if (startForegroundServices) syncForegroundServices(runnableSources)
+        if (startForegroundServices) syncForegroundServices()
     }
 
     /** 启动指定来源实例 */
@@ -504,20 +499,8 @@ class RemoteSourceRuntimeManager private constructor(private val appContext: Con
         }
     }
 
-    private fun syncForegroundServices(enabledSources: List<RemoteSourceInstance>) {
-        val hasTg = enabledSources.any { it.type == RemoteSourceType.TELEGRAM }
-        val hasWs = enabledSources.any { it.type == RemoteSourceType.WEBSOCKET }
-        val hasDing = enabledSources.any { it.type == RemoteSourceType.DINGTALK }
-        val hasFeishu = enabledSources.any { it.type == RemoteSourceType.FEISHU }
-        val hasWeCom = enabledSources.any { it.type == RemoteSourceType.WECOM }
-        val hasEmail = enabledSources.any { it.type == RemoteSourceType.EMAIL }
-
-        if (hasTg) TelegramRemoteControlService.ensureStarted(appContext) else TelegramRemoteControlService.stop(appContext)
-        if (hasWs) WebSocketRemoteControlService.ensureStarted(appContext) else WebSocketRemoteControlService.stop(appContext)
-        if (hasDing) DingTalkRemoteControlService.ensureStarted(appContext) else DingTalkRemoteControlService.stop(appContext)
-        if (hasFeishu) FeishuRemoteControlService.ensureStarted(appContext) else FeishuRemoteControlService.stop(appContext)
-        if (hasWeCom) org.fossify.messages.services.WeComRemoteControlService.ensureStarted(appContext) else org.fossify.messages.services.WeComRemoteControlService.stop(appContext)
-        if (hasEmail) EmailRemoteControlService.ensureStarted(appContext) else EmailRemoteControlService.stop(appContext)
+    private fun syncForegroundServices() {
+        org.fossify.messages.services.SmsKeepAliveService.ensureStarted(appContext)
     }
 
     fun sendWeComPush(sourceInstanceId: String, chatId: String, content: String): WeComPushResult {
@@ -551,6 +534,11 @@ class RemoteSourceRuntimeManager private constructor(private val appContext: Con
 
     companion object {
         private const val TAG = "RemoteSourceRuntime"
+
+        /** Persisted READY state is not evidence of a live connection after process restart. */
+        fun activeSourceIds(): Set<String> =
+            INSTANCE?.runningHandles?.filterValues { !it.isStopped.get() }?.keys?.toSet().orEmpty()
+
         private val restoringAfterServiceRestart = AtomicBoolean(false)
 
         /** A sticky foreground service may return in a new process before any Activity starts. */

@@ -469,8 +469,8 @@
     <string name="default_sms_alert_channel_description">默认短信应用被系统更换时发出提醒</string>
     <string name="default_sms_lost_notification_title">默认短信应用已被更换</string>
     <string name="default_sms_lost_notification_text">系统已将其他应用设为默认信息应用，短信接收和自动转发可能停止。点击重新设置。</string>
-    <string name="keep_alive_channel_name">短信后台服务</string>
-    <string name="keep_alive_channel_description">保持短信接收、同步和转发在息屏后继续工作</string>
+    <string name="keep_alive_channel_name">统一后台服务</string>
+    <string name="keep_alive_channel_description">显示短信守护与远程来源的后台运行状态</string>
     <string name="keep_alive_notification_title">短信服务正在运行</string>
     <string name="incoming_sms_processing">正在处理收到的短信</string>
     <string name="keep_alive_notification_text">正在保持短信接收、同步与转发</string>
@@ -685,4 +685,10 @@
     <string name="about_special_statement">特别声明</string>
     <string name="settings_verification_code_popup">验证码弹窗</string>
     <string name="settings_verification_code_popup_summary">首页在前台时显示验证码与复制按钮；关闭不影响后台通知或短信转发。</string>
+    <string name="background_service_title">短信转发器 · 后台服务</string>
+    <string name="background_service_starting">正在恢复短信守护与远程来源</string>
+    <string name="background_sms_on">短信守护已开启</string>
+    <string name="background_sms_off">短信守护已关闭</string>
+    <string name="background_remote_count">远程来源 %1$d/%2$d 已就绪</string>
+    <string name="background_remote_restoring">待恢复</string>
 </resources>

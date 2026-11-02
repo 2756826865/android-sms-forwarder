@@ -421,7 +421,7 @@ fun OperationsContent(
                                     if (enabled) {
                                         SmsKeepAliveService.ensureStarted(context)
                                     } else {
-                                        context.stopService(Intent(context, SmsKeepAliveService::class.java))
+                                        SmsKeepAliveService.stop(context)
                                     }
                                 }
                             )

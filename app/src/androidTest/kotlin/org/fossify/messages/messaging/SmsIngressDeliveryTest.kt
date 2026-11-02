@@ -12,6 +12,175 @@ import org.junit.Test
 
 class SmsIngressDeliveryTest {
     @Test
+    fun unifiedBackgroundSnapshotCountsActualReadinessAndHidesSensitiveFields() {
+        val context = ForwardingTestContext.context
+        val config = org.fossify.messages.forwarding.MultiForwardConfig(context)
+        val old = config.keepAliveServiceEnabled
+        try {
+            config.keepAliveServiceEnabled = false
+            val source =
+                org.fossify.messages.remote.repository.RemoteSourceInstance(
+                    id = "test-source",
+                    name = "private-source-name",
+                    type = org.fossify.messages.remote.repository.RemoteSourceType.TELEGRAM,
+                    connectionState =
+                        org.fossify.messages.remote.repository.RemoteSourceConnectionState.READY,
+                    configJson = """{"botToken":"secret-token"}""",
+                )
+            val storedReady =
+                org.fossify.messages.services.SmsKeepAliveService.snapshot(
+                    context,
+                    listOf(source),
+                    emptySet(),
+                )
+            assertTrue(storedReady.required)
+            assertTrue(storedReady.text.contains("0/1"))
+            assertTrue(storedReady.text.contains("待恢复"))
+            assertFalse(storedReady.text.contains("secret-token"))
+            assertFalse(storedReady.text.contains("private-source-name"))
+            val active =
+                org.fossify.messages.services.SmsKeepAliveService.snapshot(
+                    context,
+                    listOf(source),
+                    setOf(source.id),
+                )
+            assertTrue(active.text.contains("1/1"))
+            assertFalse(
+                org.fossify.messages.services.SmsKeepAliveService.snapshot(
+                        context,
+                        listOf(source.copy(enabled = false)),
+                    )
+                    .required
+            )
+            assertFalse(
+                org.fossify.messages.services.SmsKeepAliveService.snapshot(
+                        context,
+                        listOf(source.copy(configJson = "{}")),
+                    )
+                    .required
+            )
+            config.keepAliveServiceEnabled = true
+            assertTrue(
+                org.fossify.messages.services.SmsKeepAliveService.snapshot(context, emptyList())
+                    .required
+            )
+        } finally {
+            config.keepAliveServiceEnabled = old
+        }
+    }
+
+    @Test
+    fun unifiedForegroundRetiresAllLegacyOwnersWithoutTouchingSmsProcessingNotification() {
+        val instrumentation =
+            androidx.test.platform.app.InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        val repo =
+            org.fossify.messages.remote.repository.RemoteSourceRepository.getInstance(context)
+        org.junit.Assume.assumeTrue(
+            repo.getEnabledSources().none {
+                it.type != org.fossify.messages.remote.repository.RemoteSourceType.SMS &&
+                    it.hasValidCredentials()
+            }
+        )
+        val config = org.fossify.messages.forwarding.MultiForwardConfig(context)
+        val old = config.keepAliveServiceEnabled
+        val automation = instrumentation.uiAutomation
+        val permission = android.Manifest.permission.POST_NOTIFICATIONS
+        val hadPermission =
+            android.os.Build.VERSION.SDK_INT < 33 ||
+                context.checkSelfPermission(permission) ==
+                    android.content.pm.PackageManager.PERMISSION_GRANTED
+        automation.adoptShellPermissionIdentity()
+        if (android.os.Build.VERSION.SDK_INT >= 33 && !hadPermission)
+            automation.grantRuntimePermission(context.packageName, permission)
+        val manager = context.getSystemService(android.app.NotificationManager::class.java)
+        val activityManager = context.getSystemService(android.app.ActivityManager::class.java)
+        fun awaitState(check: () -> Boolean) {
+            val end = android.os.SystemClock.elapsedRealtime() + 8_000L
+            while (!check() && android.os.SystemClock.elapsedRealtime() < end) android.os
+                .SystemClock
+                .sleep(50)
+            assertTrue("unified foreground state timed out", check())
+        }
+        val legacy =
+            listOf(
+                org.fossify.messages.services.DingTalkRemoteControlService::class.java,
+                org.fossify.messages.services.FeishuRemoteControlService::class.java,
+                org.fossify.messages.services.EmailRemoteControlService::class.java,
+                org.fossify.messages.services.TelegramRemoteControlService::class.java,
+                org.fossify.messages.services.WebSocketRemoteControlService::class.java,
+                org.fossify.messages.services.WeComRemoteControlService::class.java,
+            )
+        val localSource =
+            org.fossify.messages.remote.repository.RemoteSourceInstance(
+                id = "unified-service-regression-${java.util.UUID.randomUUID()}",
+                name = "local regression",
+                type = org.fossify.messages.remote.repository.RemoteSourceType.WEBSOCKET,
+                configJson = """{"url":"ws://127.0.0.1:9"}""",
+            )
+        try {
+            config.keepAliveServiceEnabled = true
+            org.fossify.messages.services.SmsKeepAliveService.ensureStarted(context)
+            awaitState { manager.activeNotifications.any { it.id == 19081 } }
+            // The short-lived SMS service owns 19082. Migration must never cancel that ID.
+            manager.createNotificationChannel(
+                android.app.NotificationChannel("migration-test", "test", 2)
+            )
+            manager.notify(
+                19082,
+                androidx.core.app.NotificationCompat.Builder(context, "migration-test")
+                    .setSmallIcon(android.R.drawable.ic_dialog_info)
+                    .setContentTitle("SMS processing sentinel")
+                    .build(),
+            )
+            legacy.forEach { component ->
+                androidx.core.content.ContextCompat.startForegroundService(
+                    context,
+                    android.content.Intent(context, component),
+                )
+                android.os.SystemClock.sleep(200)
+                awaitState {
+                    activityManager.getRunningServices(100).none {
+                        it.service.className in legacy.map { cls -> cls.name }
+                    } &&
+                        manager.activeNotifications.none {
+                            it.id in
+                                org.fossify.messages.services.SmsKeepAliveService
+                                    .LEGACY_NOTIFICATION_IDS
+                        }
+                }
+                assertTrue(manager.activeNotifications.any { it.id == 19081 })
+                assertTrue(manager.activeNotifications.any { it.id == 19082 })
+            }
+            // A source's legacy stop API must not stop the enabled SMS guard.
+            org.fossify.messages.services.FeishuRemoteControlService.stop(context)
+            android.os.SystemClock.sleep(200)
+            assertTrue(manager.activeNotifications.any { it.id == 19081 })
+            repo.saveSource(localSource)
+            config.keepAliveServiceEnabled = false
+            org.fossify.messages.services.SmsKeepAliveService.stop(context)
+            android.os.SystemClock.sleep(200)
+            assertTrue(
+                "remote listener must retain the foreground owner",
+                manager.activeNotifications.any { it.id == 19081 },
+            )
+            org.fossify.messages.services.FeishuRemoteControlService.stop(context)
+            android.os.SystemClock.sleep(200)
+            assertTrue(manager.activeNotifications.any { it.id == 19081 })
+            repo.deleteSource(localSource.id)
+            org.fossify.messages.services.SmsKeepAliveService.stop(context)
+            awaitState { manager.activeNotifications.none { it.id == 19081 } }
+        } finally {
+            repo.deleteSource(localSource.id)
+            manager.cancel(19082)
+            config.keepAliveServiceEnabled = old
+            org.fossify.messages.services.SmsKeepAliveService.ensureStarted(context)
+            // As with a grant-permission rule, keep the test grant: revoking it kills this runner.
+            automation.dropShellPermissionIdentity()
+        }
+    }
+
+    @Test
     fun completionDoesNotDiscardAnUnpublishedAlert() {
         val context = ForwardingTestContext.context
         val key = UUID.randomUUID().toString()
