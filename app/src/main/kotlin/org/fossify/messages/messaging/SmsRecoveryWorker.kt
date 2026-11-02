@@ -137,13 +137,21 @@ class SmsRecoveryWorker(
         // 显式 try/catch 而非 runCatching：runCatching 会把 CancellationException 一起吞掉，
         // 使 WorkManager 的取消无法正常传播（协程取消语义被破坏）。这里先原样重抛。
         try {
-            applicationContext.contentResolver.query(
-                Telephony.Sms.CONTENT_URI,
-                projection,
-                selection,
-                args,
-                    "${Telephony.Sms.DATE} ASC, ${Telephony.Sms._ID} ASC LIMIT ${SCAN_PAGE_SIZE + 1}",
-            )?.use { cursor ->
+            // Keep provider scans usable if an OEM rejects ORDER BY LIMIT.
+            val order = "${Telephony.Sms.DATE} ASC, ${Telephony.Sms._ID} ASC"
+            val cursor = try {
+                applicationContext.contentResolver.query(
+                    Telephony.Sms.CONTENT_URI, projection, selection, args,
+                    "$order LIMIT ${SCAN_PAGE_SIZE + 1}",
+                )
+            } catch (error: RuntimeException) {
+                if (error is SecurityException) throw error
+                Log.w(TAG, "bounded SMS scan rejected by Provider; retrying ordered query", error)
+                applicationContext.contentResolver.query(
+                    Telephony.Sms.CONTENT_URI, projection, selection, args, order,
+                )
+            }
+            cursor?.use { cursor ->
                 val idIndex = cursor.getColumnIndexOrThrow(Telephony.Sms._ID)
                 val addressIndex = cursor.getColumnIndexOrThrow(Telephony.Sms.ADDRESS)
                 val bodyIndex = cursor.getColumnIndexOrThrow(Telephony.Sms.BODY)
@@ -156,17 +164,19 @@ class SmsRecoveryWorker(
                 // One bounded Room lookup per table, before taking the receipt-processing lock.
                 val pageIds = mutableListOf<Long>()
                 val pageThreads = mutableSetOf<Long>()
-                while (cursor.moveToNext()) {
+                // Bound preflight even when an OEM silently ignores SQL LIMIT.
+                while (pageIds.size <= SCAN_PAGE_SIZE && cursor.moveToNext()) {
                     pageIds.add(cursor.getLong(idIndex))
                     pageThreads.add(cursor.getLong(threadIndex))
                 }
+                if (pageIds.size > SCAN_PAGE_SIZE) exhausted = false
                 cursor.moveToPosition(-1)
                 val localIds = applicationContext.messagesDB.getExistingIds(pageIds).toSet()
                 val localThreads = applicationContext.conversationsDB
                     .getExistingThreadIds(pageThreads.toList()).toSet()
                 ShadowRepository.incrementCounter(applicationContext, "RECOVERY_SCAN_STARTED")
                 
-                while (cursor.moveToNext()) {
+                while (scanned < pageIds.size && cursor.moveToNext()) {
                         coroutineContext.ensureActive()
                         if (
                             scanned >= SCAN_PAGE_SIZE ||

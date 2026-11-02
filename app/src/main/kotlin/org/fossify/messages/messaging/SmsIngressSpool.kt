@@ -51,11 +51,14 @@ internal class SmsIngressSpool(private val context: Context) {
         try {
             output.write(encrypted)
             file.finishWrite(output)
-            context.getSharedPreferences("sms_ingress_spool_status", Context.MODE_PRIVATE).edit()
-                .putLong("last_write_ms", android.os.SystemClock.elapsedRealtime() - started).apply()
         } catch (error: Exception) {
             file.failWrite(output)
             throw error
+        }
+        // Storage is already durable; optional timing metrics must not report failure.
+        runCatching {
+            context.getSharedPreferences("sms_ingress_spool_status", Context.MODE_PRIVATE).edit()
+                .putLong("last_write_ms", android.os.SystemClock.elapsedRealtime() - started).apply()
         }
     }
 

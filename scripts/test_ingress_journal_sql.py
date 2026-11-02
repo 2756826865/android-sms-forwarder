@@ -129,4 +129,14 @@ class IngressJournalSqlTest(unittest.TestCase):
   sql=re.search(r'"""\s*(SELECT j.event_key,j.received_at,j.reason FROM ingress_journal j.*?)"""',src,re.S).group(1)
   self.assertEqual(self.db.execute(sql).fetchall()[0][0],'second')
 
+ def test_oem_sms_scan_is_bounded_when_limit_ignored(self):
+  src=(SRC/'SmsRecoveryWorker.kt').read_text()
+  self.assertIn('while (pageIds.size <= SCAN_PAGE_SIZE && cursor.moveToNext())',src)
+  self.assertIn('if (pageIds.size > SCAN_PAGE_SIZE) exhausted = false',src)
+  self.assertIn('bounded SMS scan rejected by Provider; retrying ordered query',src)
+ def test_spool_telemetry_cannot_fail_durable_admission(self):
+  src=(SRC/'SmsIngressSpool.kt').read_text()
+  self.assertIn('file.finishWrite(output)\\n        } catch',src)
+  self.assertIn('runCatching {\\n            context.getSharedPreferences("sms_ingress_spool_status"',src)
+
 if __name__=='__main__':unittest.main()
