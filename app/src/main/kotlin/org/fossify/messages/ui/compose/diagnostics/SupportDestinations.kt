@@ -56,8 +56,8 @@ internal fun openSupportDestination(context: Context, destination: String) {
                 try { context.startActivity(Intent(intent).setPackage("com.tencent.mobileqq")) }
                 catch (_: android.content.ActivityNotFoundException) { context.startActivity(intent) }
             }
-            "app:changelog" -> showTextDialog("1.2.7 开发版更新日志",
-                "• 设置分类管理，支持 Miuix／Material 风格切换。\n• 引入主题预览、深浅配色及胶囊导航。\n• 新增诊断日志预览、文件保存与分享。\n• 大盘移除快捷自愈及队列深度面板。\n• 全量同步每 500 条更新读取进度，每 1000 条批量写入。\n\n本页记录开发分支改动，构建通过不代表真机功能已验收。")
+            "app:changelog" -> showTextDialog("1.2.9 更新日志",
+                "• 短信直发防无限发：新增本机双卡自收自转拦截、已转发模板特征拦截，并支持仅断网时发送。\n• 短信直发频率保护：新增 1 分钟上限（默认 10 条）与 1 小时上限（默认 30 条）频率限制开关。\n• 双卡自定义名称修复：兼容国内 ROM 广播 subId/simSlot/slotIdx，修复双卡同时命名时推送不显示所属卡槽的问题。\n• 验证码自动填充修复：正式注册系统无障碍自动填充服务，补齐无障碍自动填充与自动点击提交。\n• 功能与双主题补齐：补齐转发内容隐私脱敏、双卡本机号码配置、远程控制环境检查及 TG 反代地址，对齐经典版与开发版（Miuix/Material）。")
             else -> context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(destination)))
         }
     } catch (_: Exception) {

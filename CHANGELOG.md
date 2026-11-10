@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.9] - 2026-11-10
+
+版本代码：1219。本节记录 1.2.9 相对 1.2.8 的累计修改。
+
+### 短信直发安全防护与频率限制
+
+- 新增本机号码回环拦截（`isSelfNumber`）与已转发模板特征拦截（`isForwardedLoopContent`），阻止双卡本机互发及多机循环转发。
+- 新增短信直发频率限制开关（`smsDirectRateLimitEnabled`），支持配置 1 分钟最大发送条数（默认 10 条）与 1 小时最大发送条数（默认 30 条），基于 `sms_direct_guard.db` 持久化账本在提交前硬拦截。
+- 所有短信直发通道实例、全局设置与传统模式均支持「仅断网时发送（断网直发兜底）」。
+
+### 双卡识别、验证码填充与界面功能对齐
+
+- 补充 `subId`、`simSlot`、`slotIdx` 广播额外字段解析并将已确认卡槽传入接收快照，修复双卡同时编辑自定义名称后推送不显示所属卡槽名称的问题。
+- 在 `AndroidManifest.xml` 注册 `SmsAutofillAccessibilityService` 无障碍服务，接通验证码自动填入输入框与自动点击提交（`autoSubmit`）开关。
+- 在开发版转发高级设置补齐「转发内容隐私脱敏」、「同时遮挡验证码」与「双卡本机号码」配置；在远程控制页展示「系统发信环境检查」并补齐 Telegram 自定义反代地址（`customHost`）。
+- 在开发版规则管理页补齐「规则作用范围」切换与「最近规则判定」展示；修复经典版编辑规则时丢失 v2 高级字段的问题，并放宽心跳周期备份恢复校验（支持 1~24 小时）。
+- 对齐 Miuix 与 Material 主题页，补齐橘红主题色、AMOLED 纯黑背景开关，并修复非动态色下调色板风格与色彩规范的实时应用。
+
+[正式版说明](docs/release-1.2.9.md)
+
 ## [1.2.8] - 2026-11-02
 
 版本代码：1218。本节记录 1.2.8 相对 1.2.7 的累计修改。代码验证基线：`7fe08fa`。
