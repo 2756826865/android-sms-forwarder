@@ -1193,6 +1193,18 @@ fun InstanceEditorDialog(
         val legacyMode = MultiForwardConfig(context).smsDirectOnlyOnNoNetwork
         mutableStateOf(existingInstance?.optBoolean("onlyOnNoNetwork", legacyMode) ?: legacyMode)
     }
+    var smsDirectRateLimitEnabled by remember {
+        val defaultEnabled = MultiForwardConfig(context).smsDirectRateLimitEnabled
+        mutableStateOf(existingInstance?.optBoolean("rateLimitEnabled", defaultEnabled) ?: defaultEnabled)
+    }
+    var smsDirectMinuteLimitText by remember {
+        val defaultMin = MultiForwardConfig(context).smsDirectMinuteLimit
+        mutableStateOf((existingInstance?.optInt("minuteLimit", defaultMin) ?: defaultMin).toString())
+    }
+    var smsDirectHourLimitText by remember {
+        val defaultHour = MultiForwardConfig(context).smsDirectHourLimit
+        mutableStateOf((existingInstance?.optInt("hourLimit", defaultHour) ?: defaultHour).toString())
+    }
     var emailPort by remember { mutableStateOf(existingInstance?.optInt("port", 465)?.toString() ?: "465") }
     var emailSecurity by remember {
         val port = existingInstance?.optInt("port", 465) ?: 465
@@ -1292,7 +1304,11 @@ fun InstanceEditorDialog(
             ForwardingChannels.CHANNEL_GROUP -> configJson.put("members", org.json.JSONArray(groupMembers))
                 .put("executionMode", groupMode)
             ForwardingChannels.SMS_DIRECT -> configJson.put("phone", f1)
-                .put("onlyOnNoNetwork", smsDirectOnlyOnNoNetwork).put("simMode", smsDirectSimMode)
+                .put("onlyOnNoNetwork", smsDirectOnlyOnNoNetwork)
+                .put("simMode", smsDirectSimMode)
+                .put("rateLimitEnabled", smsDirectRateLimitEnabled)
+                .put("minuteLimit", (smsDirectMinuteLimitText.toIntOrNull() ?: MultiForwardConfig.DEFAULT_SMS_DIRECT_MINUTE_LIMIT).coerceIn(1, 200))
+                .put("hourLimit", (smsDirectHourLimitText.toIntOrNull() ?: MultiForwardConfig.DEFAULT_SMS_DIRECT_HOUR_LIMIT).coerceIn(1, 1000))
             ForwardingChannels.CUSTOM_WEBHOOK -> configJson.put("url", f1).put("headers", f2)
                 .put("method", customWebhookMethod.uppercase())
                 .put("contentType", customWebhookContentType)
@@ -1673,17 +1689,55 @@ fun InstanceEditorDialog(
                         }
                         OutlinedTextField(value = f1, onValueChange = { f1 = it }, label = { Text("目标接收手机号码") }, modifier = Modifier.fillMaxWidth())
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                            Text("仅断网时发送", modifier = Modifier.weight(1f))
+                            Text("仅断网时发送（断网直发兜底）", modifier = Modifier.weight(1f))
                             Switch(
                                 checked = smsDirectOnlyOnNoNetwork,
                                 onCheckedChange = { smsDirectOnlyOnNoNetwork = it }
                             )
                         }
                         Text(
-                            "开启后，仅在当前网络不可用时自动转发；通道测试仍会发送短信。",
+                            "开启后，所有短信直发实例均仅在当前网络不可用时自动转发；通道测试仍会发送短信。",
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("启用发送频率限制（防无限循环扣费）", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                                Text(
+                                    "限制 1 分钟与 1 小时内短信直发的最大条数，超限自动拦截",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Switch(
+                                checked = smsDirectRateLimitEnabled,
+                                onCheckedChange = { smsDirectRateLimitEnabled = it }
+                            )
+                        }
+                        if (smsDirectRateLimitEnabled) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                OutlinedTextField(
+                                    value = smsDirectMinuteLimitText,
+                                    onValueChange = { smsDirectMinuteLimitText = it.filter(Char::isDigit).take(3) },
+                                    label = { Text("1分钟上限(条)") },
+                                    placeholder = { Text("如 10") },
+                                    singleLine = true,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                OutlinedTextField(
+                                    value = smsDirectHourLimitText,
+                                    onValueChange = { smsDirectHourLimitText = it.filter(Char::isDigit).take(4) },
+                                    label = { Text("1小时上限(条)") },
+                                    placeholder = { Text("如 30") },
+                                    singleLine = true,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
                     }
                     ForwardingChannels.CHANNEL_GROUP -> {
                         Text("执行策略", fontWeight = FontWeight.SemiBold)
@@ -2102,8 +2156,16 @@ fun ForwardSettingsDialog(onDismiss: () -> Unit) {
     val scope = rememberCoroutineScope()
     val config = remember { MultiForwardConfig(context) }
     var markAsRead by remember { mutableStateOf(config.markAsReadAfterForward) }
+    var enablePrivacyMask by remember { mutableStateOf(config.enablePrivacyMask) }
+    var maskVerificationCode by remember { mutableStateOf(config.maskVerificationCode) }
     var simOneLabel by remember { mutableStateOf(config.simOneLabel) }
     var simTwoLabel by remember { mutableStateOf(config.simTwoLabel) }
+    var simOneNumber by remember { mutableStateOf(config.simOneNumber) }
+    var simTwoNumber by remember { mutableStateOf(config.simTwoNumber) }
+    var smsDirectOnlyOnNoNetwork by remember { mutableStateOf(config.smsDirectOnlyOnNoNetwork) }
+    var smsDirectRateLimitEnabled by remember { mutableStateOf(config.smsDirectRateLimitEnabled) }
+    var smsDirectMinuteLimitText by remember { mutableStateOf(config.smsDirectMinuteLimit.toString()) }
+    var smsDirectHourLimitText by remember { mutableStateOf(config.smsDirectHourLimit.toString()) }
     var rootEnhancementEnabled by remember { mutableStateOf(config.rootEnhancementEnabled) }
     var rootCheckRunning by remember { mutableStateOf(false) }
     var rootStatusText by remember { mutableStateOf("尚未检测 Root") }
@@ -2148,33 +2210,177 @@ fun ForwardSettingsDialog(onDismiss: () -> Unit) {
                     )
                 }
 
-                // 2. 双卡显示名称（复用经典版配置，仅影响显示，不改变发送卡解析）
+                // 1b. 转发内容隐私脱敏
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text("双卡显示名称", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                            Text("转发内容隐私脱敏", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                            Text(
+                                "开启后自动将发件人及短信正文中的手机号中间 4 位替换为 ****",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = enablePrivacyMask,
+                            onCheckedChange = {
+                                enablePrivacyMask = it
+                                config.enablePrivacyMask = it
+                            }
+                        )
+                    }
+                    if (enablePrivacyMask) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(start = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                                Text("同时遮挡验证码", fontWeight = FontWeight.Medium, fontSize = 13.sp)
+                                Text(
+                                    "对识别出的验证码仅保留首尾数字（如 1****6）",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Switch(
+                                checked = maskVerificationCode,
+                                onCheckedChange = {
+                                    maskVerificationCode = it
+                                    config.maskVerificationCode = it
+                                }
+                            )
+                        }
+                    }
+                }
+
+                // 2. 双卡显示名称与本机号码
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("双卡显示名称与本机号码", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
                     Text(
-                        "转发模板使用此处名称，例如 SIM1 · 工作号1234；留空时显示 SIM 与运营商名称",
+                        "转发模板使用此处名称（如 SIM1 · 工作号）；填写本机号码后可增强双卡自收自转防环路拦截与收件号码展示",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    OutlinedTextField(
-                        value = simOneLabel,
-                        onValueChange = { simOneLabel = it.take(24) },
-                        label = { Text("卡一名称") },
-                        placeholder = { Text("例如：工作号1234") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    OutlinedTextField(
-                        value = simTwoLabel,
-                        onValueChange = { simTwoLabel = it.take(24) },
-                        label = { Text("卡二名称") },
-                        placeholder = { Text("例如：家人号1234") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        OutlinedTextField(
+                            value = simOneLabel,
+                            onValueChange = { simOneLabel = it.take(24) },
+                            label = { Text("卡一名称") },
+                            placeholder = { Text("工作号") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+                        OutlinedTextField(
+                            value = simOneNumber,
+                            onValueChange = { simOneNumber = it.take(24) },
+                            label = { Text("卡一本机号码") },
+                            placeholder = { Text("选填手机号") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        OutlinedTextField(
+                            value = simTwoLabel,
+                            onValueChange = { simTwoLabel = it.take(24) },
+                            label = { Text("卡二名称") },
+                            placeholder = { Text("家人号") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+                        OutlinedTextField(
+                            value = simTwoNumber,
+                            onValueChange = { simTwoNumber = it.take(24) },
+                            label = { Text("卡二本机号码") },
+                            placeholder = { Text("选填手机号") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+
+                // 2b. 短信直发全局策略（断网直发 & 频率限制）
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("短信直发全局安全策略", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                            Text("默认仅断网时发送（断网直发）", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                            Text(
+                                "无网时通过 SIM 短信兜底转发，有网时自动跳过以节省短信费",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = smsDirectOnlyOnNoNetwork,
+                            onCheckedChange = {
+                                smsDirectOnlyOnNoNetwork = it
+                                config.smsDirectOnlyOnNoNetwork = it
+                            }
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                            Text("短信直发频率限制开关", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                            Text(
+                                "限制 1 分钟与 1 小时内最大发送条数（如 1分钟10条、1小时30条）",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = smsDirectRateLimitEnabled,
+                            onCheckedChange = {
+                                smsDirectRateLimitEnabled = it
+                                config.smsDirectRateLimitEnabled = it
+                            }
+                        )
+                    }
+                    if (smsDirectRateLimitEnabled) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = smsDirectMinuteLimitText,
+                                onValueChange = { smsDirectMinuteLimitText = it.filter(Char::isDigit).take(3) },
+                                label = { Text("1分钟上限(条)") },
+                                placeholder = { Text("10") },
+                                singleLine = true,
+                                modifier = Modifier.weight(1f)
+                            )
+                            OutlinedTextField(
+                                value = smsDirectHourLimitText,
+                                onValueChange = { smsDirectHourLimitText = it.filter(Char::isDigit).take(4) },
+                                label = { Text("1小时上限(条)") },
+                                placeholder = { Text("30") },
+                                singleLine = true,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
                 }
 
                 // 3. Root 增强模式（开发版实验总开关；当前不执行任何 su 命令）
@@ -2426,6 +2632,10 @@ fun ForwardSettingsDialog(onDismiss: () -> Unit) {
                 onClick = {
                     config.simOneLabel = simOneLabel
                     config.simTwoLabel = simTwoLabel
+                    config.simOneNumber = simOneNumber
+                    config.simTwoNumber = simTwoNumber
+                    config.smsDirectMinuteLimit = (smsDirectMinuteLimitText.toIntOrNull() ?: MultiForwardConfig.DEFAULT_SMS_DIRECT_MINUTE_LIMIT).coerceIn(1, 200)
+                    config.smsDirectHourLimit = (smsDirectHourLimitText.toIntOrNull() ?: MultiForwardConfig.DEFAULT_SMS_DIRECT_HOUR_LIMIT).coerceIn(1, 1000)
                     onDismiss()
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = BrandGreen)

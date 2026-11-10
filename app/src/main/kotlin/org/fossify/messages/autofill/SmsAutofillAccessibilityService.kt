@@ -96,7 +96,8 @@ class SmsAutofillAccessibilityService : AccessibilityService() {
 
     private fun collectEditTextNodes(node: AccessibilityNodeInfo?, list: MutableList<AccessibilityNodeInfo>) {
         if (node == null) return
-        if (node.className?.toString()?.contains("EditText", ignoreCase = true) == true && node.isEditable) {
+        val isEditClass = node.className?.toString()?.contains("EditText", ignoreCase = true) == true
+        if (node.isEditable || (isEditClass && node.isEnabled)) {
             list.add(node)
         }
         for (i in 0 until node.childCount) {
@@ -161,6 +162,16 @@ class SmsAutofillAccessibilityService : AccessibilityService() {
                     org.fossify.messages.helpers.FloatingCodePillManager.showPill(context, code)
                 }.onFailure {
                     Log.w(TAG, "Code pill failed: ${it.javaClass.simpleName}")
+                }
+            }
+
+            instanceRef.get()?.let { service ->
+                service.mainHandler.post {
+                    runCatching {
+                        service.attemptAutofill(code)
+                    }.onFailure {
+                        Log.w(TAG, "Accessibility autofill failed: ${it.javaClass.simpleName}")
+                    }
                 }
             }
         }

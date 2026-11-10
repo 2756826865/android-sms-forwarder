@@ -119,6 +119,9 @@ fun AutoReplyEmbeddedScreen() {
                 SettingSwitch("自动回复", "符合规则时使用本机 SIM 自动回复短信", enabled) {
                     enabled = it; cfg.enabled = it
                 }
+                if (cfg.lastDecision.isNotBlank()) {
+                    Text("最近自动回复状态：${cfg.lastDecision}", fontSize = 12.sp, color = TextSecondary)
+                }
                 Text("每日上限：$dailyLimit 条", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     listOf(5, 10, 20, 50).forEach { limit ->
@@ -608,6 +611,8 @@ fun AutofillEmbeddedScreen() {
     var enabled by remember { mutableStateOf(cfg.enabled) }
     var copyToClipboard by remember { mutableStateOf(cfg.copyToClipboard) }
     var floatingPill by remember { mutableStateOf(cfg.enableFloatingPill) }
+    var autoSubmit by remember { mutableStateOf(cfg.autoSubmit) }
+    val a11yRunning = org.fossify.messages.autofill.SmsAutofillAccessibilityService.isServiceRunning()
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -616,12 +621,22 @@ fun AutofillEmbeddedScreen() {
     ) {
         item {
             FeatureCard {
-                SettingSwitch("验证码复制与提示", "识别短信验证码，按下方设置复制或提示", enabled) {
+                SettingSwitch("验证码自动复制、填充与提示", "识别短信验证码，按下方设置自动写入剪贴板、悬浮提示或无障碍填充", enabled) {
                     enabled = it
                     cfg.enabled = it
                 }
-                Text("不自动填写或提交其他应用的输入框。剪贴板写入是否可用受系统限制，以实际粘贴为准。", fontSize = 12.sp)
                 Text(if (android.provider.Settings.canDrawOverlays(context)) "悬浮窗权限：已允许" else "悬浮窗权限：未允许，胶囊提示不可用", fontSize = 12.sp)
+                Text(if (a11yRunning) "无障碍填充服务：运行中" else "无障碍填充服务：未开启（开启后可自动填入当前焦点输入框）", fontSize = 12.sp, color = if (a11yRunning) BrandGreen else TextSecondary)
+                OutlinedButton(
+                    onClick = {
+                        runCatching {
+                            context.startActivity(android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(if (a11yRunning) "管理无障碍填充服务" else "去开启无障碍自动填充服务")
+                }
                 SettingSwitch("写入剪贴板", "识别成功后可直接在其他应用粘贴", copyToClipboard) {
                     copyToClipboard = it
                     cfg.copyToClipboard = it
@@ -639,6 +654,10 @@ fun AutofillEmbeddedScreen() {
                             )
                         )
                     }
+                }
+                SettingSwitch("无障碍填充后自动点击提交", "自动填入输入框后延迟 0.5 秒尝试点击登录/确定/下一步按钮", autoSubmit) {
+                    autoSubmit = it
+                    cfg.autoSubmit = it
                 }
             }
         }

@@ -61,13 +61,23 @@ class SettingsActivity : SimpleActivity() {
                 !org.fossify.messages.helpers.RecentTasksVisibility.setHidden(this, hidden)) {
                 toast(R.string.settings_hide_recent_tasks_apply_failed)
             }
+            updateHideRecentTasksSummary()
+        }
+        binding.settingsHideRecentTasksHolder.setOnClickListener {
+            binding.settingsHideRecentTasksSwitch.toggle()
         }
         binding.settingsHomeBottomNavSwitch.setOnCheckedChangeListener { _, isChecked ->
             config.showHomeBottomNavigation = isChecked
         }
+        binding.settingsHomeBottomNavHolder.setOnClickListener {
+            binding.settingsHomeBottomNavSwitch.toggle()
+        }
         binding.settingsLiveIslandSwitch.setOnCheckedChangeListener { _, isChecked ->
             config.enableLiveIsland = isChecked
             updateLiveIslandSummary()
+        }
+        binding.settingsLiveIslandHolder.setOnClickListener {
+            binding.settingsLiveIslandSwitch.toggle()
         }
         refreshToggleStates()
     }
@@ -77,7 +87,16 @@ class SettingsActivity : SimpleActivity() {
         binding.settingsHideRecentTasksSwitch.isChecked = config.hideFromRecentTasks
         binding.settingsHomeBottomNavSwitch.isChecked = config.showHomeBottomNavigation
         binding.settingsLiveIslandSwitch.isChecked = config.enableLiveIsland
+        updateHideRecentTasksSummary()
         updateLiveIslandSummary()
+    }
+
+    private fun updateHideRecentTasksSummary() {
+        binding.settingsHideRecentTasksSummary.text = if (config.hideFromRecentTasks) {
+            "状态：已启用（切换后台任务时自动隐藏本应用卡片）"
+        } else {
+            getString(R.string.live_island_status_disabled)
+        }
     }
 
     private fun updateLiveIslandSummary() {

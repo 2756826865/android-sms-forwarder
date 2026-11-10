@@ -75,6 +75,9 @@ class SmsDirectSettingsActivity : SimpleActivity() {
         smsDirectEnabled.isChecked = forwardingConfig.smsDirectEnabled
         smsDirectPhone.setText(forwardingConfig.smsDirectPhone())
         smsDirectOnlyOnNoNetwork.isChecked = forwardingConfig.smsDirectOnlyOnNoNetwork
+        smsDirectRateLimitEnabled.isChecked = forwardingConfig.smsDirectRateLimitEnabled
+        smsDirectMinuteLimit.setText(forwardingConfig.smsDirectMinuteLimit.toString())
+        smsDirectHourLimit.setText(forwardingConfig.smsDirectHourLimit.toString())
         smsDirectTestSender.setText("10086")
         smsDirectTestBody.setText("这是一条短信直发测试消息")
     }
@@ -89,6 +92,11 @@ class SmsDirectSettingsActivity : SimpleActivity() {
         forwardingConfig.smsDirectEnabled = binding.smsDirectEnabled.isChecked
         forwardingConfig.saveSmsDirect(phone)
         forwardingConfig.smsDirectOnlyOnNoNetwork = binding.smsDirectOnlyOnNoNetwork.isChecked
+        forwardingConfig.smsDirectRateLimitEnabled = binding.smsDirectRateLimitEnabled.isChecked
+        forwardingConfig.smsDirectMinuteLimit = (binding.smsDirectMinuteLimit.text?.toString()?.toIntOrNull()
+            ?: MultiForwardConfig.DEFAULT_SMS_DIRECT_MINUTE_LIMIT).coerceIn(1, 200)
+        forwardingConfig.smsDirectHourLimit = (binding.smsDirectHourLimit.text?.toString()?.toIntOrNull()
+            ?: MultiForwardConfig.DEFAULT_SMS_DIRECT_HOUR_LIMIT).coerceIn(1, 1000)
         return true
     }
 

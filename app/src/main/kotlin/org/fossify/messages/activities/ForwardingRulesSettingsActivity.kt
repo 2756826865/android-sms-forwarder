@@ -153,7 +153,8 @@ class ForwardingRulesSettingsActivity : SimpleActivity() {
             return null
         }
         val fallbackName = getString(R.string.forwarding_rules_rule_default, selectedRuleIndex + 1)
-        return ForwardingRule(
+        val existing = workingRules.getOrNull(selectedRuleIndex)
+        return (existing ?: ForwardingRule(name = fallbackName)).copy(
             name = binding.rulesName.text?.toString().orEmpty().trim().ifBlank { fallbackName },
             enabled = binding.ruleItemEnabled.isChecked,
             matchMode = if (binding.rulesMatchMode.selectedItemPosition == 1) {

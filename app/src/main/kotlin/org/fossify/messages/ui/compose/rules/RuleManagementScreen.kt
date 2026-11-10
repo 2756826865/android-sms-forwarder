@@ -75,6 +75,8 @@ fun RuleManagementScreen(
     val availableInstances = channelInstances
 
     var isRulesEnabled by remember { mutableStateOf(repository.isRulesEnabled()) }
+    var ruleScope by remember { mutableStateOf(repository.getScope()) }
+    val lastDecision = remember(rules, isRulesEnabled) { repository.getLastDecision() }
     var ruleToDelete by remember { mutableStateOf<String?>(null) }
 
     val isDark = org.fossify.messages.ui.compose.theme.LocalGatewayDark.current
@@ -152,6 +154,42 @@ fun RuleManagementScreen(
                         checkedTrackColor = BrandGreen
                     )
                 )
+            }
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("规则作用范围：", fontSize = 12.sp, color = secondaryText)
+                    listOf(
+                        org.fossify.messages.forwarding.ForwardingRulesConfig.SCOPE_FORWARDING_ONLY to "仅网络通道",
+                        org.fossify.messages.forwarding.ForwardingRulesConfig.SCOPE_FORWARDING_AND_SMS_DIRECT to "含短信直发",
+                        org.fossify.messages.forwarding.ForwardingRulesConfig.SCOPE_ALL to "含直发与远控"
+                    ).forEach { (scopeValue, label) ->
+                        androidx.compose.material3.FilterChip(
+                            selected = ruleScope == scopeValue,
+                            onClick = {
+                                ruleScope = scopeValue
+                                repository.setScope(scopeValue)
+                            },
+                            label = { Text(label, fontSize = 11.sp) }
+                        )
+                    }
+                }
+                if (lastDecision.isNotBlank()) {
+                    Text(
+                        text = "最近规则判定：$lastDecision",
+                        fontSize = 11.5.sp,
+                        color = secondaryText
+                    )
+                }
             }
 
             if (rules.isEmpty()) {

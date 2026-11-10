@@ -520,7 +520,16 @@ class MultiChannelForwardWorker(
                     ForwardingChannels.SMS_DIRECT -> {
                         val phone = instance.optString("phone")
                         check(phone.isNotBlank()) { "目标手机号未配置" }
-                        sendSmsDirect(phone, textOnlyContent, subscriptionId, isTest = isTest, simMode = instance.optInt("simMode", MultiForwardConfig(applicationContext).smsDirectSimMode))
+                        sendSmsDirect(
+                            phone = phone,
+                            content = textOnlyContent,
+                            receiveSubId = subscriptionId,
+                            isTest = isTest,
+                            simMode = instance.optInt("simMode", config.smsDirectSimMode),
+                            rateLimitEnabled = instance.optBoolean("rateLimitEnabled", config.smsDirectRateLimitEnabled),
+                            minuteLimit = instance.optInt("minuteLimit", config.smsDirectMinuteLimit),
+                            hourLimit = instance.optInt("hourLimit", config.smsDirectHourLimit),
+                        )
                     }
                     ForwardingChannels.CHANNEL_GROUP -> error("通道组必须展开为具体实例后发送")
                     else -> error("暂不支持的通道类型：${instance.channelType}")
@@ -792,7 +801,14 @@ class MultiChannelForwardWorker(
                         )
                     }
                     ForwardingChannels.SMS_DIRECT -> sendSmsDirect(
-                        instance.optString("phone"), textOnlyContent, subscriptionId, isTest, instance.optInt("simMode", MultiForwardConfig(applicationContext).smsDirectSimMode)
+                        phone = instance.optString("phone"),
+                        content = textOnlyContent,
+                        receiveSubId = subscriptionId,
+                        isTest = isTest,
+                        simMode = instance.optInt("simMode", config.smsDirectSimMode),
+                        rateLimitEnabled = instance.optBoolean("rateLimitEnabled", config.smsDirectRateLimitEnabled),
+                        minuteLimit = instance.optInt("minuteLimit", config.smsDirectMinuteLimit),
+                        hourLimit = instance.optInt("hourLimit", config.smsDirectHourLimit),
                     )
                     ForwardingChannels.CHANNEL_GROUP -> error("通道组必须展开为具体实例后发送")
                     else -> error("暂不支持的通道类型：${instance.channelType}")
@@ -1391,7 +1407,16 @@ class MultiChannelForwardWorker(
         }
     }
 
-    private fun sendSmsDirect(phone: String, content: String, receiveSubId: Int, isTest: Boolean = false, simMode: Int = MultiForwardConfig(applicationContext).smsDirectSimMode) {
+    private fun sendSmsDirect(
+        phone: String,
+        content: String,
+        receiveSubId: Int,
+        isTest: Boolean = false,
+        simMode: Int = MultiForwardConfig(applicationContext).smsDirectSimMode,
+        rateLimitEnabled: Boolean = MultiForwardConfig(applicationContext).smsDirectRateLimitEnabled,
+        minuteLimit: Int = MultiForwardConfig(applicationContext).smsDirectMinuteLimit,
+        hourLimit: Int = MultiForwardConfig(applicationContext).smsDirectHourLimit,
+    ) {
         smsDirectAttempted = true
         require(phone.isNotBlank()) { "目标手机号不能为空" }
         val normalized = phone.trim()
@@ -1402,8 +1427,42 @@ class MultiChannelForwardWorker(
         if ((runAttemptCount > 0 || smsDirectPreviouslyStarted) && !preparing) throw SmsDirectOutcomeUnknown("这是系统重新执行的短信直发任务，先前结果未确认；已阻止自动重发")
         if (SmsDirectBillingPolicy.isUnidentifiedLegacyDegradedSource(smsDirectSource))
             throw SmsDirectOutcomeUnknown("旧降级任务无法确认原短信身份，已阻止收费发送，请先核对收件端")
-        require(isTest || !SmsDirectBillingPolicy.isEcho(inputData.getString(KEY_SENDER).orEmpty(), normalized)) {
+        val incomingSender = inputData.getString(KEY_SENDER).orEmpty()
+        val incomingBody = inputData.getString(KEY_BODY).orEmpty()
+        val alreadyRendered = inputData.getBoolean(KEY_BODY_ALREADY_RENDERED, false)
+        val multiConfig = MultiForwardConfig(applicationContext)
+        val ownNumbers = buildList {
+            add(multiConfig.simOneNumber)
+            add(multiConfig.simTwoNumber)
+            add(receivedSimSnapshot()?.receiverNumber.orEmpty())
+            org.fossify.messages.messaging.SubscriptionResolver
+                .getActiveSubscriptionSnapshots(applicationContext)
+                .forEach { add(it.number) }
+        }
+        require(isTest || !SmsDirectBillingPolicy.isEcho(incomingSender, normalized)) {
             "原发件人与短信直发目标相同，已拦截回传，避免循环扣费"
+        }
+        require(isTest || !SmsDirectBillingPolicy.isSelfNumber(normalized, ownNumbers)) {
+            "短信直发目标号码与本机 SIM 卡号码相同，已拦截本机互转，避免循环扣费"
+        }
+        require(isTest || !SmsDirectBillingPolicy.isSelfNumber(incomingSender, ownNumbers)) {
+            "原发件人为本机 SIM 卡号码，已拦截本机双卡自收自转，避免循环扣费"
+        }
+        require(isTest || !SmsDirectBillingPolicy.isForwardedLoopContent(incomingBody, alreadyRendered)) {
+            "检测到短信已包含转发模板特征，已拦截二次短信直发，避免循环扣费"
+        }
+        if (!isTest && rateLimitEnabled) {
+            val nowMs = System.currentTimeMillis()
+            val recentMinuteCount = SmsDirectSendGuard.countClaimsSince(applicationContext, nowMs - 60_000L)
+            val recentHourCount = SmsDirectSendGuard.countClaimsSince(applicationContext, nowMs - 3_600_000L)
+            val rateViolation = SmsDirectBillingPolicy.rateLimitViolation(
+                enabled = true,
+                recentMinuteCount = recentMinuteCount,
+                minuteLimit = minuteLimit,
+                recentHourCount = recentHourCount,
+                hourLimit = hourLimit,
+            )
+            require(rateViolation == null) { rateViolation!! }
         }
         require(simMode in 0..2) { "短信直发选卡设置无效" }
         require(simMode != 0 || receiveSubId >= 0) { "跟随接收卡模式没有接收卡信息，请选择固定 SIM1 或 SIM2 后测试" }

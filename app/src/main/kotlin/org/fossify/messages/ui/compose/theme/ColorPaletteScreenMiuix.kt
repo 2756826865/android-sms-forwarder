@@ -287,24 +287,14 @@ fun ColorPaletteScreenMiuix(
                             .padding(top = 12.dp)
                             .fillMaxWidth(),
                     ) {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                            SwitchPreference(
-                                title = "模糊",
-                                summary = "启用顶栏和底栏的模糊效果",
-                                startAction = {
-                                    Icon(
-                                        Icons.Rounded.BlurOn,
-                                        modifier = Modifier.padding(end = 6.dp),
-                                        contentDescription = "模糊",
-                                        tint = colorScheme.primary
-                                    )
-                                },
-                                checked = uiState.blur,
-                                onCheckedChange = {
-                                    update(uiState.copy(blur = it))
-                                }
-                            )
-                        }
+                        SwitchPreference(
+                            title = "纯黑背景",
+                            summary = "在深色模式下使用 AMOLED 纯黑背景",
+                            checked = uiState.amoled,
+                            onCheckedChange = {
+                                update(uiState.copy(amoled = it))
+                            }
+                        )
                         SwitchPreference(
                             title = "悬浮底栏",
                             summary = "使用 Apple 风格的悬浮底栏",
@@ -321,15 +311,15 @@ fun ColorPaletteScreenMiuix(
                                 update(uiState.copy(floating = it))
                             }
                         )
-                        AnimatedVisibility(visible = uiState.floating && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                             SwitchPreference(
-                                title = "液态玻璃",
-                                summary = "启用悬浮底栏的液态玻璃效果",
+                                title = "模糊与液态玻璃",
+                                summary = "启用顶栏模糊与悬浮底栏液态玻璃效果",
                                 startAction = {
                                     Icon(
-                                        Icons.Rounded.WaterDrop,
+                                        Icons.Rounded.BlurOn,
                                         modifier = Modifier.padding(end = 6.dp),
-                                        contentDescription = "液态玻璃",
+                                        contentDescription = "模糊与液态玻璃",
                                         tint = colorScheme.primary
                                     )
                                 },

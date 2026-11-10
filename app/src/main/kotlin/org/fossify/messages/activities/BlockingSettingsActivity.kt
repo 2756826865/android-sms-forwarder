@@ -25,8 +25,6 @@ class BlockingSettingsActivity : SimpleActivity() {
         binding.blockingToolbar.title = ""
         applyMiuiTopAppBarChrome(binding.blockingAppbar, binding.blockingToolbar)
 
-        binding.blockingSimOne.setOnClickListener { selectSim(first = true) }
-        binding.blockingSimTwo.setOnClickListener { selectSim(first = false) }
         binding.blockingCalls.setOnClickListener {
             runCatching { startActivity(Intent("android.settings.BLOCKED_NUMBER_SETTINGS")) }
                 .onFailure { openBlacklist() }
@@ -50,14 +48,5 @@ class BlockingSettingsActivity : SimpleActivity() {
 
     private fun openBlacklist() {
         startActivity(Intent(this, ManageBlacklistActivity::class.java))
-    }
-
-    private fun selectSim(first: Boolean) {
-        val selectedBackground = getDrawable(R.drawable.miui_segment_selected_background)
-        val normalBackground = getDrawable(R.drawable.miui_segment_background)
-        binding.blockingSimOne.background = if (first) selectedBackground else normalBackground
-        binding.blockingSimTwo.background = if (first) normalBackground else selectedBackground
-        binding.blockingSimOne.setTextColor(if (first) Color.BLACK else Color.rgb(119, 119, 119))
-        binding.blockingSimTwo.setTextColor(if (first) Color.rgb(119, 119, 119) else Color.BLACK)
     }
 }

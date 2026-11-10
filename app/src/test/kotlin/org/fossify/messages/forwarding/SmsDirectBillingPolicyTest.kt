@@ -182,4 +182,70 @@ class SmsDirectBillingPolicyTest {
             SmsDirectBillingPolicy.workerSource(SmsDirectBillingPolicy.degradedWorkId("a".repeat(64)), 1000, "unused")))
         assertFalse(SmsDirectBillingPolicy.isUnidentifiedLegacyDegradedSource("worker:sms-123:1000"))
     }
+
+    @Test fun selfSimNumbersAreDetectedForBothSenderAndDestination() {
+        val ownNumbers = listOf("+86 138-0000-0001", "", "008613800000002")
+        assertTrue(SmsDirectBillingPolicy.isSelfNumber("13800000001", ownNumbers))
+        assertTrue(SmsDirectBillingPolicy.isSelfNumber("+8613800000002", ownNumbers))
+        assertFalse(SmsDirectBillingPolicy.isSelfNumber("13900009999", ownNumbers))
+        assertFalse(SmsDirectBillingPolicy.isSelfNumber("", ownNumbers))
+    }
+
+    @Test fun forwardedLoopContentIsBlockedWithoutBlockingFirstHop() {
+        val rawNormalSms = "【中国移动】您的验证码是 123456，5分钟内有效。"
+        assertFalse(SmsDirectBillingPolicy.isForwardedLoopContent(rawNormalSms, alreadyRendered = false))
+
+        val firstHopCompactRendered = "$rawNormalSms\n接收时间：2026-11-10 19:00:00"
+        assertFalse(SmsDirectBillingPolicy.isForwardedLoopContent(firstHopCompactRendered, alreadyRendered = true))
+
+        val firstHopWithSimHeader = "【SIM1 · 工作卡】\n$rawNormalSms\n接收时间：2026-11-10 19:00:00"
+        assertTrue(SmsDirectBillingPolicy.isForwardedLoopContent(firstHopWithSimHeader, alreadyRendered = false))
+        assertFalse(SmsDirectBillingPolicy.isForwardedLoopContent(firstHopWithSimHeader, alreadyRendered = true))
+
+        val secondHopNested = "$firstHopCompactRendered\n接收时间：2026-11-10 19:00:05"
+        assertTrue(SmsDirectBillingPolicy.isForwardedLoopContent(secondHopNested, alreadyRendered = true))
+
+        val emojiForwarded = "📩新短信通知\n📞号码：10086\n⏰时间：2026-11-10 19:00:00\n💬消息：验证码 1234"
+        assertTrue(SmsDirectBillingPolicy.isForwardedLoopContent(emojiForwarded, alreadyRendered = false))
+        assertFalse(SmsDirectBillingPolicy.isForwardedLoopContent(emojiForwarded, alreadyRendered = true))
+    }
+
+    @Test fun rateLimitEnforcesMinuteAndHourThresholdsWhenEnabled() {
+        assertNull(
+            SmsDirectBillingPolicy.rateLimitViolation(
+                enabled = true,
+                recentMinuteCount = 9,
+                minuteLimit = 10,
+                recentHourCount = 29,
+                hourLimit = 30,
+            )
+        )
+        assertNotNull(
+            SmsDirectBillingPolicy.rateLimitViolation(
+                enabled = true,
+                recentMinuteCount = 10,
+                minuteLimit = 10,
+                recentHourCount = 10,
+                hourLimit = 30,
+            )
+        )
+        assertNotNull(
+            SmsDirectBillingPolicy.rateLimitViolation(
+                enabled = true,
+                recentMinuteCount = 3,
+                minuteLimit = 10,
+                recentHourCount = 30,
+                hourLimit = 30,
+            )
+        )
+        assertNull(
+            SmsDirectBillingPolicy.rateLimitViolation(
+                enabled = false,
+                recentMinuteCount = 100,
+                minuteLimit = 10,
+                recentHourCount = 500,
+                hourLimit = 30,
+            )
+        )
+    }
 }

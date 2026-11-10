@@ -73,6 +73,16 @@ internal object SmsDirectSendGuard {
         }
     }
 
+    fun countClaimsSince(context: Context, sinceTimestampMs: Long): Int {
+        val db = database(context).readableDatabase
+        return db.rawQuery(
+            "SELECT COUNT(*) FROM sms_direct_claims WHERE claimed_at >= ? AND phase <> 'failed'",
+            arrayOf(sinceTimestampMs.toString())
+        ).use { cursor ->
+            if (cursor.moveToFirst()) cursor.getInt(0) else 0
+        }
+    }
+
     private fun claim(context: Context, key: String, token: String = "", recordId: String = ""): Boolean {
         val db = database(context).writableDatabase
         db.beginTransaction()

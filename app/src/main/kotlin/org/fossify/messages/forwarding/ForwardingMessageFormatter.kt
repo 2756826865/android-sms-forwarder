@@ -24,11 +24,13 @@ object ForwardingMessageFormatter {
         snapshot: ForwardingSimSnapshot? = null,
     ): String {
         val description = if (snapshot != null) {
-            if (snapshot.customLabel.isBlank() || snapshot.slotIndex < 0) return content
-            describeSim(snapshot)
+            if (snapshot.slotIndex < 0) return content
+            val effectiveLabel = snapshot.customLabel.ifBlank { config.customSimLabel(snapshot.slotIndex) }
+            if (effectiveLabel.isBlank()) return content
+            SimLabelPresentation.describeSlot(snapshot.slotIndex, effectiveLabel)
         } else {
             val resolvedInfo = resolveSimInfo(context, subscriptionId)
-                val slot = resolvedInfo?.simSlotIndex?.takeIf { it >= 0 } ?: return content
+            val slot = resolvedInfo?.simSlotIndex?.takeIf { it >= 0 } ?: return content
             val label = config.customSimLabel(slot)
             if (label.isBlank()) return content
             SimLabelPresentation.describeSlot(slot, label)
@@ -303,14 +305,21 @@ object ForwardingMessageFormatter {
         return ForwardingSimSnapshot(slot, SimLabelPresentation.describeSlot(slot, label), config.customSimNumber(slot), label)
     }
 
-    fun captureSim(context: Context, subscriptionId: Int): ForwardingSimSnapshot {
+    fun captureSim(
+        context: Context,
+        subscriptionId: Int,
+        confirmedSlot: Int? = null,
+    ): ForwardingSimSnapshot {
         val config = MultiForwardConfig(context)
         val info = resolveSimInfo(context, subscriptionId)
         val slot =
-            org.fossify.messages.messaging.ReceivingSubscriptionReader.slotForSubscription(
-                context,
-                subscriptionId,
-            ) ?: -1
+            confirmedSlot?.takeIf { it >= 0 }
+                ?: org.fossify.messages.messaging.ReceivingSubscriptionReader.slotForSubscription(
+                    context,
+                    subscriptionId,
+                )
+                ?: info?.simSlotIndex?.takeIf { it >= 0 }
+                ?: -1
         val custom = config.customSimLabel(slot)
         val carrier = info?.carrierName?.toString()?.takeIf(String::isNotBlank) ?: info?.displayName?.toString().orEmpty()
         val description =

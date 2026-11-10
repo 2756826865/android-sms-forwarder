@@ -573,6 +573,18 @@ class MultiForwardConfig(
         get() = prefs.getInt("sms_direct_sim_mode", 0)
         set(value) { prefs.edit().putInt("sms_direct_sim_mode", value).apply() }
 
+    var smsDirectRateLimitEnabled: Boolean
+        get() = prefs.getBoolean(KEY_SMS_DIRECT_RATE_LIMIT_ENABLED, true)
+        set(value) = prefs.edit().putBoolean(KEY_SMS_DIRECT_RATE_LIMIT_ENABLED, value).apply()
+
+    var smsDirectMinuteLimit: Int
+        get() = prefs.getInt(KEY_SMS_DIRECT_MINUTE_LIMIT, DEFAULT_SMS_DIRECT_MINUTE_LIMIT).coerceIn(1, 200)
+        set(value) = prefs.edit().putInt(KEY_SMS_DIRECT_MINUTE_LIMIT, value.coerceIn(1, 200)).apply()
+
+    var smsDirectHourLimit: Int
+        get() = prefs.getInt(KEY_SMS_DIRECT_HOUR_LIMIT, DEFAULT_SMS_DIRECT_HOUR_LIMIT).coerceIn(1, 1000)
+        set(value) = prefs.edit().putInt(KEY_SMS_DIRECT_HOUR_LIMIT, value.coerceIn(1, 1000)).apply()
+
     fun smsDirectPhone() = getSecret(KEY_SMS_DIRECT_PHONE)
 
     // 16. 自定义 Webhook
@@ -957,6 +969,11 @@ class MultiForwardConfig(
         private const val KEY_SMS_DIRECT_ENABLED = "sms_direct_enabled"
         private const val KEY_SMS_DIRECT_PHONE = "sms_direct_phone"
         private const val KEY_SMS_DIRECT_ONLY_ON_NO_NETWORK = "sms_direct_only_on_no_network"
+        private const val KEY_SMS_DIRECT_RATE_LIMIT_ENABLED = "sms_direct_rate_limit_enabled"
+        private const val KEY_SMS_DIRECT_MINUTE_LIMIT = "sms_direct_minute_limit"
+        private const val KEY_SMS_DIRECT_HOUR_LIMIT = "sms_direct_hour_limit"
+        const val DEFAULT_SMS_DIRECT_MINUTE_LIMIT = 10
+        const val DEFAULT_SMS_DIRECT_HOUR_LIMIT = 30
         private const val KEY_CUSTOM_WEBHOOK_ENABLED = "custom_webhook_enabled"
         private const val KEY_CUSTOM_WEBHOOK_URL = "custom_webhook_url"
         private const val KEY_CUSTOM_WEBHOOK_HEADERS = "custom_webhook_headers"

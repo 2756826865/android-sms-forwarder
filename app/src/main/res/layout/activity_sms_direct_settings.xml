@@ -79,6 +79,48 @@
                 android:layout_height="48dp" />
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:text="指定卡不可用时停止发送，不自动换卡；跟随模式测试需改选固定卡。" />
+
+            <com.google.android.material.switchmaterial.SwitchMaterial
+                android:id="@+id/sms_direct_rate_limit_enabled"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="启用发送频率限制（防无限循环扣费）"
+                android:textColor="#111111" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:orientation="horizontal">
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="6dp"
+                    android:hint="1分钟上限(条)">
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/sms_direct_minute_limit"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="number" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="6dp"
+                    android:hint="1小时上限(条)">
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/sms_direct_hour_limit"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="number" />
+                </com.google.android.material.textfield.TextInputLayout>
+            </LinearLayout>
+
             <View
                 android:layout_width="match_parent"
                 android:layout_height="1dp"

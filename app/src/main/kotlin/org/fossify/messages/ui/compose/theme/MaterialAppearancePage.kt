@@ -30,7 +30,7 @@ internal fun MaterialAppearancePage(onBack: () -> Unit) {
             ))
             Spacer(Modifier.height(13.dp))
             SegmentedColumn(content = listOf(
-                { SegmentedDropdownItem(title = "主题色", items = listOf("绿色", "蓝色", "紫色"), selectedIndex = value.accent.coerceIn(0,2), onItemSelected = { update(value.copy(accent = it, keyColor = 0, dynamic = false)) }) },
+                { SegmentedDropdownItem(title = "主题色", items = listOf("青绿", "蓝色", "紫色", "橘红"), selectedIndex = value.accent.coerceIn(0,3), onItemSelected = { update(value.copy(accent = it, keyColor = 0, dynamic = false)) }) },
                 { val entries = top.yukonga.miuix.kmp.theme.ThemePaletteStyle.entries
                     SegmentedDropdownItem(title = "调色板风格", items = entries.map { it.name }, selectedIndex = entries.indexOfFirst { it.name == value.palette }.coerceAtLeast(0), onItemSelected = { update(value.copy(palette = entries[it].name)) }) },
                 { SegmentedDropdownItem(title = "色彩规范", items = listOf("2021", "2025"), selectedIndex = if(value.spec2025) 1 else 0, onItemSelected = { update(value.copy(spec2025 = it == 1)) }) }

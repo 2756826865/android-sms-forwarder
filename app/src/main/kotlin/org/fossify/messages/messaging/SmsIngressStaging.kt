@@ -268,7 +268,8 @@ internal class SmsIngressStaging(
             ),
         )
         val snapshot =
-            if (identity.slotIndex != null) ForwardingMessageFormatter.captureSim(app, sub)
+            if (identity.slotIndex != null)
+                ForwardingMessageFormatter.captureSim(app, sub, identity.slotIndex)
             else
                 ForwardingSimSnapshot(
                     -1,

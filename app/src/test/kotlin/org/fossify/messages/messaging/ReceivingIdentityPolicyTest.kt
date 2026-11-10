@@ -76,4 +76,19 @@ class ReceivingIdentityPolicyTest {
         assertEquals(7, result.confirmedSubscriptionId)
         assertNull(result.slotIndex)
     }
+
+    @Test
+    fun camelCaseSubIdAndVendorSlotKeysMapToDualSimSlot() {
+        val bySubId = resolve(mapOf("subId" to 42))
+        assertEquals(42, bySubId.confirmedSubscriptionId)
+        assertEquals(1, bySubId.slotIndex)
+
+        val bySimSlot = resolve(mapOf("simSlot" to 0))
+        assertEquals(7, bySimSlot.confirmedSubscriptionId)
+        assertEquals(0, bySimSlot.slotIndex)
+
+        val bySlotIdx = resolve(mapOf("slotIdx" to 1))
+        assertEquals(42, bySlotIdx.confirmedSubscriptionId)
+        assertEquals(1, bySlotIdx.slotIndex)
+    }
 }

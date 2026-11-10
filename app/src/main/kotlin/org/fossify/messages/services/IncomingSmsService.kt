@@ -329,7 +329,15 @@ open class IncomingSmsService : Service() {
         val eventKey = intent.getStringExtra(SmsIngressJournal.EXTRA_EVENT)
         if (eventKey != null && !SmsIngressJournal(this).routingAllowed(eventKey)) return
         val rulesConfig = ForwardingRulesConfig(applicationContext)
-        val simSlotIndex = SmsIngressJournal(this).receipt(intent)?.slot?.takeIf { it >= 0 }
+        val ingressSimSnapshot =
+            org.fossify.messages.messaging.SmsIngressSnapshots(this).snapshotForWork(uniqueId)
+        val simSlotIndex =
+            SmsIngressJournal(this).receipt(intent)?.slot?.takeIf { it >= 0 }
+                ?: ingressSimSnapshot?.slotIndex?.takeIf { it >= 0 }
+                ?: org.fossify.messages.messaging.ReceivingSubscriptionReader.slotForSubscription(
+                    this,
+                    subscriptionId,
+                )
 
         val multiConfig = MultiForwardConfig(applicationContext)
         val enabledForwardChannels = buildSet {
@@ -353,9 +361,24 @@ open class IncomingSmsService : Service() {
                     val template = action.customTemplate.takeIf { action.templateMode == org.fossify.messages.forwarding.RuleTemplateMode.CUSTOM }
                         ?: rule.customTemplate.takeIf(String::isNotBlank)
                     if (template != null) {
-                        ForwardingMessageFormatter.renderRuleTemplate(this, template, address, text, sentAt, subscriptionId)
+                        ForwardingMessageFormatter.renderRuleTemplate(
+                            this,
+                            template,
+                            address,
+                            text,
+                            sentAt,
+                            subscriptionId,
+                            simSnapshot = ingressSimSnapshot,
+                        )
                     } else {
-                        ForwardingMessageFormatter.format(this, address, text, sentAt, subscriptionId).content
+                        ForwardingMessageFormatter.format(
+                            this,
+                            address,
+                            text,
+                            sentAt,
+                            subscriptionId,
+                            simSnapshot = ingressSimSnapshot,
+                        ).content
                     }
                 }
             )
@@ -437,7 +460,8 @@ open class IncomingSmsService : Service() {
                             actionId = target.actionId,
                             bodyAlreadyRendered = true,
                             allowSimLabelPrefix = target.allowSimLabelPrefix,
-                            threadId = resolvedThreadId
+                            threadId = resolvedThreadId,
+                            originalSim = ingressSimSnapshot,
                         )
                     }
                 } else {
@@ -453,7 +477,8 @@ open class IncomingSmsService : Service() {
                     subscriptionId = subscriptionId,
                     uniqueId = uniqueId,
                     operationId = operationId,
-                    threadId = resolvedThreadId
+                    threadId = resolvedThreadId,
+                    originalSim = ingressSimSnapshot,
                 )
             }
         }

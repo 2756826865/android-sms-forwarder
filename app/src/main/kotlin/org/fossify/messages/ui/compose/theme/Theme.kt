@@ -135,9 +135,9 @@ fun GatewayTheme(
                 if (dark) top.yukonga.miuix.kmp.theme.ColorSchemeMode.MonetDark else top.yukonga.miuix.kmp.theme.ColorSchemeMode.MonetLight,
                 keyColor = if (settings.dynamic && settings.keyColor == 0) colorScheme.primary else accent,
                 isDark = dark,
-                paletteStyle = runCatching { top.yukonga.miuix.kmp.theme.ThemePaletteStyle.valueOf(if (settings.dynamic) settings.palette else "TonalSpot") }
+                paletteStyle = runCatching { top.yukonga.miuix.kmp.theme.ThemePaletteStyle.valueOf(settings.palette) }
                     .getOrDefault(top.yukonga.miuix.kmp.theme.ThemePaletteStyle.TonalSpot),
-                colorSpec = if (!settings.dynamic || settings.spec2025) top.yukonga.miuix.kmp.theme.ThemeColorSpec.Spec2025
+                colorSpec = if (settings.spec2025) top.yukonga.miuix.kmp.theme.ThemeColorSpec.Spec2025
                     else top.yukonga.miuix.kmp.theme.ThemeColorSpec.Spec2021
             )
         ) {
@@ -145,8 +145,9 @@ fun GatewayTheme(
             val neutralPage = if (dark) { if (settings.amoled) Color.Black else Color(0xFF121417) } else Color(0xFFF5F5F5)
             val neutralCard = if (dark) Color(0xFF1E2024) else Color.White
             val neutralText = if (dark) Color(0xFFE6E6E6) else Color(0xFF202124)
+            val useGeneratedPalette = settings.dynamic || settings.palette != "TonalSpot" || !settings.spec2025
             val miuix = generated.copy(
-                primary = if (settings.dynamic) generated.primary else accent,
+                primary = if (useGeneratedPalette) generated.primary else accent,
                 surface = neutralPage,
                 background = neutralPage,
                 surfaceContainer = neutralCard,

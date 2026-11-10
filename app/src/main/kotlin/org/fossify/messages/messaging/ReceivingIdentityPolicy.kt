@@ -23,11 +23,11 @@ internal object ReceivingIdentityPolicy {
 
     val subscriptionKeys = listOf(
         "android.telephony.extra.SUBSCRIPTION_INDEX", "android.telephony.extra.SUBSCRIPTION_ID",
-        "subscription", "subscription_id", "subscriptionIndex", "sub_id",
+        "subscription", "subscription_id", "subscriptionIndex", "sub_id", "subId",
     )
     val slotKeys = listOf(
         "android.telephony.extra.SLOT_INDEX", "phone", "slot", "slot_id", "slotIndex",
-        "phone_id", "phoneId",
+        "phone_id", "phoneId", "simSlot", "slotIdx",
         )
 
     val ambiguousVendorKeys = listOf("simId", "sim_id", "simnum",

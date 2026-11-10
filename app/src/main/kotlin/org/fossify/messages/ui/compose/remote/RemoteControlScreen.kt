@@ -173,6 +173,15 @@ fun RemoteControlScreen(
                 }
             }
 
+            item(key = "prerequisite_card") {
+                PrerequisiteCard(
+                    context = context,
+                    isDark = isDark,
+                    cardColor = cardColor,
+                    outlineColor = outlineColor
+                )
+            }
+
             // 3. 远程来源列表头部与添加来源
             item {
                 Row(
@@ -968,6 +977,12 @@ private fun RemoteSourceEditDialog(
     }
     var emailPortText by remember { mutableStateOf(initialSource?.optInt("port", 993)?.toString() ?: "993") }
     var emailSsl by remember { mutableStateOf(initialSource?.optBoolean("ssl", true) ?: true) }
+    var telegramCustomHost by remember {
+        mutableStateOf(
+            initialSource?.optString("customHost").orEmpty()
+                .ifBlank { org.fossify.messages.forwarding.MultiForwardConfig(context).telegramRemoteCustomHost() }
+        )
+    }
 
     val scrollState = rememberScrollState()
 
@@ -1103,6 +1118,14 @@ private fun RemoteSourceEditDialog(
                             value = param3,
                             onValueChange = { param3 = it },
                             label = { Text("默认 ChatID (选填，原路回复时自动填充)") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = telegramCustomHost,
+                            onValueChange = { telegramCustomHost = it },
+                            label = { Text("自定义反代 API 地址 (选填，国内免代理)") },
+                            placeholder = { Text("留空默认 https://api.telegram.org") },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -1434,12 +1457,15 @@ private fun RemoteSourceEditDialog(
                     val authSet = authUsersText.lines().map(String::trim).filter(String::isNotBlank).toSet()
                     val groupSet = authGroupsText.lines().map(String::trim).filter(String::isNotBlank).toSet()
 
-                    val json = JSONObject().apply {
+                    val json = (initialSource?.takeIf { it.type == type }?.let {
+                        runCatching { JSONObject(it.configJson) }.getOrNull()
+                    } ?: JSONObject()).apply {
                         when (type) {
                             RemoteSourceType.SMS -> {}
                             RemoteSourceType.TELEGRAM -> {
                                 put("botToken", param1.trim())
                                 put("chatId", param3.trim())
+                                put("customHost", telegramCustomHost.trim())
                             }
                             RemoteSourceType.DINGTALK -> {
                                 put("clientId", param1.trim())

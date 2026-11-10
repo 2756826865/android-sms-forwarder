@@ -27,14 +27,16 @@ class AutofillSettingsActivity : SimpleActivity() {
     }
 
     private fun setupViews() {
-        binding.autofillSwitchEnabled.isChecked = config.enabled
+        binding.autofillSwitchEnabled.isChecked = config.enabled && config.copyToClipboard
         binding.autofillSwitchEnabled.setOnCheckedChangeListener { _, isChecked ->
-            config.enabled = isChecked
+            config.enabled = isChecked || config.enableFloatingPill
+            config.copyToClipboard = isChecked
         }
 
         binding.autofillSwitchFloatingPill.isChecked = config.enableFloatingPill
         binding.autofillSwitchFloatingPill.setOnCheckedChangeListener { _, isChecked ->
             config.enableFloatingPill = isChecked
+            if (isChecked) config.enabled = true
             if (isChecked && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
                 try {
                     val intent = Intent(
