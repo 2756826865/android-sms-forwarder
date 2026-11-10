@@ -292,6 +292,21 @@ object DeviceCompatHelper {
         return brand == DeviceBrand.XIAOMI || brand == DeviceBrand.REDMI || brand == DeviceBrand.POCO
     }
 
+    /**
+     * 检测是否处于鸿蒙（HarmonyOS）或鸿蒙 NEXT 卓易通/出境易兼容容器环境。
+     */
+    fun isHarmonyOsOrContainer(): Boolean {
+        val brand = detectBrand()
+        if (brand == DeviceBrand.HUAWEI) return true
+        return runCatching {
+            val clazz = Class.forName("com.huawei.system.BuildEx")
+            val method = clazz.getMethod("getOsBrand")
+            "harmony".equals(method.invoke(clazz)?.toString(), ignoreCase = true)
+        }.getOrDefault(false) ||
+            Build.DISPLAY.contains("Harmony", ignoreCase = true) ||
+            Build.HOST.contains("harmony", ignoreCase = true)
+    }
+
     fun isNotificationSmsDenied(context: Context): Boolean {
         if (!isMiui()) return false
         return try {

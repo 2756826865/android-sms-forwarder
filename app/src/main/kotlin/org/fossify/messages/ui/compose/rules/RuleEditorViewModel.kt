@@ -165,6 +165,22 @@ class RuleEditorViewModel(
         runLiveTest()
     }
 
+    fun updateActionTemplate(actionId: String, customTemplate: String) {
+        _uiState.update { state ->
+            val trimmed = customTemplate.trim()
+            val updated = state.actions.map { action ->
+                if (action.id == actionId) {
+                    action.copy(
+                        templateMode = if (trimmed.isNotBlank()) RuleTemplateMode.CUSTOM else RuleTemplateMode.GLOBAL,
+                        customTemplate = customTemplate
+                    )
+                } else action
+            }
+            state.copy(actions = updated)
+        }
+        runLiveTest()
+    }
+
     fun updateCustomTemplate(template: String) {
         _uiState.update { it.copy(customTemplate = template) }
         runLiveTest()

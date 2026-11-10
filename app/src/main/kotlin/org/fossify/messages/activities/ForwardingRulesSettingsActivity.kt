@@ -139,6 +139,10 @@ class ForwardingRulesSettingsActivity : SimpleActivity() {
         binding.rulesExcludeKeywords.setText(rule.excludeKeywords.joinToString("\n"))
         binding.rulesAllowRegex.setText(rule.includeRegex)
         binding.rulesExcludeRegex.setText(rule.excludeRegex)
+        binding.rulesCustomTemplate.setText(rule.customTemplate)
+        binding.rulesRegexReplacements.setText(
+            rule.regexReplacements.joinToString("\n") { "${it.pattern} => ${it.replacement}" }
+        )
         selectedChannels = rule.channels.toMutableSet()
         updateChannelSummary()
         loadingEditor = false
@@ -148,7 +152,8 @@ class ForwardingRulesSettingsActivity : SimpleActivity() {
         if (loadingEditor) return workingRules.getOrNull(selectedRuleIndex)
         val includeRegex = binding.rulesAllowRegex.text?.toString().orEmpty().trim()
         val excludeRegex = binding.rulesExcludeRegex.text?.toString().orEmpty().trim()
-        if (!isRegexValid(includeRegex) || !isRegexValid(excludeRegex)) {
+        val parsedReplacements = parseRegexReplacements(binding.rulesRegexReplacements.text?.toString().orEmpty())
+        if (!isRegexValid(includeRegex) || !isRegexValid(excludeRegex) || parsedReplacements.any { !isRegexValid(it.pattern) }) {
             if (showError) toast(R.string.forwarding_rules_invalid_regex)
             return null
         }
@@ -171,6 +176,8 @@ class ForwardingRulesSettingsActivity : SimpleActivity() {
             excludeKeywords = splitValues(binding.rulesExcludeKeywords.text?.toString().orEmpty()),
             includeRegex = includeRegex,
             excludeRegex = excludeRegex,
+            customTemplate = binding.rulesCustomTemplate.text?.toString().orEmpty().trim(),
+            regexReplacements = parsedReplacements,
             channels = selectedChannels.toList(),
         )
     }
@@ -292,6 +299,26 @@ class ForwardingRulesSettingsActivity : SimpleActivity() {
         .map(String::trim)
         .filter(String::isNotBlank)
         .distinct()
+
+    private fun parseRegexReplacements(raw: String): List<org.fossify.messages.forwarding.RegexReplacement> =
+        raw.lineSequence()
+            .map(String::trim)
+            .filter(String::isNotBlank)
+            .mapNotNull { line ->
+                val sep = when {
+                    "=> " in line -> "=> "
+                    "=>" in line -> "=>"
+                    "->" in line -> "->"
+                    else -> null
+                }
+                if (sep != null) {
+                    val idx = line.indexOf(sep)
+                    val pattern = line.substring(0, idx).trim()
+                    val replacement = line.substring(idx + sep.length).trim()
+                    if (pattern.isNotBlank()) org.fossify.messages.forwarding.RegexReplacement(pattern, replacement, true) else null
+                } else null
+            }
+            .toList()
 
     private fun isRegexValid(value: String) = value.isBlank() || runCatching { Regex(value) }.isSuccess
 }

@@ -423,8 +423,8 @@
     <string name="compatibility_brand_vivo_advice">vivo / iQOO 若自动换回系统信息，请先进入系统设置 → 应用与权限 → 默认应用 → 短信，选择本应用；再到 i 管家允许自启动、后台高耗电和锁屏通知。重启、系统更新或 i 管家修复后建议回到本页重新检测。仍被回退时，可展开高级技术诊断并复制 ADB 修复命令。</string>
     <string name="compatibility_brand_xiaomi_title">小米 / Redmi 专属建议</string>
     <string name="compatibility_brand_xiaomi_advice">允许自启动，省电策略设为无限制，并允许后台弹出界面与锁屏通知。息屏收不到短信时，到本页确认 SMS Role 与 WRITE_SMS 为正常；若 WRITE_SMS 未允许，可展开高级诊断复制 ADB 命令修复。HyperOS 更新后建议重新确认以上项。</string>
-    <string name="compatibility_brand_huawei_title">华为 / 荣耀专属建议</string>
-    <string name="compatibility_brand_huawei_advice">Pura 70 等新系统不一定再显示旧版“允许后台运行”入口。优先进入设置 → 应用和服务 → 应用启动管理，找到本应用后关闭自动管理，并允许自启动、关联启动和后台活动；也可从手机管家 → 应用启动管理进入。若入口被系统版本移除，请进入应用详情，把电池策略设为不限制，并在最近任务中锁定应用。若 SMS Role、底层路由与 WRITE_SMS 不同步，请展开高级诊断处理。</string>
+    <string name="compatibility_brand_huawei_title">华为 / 鸿蒙 (含 NEXT 卓易通容器) 专属建议</string>
+    <string name="compatibility_brand_huawei_advice">Pura 70 等新系统不一定再显示旧版“允许后台运行”入口。优先进入设置 → 应用和服务 → 应用启动管理，找到本应用后关闭自动管理，并允许自启动、关联启动和后台活动；也可从手机管家 → 应用启动管理进入。若入口被系统版本移除，请进入应用详情，把电池策略设为不限制，并在最近任务中锁定应用。若 SMS Role、底层路由与 WRITE_SMS 不同步，请展开高级诊断处理。\n\n【鸿蒙 NEXT（卓易通 / 出境易容器）特别说明】：\n1. 在卓易通安卓容器内运行本应用时，鸿蒙原生多任务界面由宿主系统接管，Android 标准“最近任务隐藏”接口在宿主多任务视图中可能不生效；\n2. 安卓无障碍服务与悬浮胶囊仅作用于容器内安卓应用，无法跨越容器边界自动填入鸿蒙原生 App，建议优先开启「验证码自动写入剪贴板」直接粘贴。</string>
     <string name="compatibility_brand_coloros_title">ColorOS（OPPO / 一加 / realme）短信发送确认</string>
     <string name="compatibility_brand_coloros_advice">若每次通过短信直发、批量发送或远程指令发送短信都出现系统确认弹窗，请先将本应用设为默认短信应用，并在权限管理中把“发送短信”设为始终允许；如系统提供“验证码短信保护”，请按实际需要关闭。随后进入开发者选项，尝试开启“禁止权限监控”；仍然弹窗时，可再开启“停止限制子进程”。不同 ColorOS 版本的名称和位置可能不同，新版本可能已经移除这些开关。应用无法自行修改这些系统安全选项，也不能保证所有机型都取消确认。为保证后台接收与转发，还应允许自启动、关联启动/后台活动，关闭电池优化，并在最近任务中锁定应用。</string>
     <string name="compatibility_brand_meizu_title">魅族 / Flyme 短信接收建议</string>

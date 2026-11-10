@@ -268,22 +268,26 @@ class BulkSendActivity : SimpleActivity() {
         binding.bulkSendSettingsChevron.rotation = if (expanded) 180f else 0f
     }
 
+    private val delaySecondChoices = listOf(0, 1, 2, 3, 5, 10, 15, 30, 60)
+
     private fun updateSettingsSummary() {
         val simLabel = simOptions.getOrNull(binding.bulkSendSim.selectedItemPosition)?.label
             ?: getString(R.string.bulk_send_default_sim)
-        val delayLabel = delayLabel(config.bulkSendDelaySeconds.coerceIn(0, 5))
+        val delayLabel = delayLabel(config.bulkSendDelaySeconds.coerceIn(0, 60))
         binding.bulkSendSettingsSummary.text = getString(R.string.bulk_send_settings_summary, simLabel, delayLabel)
     }
 
     private fun loadDelayOptions() {
-        val delayOptions = (0..5).map(::delayLabel)
+        val delayOptions = delaySecondChoices.map(::delayLabel)
         binding.bulkSendDelay.adapter = ArrayAdapter(this, R.layout.item_bulk_sim_option, delayOptions).apply {
             setDropDownViewResource(R.layout.item_bulk_sim_option)
         }
-        binding.bulkSendDelay.setSelection(config.bulkSendDelaySeconds.coerceIn(0, 5))
+        val currentDelay = config.bulkSendDelaySeconds.coerceIn(0, 60)
+        val initialPos = delaySecondChoices.indexOf(currentDelay).takeIf { it >= 0 } ?: 0
+        binding.bulkSendDelay.setSelection(initialPos)
         binding.bulkSendDelay.setOnItemSelectedListener(object : android.widget.AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
-                config.bulkSendDelaySeconds = position
+                config.bulkSendDelaySeconds = delaySecondChoices.getOrElse(position) { 0 }
                 updateSettingsSummary()
             }
 

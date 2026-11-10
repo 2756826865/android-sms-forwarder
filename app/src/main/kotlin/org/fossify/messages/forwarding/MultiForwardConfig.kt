@@ -507,12 +507,33 @@ class MultiForwardConfig(
     fun websocketRemoteCustomPrefix() = prefs.getString(KEY_WEBSOCKET_REMOTE_CUSTOM_PREFIX, "").orEmpty()
 
     // 9. Bark
-    fun saveBark(serverUrl: String, deviceKey: String) {
+    fun saveBark(
+        serverUrl: String,
+        deviceKey: String,
+        level: String = barkLevel,
+        group: String = barkGroup,
+        autoCopyCode: Boolean = barkAutoCopyCode
+    ) {
         saveSecret(KEY_BARK_SERVER_URL, serverUrl)
         saveSecret(KEY_BARK_DEVICE_KEY, deviceKey)
+        barkLevel = level
+        barkGroup = group
+        barkAutoCopyCode = autoCopyCode
     }
     fun barkServerUrl() = getSecret(KEY_BARK_SERVER_URL).ifBlank { "https://api.day.app" }
     fun barkDeviceKey() = getSecret(KEY_BARK_DEVICE_KEY)
+
+    var barkLevel: String
+        get() = prefs.getString(KEY_BARK_LEVEL, "active").orEmpty().ifBlank { "active" }
+        set(value) = prefs.edit().putString(KEY_BARK_LEVEL, value.trim().ifBlank { "active" }).apply()
+
+    var barkGroup: String
+        get() = prefs.getString(KEY_BARK_GROUP, "").orEmpty()
+        set(value) = prefs.edit().putString(KEY_BARK_GROUP, value.trim()).apply()
+
+    var barkAutoCopyCode: Boolean
+        get() = prefs.getBoolean(KEY_BARK_AUTO_COPY_CODE, true)
+        set(value) = prefs.edit().putBoolean(KEY_BARK_AUTO_COPY_CODE, value).apply()
 
     // 10. WebSocket 客户端
     fun saveWebsocket(serverUrl: String, token: String = "") {
@@ -948,6 +969,9 @@ class MultiForwardConfig(
         private const val KEY_BARK_SERVER_URL = "bark_server_url"
         private const val KEY_BARK_DEVICE_KEY = "bark_device_key"
         private const val KEY_BARK_ALLOW_HTTP = "bark_allow_http"
+        private const val KEY_BARK_LEVEL = "bark_level"
+        private const val KEY_BARK_GROUP = "bark_group"
+        private const val KEY_BARK_AUTO_COPY_CODE = "bark_auto_copy_code"
         private const val KEY_WEBSOCKET_ENABLED = "websocket_enabled"
         private const val KEY_WEBSOCKET_URL = "websocket_url"
         private const val KEY_WEBSOCKET_TOKEN = "websocket_token"

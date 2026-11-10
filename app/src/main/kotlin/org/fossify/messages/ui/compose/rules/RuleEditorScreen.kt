@@ -378,7 +378,8 @@ fun RuleEditorScreen(
                             actions = uiState.actions,
                             availableInstances = uiState.availableInstances,
                             onAddAction = viewModel::addAction,
-                            onRemoveAction = viewModel::removeAction
+                            onRemoveAction = viewModel::removeAction,
+                            onUpdateActionTemplate = viewModel::updateActionTemplate
                         )
                     }
                 }

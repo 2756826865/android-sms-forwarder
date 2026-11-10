@@ -59,7 +59,8 @@ fun ActionInstanceSelector(
     actions: List<ForwardingRuleAction>,
     availableInstances: List<ForwardingChannelInstance>,
     onAddAction: (instanceId: String) -> Unit,
-    onRemoveAction: (actionId: String) -> Unit
+    onRemoveAction: (actionId: String) -> Unit,
+    onUpdateActionTemplate: (actionId: String, customTemplate: String) -> Unit = { _, _ -> }
 ) {
     val isDark = org.fossify.messages.ui.compose.theme.LocalGatewayDark.current
     val primaryText = if (isDark) Color.White else TextPrimary
@@ -68,6 +69,7 @@ fun ActionInstanceSelector(
     val borderColor = if (isDark) DarkOutline else OutlineSoft
 
     var pickerExpanded by remember { mutableStateOf(false) }
+    var expandedTemplateIds by remember { mutableStateOf(setOf<String>()) }
 
     Column(modifier = Modifier.fillMaxWidth()) {
         if (availableInstances.isEmpty()) {
@@ -104,54 +106,91 @@ fun ActionInstanceSelector(
                         val name = inst?.name ?: "已删除的通道实例"
                         val emoji = ChannelRegistry.getIconEmoji(action.channelType)
 
+                        val hasCustomTpl = !action.customTemplate.isNullOrBlank()
+                        val isTplExpanded = action.id in expandedTemplateIds || hasCustomTpl
+
                         Surface(
                             shape = RoundedCornerShape(10.dp),
                             color = cardBg,
                             shadowElevation = 1.dp,
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Row(
+                            Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 14.dp, vertical = 10.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                                    .padding(horizontal = 14.dp, vertical = 10.dp)
                             ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(text = emoji, fontSize = 18.sp)
-                                    Spacer(modifier = Modifier.width(10.dp))
-                                    Column {
-                                        Text(
-                                            text = name,
-                                            fontSize = 14.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = primaryText
-                                        )
-                                        Text(
-                                            text = ChannelRegistry.getDisplayName(action.channelType),
-                                            fontSize = 12.sp,
-                                            color = secondaryText
-                                        )
-                                        if (inst == null || !inst.enabled) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                        Text(text = emoji, fontSize = 18.sp)
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                        Column {
                                             Text(
-                                                text = if (inst == null) "关联已失效，请移除" else "已停用，执行时将跳过",
+                                                text = name,
+                                                fontSize = 14.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = primaryText
+                                            )
+                                            Text(
+                                                text = ChannelRegistry.getDisplayName(action.channelType),
+                                                fontSize = 12.sp,
+                                                color = secondaryText
+                                            )
+                                            if (inst == null || !inst.enabled) {
+                                                Text(
+                                                    text = if (inst == null) "关联已失效，请移除" else "已停用，执行时将跳过",
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Medium,
+                                                    color = GatewayOrange
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        androidx.compose.material3.TextButton(
+                                            onClick = {
+                                                expandedTemplateIds = if (action.id in expandedTemplateIds) {
+                                                    expandedTemplateIds - action.id
+                                                } else {
+                                                    expandedTemplateIds + action.id
+                                                }
+                                            },
+                                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 0.dp)
+                                        ) {
+                                            Text(
+                                                text = if (hasCustomTpl) "独立模板✓" else if (isTplExpanded) "收起模板" else "独立模板",
                                                 fontSize = 11.sp,
-                                                fontWeight = FontWeight.Medium,
-                                                color = GatewayOrange
+                                                color = if (hasCustomTpl) BrandGreen else secondaryText
+                                            )
+                                        }
+                                        IconButton(
+                                            onClick = { onRemoveAction(action.id) },
+                                            modifier = Modifier.size(30.dp)
+                                        ) {
+                                            Icon(
+                                                painter = painterResource(R.drawable.ic_delete),
+                                                contentDescription = "移除目标",
+                                                tint = GatewayRed,
+                                                modifier = Modifier.size(16.dp)
                                             )
                                         }
                                     }
                                 }
 
-                                IconButton(
-                                    onClick = { onRemoveAction(action.id) },
-                                    modifier = Modifier.size(30.dp)
-                                ) {
-                                    Icon(
-                                        painter = painterResource(R.drawable.ic_delete),
-                                        contentDescription = "移除目标",
-                                        tint = GatewayRed,
-                                        modifier = Modifier.size(16.dp)
+                                if (isTplExpanded) {
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    androidx.compose.material3.OutlinedTextField(
+                                        value = action.customTemplate.orEmpty(),
+                                        onValueChange = { onUpdateActionTemplate(action.id, it) },
+                                        label = { Text("该通道专属模板（选填，留空则沿用规则/全局模板）", fontSize = 11.sp) },
+                                        placeholder = { Text("例如短信直发仅发短文本：验证码 {{CODE}} 来自 {{FROM}}", fontSize = 11.sp) },
+                                        minLines = 2,
+                                        modifier = Modifier.fillMaxWidth()
                                     )
                                 }
                             }

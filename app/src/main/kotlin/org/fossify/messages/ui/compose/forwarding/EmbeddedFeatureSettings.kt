@@ -659,6 +659,13 @@ fun AutofillEmbeddedScreen() {
                     autoSubmit = it
                     cfg.autoSubmit = it
                 }
+                if (org.fossify.messages.helpers.DeviceCompatHelper.isHarmonyOsOrContainer()) {
+                    Text(
+                        "💡 鸿蒙 / 卓易通环境提示：若在鸿蒙 NEXT 卓易通容器内运行，安卓无障碍与悬浮窗仅对容器内安卓应用生效，无法跨越容器边界自动填充鸿蒙原生应用；推荐开启「写入剪贴板」直接在原生应用中粘贴验证码。",
+                        fontSize = 11.5.sp,
+                        color = TextSecondary
+                    )
+                }
             }
         }
         item { Spacer(Modifier.height(LocalGatewayBottomPadding.current)) }
@@ -938,12 +945,20 @@ fun ClassicFeatureEntryScreen(
 }
 
 private val PRESET_NOTIFICATION_APPS = listOf(
+    "com.android.mms" to "系统短信 (原生/小米/魅族)",
+    "com.vivo.message" to "vivo/iQOO 系统信息",
+    "com.coloros.mcs" to "OPPO/一加/Realme 系统信息",
+    "com.huawei.message" to "华为系统信息",
+    "com.hihonor.mms" to "荣耀系统信息",
+    "com.samsung.android.messaging" to "三星系统信息",
+    "com.google.android.apps.messaging" to "Google 信息",
     "com.tencent.mm" to "微信",
     "com.eg.android.AlipayGphone" to "支付宝",
     "com.tencent.mobileqq" to "QQ",
     "com.tencent.wework" to "企业微信",
     "com.alibaba.android.rimet" to "钉钉",
     "com.ss.android.lark" to "飞书",
+    "com.unionpay" to "云闪付",
     "com.jingdong.app.mall" to "京东",
     "com.taobao.taobao" to "淘宝"
 )
@@ -954,6 +969,7 @@ fun NotificationForwardEmbeddedScreen() {
     val cfg = remember { NotificationForwardConfig(context) }
     var enabled by remember { mutableStateOf(cfg.enabled) }
     var ignoreOngoing by remember { mutableStateOf(cfg.ignoreOngoing) }
+    var skipSystemSmsWhenDefault by remember { mutableStateOf(cfg.skipSystemSmsWhenDefault) }
     var targetPackages by remember { mutableStateOf(cfg.targetPackageNames) }
     var selectedIds by remember { mutableStateOf(cfg.channelInstanceIds) }
     var hasPermission by remember { mutableStateOf(NotificationForwardListenerService.isPermissionGranted(context)) }
@@ -1038,6 +1054,41 @@ fun NotificationForwardEmbeddedScreen() {
                 ) { checked ->
                     ignoreOngoing = checked
                     cfg.ignoreOngoing = checked
+                }
+
+                SettingSwitch(
+                    title = "默认短信正常时跳过系统短信通知",
+                    subtitle = "开启后：若本应用已正常持有默认短信权限，自动忽略系统信息通知防重复；若被系统夺回默认权限，则自动通过通知兜底转发",
+                    checked = skipSystemSmsWhenDefault
+                ) { checked ->
+                    skipSystemSmsWhenDefault = checked
+                    cfg.skipSystemSmsWhenDefault = checked
+                }
+            }
+        }
+
+        // 系统短信通知兜底快捷卡片（专治 vivo/OPPO/魅族系统夺权与飞信通知）
+        item {
+            FeatureCard {
+                Text("🛡️ 系统短信通知监听兜底（防夺权模式）", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    "针对 vivo/iQOO、OPPO/ColorOS、魅族/Flyme 等频繁自动将默认短信切换回系统「信息」、或验证码仅在通知栏弹出的机型：一键将主流品牌系统短信包名加入监听列表，被系统夺权时依然能通过通知栏无缝兜底转发。",
+                    fontSize = 12.sp,
+                    color = if (dark) Color(0xFF9CA3AF) else TextSecondary
+                )
+                val allSysIncluded = NotificationForwardConfig.SYSTEM_SMS_PACKAGES.all { it in targetPackages }
+                OutlinedButton(
+                    onClick = {
+                        val merged = targetPackages + NotificationForwardConfig.SYSTEM_SMS_PACKAGES
+                        targetPackages = merged
+                        cfg.targetPackageNames = merged
+                        skipSystemSmsWhenDefault = true
+                        cfg.skipSystemSmsWhenDefault = true
+                        Toast.makeText(context, "已加入全部主流系统短信应用包名并开启防重保护", Toast.LENGTH_SHORT).show()
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(if (allSysIncluded) "✅ 已包含全部系统短信兜底包名（点击刷新）" else "一键开启系统短信通知兜底包名")
                 }
             }
         }

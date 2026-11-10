@@ -424,7 +424,17 @@ class MultiChannelForwardWorker(
                         val url = instance.optString("serverUrl")
                         val key = instance.optString("deviceKey")
                         check(url.isNotBlank() && key.isNotBlank()) { "Bark URL 或 DeviceKey 未配置" }
-                        sendBark(url, key, title, content, true)
+                        sendBark(
+                            url,
+                            key,
+                            title,
+                            content,
+                            true,
+                            level = instance.optString("level", "active"),
+                            group = instance.optString("group", ""),
+                            autoCopyCode = instance.optBoolean("autoCopyCode", true),
+                            rawSmsBody = body
+                        )
                     }
                     ForwardingChannels.CUSTOM_WEBHOOK -> {
                         val url = instance.optString("url")
@@ -591,7 +601,17 @@ class MultiChannelForwardWorker(
             sendDingTalk(config.dingTalkWebhook(), config.dingTalkSecret(), textOnlyContent)
         }
         if (shouldRun(ForwardingChannels.BARK, config.barkEnabled)) runChannel("Bark", ForwardingChannels.BARK) {
-            sendBark(config.barkServerUrl(), config.barkDeviceKey(), title, content, config.barkAllowHttp)
+            sendBark(
+                config.barkServerUrl(),
+                config.barkDeviceKey(),
+                title,
+                content,
+                config.barkAllowHttp,
+                level = config.barkLevel,
+                group = config.barkGroup,
+                autoCopyCode = config.barkAutoCopyCode,
+                rawSmsBody = body
+            )
         }
         if (shouldRun(ForwardingChannels.WEBSOCKET, config.websocketEnabled)) runChannel("WebSocket客户端", ForwardingChannels.WEBSOCKET) {
             sendWebsocket(config.websocketUrl(), config.websocketToken(), title, content)
@@ -715,7 +735,17 @@ class MultiChannelForwardWorker(
                         val url = instance.optString("serverUrl")
                         val key = instance.optString("deviceKey")
                         check(url.isNotBlank() && key.isNotBlank()) { "Bark URL 或 DeviceKey 未配置" }
-                        sendBark(url, key, title, content, true)
+                        sendBark(
+                            url,
+                            key,
+                            title,
+                            content,
+                            true,
+                            level = instance.optString("level", "active"),
+                            group = instance.optString("group", ""),
+                            autoCopyCode = instance.optBoolean("autoCopyCode", true),
+                            rawSmsBody = body
+                        )
                     }
                     ForwardingChannels.CUSTOM_WEBHOOK -> {
                         val url = instance.optString("url")
@@ -986,15 +1016,42 @@ class MultiChannelForwardWorker(
         ForwardingUrlPolicy.requireAllowed(url, allowHttp)
     }
 
-    private fun sendBark(serverUrl: String, deviceKey: String, title: String, content: String, allowHttp: Boolean) {
+    private fun sendBark(
+        serverUrl: String,
+        deviceKey: String,
+        title: String,
+        content: String,
+        allowHttp: Boolean,
+        level: String = "active",
+        group: String = "",
+        autoCopyCode: Boolean = true,
+        rawSmsBody: String = ""
+    ) {
         require(serverUrl.isNotBlank() && deviceKey.isNotBlank()) { "Bark 配置不完整" }
         val base = serverUrl.trim().trimEnd('/')
         requireHttpsOrAllowedHttp(base, allowHttp)
+        val payload = JSONObject()
+            .put("title", title)
+            .put("body", content)
+        val normalizedLevel = level.trim()
+        if (normalizedLevel in setOf("active", "timeSensitive", "critical", "passive")) {
+            payload.put("level", normalizedLevel)
+        }
+        if (group.isNotBlank()) {
+            payload.put("group", group.trim())
+        }
+        if (autoCopyCode) {
+            val extractedCode = org.fossify.messages.autofill.VerificationCodeExtractor.extractCode(
+                rawSmsBody.ifBlank { content }
+            )
+            if (!extractedCode.isNullOrBlank()) {
+                payload.put("autoCopy", "1")
+                payload.put("copy", extractedCode)
+            }
+        }
         val result = postJson(
             "$base/${URLEncoder.encode(deviceKey.trim(), "UTF-8")}",
-            JSONObject()
-                .put("title", title)
-                .put("body", content)
+            payload
         )
         check(result.optInt("code", -1) == 200) {
             result.optString("message", "Bark 请求失败")

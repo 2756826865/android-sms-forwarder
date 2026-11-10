@@ -1205,6 +1205,18 @@ fun InstanceEditorDialog(
         val defaultHour = MultiForwardConfig(context).smsDirectHourLimit
         mutableStateOf((existingInstance?.optInt("hourLimit", defaultHour) ?: defaultHour).toString())
     }
+    var barkLevel by remember {
+        val defaultLevel = MultiForwardConfig(context).barkLevel
+        mutableStateOf(existingInstance?.optString("level")?.ifBlank { defaultLevel } ?: defaultLevel)
+    }
+    var barkGroup by remember {
+        val defaultGroup = MultiForwardConfig(context).barkGroup
+        mutableStateOf(existingInstance?.optString("group")?.ifBlank { defaultGroup } ?: defaultGroup)
+    }
+    var barkAutoCopyCode by remember {
+        val defaultAutoCopy = MultiForwardConfig(context).barkAutoCopyCode
+        mutableStateOf(existingInstance?.optBoolean("autoCopyCode", defaultAutoCopy) ?: defaultAutoCopy)
+    }
     var emailPort by remember { mutableStateOf(existingInstance?.optInt("port", 465)?.toString() ?: "465") }
     var emailSecurity by remember {
         val port = existingInstance?.optInt("port", 465) ?: 465
@@ -1293,6 +1305,9 @@ fun InstanceEditorDialog(
                 .put("whitelistEnabled", dingTalkWhitelistEnabled)
                 .put("authorizedUsers", f6).put("authorizedGroups", f7)
             ForwardingChannels.BARK -> configJson.put("serverUrl", f1).put("deviceKey", f2)
+                .put("level", barkLevel.ifBlank { "active" })
+                .put("group", barkGroup.trim())
+                .put("autoCopyCode", barkAutoCopyCode)
             ForwardingChannels.WEBSOCKET -> configJson.put("serverUrl", f1).put("token", f2)
             ForwardingChannels.TELEGRAM -> configJson.put("botToken", f1).put("chatId", f2)
             ForwardingChannels.DISCORD -> configJson.put("webhook", f1)
@@ -1647,6 +1662,49 @@ fun InstanceEditorDialog(
                     ForwardingChannels.BARK -> {
                         OutlinedTextField(value = f1, onValueChange = { f1 = it }, label = { Text("服务器 (默认 https://api.day.app)") }, modifier = Modifier.fillMaxWidth())
                         OutlinedTextField(value = f2, onValueChange = { f2 = it }, label = { Text("Device Key") }, visualTransformation = secretVisualTransformation, modifier = Modifier.fillMaxWidth())
+                        Text("通知提醒级别 (iOS 专注模式/静音策略)", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            listOf(
+                                listOf("active" to "默认提醒", "timeSensitive" to "时效性(突破专注)"),
+                                listOf("critical" to "重要警告(忽略静音)", "passive" to "静默无声")
+                            ).forEach { rowItems ->
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                                    rowItems.forEach { (lv, label) ->
+                                        FilterChip(
+                                            selected = barkLevel == lv,
+                                            onClick = { barkLevel = lv },
+                                            label = { Text(label, fontSize = 11.5.sp) },
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        OutlinedTextField(
+                            value = barkGroup,
+                            onValueChange = { barkGroup = it.take(32) },
+                            label = { Text("通知分组名称 (选填，如 验证码)") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                Text("收到验证码时在 iPhone 自动复制", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                                Text(
+                                    "识别到短信验证码时自动附加 autoCopy=1&copy=验证码，iOS 收到通知直接写入剪贴板",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Switch(
+                                checked = barkAutoCopyCode,
+                                onCheckedChange = { barkAutoCopyCode = it }
+                            )
+                        }
                     }
                     ForwardingChannels.WEBSOCKET -> {
                         OutlinedTextField(value = f1, onValueChange = { f1 = it }, label = { Text("WebSocket URL (ws://... 或 http://...)") }, modifier = Modifier.fillMaxWidth())

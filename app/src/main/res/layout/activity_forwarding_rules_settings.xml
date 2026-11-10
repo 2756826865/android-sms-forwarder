@@ -294,6 +294,42 @@
                 style="@style/SmsChannelHelperText"
                 android:layout_marginTop="6dp" />
 
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:hint="当前规则独立消息模板（选填）"
+                app:helperText="留空则沿用全局模板；支持 {{FROM}} {{SMS}} {{CODE}} {{SIM_SLOT}} 等变量"
+                app:helperTextTextColor="@color/miui_secondary_text">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/rules_custom_template"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="textMultiLine"
+                    android:minLines="2"
+                    android:textColor="@color/miui_primary_text"
+                    android:textColorHint="@color/miui_hint_text" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:hint="正则替换内容清洗（选填，每行一条）"
+                app:helperText="格式：正则表达式 => 替换内容（例如：退订回T => ）"
+                app:helperTextTextColor="@color/miui_secondary_text">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/rules_regex_replacements"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="textMultiLine"
+                    android:minLines="2"
+                    android:textColor="@color/miui_primary_text"
+                    android:textColorHint="@color/miui_hint_text" />
+            </com.google.android.material.textfield.TextInputLayout>
+
             <View style="@style/SmsChannelDivider" />
 
             <TextView

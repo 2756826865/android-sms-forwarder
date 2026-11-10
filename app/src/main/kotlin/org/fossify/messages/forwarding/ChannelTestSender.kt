@@ -197,7 +197,15 @@ object ChannelTestSender {
                     require(key.isNotBlank()) { "Bark DeviceKey 不能为空，请先配置" }
                     ForwardingUrlPolicy.requireAllowed(server.trim().trimEnd('/'), config.barkAllowHttp)
                     val url = "$server/${URLEncoder.encode(key, "UTF-8")}"
-                    val res = postJson(url, JSONObject().put("title", title).put("body", content))
+                    val payload = JSONObject().put("title", title).put("body", content)
+                    val level = config.barkLevel.trim()
+                    if (level in setOf("active", "timeSensitive", "critical", "passive")) {
+                        payload.put("level", level)
+                    }
+                    if (config.barkGroup.isNotBlank()) {
+                        payload.put("group", config.barkGroup.trim())
+                    }
+                    val res = postJson(url, payload)
                     check(res.optInt("code", -1) == 200) { res.optString("message", "Bark 请求失败") }
                     "Bark 服务端已受理（设备通知待确认）"
                 }
@@ -520,7 +528,16 @@ object ChannelTestSender {
                     require(server.isNotBlank() && key.isNotBlank()) { "Bark URL 或 DeviceKey 不能为空，请先配置" }
                     ForwardingUrlPolicy.requireAllowed(server.trim().trimEnd('/'), server.startsWith("http://"))
                     val url = "$server/${URLEncoder.encode(key, "UTF-8")}"
-                    val res = postJson(url, JSONObject().put("title", title).put("body", content))
+                    val payload = JSONObject().put("title", title).put("body", content)
+                    val level = instance.optString("level", "active").trim()
+                    if (level in setOf("active", "timeSensitive", "critical", "passive")) {
+                        payload.put("level", level)
+                    }
+                    val group = instance.optString("group", "").trim()
+                    if (group.isNotBlank()) {
+                        payload.put("group", group)
+                    }
+                    val res = postJson(url, payload)
                     check(res.optInt("code", -1) == 200) { res.optString("message", "Bark 请求失败") }
                     "Bark 服务端已受理（设备通知待确认）"
                 }

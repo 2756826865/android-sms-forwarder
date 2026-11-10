@@ -48,11 +48,30 @@ class BarkSettingsActivity : SimpleActivity() {
         applyMiuiTopAppBarChrome(binding.barkAppbar, binding.barkToolbar)
     }
 
+    private val levelOptions = listOf(
+        "active" to "默认提醒 (active)",
+        "timeSensitive" to "时效性通知 - 突破专注模式 (timeSensitive)",
+        "critical" to "重要警告 - 忽略静音强制响铃 (critical)",
+        "passive" to "静默无声 (passive)"
+    )
+
     private fun loadConfig() = with(binding) {
         barkEnabled.isChecked = forwardingConfig.barkEnabled
         barkServerUrl.setText(forwardingConfig.barkServerUrl().ifBlank { "https://api.day.app" })
         barkDeviceKey.setText(forwardingConfig.barkDeviceKey())
         barkAllowHttp.isChecked = forwardingConfig.barkAllowHttp
+        val adapter = android.widget.ArrayAdapter(
+            this@BarkSettingsActivity,
+            android.R.layout.simple_spinner_item,
+            levelOptions.map { it.second }
+        ).apply {
+            setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        }
+        barkLevelSpinner.adapter = adapter
+        val currentLevelIndex = levelOptions.indexOfFirst { it.first == forwardingConfig.barkLevel }.coerceAtLeast(0)
+        barkLevelSpinner.setSelection(currentLevelIndex)
+        barkGroup.setText(forwardingConfig.barkGroup)
+        barkAutoCopyCode.isChecked = forwardingConfig.barkAutoCopyCode
         barkTestSender.setText("10086")
         barkTestBody.setText("这是一条 Bark 转发测试消息")
     }
@@ -69,9 +88,16 @@ class BarkSettingsActivity : SimpleActivity() {
             toast("默认必须使用 HTTPS；HTTP 仅允许局域网地址")
             return false
         }
+        val selectedLevel = levelOptions.getOrNull(binding.barkLevelSpinner.selectedItemPosition)?.first ?: "active"
         forwardingConfig.barkEnabled = binding.barkEnabled.isChecked
         forwardingConfig.barkAllowHttp = binding.barkAllowHttp.isChecked
-        forwardingConfig.saveBark(serverUrl, deviceKey)
+        forwardingConfig.saveBark(
+            serverUrl = serverUrl,
+            deviceKey = deviceKey,
+            level = selectedLevel,
+            group = binding.barkGroup.value.trim().take(32),
+            autoCopyCode = binding.barkAutoCopyCode.isChecked
+        )
         return true
     }
 }

@@ -47,11 +47,11 @@ internal object BackupPreferences {
     // Export only explicitly chosen non-credential settings; never copy arbitrary preferences across devices.
     val portableKeys: Map<String, Set<String>> = mapOf(
         "forwarding_fallback" to emptySet(), // instance IDs are dynamic; all string values allowed below
-        "multi_channel_forwarding" to setOf("sim_one_label", "sim_two_label", "sim_one_number", "sim_two_number", "forwarding_delay_seconds", "keep_alive_service_enabled", "root_enhancement_enabled", "enable_privacy_mask", "mask_verification_code", "mark_as_read_after_forward", "sms_direct_only_on_no_network", "sms_direct_sim_mode", "sms_direct_rate_limit_enabled", "sms_direct_minute_limit", "sms_direct_hour_limit", "dingtalk_enabled", "feishu_enabled", "email_enabled", "sms_direct_enabled", "bark_enabled", "gotify_enabled", "pushplus_enabled", "wechat_test_enabled", "qq_enabled", "wecom_enabled", "wecom_bot_enabled", "feishu_app_enabled", "websocket_enabled", "telegram_enabled", "discord_enabled", "tencent_cloud_enabled", "custom_webhook_enabled", "channel_group_enabled", "bark_allow_http", "gotify_allow_http"),
+        "multi_channel_forwarding" to setOf("sim_one_label", "sim_two_label", "sim_one_number", "sim_two_number", "forwarding_delay_seconds", "keep_alive_service_enabled", "root_enhancement_enabled", "enable_privacy_mask", "mask_verification_code", "mark_as_read_after_forward", "sms_direct_only_on_no_network", "sms_direct_sim_mode", "sms_direct_rate_limit_enabled", "sms_direct_minute_limit", "sms_direct_hour_limit", "dingtalk_enabled", "feishu_enabled", "email_enabled", "sms_direct_enabled", "bark_enabled", "bark_level", "bark_group", "bark_auto_copy_code", "gotify_enabled", "pushplus_enabled", "wechat_test_enabled", "qq_enabled", "wecom_enabled", "wecom_bot_enabled", "feishu_app_enabled", "websocket_enabled", "telegram_enabled", "discord_enabled", "tencent_cloud_enabled", "custom_webhook_enabled", "channel_group_enabled", "bark_allow_http", "gotify_allow_http"),
         "autofill_config" to setOf("enabled", "auto_submit", "copy_to_clipboard", "enable_floating_pill", "excluded_packages"),
         "heartbeat_config" to setOf("heartbeat_enabled", "heartbeat_interval_hours", "heartbeat_custom_template", "heartbeat_channel_instance_ids"),
         "call_forward_config" to setOf("call_forward_enabled", "call_forward_missed_only", "call_forward_answered", "call_forward_custom_template", "call_forward_channel_instance_ids"),
-        "notification_forward_config" to setOf("notification_forward_enabled", "notification_forward_ignore_ongoing", "notification_forward_channel_instance_ids", "notification_forward_target_packages", "notification_forward_custom_template"),
+        "notification_forward_config" to setOf("notification_forward_enabled", "notification_forward_ignore_ongoing", "notification_forward_skip_system_sms_when_default", "notification_forward_channel_instance_ids", "notification_forward_target_packages", "notification_forward_custom_template"),
         "gateway_appearance" to setOf("mode", "dynamic", "accent", "amoled", "blur", "key_color", "palette", "spec2025", "floating", "material"),
         "thread_layout" to setOf("composer_offset_dp")
     )
@@ -73,7 +73,7 @@ internal object BackupPreferences {
                         "palette" -> require(value is String && value.length <= 64)
                         else -> require(value is Boolean)
                     }
-                    name == "forwarding_fallback" || key.startsWith("sim_") || key.endsWith("template") -> require(value is String)
+                    name == "forwarding_fallback" || key.startsWith("sim_") || key.endsWith("template") || key in setOf("bark_level", "bark_group") -> require(value is String)
                     key.endsWith("instance_ids") || key.endsWith("packages") -> require(value is Set<*>)
                     key in setOf("forwarding_delay_seconds", "composer_offset_dp", "heartbeat_interval_hours", "sms_direct_sim_mode", "sms_direct_minute_limit", "sms_direct_hour_limit") -> require(value is Int)
                     else -> require(value is Boolean)

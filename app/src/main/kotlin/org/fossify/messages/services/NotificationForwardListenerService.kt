@@ -55,6 +55,15 @@ class NotificationForwardListenerService : NotificationListenerService() {
         val targetPackages = config.targetPackageNames
         if (packageName !in targetPackages) return
 
+        // 3b. 智能防重：若当前通知来自系统短信应用，且本应用已正常持有系统默认短信角色，
+        // 则按用户设置跳过通知转发，避免与正常 SMS_DELIVER 广播重复转发两遍。
+        if (config.skipSystemSmsWhenDefault && packageName in NotificationForwardConfig.SYSTEM_SMS_PACKAGES) {
+            if (org.fossify.messages.helpers.DeviceCompatHelper.isDefaultSmsApp(applicationContext)) {
+                Log.d(TAG, "Skip system SMS notification from $packageName because app already holds default SMS role.")
+                return
+            }
+        }
+
         // 4. 提取通知文本（兼顾标准、BigTextStyle 与子文本）
         val extras = notification.extras ?: return
         val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString()?.trim().orEmpty()
