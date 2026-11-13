@@ -52,17 +52,33 @@ class ConversationsViewModel(application: Application) : AndroidViewModel(applic
 
     fun search(text: String) {
         searchJob?.cancel()
-        if (text.isBlank()) { _uiState.value = _uiState.value.copy(searchThreadIds = emptySet(), searchStatus = "搜索联系人/号码及已同步短信正文")
-            return }
+        val query = text.trim()
+        if (query.isBlank()) {
+            _uiState.value = _uiState.value.copy(
+                searchThreadIds = emptySet(),
+                searchStatus = "搜索联系人/号码及已同步短信正文"
+            )
+            return
+        }
         searchJob = viewModelScope.launch {
-            delay(250)
-            _uiState.value = _uiState.value.copy(searchThreadIds = emptySet(), searchStatus = "正在搜索已同步正文…")
+            delay(300)
             try {
-                val ids = withContext(Dispatchers.IO) { getApplication<Application>().messagesDB.searchConversationIds(text) }
-                _uiState.value = _uiState.value.copy(searchThreadIds = ids.take(500).toSet(),
-                    searchStatus = if (ids.size > 500) "正文结果仅展示最近500个会话；可缩小关键词范围" else "已搜索本地同步正文；未同步历史需先全量同步")
-            } catch (e: CancellationException) { throw e }
-            catch (_: Exception) { _uiState.value = _uiState.value.copy(searchThreadIds = emptySet(), searchStatus = "正文搜索失败，仍展示联系人/号码匹配") }
+                val ids = withContext(Dispatchers.IO) {
+                    getApplication<Application>().messagesDB.searchConversationIds(query).distinct()
+                }
+                _uiState.value = _uiState.value.copy(
+                    searchThreadIds = ids.take(200).toSet(),
+                    searchStatus = if (ids.size >= 200) "正文结果仅展示最近200个会话；可缩小关键词范围"
+                    else "已搜索本地同步正文；未同步历史需先全量同步"
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    searchThreadIds = emptySet(),
+                    searchStatus = "正文搜索失败，仍展示联系人/号码匹配"
+                )
+            }
         }
     }
 

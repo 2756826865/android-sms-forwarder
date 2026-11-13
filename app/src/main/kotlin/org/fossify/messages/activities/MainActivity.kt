@@ -1113,22 +1113,31 @@ class MainActivity : SimpleActivity() {
             .build()
     }
 
+    private var searchRunnable: Runnable? = null
+    private val searchHandler = android.os.Handler(android.os.Looper.getMainLooper())
+
     private fun searchTextChanged(text: String, forceUpdate: Boolean = false) {
         if (binding.homeSearch.text.isNullOrBlank() && !forceUpdate) {
             return
         }
 
+        searchRunnable?.let { searchHandler.removeCallbacks(it) }
         lastSearchedText = text
-        binding.searchPlaceholder2.beGoneIf(text.length >= 2)
-        if (text.length >= 2) {
-            ensureBackgroundThread {
-                val searchQuery = "%$text%"
-                val messages = messagesDB.getMessagesWithText(searchQuery)
-                val conversations = conversationsDB.getConversationsWithText(searchQuery)
-                if (text == lastSearchedText) {
-                    showSearchResults(messages, conversations, text)
+        val trimmed = text.trim()
+        binding.searchPlaceholder2.beGoneIf(trimmed.length >= 2)
+        if (trimmed.length >= 2) {
+            val runnable = Runnable {
+                ensureBackgroundThread {
+                    val searchQuery = "%$trimmed%"
+                    val messages = messagesDB.getMessagesWithText(searchQuery, limit = 100)
+                    val conversations = conversationsDB.getConversationsWithText(searchQuery, limit = 50)
+                    if (trimmed == lastSearchedText.trim()) {
+                        showSearchResults(messages, conversations, trimmed)
+                    }
                 }
             }
+            searchRunnable = runnable
+            searchHandler.postDelayed(runnable, 300)
         } else {
             binding.searchPlaceholder.beVisible()
             binding.searchResultsList.beGone()

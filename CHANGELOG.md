@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **并发防重与短时验证码容错**：优化广播与通知互通防重窗口为 20 秒，本地保底优先根据 Provider 真实 ID 判重，杜绝 30 秒内合法连发的同正文验证码被误杀。
 - **空白正文与不可见字符严格过滤**：严密过滤系统通知 `FLAG_GROUP_SUMMARY`（组汇总摘要）；正则拦截扩展至全部零宽控制字符（`\u200B-\u200F`、`\u2060-\u206F`、`\uFEFF`）及全角空格、窄不换行空格；自定义规则模板渲染为空时前置熔断拦截，杜绝飞书/钉钉空气泡。
 - **内存健康、线程守护与超长会话防卡死**：限制静态缓存上限与过期修剪机制；工作线程池（`fallbackExecutor`、`fallbackScheduler`）接入带 `UncaughtExceptionHandler` 的守护线程工厂；会话详情页对 3 万条以上超长会话采用固定分页上限与差量写入策略，彻底避免卡死与 ANR。
+- **超大数据量（3 万条以上）短信搜索流畅度优化**：重构 SQLite 短信搜索查询，移除全量 `GROUP BY MAX(date)` 与 `lower(body)` 全表转换；增加 300ms 搜索防抖与结果上限分页；移除 Compose 搜索过滤中的内联黄页高频计算与 $O(N^2)$ 诊断循环，彻底消除全量同步 3 万条短信后搜索框输入卡顿、掉帧与无响应。
 
 [正式版说明](docs/release-1.2.10.md)
 

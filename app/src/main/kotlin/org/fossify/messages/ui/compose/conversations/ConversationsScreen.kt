@@ -131,28 +131,27 @@ fun ConversationsScreen(
     val secondaryTextColor = if (isDark) Color(0xFF9CA3AF) else TextSecondary
 
     val filteredConversations = remember(uiState.conversations, uiState.searchThreadIds, searchQuery) {
-        if (searchQuery.isBlank()) {
+        val query = searchQuery.trim()
+        if (query.isBlank()) {
             uiState.conversations
         } else {
             uiState.conversations.filter {
                 it.threadId in uiState.searchThreadIds ||
-                it.title.contains(searchQuery, ignoreCase = true) ||
-                it.snippet.contains(searchQuery, ignoreCase = true) ||
-                it.phoneNumber.contains(searchQuery, ignoreCase = true) ||
-                YellowPageHelper.lookup(context, it.phoneNumber, it.snippet)?.brand?.contains(searchQuery, ignoreCase = true) == true
+                it.title.contains(query, ignoreCase = true) ||
+                it.snippet.contains(query, ignoreCase = true) ||
+                it.phoneNumber.contains(query, ignoreCase = true)
             }
         }
     }
 
-    LaunchedEffect(uiState.diagnosticTraceId, filteredConversations, uiState.isLoading, searchQuery.isBlank()) {
+    LaunchedEffect(uiState.diagnosticTraceId, filteredConversations.size, uiState.isLoading, searchQuery.isBlank()) {
         uiState.diagnosticTraceId?.let { trace ->
             org.fossify.messages.helpers.SmsSyncDiagnostics.recent(trace)?.let { diagnostics ->
                 diagnostics.conversations("screen_filtered_source", filteredConversations)
-                diagnostics.log("screen_source", "loading=${uiState.isLoading} searchActive=${searchQuery.isNotBlank()} scope=data_source screenVisibility=not_measured")
-                if (searchQuery.isNotBlank()) {
-                    uiState.conversations.filterNot { row -> filteredConversations.any { it.threadId == row.threadId } }
-                        .forEach { diagnostics.threadResolution(it.threadId, "search_filter") }
-                }
+                diagnostics.log(
+                    "screen_source",
+                    "loading=${uiState.isLoading} searchActive=${searchQuery.isNotBlank()} scope=data_source"
+                )
             }
         }
     }

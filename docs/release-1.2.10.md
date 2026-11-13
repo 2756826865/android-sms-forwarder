@@ -27,5 +27,9 @@
   - 静态缓存（`recentDeduplicationMap`、`recentBroadcastBodies`、`appNameCache`）设置严格上限与定期淘汰清理机制，防止连续运行 30 天以上内存泄漏。
   - 后台执行线程池（`fallbackExecutor`、`fallbackScheduler`）装配带有未捕获异常处理器（`UncaughtExceptionHandler`）的守护线程工厂，保障工作线程生命周期健康。
   - 会话详情页在大数据量（3 万条以上短信）下严格采用分页上限（`MESSAGES_LIMIT`）与 SQLite 差量写入策略，彻底避免打开超长会话出现卡死或 ANR。
+- **超大数据量（3 万条以上）短信搜索性能重构**：
+  - 重构 SQLite 短信搜索查询：移除全量 `GROUP BY MAX(date)` 与逐行 `lower(body)` 函数转换，改用索引直出的正序倒序截断，避免 3 万条历史短信每次搜索全表暴力聚合。
+  - 增加 300ms 智能搜索输入防抖与分页上限，防止打字过程中连续触发数十次无意义底层全库扫描。
+  - 彻底移除 Compose UI 会话搜索过滤中的内联黄页高频计算与 $O(N^2)$ 嵌套诊断循环，彻底消除全量同步 3 万条短信后搜索框输入卡顿、掉帧与无响应。
 
 完整累计变更见 [CHANGELOG](https://github.com/2756826865/android-sms-forwarder/blob/v1.2.10/CHANGELOG.md)。
