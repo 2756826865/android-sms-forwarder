@@ -72,11 +72,22 @@ interface MessagesDao {
     @Query("SELECT * FROM messages WHERE thread_id = :threadId")
     fun getThreadMessages(threadId: Long): List<Message>
 
+    @Query("SELECT * FROM messages WHERE thread_id = :threadId ORDER BY date DESC, id DESC LIMIT :limit")
+    fun getLatestThreadMessages(threadId: Long, limit: Int): List<Message>
+
     @Query("SELECT * FROM messages WHERE thread_id = :threadId AND date < :beforeDate ORDER BY date DESC LIMIT :limit")
     fun getOlderThreadMessages(threadId: Long, beforeDate: Int, limit: Int): List<Message>
 
     @Query("SELECT messages.* FROM messages LEFT OUTER JOIN recycle_bin_messages ON messages.id = recycle_bin_messages.id WHERE recycle_bin_messages.id IS NULL AND thread_id = :threadId")
     fun getNonRecycledThreadMessages(threadId: Long): List<Message>
+
+    @Query(
+        "SELECT messages.* FROM messages LEFT OUTER JOIN recycle_bin_messages " +
+            "ON messages.id = recycle_bin_messages.id " +
+            "WHERE recycle_bin_messages.id IS NULL AND thread_id = :threadId " +
+            "ORDER BY messages.date DESC, messages.id DESC LIMIT :limit"
+    )
+    fun getLatestNonRecycledThreadMessages(threadId: Long, limit: Int): List<Message>
 
     @Query("""SELECT messages.* FROM messages LEFT JOIN recycle_bin_messages r ON messages.id=r.id
         WHERE r.id IS NULL AND messages.thread_id=:threadId ORDER BY messages.date DESC,messages.id DESC LIMIT 1""")
@@ -108,6 +119,9 @@ interface MessagesDao {
 
     @Query("SELECT * FROM messages WHERE id = :id LIMIT 1")
     fun getMessageWithId(id: Long): Message?
+
+    @Query("SELECT body FROM messages WHERE type = 1 AND date BETWEEN :fromSeconds AND :toSeconds")
+    fun getInboxBodiesBetween(fromSeconds: Int, toSeconds: Int): List<String>
 
     @Query("UPDATE messages SET read = 1 WHERE id = :id")
     fun markRead(id: Long)

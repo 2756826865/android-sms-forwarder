@@ -22,4 +22,10 @@ class NotificationTextTest {
     @Test fun emptyNotificationDoesNotInventContent() {
         assertEquals("", extractNotificationText(null, null, null))
     }
+    @Test fun invisibleOnlyNotificationTreatedAsEmpty() {
+        assertEquals("", extractNotificationText("\u200B\u3000\u00A0\uFEFF", " \u200D ", "   "))
+    }
+    @Test fun stripInvisiblePreservesInteriorSpaces() {
+        assertEquals("验证码\u3000123456\u00A0有效", "\u200B  验证码\u3000123456\u00A0有效\u3000 ".stripInvisibleAndTrim())
+    }
 }

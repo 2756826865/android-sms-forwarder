@@ -947,7 +947,11 @@ fun ClassicFeatureEntryScreen(
 private val PRESET_NOTIFICATION_APPS = listOf(
     "com.android.mms" to "系统短信 (原生/小米/魅族)",
     "com.vivo.message" to "vivo/iQOO 系统信息",
-    "com.coloros.mcs" to "OPPO/一加/Realme 系统信息",
+    "com.coloros.mcs" to "OPPO/一加/Realme 消息服务",
+    "com.oplus.mms" to "OPPO/一加/Realme 欢太信息",
+    "com.coloros.mms" to "OPPO/ColorOS 短信",
+    "com.oneplus.mms" to "一加短信",
+    "com.meizu.mms" to "魅族 Flyme 短信",
     "com.huawei.message" to "华为系统信息",
     "com.hihonor.mms" to "荣耀系统信息",
     "com.samsung.android.messaging" to "三星系统信息",

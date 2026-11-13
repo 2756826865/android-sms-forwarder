@@ -1320,10 +1320,12 @@ class MainActivity : SimpleActivity() {
 
         @Subscribe(threadMode = ThreadMode.MAIN)
         fun refreshMessages(@Suppress("unused") event: Events.RefreshMessages) {
+            if (!homeRefreshGate.request()) return
             if (config.useGatewayDeveloperUi) {
-                if (!homeRefreshGate.request()) return
                 requestHomeConversationRefresh()
                 dashboardViewModel?.refreshAfterChange()
+            } else {
+                getCachedConversations()
             }
         }
 

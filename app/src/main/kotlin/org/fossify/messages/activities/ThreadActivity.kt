@@ -254,6 +254,7 @@ class ThreadActivity : SimpleActivity() {
     private var isJumpingToMessage = false
     private var isRecycleBin = false
     private var isLaunchedFromShortcut = false
+    private var skipInitialResumeRefresh = true
 
     private var isScheduledMessage: Boolean = false
     private var isGroupMessageConfirmationVisible = false
@@ -375,7 +376,12 @@ class ThreadActivity : SimpleActivity() {
         binding.threadCoordinator.setBackgroundColor(threadBg)
 
         isActivityVisible = true
-        refreshMessages()
+        if (skipInitialResumeRefresh) {
+            // loadConversation() on initial entry already triggers setupCachedMessages() + setupThread().
+            skipInitialResumeRefresh = false
+        } else {
+            refreshMessages()
+        }
 
         ensureBackgroundThread {
             val newConv = conversationsDB.getConversationWithThreadId(threadId)
@@ -535,9 +541,9 @@ class ThreadActivity : SimpleActivity() {
                     messagesDB.getThreadMessagesFromRecycleBin(threadId)
                 } else {
                     if (config.useRecycleBin) {
-                        messagesDB.getNonRecycledThreadMessages(threadId)
+                        messagesDB.getLatestNonRecycledThreadMessages(threadId, MESSAGES_LIMIT)
                     } else {
-                        messagesDB.getThreadMessages(threadId)
+                        messagesDB.getLatestThreadMessages(threadId, MESSAGES_LIMIT)
                     }
                 }
             } catch (e: Exception) {
@@ -579,12 +585,13 @@ class ThreadActivity : SimpleActivity() {
             finish()
             return
         }
-        val privateCursor = getMyContactsCursor(favoritesOnly = false, withPhoneNumbersOnly = true)
         ensureBackgroundThread {
+            val privateCursor = getMyContactsCursor(favoritesOnly = false, withPhoneNumbersOnly = true)
             privateContacts = MyContactsContentProvider.getSimpleContacts(this, privateCursor)
             setupParticipants() // 提前初始化参与者，确保能拿到号码
 
             val cachedMessagesCode = messages.hashCode()
+            val cachedSnapshot = messages.associateBy { it.getStableId() }
             if (!isRecycleBin) {
                 val number = participants.firstOrNull()?.phoneNumbers?.firstOrNull()?.normalizedNumber
                 val providerMessages = try {
@@ -665,8 +672,11 @@ class ThreadActivity : SimpleActivity() {
                 participants.add(contact)
             }
 
-            if (!isRecycleBin) {
-                messages.chunked(30).forEach { currentMessages ->
+            if (!isRecycleBin && messages.isNotEmpty()) {
+                // Persist only rows that are new or changed versus the Room snapshot loaded on
+                // entry; unchanged rows are not rewritten on every open.
+                val changedMessages = messages.filter { cachedSnapshot[it.getStableId()] != it }
+                changedMessages.chunked(30).forEach { currentMessages ->
                     messagesDB.insertMessages(*currentMessages.toTypedArray())
                 }
             }
@@ -731,7 +741,12 @@ class ThreadActivity : SimpleActivity() {
                 updateMessages(latestThreadItems, if (shouldScrollToBottom) lastPosition else -1)
             }
         }
+    }
 
+    private var hasInitializedContactAutoComplete = false
+    private fun setupContactAutoCompleteIfNeeded() {
+        if (hasInitializedContactAutoComplete) return
+        hasInitializedContactAutoComplete = true
         SimpleContactsHelper(this).getAvailableContacts(false) { contacts ->
             contacts.addAll(privateContacts)
             runOnUiThread {
@@ -739,9 +754,10 @@ class ThreadActivity : SimpleActivity() {
                 binding.addContactOrNumber.setAdapter(adapter)
                 binding.addContactOrNumber.imeOptions = EditorInfo.IME_ACTION_NEXT
                 binding.addContactOrNumber.setOnItemClickListener { _, _, position, _ ->
-                    val currContacts =
-                        (binding.addContactOrNumber.adapter as AutoCompleteTextViewAdapter).resultList
-                    val selectedContact = currContacts[position]
+                    val autoAdapter = binding.addContactOrNumber.adapter as? AutoCompleteTextViewAdapter
+                        ?: return@setOnItemClickListener
+                    val selectedContact = autoAdapter.resultList.getOrNull(position)
+                        ?: return@setOnItemClickListener
                     maybeShowNumberPickerDialog(selectedContact.phoneNumbers) { phoneNumber ->
                         val contactWithSelectedNumber = selectedContact.copy(
                             phoneNumbers = arrayListOf(phoneNumber)
@@ -1459,6 +1475,7 @@ class ThreadActivity : SimpleActivity() {
             hideKeyboard()
             binding.threadAddContacts.beGone()
         } else {
+            setupContactAutoCompleteIfNeeded()
             showSelectedContacts()
             binding.threadAddContacts.beVisible()
             binding.addContactOrNumber.requestFocus()

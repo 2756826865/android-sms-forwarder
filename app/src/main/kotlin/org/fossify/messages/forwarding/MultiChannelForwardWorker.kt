@@ -36,6 +36,7 @@ import org.fossify.messages.extensions.conversationsDB
 import org.fossify.messages.extensions.markThreadMessagesRead
 import org.fossify.messages.helpers.ShadowRepository
 import org.fossify.messages.helpers.refreshConversations
+import org.fossify.messages.helpers.stripInvisibleAndTrim
 import org.fossify.messages.messaging.sendMessageCompat
 import org.fossify.messages.models.ForwardingShadowAttempt
 import org.json.JSONObject
@@ -223,6 +224,15 @@ class MultiChannelForwardWorker(
         }
         Log.d(TAG, "doWork start: target=$targetChannel, test=$isTest, historyId=$historyRecordId")
 
+        val cleanBody = body.stripInvisibleAndTrim()
+        if (cleanBody.isBlank() && !isTest) {
+            if (historyRecordId.isNotBlank()) {
+                history.markSkipped(historyRecordId, "消息正文为空或仅包含空白字符，已跳过发送")
+            }
+            Log.d(TAG, "Empty or blank body, skip forwarding")
+            return@withContext Result.success()
+        }
+
         val ruleAllowedChannels = decodeRuleAllowedChannels(
             inputData.getString(KEY_ALLOWED_CHANNELS).orEmpty(),
         )
@@ -252,6 +262,13 @@ class MultiChannelForwardWorker(
         } else formattedPayload
         val title = payload.title
         val content = payload.content
+        if (!isTest && content.stripInvisibleAndTrim().isBlank()) {
+            if (historyRecordId.isNotBlank()) {
+                history.markSkipped(historyRecordId, "模板渲染后正文为空，已跳过发送")
+            }
+            Log.d(TAG, "Formatted content is blank, skip forwarding")
+            return@withContext Result.success()
+        }
         // Some providers only accept a text body. Their payload otherwise drops the
         // SIM name, which the common formatter places in the separate title field.
         // Keep explicit global/rule templates intact and avoid adding any SIM when

@@ -52,6 +52,7 @@ import org.fossify.messages.helpers.ShadowHmacHelper
 import org.fossify.messages.helpers.ShadowRepository
 import org.fossify.messages.helpers.refreshConversations
 import org.fossify.messages.helpers.refreshMessages
+import org.fossify.messages.helpers.stripInvisibleAndTrim
 import org.fossify.messages.messaging.IncomingSmsUiSyncWorker
 import org.fossify.messages.messaging.ReceivingSubscriptionReader
 import org.fossify.messages.messaging.SmsIngressIdentity
@@ -225,6 +226,8 @@ open class IncomingSmsService : Service() {
             ShadowRepository.recordStep(this, operationId, "DUPLICATE_CHECK", "SKIPPED", "Already persisted")
             return
         }
+
+        markHandledByBroadcast(body, receivedAt)
 
         val receiverStatus = PushPlusConfig(applicationContext)
         receiverStatus.lastReceiverStatus =
@@ -654,6 +657,8 @@ open class IncomingSmsService : Service() {
                     return
                 }
 
+                markHandledByBroadcast(body, receivedAt)
+
                 // 廉价过滤（微秒级，不查联系人）。命中时仍然写库保证不丢，只是不转发。
                 var filteredOut = isFilteredCheap(appContext, address, body)
                 if (filteredOut) {
@@ -685,8 +690,19 @@ open class IncomingSmsService : Service() {
 
                 if (insertedMessageId < 0L) {
                     // UI repair must not depend on the forwarding identity database succeeding.
-                    IncomingSmsUiSyncWorker.enqueue(appContext, address, body, receivedAt, subscriptionId, fingerprint,
+                    IncomingSmsUiSyncWorker.enqueue(
+                        appContext, address, body, receivedAt, subscriptionId, fingerprint,
                         insertedMessageId,
+                    )
+                    // Keep PII in memory only: after giving the system SMS app a short window
+                    // to write to Telephony Provider, persist a local-only fallback if hidden.
+                    scheduleLocalFallbackSms(
+                        context = appContext,
+                        rawSender = address,
+                        body = body,
+                        receivedAt = receivedAt,
+                        subscriptionId = subscriptionId,
+                        status = parts.last().status,
                     )
                 }
                 val ingress = SmsIngressIdentity(appContext).broadcast(address, body,
@@ -1201,5 +1217,240 @@ open class IncomingSmsService : Service() {
                 .digest(raw.toByteArray())
                 .joinToString("") { "%02x".format(it) }
         }
+
+        private val recentBroadcastBodies = java.util.concurrent.ConcurrentHashMap<String, Long>()
+        private val fallbackScheduler = java.util.concurrent.Executors.newSingleThreadScheduledExecutor()
+
+        fun markHandledByBroadcast(body: String, timestamp: Long) {
+            val clean = body.stripInvisibleAndTrim()
+            if (clean.isBlank()) return
+            recentBroadcastBodies[clean] = timestamp
+            if (recentBroadcastBodies.size <= BROADCAST_CACHE_PRUNE_THRESHOLD) return
+            val cutoff = timestamp - BROADCAST_RETENTION_MS
+            val it = recentBroadcastBodies.entries.iterator()
+            while (it.hasNext()) {
+                if (it.next().value < cutoff) it.remove()
+            }
+        }
+
+        fun wasRecentlyHandledByBroadcast(
+            body: String,
+            timestamp: Long,
+            windowMs: Long = BROADCAST_DEDUPE_WINDOW_MS,
+        ): Boolean {
+            val clean = body.stripInvisibleAndTrim()
+            val handledAt = recentBroadcastBodies[clean] ?: return false
+            return kotlin.math.abs(timestamp - handledAt) <= windowMs
+        }
+
+        fun scheduleLocalFallbackSms(
+            context: Context,
+            rawSender: String,
+            body: String,
+            receivedAt: Long,
+            subscriptionId: Int = -1,
+            status: Int = Telephony.Sms.STATUS_NONE,
+        ) {
+            val appContext = context.applicationContext
+            fallbackScheduler.schedule(
+                {
+                    runCatching {
+                        ensureLocalFallbackSmsPersisted(
+                            context = appContext,
+                            rawSender = rawSender,
+                            body = body,
+                            receivedAt = receivedAt,
+                            subscriptionId = subscriptionId,
+                            status = status,
+                        )
+                    }.onFailure { error ->
+                        Log.w(TAG, "scheduled local fallback failed: ${error.javaClass.simpleName}")
+                    }
+                },
+                LOCAL_FALLBACK_DELAY_MS,
+                java.util.concurrent.TimeUnit.MILLISECONDS,
+            )
+        }
+
+        /**
+         * Local fallback copy for SMS that the system provider refused or hid
+         * (non-default role, OEM verification-code protection, system SMS notification).
+         * Must run off the main thread.
+         *
+         * Dedupe order:
+         * 1. If Room already has the same inbox body within ±2 min, ignore.
+         * 2. If provider has the real row, import that exact row (id, threadId, address, date) into Room.
+         * 3. Otherwise (provider refused/hid it), resolve/synthesize threadId and messageId and insert into Room.
+         */
+        fun ensureLocalFallbackSmsPersisted(
+            context: Context,
+            rawSender: String,
+            body: String,
+            receivedAt: Long,
+            subscriptionId: Int = -1,
+            status: Int = Telephony.Sms.STATUS_NONE,
+        ) {
+            check(android.os.Looper.myLooper() != android.os.Looper.getMainLooper()) {
+                "local_fallback_on_main_thread"
+            }
+            val address = rawSender.trim()
+            val cleanBody = body.stripInvisibleAndTrim()
+            if (address.isBlank() || cleanBody.isBlank()) return
+            val appContext = context.applicationContext
+            synchronized(localFallbackLock) {
+                val fromSeconds = ((receivedAt - FALLBACK_DEDUPE_WINDOW_MS) / MILLIS_PER_SECOND).toInt()
+                val toSeconds = ((receivedAt + FALLBACK_DEDUPE_WINDOW_MS) / MILLIS_PER_SECOND).toInt()
+                val alreadyInRoom = runCatching {
+                    appContext.messagesDB.getInboxBodiesBetween(fromSeconds, toSeconds)
+                        .any { it.stripInvisibleAndTrim() == cleanBody }
+                }.getOrDefault(false)
+                if (alreadyInRoom) return
+
+                val providerRow = findInboxMessageFromProvider(appContext, cleanBody, receivedAt)
+                if (providerRow != null) {
+                    val resolvedAddress = providerRow.address.ifBlank { address }
+                    val resolvedThreadId = providerRow.threadId.takeIf { it > 0L }
+                        ?: resolveThreadId(appContext, resolvedAddress)
+                    runCatching {
+                        writeLocalMessageMinimal(
+                            context = appContext,
+                            address = resolvedAddress,
+                            body = providerRow.body.ifBlank { body },
+                            date = providerRow.dateMillis,
+                            messageId = providerRow.id,
+                            threadId = resolvedThreadId,
+                            subscriptionId = if (
+                                providerRow.subscriptionId !=
+                                android.telephony.SubscriptionManager.INVALID_SUBSCRIPTION_ID
+                            ) {
+                                providerRow.subscriptionId
+                            } else {
+                                subscriptionId
+                            },
+                            status = providerRow.status,
+                        )
+                    }.onFailure { error ->
+                        Log.w(TAG, "provider import write failed: ${error.javaClass.simpleName}")
+                    }
+                    return
+                }
+
+                val threadId = resolveThreadId(appContext, address)
+                val messageId = SYNTHETIC_MESSAGE_BASE + (System.nanoTime() and SYNTHETIC_MESSAGE_MASK)
+                runCatching {
+                    writeLocalMessageMinimal(
+                        context = appContext,
+                        address = address,
+                        body = body,
+                        date = receivedAt,
+                        messageId = messageId,
+                        threadId = threadId,
+                        subscriptionId = subscriptionId,
+                        status = status,
+                    )
+                }.onFailure { error ->
+                    Log.w(TAG, "local fallback write failed: ${error.javaClass.simpleName}")
+                }
+            }
+        }
+
+        private fun resolveThreadId(context: Context, address: String): Long {
+            val systemThreadId = runCatching { context.getThreadId(address) }.getOrNull()?.takeIf { it > 0L }
+            if (systemThreadId != null) return systemThreadId
+
+            val normalized = if (address.startsWith("+86")) address.removePrefix("+86") else address
+            val roomThreadId = runCatching {
+                context.conversationsDB.findConversationBySenderOrTitle(address, normalized)?.threadId
+            }.getOrNull()?.takeIf { it > 0L }
+            if (roomThreadId != null) return roomThreadId
+
+            return SYNTHETIC_THREAD_BASE + (address.hashCode().toLong() and SYNTHETIC_THREAD_MASK)
+        }
+
+        private data class ProviderSmsRow(
+            val id: Long,
+            val threadId: Long,
+            val address: String,
+            val body: String,
+            val dateMillis: Long,
+            val subscriptionId: Int,
+            val status: Int,
+        )
+
+        private fun findInboxMessageFromProvider(
+            context: Context,
+            cleanBody: String,
+            receivedAt: Long,
+        ): ProviderSmsRow? {
+            if (ContextCompat.checkSelfPermission(context, android.Manifest.permission.READ_SMS) !=
+                android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) return null
+            return runCatching {
+                val projection = arrayOf(
+                    Telephony.Sms._ID,
+                    Telephony.Sms.THREAD_ID,
+                    Telephony.Sms.ADDRESS,
+                    Telephony.Sms.BODY,
+                    Telephony.Sms.DATE,
+                    Telephony.Sms.SUBSCRIPTION_ID,
+                    Telephony.Sms.STATUS,
+                )
+                context.contentResolver.query(
+                    Telephony.Sms.CONTENT_URI,
+                    projection,
+                    "${Telephony.Sms.TYPE}=? AND ${Telephony.Sms.DATE} BETWEEN ? AND ?",
+                    arrayOf(
+                        Telephony.Sms.MESSAGE_TYPE_INBOX.toString(),
+                        (receivedAt - FALLBACK_DEDUPE_WINDOW_MS).toString(),
+                        (receivedAt + FALLBACK_DEDUPE_WINDOW_MS).toString(),
+                    ),
+                    "${Telephony.Sms.DATE} DESC",
+                )?.use { cursor ->
+                    val idCol = cursor.getColumnIndex(Telephony.Sms._ID)
+                    val threadCol = cursor.getColumnIndex(Telephony.Sms.THREAD_ID)
+                    val addrCol = cursor.getColumnIndex(Telephony.Sms.ADDRESS)
+                    val bodyCol = cursor.getColumnIndex(Telephony.Sms.BODY)
+                    val dateCol = cursor.getColumnIndex(Telephony.Sms.DATE)
+                    val subCol = cursor.getColumnIndex(Telephony.Sms.SUBSCRIPTION_ID)
+                    val statusCol = cursor.getColumnIndex(Telephony.Sms.STATUS)
+
+                    while (cursor.moveToNext()) {
+                        val body = if (bodyCol >= 0) cursor.getString(bodyCol).orEmpty() else ""
+                        if (body.stripInvisibleAndTrim() == cleanBody) {
+                            val id = if (idCol >= 0) cursor.getLong(idCol) else 0L
+                            val threadId = if (threadCol >= 0) cursor.getLong(threadCol) else 0L
+                            val address = if (addrCol >= 0) cursor.getString(addrCol).orEmpty() else ""
+                            val date = if (dateCol >= 0) cursor.getLong(dateCol) else receivedAt
+                            val dateMillis = if (date in 1..9999999999L) date * 1000L else date
+                            val defaultSubId = android.telephony.SubscriptionManager.INVALID_SUBSCRIPTION_ID
+                            val subId = if (subCol >= 0) cursor.getInt(subCol) else defaultSubId
+                            val status = if (statusCol >= 0) cursor.getInt(statusCol) else Telephony.Sms.STATUS_NONE
+                            return@use ProviderSmsRow(
+                                id = id,
+                                threadId = threadId,
+                                address = address,
+                                body = body,
+                                dateMillis = dateMillis,
+                                subscriptionId = subId,
+                                status = status,
+                            )
+                        }
+                    }
+                    null
+                }
+            }.getOrNull()
+        }
+
+        private val localFallbackLock = Any()
+        private const val MILLIS_PER_SECOND = 1000L
+        private const val BROADCAST_CACHE_PRUNE_THRESHOLD = 200
+        private const val BROADCAST_RETENTION_MS = 60_000L
+        private const val BROADCAST_DEDUPE_WINDOW_MS = 20_000L
+        private const val LOCAL_FALLBACK_DELAY_MS = 2_500L
+        private const val FALLBACK_DEDUPE_WINDOW_MS = 120_000L
+        private const val SYNTHETIC_THREAD_BASE = 9_000_000_000_000L
+        private const val SYNTHETIC_THREAD_MASK = 0x3FFFFFFFL
+        private const val SYNTHETIC_MESSAGE_BASE = 8_000_000_000_000L
+        private const val SYNTHETIC_MESSAGE_MASK = 0xFFFFFFFFFFL
     }
 }
