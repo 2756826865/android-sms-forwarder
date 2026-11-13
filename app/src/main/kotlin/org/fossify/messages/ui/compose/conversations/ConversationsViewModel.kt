@@ -308,15 +308,10 @@ class ConversationsViewModel(application: Application) : AndroidViewModel(applic
                 rawList,
                 context.config.pinnedConversations
             )
-            val hasCommercialSms = list.any { 
-                org.fossify.messages.helpers.YellowPageHelper.isCommercialOrSpecialAddress(it.phoneNumber) 
-            }
-            val effectiveNotificationDenied = if (hasCommercialSms) false else isNotificationDenied
-
             _uiState.value = _uiState.value.copy(
                 conversations = list,
                 isDefaultSmsApp = isDefault,
-                isNotificationSmsDenied = effectiveNotificationDenied,
+                isNotificationSmsDenied = isNotificationDenied,
                 diagnosticTraceId = diagnostics?.traceId,
                 isLoading = false,
                 initialLoaded = true,

@@ -396,7 +396,8 @@ fun ConversationsScreen(
                         Text("去设置", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = GatewayOrange)
                     }
                 }
-            } else if (uiState.isNotificationSmsDenied && !isNotificationBannerDismissed) {
+            }
+            if (uiState.isNotificationSmsDenied && !isNotificationBannerDismissed) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Surface(
                     color = GatewayOrange.copy(alpha = 0.12f),

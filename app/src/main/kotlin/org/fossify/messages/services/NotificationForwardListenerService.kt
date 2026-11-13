@@ -59,10 +59,11 @@ class NotificationForwardListenerService : NotificationListenerService() {
         val isSystemSmsPackage = NotificationForwardConfig.isSystemSmsPackage(applicationContext, packageName)
 
         // 4. 关键修复：只把系统短信通知写入 App 本地会话库，其他通知（微信、QQ等）绝不写入会话
-        // 即使用户未开启外部通道通知转发，只要具备通知监听权限，即可解决 ColorOS 17 / vivo / OPPO 等
+        // 即使用户未开启外部通道通知转发，只要具备通知监听权限，即可解决 ColorOS 17 / vivo / OPPO / 小米 等
         // 夺取默认短信角色或拦截验证码导致的「通知栏弹了短信但 App 对话列表没有」的问题。
         if (isSystemSmsPackage) {
-            val senderCandidate = title.ifBlank { getApplicationLabel(packageName) }
+            val senderCandidate = extractNotificationSender(notification, title)
+                .ifBlank { title.ifBlank { getApplicationLabel(packageName) } }
             val appContext = applicationContext
             val postTime = sbn.postTime.takeIf { it > 0L } ?: System.currentTimeMillis()
             fallbackExecutor.execute {
@@ -142,6 +143,29 @@ class NotificationForwardListenerService : NotificationListenerService() {
             (it as? android.os.Bundle)?.getCharSequence("text")
         }.orEmpty()
     )
+
+    private fun extractNotificationSender(notification: Notification, title: String): String {
+        val messagingStyle = androidx.core.app.NotificationCompat.MessagingStyle
+            .extractMessagingStyleFromNotification(notification)
+        if (messagingStyle != null) {
+            for (message in messagingStyle.messages.reversed()) {
+                val person = message.person
+                val uri = person?.uri.orEmpty()
+                if (uri.startsWith("tel:", ignoreCase = true)) {
+                    val tel = uri.substring(4).trim()
+                    if (tel.isNotBlank()) return tel
+                }
+                val personName = person?.name?.toString().orEmpty().stripInvisibleAndTrim()
+                if (personName.isNotBlank() && personName != "信息" && personName != "短信") {
+                    return personName
+                }
+            }
+        }
+        if (title.isNotBlank() && title != "信息" && title != "短信") {
+            return title
+        }
+        return ""
+    }
 
 
 
