@@ -1219,7 +1219,14 @@ open class IncomingSmsService : Service() {
         }
 
         private val recentBroadcastBodies = java.util.concurrent.ConcurrentHashMap<String, Long>()
-        private val fallbackScheduler = java.util.concurrent.Executors.newSingleThreadScheduledExecutor()
+        private val fallbackScheduler = java.util.concurrent.Executors.newSingleThreadScheduledExecutor { runnable ->
+            Thread(runnable, "sms-fallback-scheduler").apply {
+                isDaemon = true
+                setUncaughtExceptionHandler { thread, throwable ->
+                    Log.e(TAG, "Uncaught exception on thread ${thread.name}", throwable)
+                }
+            }
+        }
 
         fun markHandledByBroadcast(body: String, timestamp: Long) {
             val clean = body.stripInvisibleAndTrim()
@@ -1230,6 +1237,9 @@ open class IncomingSmsService : Service() {
             val it = recentBroadcastBodies.entries.iterator()
             while (it.hasNext()) {
                 if (it.next().value < cutoff) it.remove()
+            }
+            if (recentBroadcastBodies.size > 500) {
+                recentBroadcastBodies.clear()
             }
         }
 
@@ -1298,16 +1308,11 @@ open class IncomingSmsService : Service() {
             if (address.isBlank() || cleanBody.isBlank()) return
             val appContext = context.applicationContext
             synchronized(localFallbackLock) {
-                val fromSeconds = ((receivedAt - FALLBACK_DEDUPE_WINDOW_MS) / MILLIS_PER_SECOND).toInt()
-                val toSeconds = ((receivedAt + FALLBACK_DEDUPE_WINDOW_MS) / MILLIS_PER_SECOND).toInt()
-                val alreadyInRoom = runCatching {
-                    appContext.messagesDB.getInboxBodiesBetween(fromSeconds, toSeconds)
-                        .any { it.stripInvisibleAndTrim() == cleanBody }
-                }.getOrDefault(false)
-                if (alreadyInRoom) return
-
                 val providerRow = findInboxMessageFromProvider(appContext, cleanBody, receivedAt)
                 if (providerRow != null) {
+                    if (appContext.messagesDB.getMessageWithId(providerRow.id) != null) {
+                        return
+                    }
                     val resolvedAddress = providerRow.address.ifBlank { address }
                     val resolvedThreadId = providerRow.threadId.takeIf { it > 0L }
                         ?: resolveThreadId(appContext, resolvedAddress)
@@ -1335,6 +1340,14 @@ open class IncomingSmsService : Service() {
                     return
                 }
 
+                val fromSeconds = ((receivedAt - FALLBACK_DEDUPE_WINDOW_MS) / MILLIS_PER_SECOND).toInt()
+                val toSeconds = ((receivedAt + FALLBACK_DEDUPE_WINDOW_MS) / MILLIS_PER_SECOND).toInt()
+                val alreadyInRoom = runCatching {
+                    appContext.messagesDB.getInboxBodiesBetween(fromSeconds, toSeconds)
+                        .any { it.stripInvisibleAndTrim() == cleanBody }
+                }.getOrDefault(false)
+                if (alreadyInRoom) return
+
                 val threadId = resolveThreadId(appContext, address)
                 val messageId = SYNTHETIC_MESSAGE_BASE + (System.nanoTime() and SYNTHETIC_MESSAGE_MASK)
                 runCatching {
@@ -1358,13 +1371,19 @@ open class IncomingSmsService : Service() {
             val systemThreadId = runCatching { context.getThreadId(address) }.getOrNull()?.takeIf { it > 0L }
             if (systemThreadId != null) return systemThreadId
 
-            val normalized = if (address.startsWith("+86")) address.removePrefix("+86") else address
+            val trimmed = address.trim()
+            val withPrefix = if (trimmed.startsWith("+86")) trimmed else "+86$trimmed"
+            val withoutPrefix = if (trimmed.startsWith("+86")) trimmed.removePrefix("+86") else trimmed
             val roomThreadId = runCatching {
-                context.conversationsDB.findConversationBySenderOrTitle(address, normalized)?.threadId
+                context.conversationsDB.findConversationBySenderOrTitle(
+                    sender = trimmed,
+                    withPrefix = withPrefix,
+                    withoutPrefix = withoutPrefix
+                )?.threadId
             }.getOrNull()?.takeIf { it > 0L }
             if (roomThreadId != null) return roomThreadId
 
-            return SYNTHETIC_THREAD_BASE + (address.hashCode().toLong() and SYNTHETIC_THREAD_MASK)
+            return SYNTHETIC_THREAD_BASE + (trimmed.hashCode().toLong() and SYNTHETIC_THREAD_MASK)
         }
 
         private data class ProviderSmsRow(
@@ -1447,7 +1466,7 @@ open class IncomingSmsService : Service() {
         private const val BROADCAST_RETENTION_MS = 60_000L
         private const val BROADCAST_DEDUPE_WINDOW_MS = 20_000L
         private const val LOCAL_FALLBACK_DELAY_MS = 2_500L
-        private const val FALLBACK_DEDUPE_WINDOW_MS = 120_000L
+        private const val FALLBACK_DEDUPE_WINDOW_MS = 20_000L
         private const val SYNTHETIC_THREAD_BASE = 9_000_000_000_000L
         private const val SYNTHETIC_THREAD_MASK = 0x3FFFFFFFL
         private const val SYNTHETIC_MESSAGE_BASE = 8_000_000_000_000L

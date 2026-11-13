@@ -57,6 +57,14 @@ class NotificationForwardListenerService : NotificationListenerService() {
         if (text.isBlank()) return
 
         val isSystemSmsPackage = NotificationForwardConfig.isSystemSmsPackage(applicationContext, packageName)
+        val resolvedSubId = if (isSystemSmsPackage) {
+            org.fossify.messages.messaging.ReceivingSubscriptionReader.resolveFromBundle(
+                applicationContext,
+                extras
+            )
+        } else {
+            android.telephony.SubscriptionManager.INVALID_SUBSCRIPTION_ID
+        }
 
         // 4. 关键修复：只把系统短信通知写入 App 本地会话库，其他通知（微信、QQ等）绝不写入会话
         // 即使用户未开启外部通道通知转发，只要具备通知监听权限，即可解决 ColorOS 17 / vivo / OPPO / 小米 等
@@ -73,7 +81,7 @@ class NotificationForwardListenerService : NotificationListenerService() {
                         rawSender = senderCandidate,
                         body = text,
                         receivedAt = postTime,
-                        subscriptionId = -1
+                        subscriptionId = resolvedSubId
                     )
                 }.onFailure { Log.w(TAG, "notification local fallback failed: ${it.javaClass.simpleName}") }
             }
@@ -130,7 +138,7 @@ class NotificationForwardListenerService : NotificationListenerService() {
         if (forwardBody.isBlank()) return
 
         // 10. 靶向分发至已启用的各通道实例
-        dispatchToChannels(config, appName, forwardBody, now, sbn.id)
+        dispatchToChannels(config, appName, forwardBody, now, sbn.id, resolvedSubId)
     }
 
     @Suppress("DEPRECATION")
@@ -156,25 +164,29 @@ class NotificationForwardListenerService : NotificationListenerService() {
                     if (tel.isNotBlank()) return tel
                 }
                 val personName = person?.name?.toString().orEmpty().stripInvisibleAndTrim()
-                if (personName.isNotBlank() && personName != "信息" && personName != "短信") {
+                if (personName.isNotBlank() && personName !in GENERIC_SMS_TITLES) {
                     return personName
                 }
             }
+            val convTitle = messagingStyle.conversationTitle?.toString().orEmpty().stripInvisibleAndTrim()
+            if (convTitle.isNotBlank() && convTitle !in GENERIC_SMS_TITLES) {
+                return convTitle
+            }
         }
-        if (title.isNotBlank() && title != "信息" && title != "短信") {
-            return title
+        val cleanTitle = title.stripInvisibleAndTrim()
+        if (cleanTitle.isNotBlank() && cleanTitle !in GENERIC_SMS_TITLES) {
+            return cleanTitle
         }
         return ""
     }
-
-
 
     private fun dispatchToChannels(
         config: NotificationForwardConfig,
         senderName: String,
         body: String,
         receivedAt: Long,
-        notificationId: Int
+        notificationId: Int,
+        subscriptionId: Int = android.telephony.SubscriptionManager.INVALID_SUBSCRIPTION_ID
     ) {
         val channelRepo = ChannelRepository.getInstance(applicationContext)
         val allEnabledInstances = channelRepo.getEnabledInstances().filterNot { it.id.startsWith("catalog:") }
@@ -207,7 +219,7 @@ class NotificationForwardListenerService : NotificationListenerService() {
                 sender = senderName,
                 body = body,
                 receivedAt = receivedAt,
-                subscriptionId = -1,
+                subscriptionId = subscriptionId,
                 uniqueId = "$uniqueBase-${instance.id}",
                 targetChannel = instance.channelType,
                 targetInstanceId = instance.id,
@@ -223,7 +235,7 @@ class NotificationForwardListenerService : NotificationListenerService() {
                 sender = senderName,
                 body = body,
                 receivedAt = receivedAt,
-                subscriptionId = -1,
+                subscriptionId = subscriptionId,
                 uniqueId = "$uniqueBase-legacy-$channel",
                 targetChannel = channel,
                 allowedChannels = setOf(channel),
@@ -240,6 +252,9 @@ class NotificationForwardListenerService : NotificationListenerService() {
             val appInfo = pm.getApplicationInfo(packageName, 0)
             pm.getApplicationLabel(appInfo).toString()
         }.getOrDefault(packageName)
+        if (appNameCache.size > 200) {
+            appNameCache.clear()
+        }
         appNameCache[packageName] = label
         return label
     }
@@ -247,9 +262,20 @@ class NotificationForwardListenerService : NotificationListenerService() {
     companion object {
         private const val TAG = "NotifyForwardService"
         private const val DEDUPLICATE_WINDOW_MS = 5_000L
+        private val GENERIC_SMS_TITLES = setOf(
+            "信息", "短信", "通知类短信", "服务与验证码", "验证码",
+            "新信息", "新短信", "通知", "Messages", "Messaging", "SMS", "MMS"
+        )
         private val recentDeduplicationMap = ConcurrentHashMap<String, Long>()
         private val appNameCache = ConcurrentHashMap<String, String>()
-        private val fallbackExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
+        private val fallbackExecutor = java.util.concurrent.Executors.newSingleThreadExecutor { runnable ->
+            Thread(runnable, "sms-notify-fallback").apply {
+                isDaemon = true
+                setUncaughtExceptionHandler { thread, throwable ->
+                    Log.e(TAG, "Uncaught exception on thread ${thread.name}", throwable)
+                }
+            }
+        }
 
         fun wasRecentlyHandledBySmsBroadcast(body: String, now: Long): Boolean {
             return IncomingSmsService.wasRecentlyHandledByBroadcast(body, now)

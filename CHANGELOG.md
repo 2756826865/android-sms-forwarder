@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.10] - 2026-11-13
+
+版本代码：1220。针对 ColorOS 17、MIUI/HyperOS、OriginOS、Flyme 及鸿蒙等定制系统的无死角深度代码审查与并发加固。
+
+### 核心通信与保底链路
+
+- **系统通知无缝入库本地会话**：在 `NotificationForwardListenerService` 中，只要捕获系统短信通知，无论外部通道转发开关是否启用，均异步独立入库本地 Room 数据库，彻底根治 ColorOS 17 / vivo / 小米等夺回默认短信或拦截验证码时「通知栏弹了短信但 App 对话列表没有」的顽疾。
+- **发件人解析与双向号码归一化**：智能解包 AndroidX `MessagingStyle` 中的 `person.uri`（提取 `tel:` 真实发件人号码）与 `conversationTitle`，过滤「信息/短信/通知类短信/验证码」等系统通用占位词；在 `ConversationsDao` 升级号码双向归一化匹配，带与不带 `+86` 均能精确匹配本地已有会话。
+- **通知保底双卡识别与单卡推断**：实现 `ReceivingSubscriptionReader.resolveFromBundle`，深度解析 `notification.extras` 中的私有卡槽字段（`subId`、`subscription_id`、`simSlot`、`slot_id` 等）；单卡设备自动推断回填唯一有效 SIM 卡槽，消除通知保底转发时的「未知接收卡」与 `[SIM?]` 标识。
+- **并发防重与短时验证码容错**：优化广播与通知互通防重窗口为 20 秒，本地保底优先根据 Provider 真实 ID 判重，杜绝 30 秒内合法连发的同正文验证码被误杀。
+- **空白正文与不可见字符严格过滤**：严密过滤系统通知 `FLAG_GROUP_SUMMARY`（组汇总摘要）；正则拦截扩展至全部零宽控制字符（`\u200B-\u200F`、`\u2060-\u206F`、`\uFEFF`）及全角空格、窄不换行空格；自定义规则模板渲染为空时前置熔断拦截，杜绝飞书/钉钉空气泡。
+- **内存健康、线程守护与超长会话防卡死**：限制静态缓存上限与过期修剪机制；工作线程池（`fallbackExecutor`、`fallbackScheduler`）接入带 `UncaughtExceptionHandler` 的守护线程工厂；会话详情页对 3 万条以上超长会话采用固定分页上限与差量写入策略，彻底避免卡死与 ANR。
+
+[正式版说明](docs/release-1.2.10.md)
+
 ## [1.2.9] - 2026-11-10
 
 版本代码：1219。本节记录 1.2.9 相对 1.2.8 的累计修改。

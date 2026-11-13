@@ -34,10 +34,15 @@ interface ConversationsDao {
 
     @Query(
         "SELECT * FROM conversations WHERE (phone_number = :sender " +
-            "OR phone_number = :normalizedSender OR title = :sender) " +
+            "OR phone_number = :withPrefix OR phone_number = :withoutPrefix " +
+            "OR title = :sender OR title = :withPrefix OR title = :withoutPrefix) " +
             "AND is_group_conversation = 0 ORDER BY date DESC LIMIT 1"
     )
-    fun findConversationBySenderOrTitle(sender: String, normalizedSender: String = sender): Conversation?
+    fun findConversationBySenderOrTitle(
+        sender: String,
+        withPrefix: String = sender,
+        withoutPrefix: String = sender
+    ): Conversation?
 
     @Query("SELECT thread_id FROM conversations WHERE thread_id IN (:threadIds)")
     fun getExistingThreadIds(threadIds: List<Long>): List<Long>

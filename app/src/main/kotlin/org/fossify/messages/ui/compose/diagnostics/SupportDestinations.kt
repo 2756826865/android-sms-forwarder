@@ -56,8 +56,19 @@ internal fun openSupportDestination(context: Context, destination: String) {
                 try { context.startActivity(Intent(intent).setPackage("com.tencent.mobileqq")) }
                 catch (_: android.content.ActivityNotFoundException) { context.startActivity(intent) }
             }
-            "app:changelog" -> showTextDialog("1.2.9 更新日志",
-                "• 短信直发防无限发与频率限制：新增本机双卡自收自转拦截、已转发模板特征拦截，支持仅断网时发送及 1分钟(默认10条)/1小时(默认30条)频率限制。\n• 系统短信通知兜底模式：内置 vivo/OPPO/魅族/华为等主流系统短信包名，支持默认短信被夺回时自动通过通知栏兜底转发，且正常持有默认短信权限时自动跳过防重复。\n• Bark 通道增强：新增通知提醒级别（默认/突破专注模式/忽略静音警告/静默）、自定义分组，以及收到验证码时在 iPhone 自动复制（autoCopy=1）。\n• 规则与群发增强：规则编辑器支持单通道独立模板，经典版规则开放独立模板与正则替换清洗，群发间隔扩展至 1~60 秒；新增鸿蒙 NEXT 卓易通容器环境引导。\n• 双卡自定义名称与无障碍自动填充修复：兼容 subId/simSlot/slotIdx 广播参数，注册无障碍自动填充服务并对齐经典版与开发版（Miuix/Material）。")
+            "app:changelog" -> showTextDialog(
+                "1.2.10 更新日志",
+                "• 系统短信通知写入本地会话：彻底解决 ColorOS 17 / vivo / 小米 等强制夺取默认短信角色" +
+                    "或屏蔽验证码广播时，短信通知有弹窗但 App 对话列表不显示的顽疾。\n" +
+                    "• 通用发件人解析与双向号码归一化：智能解包 MessagingStyle person.uri 与 " +
+                    "conversationTitle，过滤「信息/短信/验证码」等占位词；支持带与不带 +86 双向匹配。\n" +
+                    "• 通知保底双卡识别与单卡自动推断：支持从通知 extras 提取 subId/simSlot 私有键，" +
+                    "单卡设备自动推断绑定唯一有效 SIM 卡，双卡设备精准映射，杜绝未知接收卡。\n" +
+                    "• 空白正文与模板穿透熔断：全面过滤零宽字符与全角/窄空格；模板渲染为空时前置拦截熔断，" +
+                    "杜绝外部通道出现空白暗色气泡。\n" +
+                    "• 内存健康与长时保活：缓存严格限定上限与修剪机制，工作线程池装配未捕获异常守护处理器，" +
+                    "超长会话采用差量写入与分页上限，确保打开万条会话永不卡死。"
+            )
             else -> context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(destination)))
         }
     } catch (_: Exception) {

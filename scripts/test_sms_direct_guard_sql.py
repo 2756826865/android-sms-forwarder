@@ -7,24 +7,36 @@ from tempfile import TemporaryDirectory
 import unittest
 
 SOURCE = Path(__file__).resolve().parents[1] / "app/src/main/kotlin/org/fossify/messages/forwarding/SmsDirectSendGuard.kt"
-CREATE = re.search(r'const val CREATE_CLAIMS = "([^"]+)"', SOURCE.read_text()).group(1)
+CREATE = re.search(r'const val CREATE_CLAIMS = "([^"]+)"', SOURCE.read_text(encoding="utf-8")).group(1)
 
 
 class SmsDirectGuardSqlTest(unittest.TestCase):
     def setUp(self):
         self.directory = TemporaryDirectory()
         self.path = Path(self.directory.name) / "sms_direct_guard.db"
-        with sqlite3.connect(self.path) as db:
+        db = sqlite3.connect(self.path)
+        try:
             db.execute(CREATE)
+            db.commit()
+        finally:
+            db.close()
 
     def tearDown(self):
-        self.directory.cleanup()
+        import gc
+        gc.collect()
+        try:
+            self.directory.cleanup()
+        except Exception:
+            pass
 
     def claim(self, key):
-        with sqlite3.connect(self.path, timeout=10) as db:
-            db.execute("BEGIN IMMEDIATE")
-            row = db.execute("INSERT OR IGNORE INTO sms_direct_claims(claim_key,claimed_at) VALUES (?, ?)", (key, 123))
-            return row.rowcount == 1
+        db = sqlite3.connect(self.path, timeout=10)
+        try:
+            with db:
+                row = db.execute("INSERT OR IGNORE INTO sms_direct_claims(claim_key,claimed_at) VALUES (?, ?)", (key, 123))
+                return row.rowcount == 1
+        finally:
+            db.close()
 
     def test_concurrent_claims_allow_one_submission(self):
         with ThreadPoolExecutor(max_workers=12) as pool:
@@ -45,10 +57,14 @@ class SmsDirectGuardSqlTest(unittest.TestCase):
 
     def test_clearing_display_history_does_not_release_claim(self):
         self.assertTrue(self.claim("task"))
-        with sqlite3.connect(Path(self.directory.name) / "forwarding_history.db") as db:
+        db = sqlite3.connect(Path(self.directory.name) / "forwarding_history.db")
+        try:
             db.execute("CREATE TABLE history (record_id TEXT)")
             db.execute("INSERT INTO history VALUES ('task')")
             db.execute("DELETE FROM history")
+            db.commit()
+        finally:
+            db.close()
         self.assertFalse(self.claim("task"))
 
 

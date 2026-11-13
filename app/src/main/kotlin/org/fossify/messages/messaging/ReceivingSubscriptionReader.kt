@@ -19,6 +19,52 @@ internal object ReceivingSubscriptionReader {
             null
         }
 
+    fun resolveFromBundle(context: Context, extras: android.os.Bundle?): Int {
+        val active = try {
+            if (context.checkSelfPermission(Manifest.permission.READ_PHONE_STATE) ==
+                PackageManager.PERMISSION_GRANTED
+            ) {
+                context.subscriptionManagerCompat().activeSubscriptionInfoList.orEmpty()
+            } else {
+                emptyList()
+            }
+        } catch (_: Exception) {
+            emptyList()
+        }
+
+        if (extras != null) {
+            val rawMap = (ReceivingIdentityPolicy.subscriptionKeys +
+                    ReceivingIdentityPolicy.slotKeys +
+                    ReceivingIdentityPolicy.ambiguousVendorKeys)
+                .filter { extras.containsKey(it) }
+                .associateWith { @Suppress("DEPRECATION") extras.get(it) }
+
+            if (rawMap.isNotEmpty()) {
+                val activeMapped = active.map {
+                    ReceivingIdentityPolicy.ActiveSubscription(it.subscriptionId, it.simSlotIndex)
+                }
+                val result = ReceivingIdentityPolicy.resolve(
+                    extras = rawMap,
+                    active = activeMapped,
+                    readStatus = ReceivingIdentityPolicy.ReadStatus.AVAILABLE,
+                    observedAt = System.currentTimeMillis()
+                )
+                if (result.confirmedSubscriptionId != null && result.confirmedSubscriptionId >= 0) {
+                    return result.confirmedSubscriptionId
+                }
+            }
+        }
+
+        if (active.size == 1) {
+            val singleSubId = active.first().subscriptionId
+            if (singleSubId >= 0) {
+                return singleSubId
+            }
+        }
+
+        return android.telephony.SubscriptionManager.INVALID_SUBSCRIPTION_ID
+    }
+
     fun read(context: Context, intent: Intent): ReceivingIdentityPolicy.Result {
         val extras =
             (ReceivingIdentityPolicy.subscriptionKeys +
