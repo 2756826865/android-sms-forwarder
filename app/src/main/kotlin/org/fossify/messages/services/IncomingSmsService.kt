@@ -71,8 +71,6 @@ import org.json.JSONObject
  * redeliver an interrupted intent.
  */
 open class IncomingSmsService : Service() {
-    private val executor = Executors.newSingleThreadExecutor()
-
     /**
      * 本次服务实例是否真的拿到了前台身份。
      *
@@ -115,24 +113,21 @@ open class IncomingSmsService : Service() {
         }
 
         try {
-            executor.execute {
+            serviceExecutor.execute {
                 var wakeLock: PowerManager.WakeLock? = null
                 try {
                     wakeLock = (getSystemService(Context.POWER_SERVICE) as PowerManager)
-                .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKE_LOCK_TAG)
+                        .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKE_LOCK_TAG)
                     wakeLock.acquire(WAKE_LOCK_TIMEOUT_MS)
                     processReceipt(intent)
-            } catch (error: Throwable) {
-                Log.e(TAG, "incoming SMS processing failed", error)
-                PushPlusConfig(applicationContext).lastReceiverStatus =
-                    "广播已到达，处理失败：${error.message ?: error.javaClass.simpleName}"
-                // A foreground owner can fail after Android accepted the broadcast handoff.
-                // Preserve the SMS through the same bounded fallback used by the receiver,
-                // then reconcile partially completed work even when foregroundStarted is true.
-                runCatching { processMinimal(applicationContext, intent) }
-                    .onFailure { Log.e(TAG, "minimal fallback after processing failure failed", it) }
-                runCatching { SmsRecoveryWorker.enqueueNow(applicationContext) }
-                    .onFailure { error -> Log.w(TAG, "recovery enqueue failed", error) }
+                } catch (error: Throwable) {
+                    Log.e(TAG, "incoming SMS processing failed", error)
+                    PushPlusConfig(applicationContext).lastReceiverStatus =
+                        "广播已到达，处理失败：${error.message ?: error.javaClass.simpleName}"
+                    runCatching { processMinimal(applicationContext, intent) }
+                        .onFailure { Log.e(TAG, "minimal fallback after processing failure failed", it) }
+                    runCatching { SmsRecoveryWorker.enqueueNow(applicationContext) }
+                        .onFailure { err -> Log.w(TAG, "recovery enqueue failed", err) }
                 } finally {
                     try {
                         runCatching { wakeLock?.let { if (it.isHeld) it.release() } }
@@ -147,7 +142,11 @@ open class IncomingSmsService : Service() {
                 }
             }
         } catch (_: java.util.concurrent.RejectedExecutionException) {
-            runCatching { SmsRecoveryWorker.enqueueNow(applicationContext) }
+            val appCtx = applicationContext
+            fallbackScheduler.execute {
+                runCatching { processMinimal(appCtx, intent) }
+                runCatching { SmsRecoveryWorker.enqueueNow(appCtx) }
+            }
             stopSelfResult(startId)
             return START_NOT_STICKY
         }
@@ -155,7 +154,6 @@ open class IncomingSmsService : Service() {
     }
 
     override fun onDestroy() {
-        executor.shutdown()
         super.onDestroy()
     }
 
@@ -1243,7 +1241,16 @@ open class IncomingSmsService : Service() {
 
         private val recentBroadcastBodies = java.util.concurrent.ConcurrentHashMap<String, Long>()
         private val recentNotificationForwardedBodies = java.util.concurrent.ConcurrentHashMap<String, Long>()
+        private val notifyFallbackSeq = java.util.concurrent.atomic.AtomicLong(0L)
         private val forwardingClaimLock = Any()
+        private val serviceExecutor = Executors.newSingleThreadExecutor { runnable ->
+            Thread(runnable, "incoming-sms-service-worker").apply {
+                isDaemon = true
+                setUncaughtExceptionHandler { thread, throwable ->
+                    Log.e(TAG, "Uncaught exception on thread ${thread.name}", throwable)
+                }
+            }
+        }
         private val fallbackScheduler = java.util.concurrent.Executors.newSingleThreadScheduledExecutor { runnable ->
             Thread(runnable, "sms-fallback-scheduler").apply {
                 isDaemon = true
@@ -1348,7 +1355,7 @@ open class IncomingSmsService : Service() {
                 Log.i(TAG, "Notification fallback SMS matched 0 rule targets: ${ruleDecision.reason}")
                 return true
             }
-            val uniqueId = "sms-notify-$receivedAt-${cleanBody.hashCode()}"
+            val uniqueId = "sms-notify-$receivedAt-${cleanBody.hashCode()}-${notifyFallbackSeq.incrementAndGet()}"
             enqueueForwardingFallback(
                 context = appContext,
                 address = sender,
@@ -1568,6 +1575,7 @@ open class IncomingSmsService : Service() {
                     val dateCol = cursor.getColumnIndex(Telephony.Sms.DATE)
                     val subCol = cursor.getColumnIndex(Telephony.Sms.SUBSCRIPTION_ID)
                     val statusCol = cursor.getColumnIndex(Telephony.Sms.STATUS)
+                    var firstMatchedRow: ProviderSmsRow? = null
 
                     while (cursor.moveToNext()) {
                         val body = if (bodyCol >= 0) cursor.getString(bodyCol).orEmpty() else ""
@@ -1580,7 +1588,7 @@ open class IncomingSmsService : Service() {
                             val defaultSubId = android.telephony.SubscriptionManager.INVALID_SUBSCRIPTION_ID
                             val subId = if (subCol >= 0) cursor.getInt(subCol) else defaultSubId
                             val status = if (statusCol >= 0) cursor.getInt(statusCol) else Telephony.Sms.STATUS_NONE
-                            return@use ProviderSmsRow(
+                            val row = ProviderSmsRow(
                                 id = id,
                                 threadId = threadId,
                                 address = address,
@@ -1589,9 +1597,15 @@ open class IncomingSmsService : Service() {
                                 subscriptionId = subId,
                                 status = status,
                             )
+                            if (id <= 0L || context.messagesDB.getMessageWithId(id) == null) {
+                                return@use row
+                            }
+                            if (firstMatchedRow == null) {
+                                firstMatchedRow = row
+                            }
                         }
                     }
-                    null
+                    firstMatchedRow
                 }
             }.getOrNull()
         }

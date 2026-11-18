@@ -883,19 +883,34 @@ class MultiChannelForwardWorker(
         }
         Log.d(TAG, "result: successes=$successes, failures=$failures, attempt=$runAttemptCount, isTest=$isTest")
 
+        // 识别是否属于限流错误（短信轰炸/高频并发时触发平台频率限制，必须延迟重试确保一条不漏）
+        fun isRateLimitError(msg: String): Boolean {
+            val rateKeywords = listOf(
+                "429", "too many", "freq", "rate limit", "ratelimit", "limit exceeded",
+                "频繁", "频率", "限流", "超限", "130101", "45009", "9499", "11232"
+            )
+            return rateKeywords.any { msg.contains(it, ignoreCase = true) }
+        }
+
         // 识别是否属于永久性凭据/配置错误（不可通过无脑重试解决）
         fun isPermanentError(msg: String): Boolean {
+            if (isRateLimitError(msg)) return false
             val permanentKeywords = listOf(
-                "令牌不正确", "Token", "token", "未配置", "配置不完整", "401", "403", "400", "404",
-                "invalid", "unauthorized", "Secret", "secret", "不正确", "不存在", "拒绝请求", "签名"
+                "令牌不正确", "令牌无效", "invalid token", "token invalid", "token expired",
+                "未配置", "配置不完整", "401", "403", "400", "404",
+                "unauthorized", "invalid secret", "不正确", "不存在", "签名错误", "签名不匹配"
             )
             return permanentKeywords.any { msg.contains(it, ignoreCase = true) }
         }
 
         val allFailuresArePermanent = failures.isNotEmpty() && failures.all { isPermanentError(it) }
-            // Retrying the whole Worker after one channel succeeded would submit that channel
-            // again.
-            val canRetry = !smsDirectAttempted && !isTest && !outcomeUnknown && inputData.getString(KEY_GROUP_PLAN).isNullOrBlank() && successes.isEmpty() && !allFailuresArePermanent && runAttemptCount < 2
+        val hitRateLimit = failures.any { isRateLimitError(it) }
+        val maxRetryAttempts = if (hitRateLimit) 6 else 3
+        // Retrying the whole Worker after one channel succeeded would submit that channel
+        // again.
+        val canRetry = !smsDirectAttempted && !isTest && !outcomeUnknown &&
+            inputData.getString(KEY_GROUP_PLAN).isNullOrBlank() &&
+            successes.isEmpty() && !allFailuresArePermanent && runAttemptCount < maxRetryAttempts
 
         when {
             outcomeUnknown -> {
@@ -1548,6 +1563,9 @@ class MultiChannelForwardWorker(
         require(isTest || !SmsDirectBillingPolicy.isForwardedLoopContent(incomingBody, alreadyRendered)) {
             "检测到短信已包含转发模板特征，已拦截二次短信直发，避免循环扣费"
         }
+        require(isTest || !SmsDirectSendGuard.isRecentOutboundLoop(incomingBody)) {
+            "检测到短信内容与本机近期发出的直发短信一致，已拦截回环转发，避免循环扣费"
+        }
         if (!isTest && rateLimitEnabled) {
             val nowMs = System.currentTimeMillis()
             val recentMinuteCount = SmsDirectSendGuard.countClaimsSince(applicationContext, nowMs - 60_000L)
@@ -1576,6 +1594,7 @@ class MultiChannelForwardWorker(
         }
         SmsDirectSendGuard.sendPrepared(applicationContext, smsDirectSource, normalized, recordId,
             receiptRecordId = recordId.takeIf { pureSms }.orEmpty()) { before ->
+            SmsDirectSendGuard.recordOutboundContent(incomingBody, content)
             applicationContext.sendMessageCompat(
                 text = content,
                 addresses = listOf(normalized),

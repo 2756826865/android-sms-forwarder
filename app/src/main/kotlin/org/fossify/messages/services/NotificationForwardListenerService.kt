@@ -53,11 +53,11 @@ class NotificationForwardListenerService : NotificationListenerService() {
             )) != 0
         val isNonMessageCategory = notification.category in NON_MESSAGE_CATEGORIES
 
-        // 3. 提取通知文本（兼顾标准、BigTextStyle 与子文本）
+        // 3. 提取通知文本（兼顾标准、BigTextStyle、MessagingStyle 最新单条与子文本）
         val extras = notification.extras ?: return
         val title = extras.getCharSequence(Notification.EXTRA_TITLE)
             ?.toString().orEmpty().stripInvisibleAndTrim()
-        val text = extractCleanText(extras)
+        val text = extractCleanText(notification, extras)
 
         // 通知必须具备有效正文内容，防止系统“信息”或即时通讯软件发出的无正文摘要/占位通知触发空消息或单个空格转发
         if (text.isBlank()) return
@@ -156,15 +156,23 @@ class NotificationForwardListenerService : NotificationListenerService() {
     }
 
     @Suppress("DEPRECATION")
-    private fun extractCleanText(extras: android.os.Bundle): String = extractNotificationText(
-        bigText = extras.getCharSequence(Notification.EXTRA_BIG_TEXT),
-        text = extras.getCharSequence(Notification.EXTRA_TEXT),
-        subText = extras.getCharSequence(Notification.EXTRA_SUB_TEXT),
-        lines = extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)?.toList().orEmpty(),
-        messages = extras.getParcelableArray(Notification.EXTRA_MESSAGES)?.mapNotNull {
-            (it as? android.os.Bundle)?.getCharSequence("text")
-        }.orEmpty()
-    )
+    private fun extractCleanText(notification: Notification, extras: android.os.Bundle): String {
+        val messagingStyle = androidx.core.app.NotificationCompat.MessagingStyle
+            .extractMessagingStyleFromNotification(notification)
+        if (messagingStyle != null && messagingStyle.messages.size > 1) {
+            val latestMsg = messagingStyle.messages.lastOrNull()?.text?.toString().orEmpty().stripInvisibleAndTrim()
+            if (latestMsg.isNotBlank()) return latestMsg
+        }
+        return extractNotificationText(
+            bigText = extras.getCharSequence(Notification.EXTRA_BIG_TEXT),
+            text = extras.getCharSequence(Notification.EXTRA_TEXT),
+            subText = extras.getCharSequence(Notification.EXTRA_SUB_TEXT),
+            lines = extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)?.toList().orEmpty(),
+            messages = extras.getParcelableArray(Notification.EXTRA_MESSAGES)?.mapNotNull {
+                (it as? android.os.Bundle)?.getCharSequence("text")
+            }.orEmpty()
+        )
+    }
 
     private fun extractNotificationSender(notification: Notification, title: String): String {
         val messagingStyle = androidx.core.app.NotificationCompat.MessagingStyle
@@ -225,7 +233,7 @@ class NotificationForwardListenerService : NotificationListenerService() {
             return
         }
 
-        val uniqueBase = "notify-${System.currentTimeMillis()}-$notificationId"
+        val uniqueBase = "notify-${System.currentTimeMillis()}-$notificationId-${notifySeq.incrementAndGet()}"
 
         targetInstances.forEach { instance ->
             MultiChannelForwardWorker.enqueueSingle(
@@ -300,6 +308,7 @@ class NotificationForwardListenerService : NotificationListenerService() {
         }
         private val recentDeduplicationMap = ConcurrentHashMap<String, Long>()
         private val appNameCache = ConcurrentHashMap<String, String>()
+        private val notifySeq = java.util.concurrent.atomic.AtomicLong(0L)
         private val fallbackExecutor = java.util.concurrent.Executors.newSingleThreadExecutor { runnable ->
             Thread(runnable, "sms-notify-fallback").apply {
                 isDaemon = true

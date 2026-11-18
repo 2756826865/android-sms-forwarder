@@ -17,8 +17,8 @@ internal object SmsBroadcastDispatcher {
         java.util.concurrent.ThreadFactory { task -> Thread(task, "sms-broadcast-deadline") },
     ).apply { setRemoveOnCancelPolicy(true) }
     private const val ADMISSION_THREADS = 4
-    private const val HANDOFF_CAPACITY = 64
-    private const val FALLBACK_CAPACITY = 32
+    private const val HANDOFF_CAPACITY = 512
+    private const val FALLBACK_CAPACITY = 256
     private const val THREAD_KEEP_ALIVE_SECONDS = 30L
     private val executor =
         ThreadPoolExecutor(

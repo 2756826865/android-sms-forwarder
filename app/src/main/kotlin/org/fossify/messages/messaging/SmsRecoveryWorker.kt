@@ -615,7 +615,7 @@ class SmsRecoveryWorker(
             )
             if (!continuation) {
                 WorkManager.getInstance(context).enqueueUniqueWork(
-                    "$UNIQUE_NOW-follow-up", ExistingWorkPolicy.KEEP,
+                    "$UNIQUE_NOW-follow-up", ExistingWorkPolicy.REPLACE,
                     OneTimeWorkRequestBuilder<SmsRecoveryWorker>()
                         .setInitialDelay(2, TimeUnit.SECONDS)
                         .setInputData(Data.Builder().putBoolean("v128_trigger", true).build()).build())
