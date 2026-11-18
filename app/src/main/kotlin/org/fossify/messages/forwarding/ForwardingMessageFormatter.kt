@@ -114,6 +114,18 @@ object ForwardingMessageFormatter {
             .replaceWhenPresent("{{版本号}}") { TemplateDataRetriever.getAppVersion() }
             .replaceWhenPresent("{{CURRENT_TIME}}") { TemplateDataRetriever.getCurrentTime() }
             .replaceWhenPresent("{{current_time}}") { TemplateDataRetriever.getCurrentTime() }
+            .let { rendered ->
+                val config = runCatching { MultiForwardConfig(context) }.getOrNull()
+                if (config?.enablePrivacyMask == true) {
+                    PrivacyDataMasker.mask(
+                        content = rendered,
+                        maskVerificationCode = config.maskVerificationCode,
+                        verificationCode = code
+                    )
+                } else {
+                    rendered
+                }
+            }
     }
 
     fun format(

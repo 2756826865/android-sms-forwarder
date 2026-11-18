@@ -600,7 +600,20 @@ class ThreadActivity : SimpleActivity() {
                     android.util.Log.w("ThreadActivity", "READ_SMS not granted, using cached messages only")
                     ArrayList()
                 }
-                messages = (messages + providerMessages)
+                val synBase = org.fossify.messages.services.IncomingSmsService.SYNTHETIC_MESSAGE_BASE
+                val realProviderMsgs = providerMessages.filter { it.id < synBase }
+                val remainingCached = messages.filter { cached ->
+                    if (cached.id < synBase) return@filter true
+                    val cachedClean = cached.body.trim()
+                    val matchedReal = realProviderMsgs.any { real ->
+                        kotlin.math.abs(real.date - cached.date) <= 120 && real.body.trim() == cachedClean
+                    }
+                    if (matchedReal) {
+                        runCatching { messagesDB.delete(cached.id) }
+                    }
+                    !matchedReal
+                }
+                messages = (remainingCached + providerMessages)
                     .associateBy { it.getStableId() }
                     .values
                     .toList()
@@ -2220,24 +2233,53 @@ class ThreadActivity : SimpleActivity() {
         allMessagesFetched = false
 
         ensureBackgroundThread {
+            val synBase = org.fossify.messages.services.IncomingSmsService.SYNTHETIC_MESSAGE_BASE
             val messageSnapshot = messages.toSortedMessages()
-            val lastMaxId = messageSnapshot.filterNot { it.isScheduled }.maxByOrNull { it.id }?.id ?: 0L
+            val lastMaxId = messageSnapshot
+                .filter { !it.isScheduled && it.id < synBase }
+                .maxByOrNull { it.id }?.id ?: 0L
             val providerParticipantsChanged = reconcileProviderParticipants()
-            val newThreadId = getThreadId(participants.getAddresses().toSet())
+            val resolvedThreadId = getThreadId(participants.getAddresses().toSet())
+                .takeIf { it > 0L } ?: threadId
             val number = participants.firstOrNull()?.phoneNumbers?.firstOrNull()?.normalizedNumber
             val newMessages = try {
-                getMessages(newThreadId, address = number, includeScheduledMessages = false)
+                getMessages(resolvedThreadId, address = number, includeScheduledMessages = false)
             } catch (_: SecurityException) { ArrayList() }
             if (messageSnapshot.isNotEmpty() && messageSnapshot.all { it.isScheduled } && newMessages.isNotEmpty()) {
                 // update scheduled messages with real thread id
-                threadId = newThreadId
+                threadId = resolvedThreadId
                 updateScheduledMessagesThreadId(
                     messages = messageSnapshot.filter { it.threadId != threadId },
                     newThreadId = threadId
                 )
             }
 
+            val localCached = try {
+                if (config.useRecycleBin) {
+                    messagesDB.getLatestNonRecycledThreadMessages(threadId, MESSAGES_LIMIT)
+                } else {
+                    messagesDB.getLatestThreadMessages(threadId, MESSAGES_LIMIT)
+                }
+            } catch (_: Exception) {
+                emptyList()
+            }
+            val realMsgs = newMessages.filter { it.id < synBase }
+            val activeSynthetics = (messageSnapshot + localCached)
+                .filter { it.id >= synBase && !it.isScheduled }
+                .distinctBy { it.id }
+                .filter { syn ->
+                    val synClean = syn.body.trim()
+                    val matchedReal = realMsgs.any { real ->
+                        kotlin.math.abs(real.date - syn.date) <= 120 && real.body.trim() == synClean
+                    }
+                    if (matchedReal) {
+                        runCatching { messagesDB.delete(syn.id) }
+                    }
+                    !matchedReal
+                }
+
             messages = newMessages.apply {
+                addAll(activeSynthetics)
                 val scheduledMessages = messagesDB.getScheduledThreadMessages(threadId)
                     .filterNot { it.isScheduled && it.millis() < System.currentTimeMillis() }
                 addAll(scheduledMessages)
@@ -2245,9 +2287,9 @@ class ThreadActivity : SimpleActivity() {
                     val recycledMessages = messagesDB.getThreadMessagesFromRecycleBin(threadId).toSet()
                     removeAll(recycledMessages)
                 }
-            }.toSortedMessages()
+            }.distinctBy { it.getStableId() }.toSortedMessages()
 
-            messages.filter { !it.isScheduled && !it.isReceivedMessage() && it.id > lastMaxId }
+            messages.filter { !it.isScheduled && !it.isReceivedMessage() && it.id < synBase && it.id > lastMaxId }
                 .forEach { latestMessage ->
                     messagesDB.insertOrIgnore(latestMessage)
                 }

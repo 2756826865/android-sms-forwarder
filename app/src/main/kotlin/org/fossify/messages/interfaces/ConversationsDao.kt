@@ -1,3 +1,4 @@
+@file:Suppress("MaxLineLength")
 package org.fossify.messages.interfaces
 
 import androidx.room.Dao
@@ -12,14 +13,14 @@ interface ConversationsDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun insertOrUpdate(conversation: Conversation): Long
 
-    @Query("SELECT (SELECT body FROM messages LEFT OUTER JOIN recycle_bin_messages ON messages.id = recycle_bin_messages.id WHERE recycle_bin_messages.id IS NULL AND messages.thread_id = conversations.thread_id AND (messages.is_scheduled = 0 OR conversations.is_scheduled = 1) ORDER BY messages.date DESC, messages.id DESC LIMIT 1) as new_snippet, (SELECT MAX(messages.date) FROM messages LEFT OUTER JOIN recycle_bin_messages ON messages.id = recycle_bin_messages.id WHERE recycle_bin_messages.id IS NULL AND messages.thread_id = conversations.thread_id AND (messages.is_scheduled = 0 OR conversations.is_scheduled = 1)) as new_date, * FROM conversations WHERE (SELECT COUNT(*) FROM messages LEFT OUTER JOIN recycle_bin_messages ON messages.id = recycle_bin_messages.id WHERE recycle_bin_messages.id IS NULL AND messages.thread_id = conversations.thread_id) > 0")
+    @Query("SELECT (SELECT body FROM messages LEFT OUTER JOIN recycle_bin_messages ON messages.id = recycle_bin_messages.id WHERE recycle_bin_messages.id IS NULL AND messages.thread_id = conversations.thread_id AND (messages.is_scheduled = 0 OR conversations.is_scheduled = 1) ORDER BY messages.date DESC, messages.id DESC LIMIT 1) as new_snippet, (SELECT messages.date FROM messages LEFT OUTER JOIN recycle_bin_messages ON messages.id = recycle_bin_messages.id WHERE recycle_bin_messages.id IS NULL AND messages.thread_id = conversations.thread_id AND (messages.is_scheduled = 0 OR conversations.is_scheduled = 1) ORDER BY messages.date DESC, messages.id DESC LIMIT 1) as new_date, * FROM conversations WHERE EXISTS (SELECT 1 FROM messages LEFT OUTER JOIN recycle_bin_messages ON messages.id = recycle_bin_messages.id WHERE recycle_bin_messages.id IS NULL AND messages.thread_id = conversations.thread_id)")
     fun getAllRegularWithLatestSnippet(): List<ConversationWithSnippetOverride>
 
     fun getAllRegular(): List<Conversation> {
         return getAllRegularWithLatestSnippet().map { it.toConversation() }
     }
 
-    @Query("SELECT (SELECT body FROM messages LEFT OUTER JOIN recycle_bin_messages ON messages.id = recycle_bin_messages.id WHERE recycle_bin_messages.id IS NOT NULL AND messages.thread_id = conversations.thread_id AND (messages.is_scheduled = 0 OR conversations.is_scheduled = 1) ORDER BY messages.date DESC, messages.id DESC LIMIT 1) as new_snippet, (SELECT MAX(messages.date) FROM messages LEFT OUTER JOIN recycle_bin_messages ON messages.id = recycle_bin_messages.id WHERE recycle_bin_messages.id IS NOT NULL AND messages.thread_id = conversations.thread_id AND (messages.is_scheduled = 0 OR conversations.is_scheduled = 1)) as new_date, * FROM conversations WHERE (SELECT COUNT(*) FROM messages LEFT OUTER JOIN recycle_bin_messages ON messages.id = recycle_bin_messages.id WHERE recycle_bin_messages.id IS NOT NULL AND messages.thread_id = conversations.thread_id) > 0")
+    @Query("SELECT (SELECT body FROM messages LEFT OUTER JOIN recycle_bin_messages ON messages.id = recycle_bin_messages.id WHERE recycle_bin_messages.id IS NOT NULL AND messages.thread_id = conversations.thread_id AND (messages.is_scheduled = 0 OR conversations.is_scheduled = 1) ORDER BY messages.date DESC, messages.id DESC LIMIT 1) as new_snippet, (SELECT messages.date FROM messages LEFT OUTER JOIN recycle_bin_messages ON messages.id = recycle_bin_messages.id WHERE recycle_bin_messages.id IS NOT NULL AND messages.thread_id = conversations.thread_id AND (messages.is_scheduled = 0 OR conversations.is_scheduled = 1) ORDER BY messages.date DESC, messages.id DESC LIMIT 1) as new_date, * FROM conversations WHERE EXISTS (SELECT 1 FROM messages LEFT OUTER JOIN recycle_bin_messages ON messages.id = recycle_bin_messages.id WHERE recycle_bin_messages.id IS NOT NULL AND messages.thread_id = conversations.thread_id)")
     fun getAllWithMessagesInRecycleBinWithLatestSnippet(): List<ConversationWithSnippetOverride>
 
     fun getAllWithMessagesInRecycleBin(): List<Conversation> {
@@ -47,7 +48,7 @@ interface ConversationsDao {
     @Query("SELECT thread_id FROM conversations WHERE thread_id IN (:threadIds)")
     fun getExistingThreadIds(threadIds: List<Long>): List<Long>
 
-    @Query("UPDATE conversations SET title=:name,photo_uri=:photo WHERE thread_id=:threadId AND phone_number=:address AND uses_custom_title=0 AND is_group_conversation=0")
+    @Query("UPDATE conversations SET title=:name,photo_uri=:photo WHERE thread_id=:threadId AND (phone_number=:address OR phone_number='+86'||:address OR '+86'||phone_number=:address) AND uses_custom_title=0 AND is_group_conversation=0")
     fun updateSenderDisplay(threadId: Long, address: String, name: String, photo: String)
 
     @Query("SELECT * FROM conversations WHERE read = 0")

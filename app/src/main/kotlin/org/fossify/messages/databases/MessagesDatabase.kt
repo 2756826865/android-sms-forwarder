@@ -59,7 +59,7 @@ import java.io.File
         OutboxTaskEntity::class,
         RecoveryRecordEntity::class
     ],
-    version = 16
+    version = 17
 )
 @TypeConverters(Converters::class)
 abstract class MessagesDatabase : RoomDatabase() {
@@ -159,6 +159,7 @@ abstract class MessagesDatabase : RoomDatabase() {
                 .addMigrations(MIGRATION_13_14)
                 .addMigrations(MIGRATION_14_15)
                 .addMigrations(MIGRATION_15_16)
+                .addMigrations(MIGRATION_16_17)
                 .build()
             // Room 的迁移与 schema 校验发生在首次真正开库时，这里主动开一次，
             // 把异常收敛到 openOrRecover() 的 try/catch 内；否则它会在后续任意一次 DAO
@@ -210,7 +211,7 @@ abstract class MessagesDatabase : RoomDatabase() {
         val stale = (dir.listFiles() ?: return)
             .filter { it.name.contains(".corrupt-") }
             .sortedByDescending { it.lastModified() }
-            .drop(MAX_QUARANTINED_COPIES)
+            .drop(MAX_QUARANTINED_COPIES * 3)
         stale.forEach { file ->
             if (file.delete()) {
                 Log.w(TAG, "已清理过期损坏现场：${file.name}")
@@ -399,6 +400,15 @@ abstract class MessagesDatabase : RoomDatabase() {
                     execSQL("CREATE INDEX IF NOT EXISTS `index_recovery_records_scan_time` ON `recovery_records` (`scan_time`)")
                     execSQL("CREATE INDEX IF NOT EXISTS `index_recovery_records_object` ON `recovery_records` (`object_type`, `object_id`)")
                 }
+            }
+        }
+
+        val MIGRATION_16_17 = object : Migration(16, 17) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_messages_type_date` " +
+                        "ON `messages` (`type`, `date`)"
+                )
             }
         }
     }

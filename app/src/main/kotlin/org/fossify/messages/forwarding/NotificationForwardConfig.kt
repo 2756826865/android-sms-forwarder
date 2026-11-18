@@ -25,13 +25,25 @@ class NotificationForwardConfig(context: Context) {
         get() {
             val saved = prefs.getStringSet(KEY_TARGET_PACKAGES, null)
             return if (saved != null) {
-                // 升级兼容：自动合并系统短信包名，确保老版本升级用户不会因历史配置缺失 OEM 短信兜底
-                saved.toSet() + SYSTEM_SMS_PACKAGES
+                val cleaned = saved.toSet() - NON_SMS_SYSTEM_DAEMON_PACKAGES
+                if (!prefs.getBoolean(KEY_MIGRATED_SYS_SMS_V1, false)) {
+                    val merged = cleaned + SYSTEM_SMS_PACKAGES
+                    prefs.edit()
+                        .putStringSet(KEY_TARGET_PACKAGES, merged)
+                        .putBoolean(KEY_MIGRATED_SYS_SMS_V1, true)
+                        .apply()
+                    merged
+                } else {
+                    cleaned
+                }
             } else {
                 DEFAULT_PACKAGES
             }
         }
-        set(value) = prefs.edit().putStringSet(KEY_TARGET_PACKAGES, value.toSet()).apply()
+        set(value) = prefs.edit()
+            .putStringSet(KEY_TARGET_PACKAGES, (value - NON_SMS_SYSTEM_DAEMON_PACKAGES).toSet())
+            .putBoolean(KEY_MIGRATED_SYS_SMS_V1, true)
+            .apply()
 
     var customTemplate: String
         get() = prefs.getString(KEY_CUSTOM_TEMPLATE, DEFAULT_TEMPLATE).orEmpty().ifBlank { DEFAULT_TEMPLATE }
@@ -53,27 +65,32 @@ class NotificationForwardConfig(context: Context) {
         private const val KEY_IGNORE_ONGOING = "notification_forward_ignore_ongoing"
         private const val KEY_CHANNEL_INSTANCE_IDS = "notification_forward_channel_instance_ids"
         private const val KEY_TARGET_PACKAGES = "notification_forward_target_packages"
+        private const val KEY_MIGRATED_SYS_SMS_V1 = "notification_forward_migrated_sys_sms_v1"
         private const val KEY_CUSTOM_TEMPLATE = "notification_forward_custom_template"
         private const val KEY_SKIP_SYSTEM_SMS_WHEN_DEFAULT = "notification_forward_skip_system_sms_when_default"
 
         const val DEFAULT_TEMPLATE = "【{{APP_NAME}} 通知】\n{{TITLE}}\n{{CONTENT}}"
 
-        // 各主流品牌系统短信应用包名集合（用于防夺权通知兜底模式与智能防重）
+        // 非短信类的系统底层推送服务框架（曾误入白名单，需自动剔除以防云同步/查找手机等系统通知污染短信列表）
+        private val NON_SMS_SYSTEM_DAEMON_PACKAGES = setOf(
+            "com.xiaomi.xmsf",
+            "com.heytap.mcs",
+            "com.android.mms.service"
+        )
+
+        // 各主流品牌真实系统短信应用包名集合（用于防夺权通知兜底模式与智能防重）
         val SYSTEM_SMS_PACKAGES = setOf(
             "com.android.mms",                  // 原生 / MIUI / HyperOS / Flyme 系统短信
-            "com.android.mms.service",          // 原生短信服务
             "com.vivo.message",                 // vivo / iQOO 系统信息
             "com.coloros.mms",                  // OPPO / 一加 / Realme 系统信息
             "com.coloros.mcs",                  // OPPO / 一加 / Realme 消息服务
-            "com.heytap.mcs",                   // 欢太消息服务（ColorOS 常用）
             "com.oplus.mms",                    // Oplus 新版信息（ColorOS 13/14/15/17）
             "com.oneplus.mms",                  // 一加信息
             "com.huawei.message",               // 华为系统信息
             "com.hihonor.mms",                  // 荣耀系统信息
             "com.samsung.android.messaging",    // 三星系统信息
             "com.google.android.apps.messaging",// Google 信息
-            "com.meizu.mms",                    // 魅族系统信息
-            "com.xiaomi.xmsf"                   // 小米系统服务
+            "com.meizu.mms"                     // 魅族系统信息
         )
 
         fun isSystemSmsPackage(context: Context, packageName: String): Boolean {

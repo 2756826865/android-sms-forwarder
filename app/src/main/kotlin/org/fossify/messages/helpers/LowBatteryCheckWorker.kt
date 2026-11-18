@@ -84,11 +84,12 @@ class LowBatteryCheckWorker(
                             body = content,
                             receivedAt = now,
                             subscriptionId = -1,
-                            uniqueId = uniqueId,
+                            uniqueId = "$uniqueId-${instance.id}",
                             targetChannel = instance.channelType,
                             allowedChannels = setOf(instance.id),
                             isTest = false,
-                            targetInstanceId = instance.id
+                            targetInstanceId = instance.id,
+                            bodyAlreadyRendered = true
                         )
                     }
                 } else {
@@ -96,15 +97,20 @@ class LowBatteryCheckWorker(
                         addAll(enabledMultiChannels)
                         if (pushPlusEnabled) add(ForwardingChannels.PUSHPLUS)
                     }
-                    MultiChannelForwardWorker.enqueue(
-                        context = appContext,
-                        sender = appContext.getString(R.string.low_battery_system_sender),
-                        body = content,
-                        receivedAt = now,
-                        subscriptionId = -1,
-                        uniqueId = uniqueId,
-                        allowedChannels = allSelectedEnabled,
-                    )
+                    allSelectedEnabled.forEach { channel ->
+                        MultiChannelForwardWorker.enqueueSingle(
+                            context = appContext,
+                            sender = appContext.getString(R.string.low_battery_system_sender),
+                            body = content,
+                            receivedAt = now,
+                            subscriptionId = -1,
+                            uniqueId = "$uniqueId-$channel",
+                            targetChannel = channel,
+                            allowedChannels = setOf(channel),
+                            isTest = false,
+                            bodyAlreadyRendered = true
+                        )
+                    }
                 }
             } catch (_: Exception) {
                 config.lowBatteryLastNotifiedLevel = -1

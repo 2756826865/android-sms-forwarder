@@ -28,6 +28,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
@@ -535,9 +536,10 @@ fun LowBatteryEmbeddedScreen() {
                                         context = appContext,
                                         sender = appContext.getString(R.string.low_battery_system_sender),
                                         body = body, receivedAt = now, subscriptionId = -1,
-                                        uniqueId = eventId, targetChannel = instance.channelType,
+                                        uniqueId = "$eventId-${instance.id}", targetChannel = instance.channelType,
                                         allowedChannels = setOf(instance.id), targetInstanceId = instance.id,
-                                        isTest = true
+                                        isTest = true,
+                                        bodyAlreadyRendered = true
                                     )
                                 }
                             }
@@ -612,7 +614,23 @@ fun AutofillEmbeddedScreen() {
     var copyToClipboard by remember { mutableStateOf(cfg.copyToClipboard) }
     var floatingPill by remember { mutableStateOf(cfg.enableFloatingPill) }
     var autoSubmit by remember { mutableStateOf(cfg.autoSubmit) }
-    val a11yRunning = org.fossify.messages.autofill.SmsAutofillAccessibilityService.isServiceRunning()
+    var a11yRunning by remember {
+        mutableStateOf(org.fossify.messages.autofill.SmsAutofillAccessibilityService.isServiceRunning(context))
+    }
+    var canDrawOverlay by remember {
+        mutableStateOf(android.provider.Settings.canDrawOverlays(context))
+    }
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                a11yRunning = org.fossify.messages.autofill.SmsAutofillAccessibilityService.isServiceRunning(context)
+                canDrawOverlay = android.provider.Settings.canDrawOverlays(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -625,7 +643,7 @@ fun AutofillEmbeddedScreen() {
                     enabled = it
                     cfg.enabled = it
                 }
-                Text(if (android.provider.Settings.canDrawOverlays(context)) "悬浮窗权限：已允许" else "悬浮窗权限：未允许，胶囊提示不可用", fontSize = 12.sp)
+                Text(if (canDrawOverlay) "悬浮窗权限：已允许" else "悬浮窗权限：未允许，胶囊提示不可用", fontSize = 12.sp)
                 Text(if (a11yRunning) "无障碍填充服务：运行中" else "无障碍填充服务：未开启（开启后可自动填入当前焦点输入框）", fontSize = 12.sp, color = if (a11yRunning) BrandGreen else TextSecondary)
                 OutlinedButton(
                     onClick = {
@@ -800,7 +818,8 @@ fun HeartbeatEmbeddedScreen() {
                                     targetChannel = instance.channelType,
                                     targetInstanceId = instance.id,
                                     allowedChannels = setOf(instance.id),
-                                    isTest = true
+                                    isTest = true,
+                                    bodyAlreadyRendered = true
                                 )
                             }
                             legacyChannels.forEach { channel ->
@@ -813,7 +832,8 @@ fun HeartbeatEmbeddedScreen() {
                                     uniqueId = "test-heartbeat-$now-$channel",
                                     targetChannel = channel,
                                     allowedChannels = setOf(channel),
-                                    isTest = true
+                                    isTest = true,
+                                    bodyAlreadyRendered = true
                                 )
                             }
                             android.widget.Toast.makeText(context, "心跳模拟测试已提交", android.widget.Toast.LENGTH_SHORT).show()
@@ -947,7 +967,6 @@ fun ClassicFeatureEntryScreen(
 private val PRESET_NOTIFICATION_APPS = listOf(
     "com.android.mms" to "系统短信 (原生/小米/魅族)",
     "com.vivo.message" to "vivo/iQOO 系统信息",
-    "com.coloros.mcs" to "OPPO/一加/Realme 消息服务",
     "com.oplus.mms" to "OPPO/一加/Realme 欢太信息",
     "com.coloros.mms" to "OPPO/ColorOS 短信",
     "com.oneplus.mms" to "一加短信",
@@ -977,6 +996,16 @@ fun NotificationForwardEmbeddedScreen() {
     var targetPackages by remember { mutableStateOf(cfg.targetPackageNames) }
     var selectedIds by remember { mutableStateOf(cfg.channelInstanceIds) }
     var hasPermission by remember { mutableStateOf(NotificationForwardListenerService.isPermissionGranted(context)) }
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                hasPermission = NotificationForwardListenerService.isPermissionGranted(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     val channelRepo = remember { ChannelRepository.getInstance(context) }
     val instances by channelRepo.instancesFlow.collectAsState()

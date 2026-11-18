@@ -4,6 +4,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-11-18
+
+版本代码：1300。全链路架构升级：零延迟通知保底秒发、合成消息全生命周期自愈、3 万+ 大数据量性能飞跃与转发安全全面加固。
+
+### 收信保底、零延迟双向防重与合成消息自愈
+
+- **系统短信通知 0ms 零延迟接入标准短信转发管线**：当 ColorOS 17、OriginOS、MIUI/HyperOS、Flyme 等夺回默认短信角色或屏蔽验证码广播时，`NotificationForwardListenerService` 捕获系统短信通知后（即使用户未开启第三方应用通知转发），0ms 零延迟通过 `IncomingSmsService.forwardFromNotificationFallback` 执行黑名单过滤、`ForwardingRuleEngine` 规则匹配、正则替换、单动作模板渲染、`{{CODE}}` 提取与隐私脱敏后秒发至目标通道。
+- **广播与通知双向 CAS 零延迟防重**：在 `SmsReceiver` / `SmsFallbackReceiver` 广播入口第一行（`T=0ms`）立即登记内存指纹，配合 `claimNotificationSmsForward` 双向原子互斥，无论广播与通知谁先到达，先到者 0ms 秒发、后到者自动跳过重复外部推送。
+- **彻底净化系统短信识别边界**：从 `SYSTEM_SMS_PACKAGES` 剔除 `com.xiaomi.xmsf`、`com.heytap.mcs`、`com.coloros.mcs` 等非短信系统推送守护进程；前置拦截 `FLAG_ONGOING_EVENT`、`FLAG_FOREGROUND_SERVICE`、服务/进度类通知及“正在发送/正在备份”等状态通知，根治非短信通知污染本地会话列表；修复 `targetPackageNames` 每次读取强制追加系统包名导致无法取消勾选的问题。
+- **合成保底消息（`8_000_000_000_000L`）全生命周期自愈**：当系统 Provider 真实短信延迟落库时，自动清理并原地替换同内容临时合成记录与孤立合成会话；修复 `ThreadActivity.refreshMessages()` 刷新后合成短信消失及 `lastMaxId` 阻断后续发信入库的缺陷；允许在非默认短信模式下正常删除或移入回收站本地/合成会话。
+
+### 3 万+ 短信大数据量性能与 Room 数据库优化
+
+- **新增 `messages(type, date)` 复合索引（Room v17 迁移）**：消除首页看板统计 `getReceivedSmsCountBetween` 与保底排重 `getInboxBodiesBetween` 在 3 万条短信下的全表扫描。
+- **重写 `ConversationsDao.getAllRegularWithLatestSnippet`**：将逐会话 `SELECT COUNT(*) > 0` 与 `SELECT MAX(date)` 重写为 `EXISTS (SELECT 1 ...)` 与索引倒序 `LIMIT 1`，消除每次数据库刷新时的数万次关联子查询扫描。
+- **消除千次逐行独立事务与 IPC 全表扫描**：将 `ConversationsViewModel.storeFreshProviderThreads`、`MainActivity.getNewConversations` 与 `SmsHistorySync` 中的逐会话独立事务合并为批量单事务（保留用户自定义会话标题 `usesCustomTitle`），将 `Context.getStoredThreadDates` 限制为最近 500 条记录，彻底消除全量同步与列表刷新时的磁盘 fsync 与 `InvalidationTracker` 重组风暴。
+
+### 转发引擎、规则模板、来电转发与无障碍安全加固
+
+- **规则自定义模板补齐隐私脱敏**：在 `ForwardingMessageFormatter.renderRuleTemplate` 补齐 `PrivacyDataMasker.mask` 调用，确保规则/动作自定义模板下手机号与验证码脱敏 100% 生效。
+- **定时报活与低电量告警透传 `bodyAlreadyRendered = true`**：防止设备心跳与低电量告警被用户的 `{{CODE}}` 自定义短信模板覆盖为空消息。
+- **来电转发 `CallStateReceiver` 修复**：接入 `missedCallOnly` 配置并结合 `CallLog.Calls.REJECTED_TYPE` 过滤用户主动挂断的来电；增加响铃状态超时过期保护；兼容模式下同步遍历 `ChannelRepository` 多实例通道并修复多实例 `uniqueId` 冲突。
+- **v1 规则兼容、Telegram `customHost` 与 Bark 迁移补齐**：修复 `ForwardingRules.matchesConditions` 在结构化条件下忽略 `excludeKeywords`/`excludeRegex` 的问题；为 Telegram 转发通道接入 `customHost` 自定义反代域名；补齐 Custom Webhook 多实例 `successMode` 参数与 Bark 旧配置迁移字段；修复微信等应用通知触发 `markSmsAsRead` 创建幽灵空会话的问题。
+- **无障碍验证码防误填与 Android 14-16 FGS 保活降级**：移除 `SmsAutofillAccessibilityService` 盲取首个 `EditText` 的危险逻辑，在微信/QQ/飞书/钉钉/Telegram 等聊天软件中严格要求输入框具备验证码特征词才允许填充；为 `SmsKeepAliveService` 与 `IncomingSmsService` 增加 Android 14+ `startForeground` 无类型安全降级；补齐设置页 `ON_RESUME` 权限状态实时刷新。
+
+[正式版说明](docs/release-1.3.0.md)
+
 ## [1.2.10] - 2026-11-13
 
 版本代码：1220。针对 ColorOS 17、MIUI/HyperOS、OriginOS、Flyme 及鸿蒙等定制系统的无死角深度代码审查与并发加固。

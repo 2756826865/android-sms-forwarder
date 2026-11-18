@@ -29,10 +29,13 @@ interface MessagesDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     fun insertOrIgnore(message: Message): Long
 
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    fun insertMessagesIgnore(messages: List<Message>): List<Long>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun insertMessages(vararg message: Message)
 
-    @Query("UPDATE messages SET sender_name=:name, sender_photo_uri=:photo WHERE id=:id AND sender_phone_number=:address")
+    @Query("UPDATE messages SET sender_name=:name, sender_photo_uri=:photo WHERE id=:id AND (sender_phone_number=:address OR sender_phone_number='+86'||:address OR '+86'||sender_phone_number=:address)")
     fun updateSenderDisplay(id: Long, address: String, name: String, photo: String)
 
     @Query("SELECT * FROM messages")
@@ -75,7 +78,7 @@ interface MessagesDao {
     @Query("SELECT * FROM messages WHERE thread_id = :threadId ORDER BY date DESC, id DESC LIMIT :limit")
     fun getLatestThreadMessages(threadId: Long, limit: Int): List<Message>
 
-    @Query("SELECT * FROM messages WHERE thread_id = :threadId AND date < :beforeDate ORDER BY date DESC LIMIT :limit")
+    @Query("SELECT messages.* FROM messages LEFT OUTER JOIN recycle_bin_messages ON messages.id = recycle_bin_messages.id WHERE recycle_bin_messages.id IS NULL AND thread_id = :threadId AND date < :beforeDate ORDER BY messages.date DESC, messages.id DESC LIMIT :limit")
     fun getOlderThreadMessages(threadId: Long, beforeDate: Int, limit: Int): List<Message>
 
     @Query("SELECT messages.* FROM messages LEFT OUTER JOIN recycle_bin_messages ON messages.id = recycle_bin_messages.id WHERE recycle_bin_messages.id IS NULL AND thread_id = :threadId")
@@ -129,11 +132,17 @@ interface MessagesDao {
     @Query("SELECT body FROM messages WHERE type = 1 AND date BETWEEN :fromSeconds AND :toSeconds")
     fun getInboxBodiesBetween(fromSeconds: Int, toSeconds: Int): List<String>
 
+    @Query("SELECT * FROM messages WHERE id >= :syntheticBase AND date BETWEEN :fromSeconds AND :toSeconds")
+    fun getSyntheticMessagesBetween(syntheticBase: Long, fromSeconds: Int, toSeconds: Int): List<Message>
+
     @Query("UPDATE messages SET read = 1 WHERE id = :id")
     fun markRead(id: Long)
 
-    @Query("UPDATE messages SET read = 1 WHERE thread_id = :threadId")
+    @Query("UPDATE messages SET read = 1 WHERE thread_id = :threadId AND read = 0")
     fun markThreadRead(threadId: Long)
+
+    @Query("UPDATE messages SET read = 0 WHERE id = (SELECT id FROM messages WHERE thread_id = :threadId ORDER BY date DESC, id DESC LIMIT 1)")
+    fun markLatestThreadMessageUnread(threadId: Long)
 
     @Query("UPDATE messages SET type = :type WHERE id = :id")
     fun updateType(id: Long, type: Int): Int

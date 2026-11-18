@@ -18,5 +18,6 @@ class NotificationForwardConfigTest {
         assertTrue(packages.contains("com.hihonor.mms"))
         assertTrue(packages.contains("com.samsung.android.messaging"))
         assertTrue(packages.contains("com.google.android.apps.messaging"))
+        org.junit.Assert.assertFalse(packages.contains("com.xiaomi.xmsf"))
     }
 }

@@ -434,8 +434,9 @@ class MultiChannelForwardWorker(
                     ForwardingChannels.TELEGRAM -> {
                         val token = instance.optString("botToken")
                         val chatId = instance.optString("chatId")
+                        val customHost = instance.optString("customHost", config.telegramRemoteCustomHost())
                         check(token.isNotBlank() && chatId.isNotBlank()) { "Telegram 凭据未配置" }
-                        sendTelegram(token, chatId, title, content)
+                        sendTelegram(token, chatId, title, content, customHost)
                     }
                     ForwardingChannels.BARK -> {
                         val url = instance.optString("serverUrl")
@@ -634,7 +635,13 @@ class MultiChannelForwardWorker(
             sendWebsocket(config.websocketUrl(), config.websocketToken(), title, content)
         }
         if (shouldRun(ForwardingChannels.TELEGRAM, config.telegramEnabled)) runChannel("Telegram", ForwardingChannels.TELEGRAM) {
-            sendTelegram(config.telegramBotToken(), config.telegramChatId(), title, content)
+            sendTelegram(
+                config.telegramBotToken(),
+                config.telegramChatId(),
+                title,
+                content,
+                config.telegramRemoteCustomHost()
+            )
         }
         if (shouldRun(ForwardingChannels.DISCORD, config.discordEnabled)) runChannel("Discord", ForwardingChannels.DISCORD) {
             sendDiscord(config.discordWebhook(), title, content)
@@ -745,8 +752,9 @@ class MultiChannelForwardWorker(
                     ForwardingChannels.TELEGRAM -> {
                         val token = instance.optString("botToken")
                         val chatId = instance.optString("chatId")
+                        val customHost = instance.optString("customHost", config.telegramRemoteCustomHost())
                         check(token.isNotBlank() && chatId.isNotBlank()) { "Telegram 凭据未配置" }
-                        sendTelegram(token, chatId, title, content)
+                        sendTelegram(token, chatId, title, content, customHost)
                     }
                     ForwardingChannels.BARK -> {
                         val url = instance.optString("serverUrl")
@@ -772,7 +780,9 @@ class MultiChannelForwardWorker(
                             url, headers, instance.optString("method", "POST"),
                             instance.optString("contentType", "application/json"),
                             instance.optString("bodyTemplate", MultiForwardConfig.DEFAULT_CUSTOM_WEBHOOK_BODY),
-                            title, content, sender, receivedAt, subscriptionId
+                            title, content, sender, receivedAt, subscriptionId,
+                            instance.optString("successMode", "http"),
+                            instance.optString("successField"), instance.optString("successValue")
                         )
                     }
                     ForwardingChannels.DISCORD -> {
@@ -898,7 +908,12 @@ class MultiChannelForwardWorker(
                         "；跳过：${skippedReasons.joinToString("；")}"
                     history.markSuccess(historyRecordId, "已提交：${successes.joinToString("、")}$skippedDetail")
                 }
-                if (!isTest && config.markAsReadAfterForward && sender.isNotBlank()) {
+                if (
+                    !isTest &&
+                    config.markAsReadAfterForward &&
+                    sender.isNotBlank() &&
+                    (threadId > 0L || sender.any { it.isDigit() })
+                ) {
                     markSmsAsRead(applicationContext, threadId, sender)
                 }
                 Log.d(TAG, "result: success")
@@ -1298,10 +1313,18 @@ class MultiChannelForwardWorker(
         }
     }
 
-    private fun sendTelegram(botToken: String, chatId: String, title: String, content: String) {
+    private fun sendTelegram(
+        botToken: String,
+        chatId: String,
+        title: String,
+        content: String,
+        customHost: String = "",
+    ) {
         require(botToken.isNotBlank() && chatId.isNotBlank()) { "Telegram 配置不完整" }
-        val text = "*$title*\n\n$content"
-        val url = "https://api.telegram.org/bot$botToken/sendMessage"
+        val text = "$title\n\n$content"
+        val baseUrl = customHost.trim().trimEnd('/').ifBlank { "https://api.telegram.org" }
+            .let { if (it.startsWith("http://") || it.startsWith("https://")) it else "https://$it" }
+        val url = "$baseUrl/bot$botToken/sendMessage"
         val payload = JSONObject()
             .put("chat_id", chatId)
             .put("text", text)

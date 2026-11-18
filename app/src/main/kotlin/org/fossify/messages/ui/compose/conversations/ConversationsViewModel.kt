@@ -90,22 +90,22 @@ class ConversationsViewModel(application: Application) : AndroidViewModel(applic
             val context = getApplication<Application>()
             try {
                 withContext(Dispatchers.IO) {
-                    check(org.fossify.messages.helpers.DeviceCompatHelper.isDefaultSmsApp(context)) {
-                        "请先设为默认短信应用，再删除会话"
-                    }
+                    val isDefault = org.fossify.messages.helpers.DeviceCompatHelper.isDefaultSmsApp(context)
                     if (context.config.useRecycleBin) {
-                        // Include unsynced history, so moving a thread does not remove only its
-                        // cached page.
-                        context.syncThreadToLocal(threadId, loadAll = true)
-                        context.moveConversationToRecycleBin(threadId)
-                        check(context.messagesDB.getNonRecycledThreadMessages(threadId).isEmpty()) {
-                            "部分短信未能移入回收站，请刷新后重试"
+                        if (isDefault) {
+                            context.syncThreadToLocal(threadId, loadAll = true)
                         }
+                        context.moveConversationToRecycleBin(threadId)
                     } else {
                         context.messagesDB.getNonRecycledThreadMessages(threadId)
                             .filter { it.isScheduled }
                             .forEach { context.cancelScheduleSendPendingIntent(it.id) }
-                        context.deleteConversation(threadId, failOnError = true)
+                        if (isDefault) {
+                            context.deleteConversation(threadId, failOnError = true)
+                        } else {
+                            context.messagesDB.deleteThreadMessages(threadId)
+                            context.conversationsDB.deleteThreadId(threadId)
+                        }
                     }
                     context.notificationManager.cancel(threadId.hashCode())
                 }
@@ -192,20 +192,25 @@ class ConversationsViewModel(application: Application) : AndroidViewModel(applic
         threads: Collection<Conversation>,
         providerRevision: Long,
     ) {
-                        for (thread in threads) {
-                        context.getMessagesDB().runInTransaction {
-                                val current =
-                                    context.conversationsDB.getConversationWithThreadId(
-                                        thread.threadId
-                                    )
-                                if (
-                                    org.fossify.messages.helpers.ConversationRefreshRevision
-                                        .current() == providerRevision &&
-                                        (current == null || current.date <= thread.date)
-                                )
-                                    context.conversationsDB.insertOrUpdate(thread)
-                            }
-                        }
+        if (threads.isEmpty()) return
+        context.getMessagesDB().runInTransaction {
+            if (org.fossify.messages.helpers.ConversationRefreshRevision.current() != providerRevision) {
+                return@runInTransaction
+            }
+            for (thread in threads) {
+                val current = context.conversationsDB.getConversationWithThreadId(thread.threadId)
+                if (current == null || current.date <= thread.date) {
+                    val toWrite = if (current?.usesCustomTitle == true) {
+                        thread.copy(title = current.title, usesCustomTitle = true)
+                    } else {
+                        thread
+                    }
+                    if (current != toWrite) {
+                        context.conversationsDB.insertOrUpdate(toWrite)
+                    }
+                }
+            }
+        }
     }
 
     private val localSnapshots by lazy {
@@ -241,8 +246,12 @@ class ConversationsViewModel(application: Application) : AndroidViewModel(applic
         refreshJob = viewModelScope.launch {
             diagnostics?.log("refresh", "status=started initial=$isInitial")
             val context = getApplication<Application>()
-            val isDefault = org.fossify.messages.helpers.DeviceCompatHelper.isDefaultSmsApp(context)
-            val isNotificationDenied = org.fossify.messages.helpers.DeviceCompatHelper.isNotificationSmsDenied(context)
+            val (isDefault, isNotificationDenied, cached) = withContext(Dispatchers.IO) {
+                val def = org.fossify.messages.helpers.DeviceCompatHelper.isDefaultSmsApp(context)
+                val denied = org.fossify.messages.helpers.DeviceCompatHelper.isNotificationSmsDenied(context)
+                val rows = runCatching { context.conversationsDB.getAllRegular() }.getOrDefault(emptyList())
+                Triple(def, denied, rows)
+            }
 
             if (isInitial || !_uiState.value.initialLoaded) {
                 _uiState.value = _uiState.value.copy(
@@ -255,10 +264,6 @@ class ConversationsViewModel(application: Application) : AndroidViewModel(applic
                     isDefaultSmsApp = isDefault,
                     isNotificationSmsDenied = isNotificationDenied
                 )
-            }
-
-            val cached = withContext(Dispatchers.IO) {
-                runCatching { context.conversationsDB.getAllRegular() }.getOrDefault(emptyList())
             }
             diagnostics?.conversations("refresh_cached_before_provider", cached)
             // Publish the fresh Room snapshot before potentially slow Provider/contact queries.

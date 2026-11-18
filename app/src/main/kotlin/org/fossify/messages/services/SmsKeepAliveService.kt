@@ -49,11 +49,15 @@ class SmsKeepAliveService : Service() {
             createChannel()
             val notification = buildNotification(getString(R.string.background_service_starting))
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                startForeground(
-                    NOTIFICATION_ID,
-                    notification,
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
-                )
+                try {
+                    startForeground(
+                        NOTIFICATION_ID,
+                        notification,
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
+                    )
+                } catch (_: Exception) {
+                    startForeground(NOTIFICATION_ID, notification)
+                }
             } else {
                 startForeground(NOTIFICATION_ID, notification)
             }

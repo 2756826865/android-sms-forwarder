@@ -428,20 +428,32 @@ private fun Context.getUnreadCountsByThreadStrict(threadId: Long?): Map<Long, In
 /** Read message timestamps in two batched queries rather than trusting OEM thread metadata. */
 private fun Context.getStoredThreadDates(threadId: Long?): Map<Long, Int> {
     val dates = HashMap<Long, Int>()
+    val rowCap = if (threadId != null) 1 else 500
     for ((uri, threadColumn, dateColumn, milliseconds) in listOf(
         StoredThreadDateSource(Sms.CONTENT_URI, Sms.THREAD_ID, Sms.DATE, true),
         StoredThreadDateSource(Mms.CONTENT_URI, Mms.THREAD_ID, Mms.DATE, false)
     )) {
         try {
-            val sortOrder = if (threadId != null) "$dateColumn DESC LIMIT 1" else "$dateColumn DESC"
-            contentResolver.query(
-                uri, arrayOf(threadColumn, dateColumn),
-                threadId?.let { "$threadColumn = ?" },
-                threadId?.let { arrayOf(it.toString()) }, sortOrder
-            )?.use { cursor ->
-                while (cursor.moveToNext()) {
-                    val id = cursor.getLongValue(threadColumn)
-                    val raw = cursor.getLongValue(dateColumn)
+            val sortOrder = "$dateColumn DESC LIMIT $rowCap"
+            val cursor = try {
+                contentResolver.query(
+                    uri, arrayOf(threadColumn, dateColumn),
+                    threadId?.let { "$threadColumn = ?" },
+                    threadId?.let { arrayOf(it.toString()) }, sortOrder
+                )
+            } catch (_: Exception) {
+                contentResolver.query(
+                    uri, arrayOf(threadColumn, dateColumn),
+                    threadId?.let { "$threadColumn = ?" },
+                    threadId?.let { arrayOf(it.toString()) }, "$dateColumn DESC"
+                )
+            }
+            cursor?.use { c ->
+                var readRows = 0
+                while (readRows < rowCap && c.moveToNext()) {
+                    readRows++
+                    val id = c.getLongValue(threadColumn)
+                    val raw = c.getLongValue(dateColumn)
                     val seconds = if (milliseconds) raw / 1000L else raw
                     if (seconds in 1..Int.MAX_VALUE.toLong()) {
                         dates[id] = maxOf(dates[id] ?: 0, seconds.toInt())
@@ -1216,15 +1228,18 @@ fun Context.markThreadMessagesRead(threadId: Long) {
 }
 
 fun Context.markThreadMessagesUnread(threadId: Long) {
-    arrayOf(Sms.CONTENT_URI, Mms.CONTENT_URI).forEach { uri ->
-        val contentValues = ContentValues().apply {
-            put(Sms.READ, 0)
-            put(Sms.SEEN, 0)
+    runCatching {
+        arrayOf(Sms.CONTENT_URI, Mms.CONTENT_URI).forEach { uri ->
+            val contentValues = ContentValues().apply {
+                put(Sms.READ, 0)
+                put(Sms.SEEN, 0)
+            }
+            val selection = "${Sms.THREAD_ID} = ?"
+            val selectionArgs = arrayOf(threadId.toString())
+            contentResolver.update(uri, contentValues, selection, selectionArgs)
         }
-        val selection = "${Sms.THREAD_ID} = ?"
-        val selectionArgs = arrayOf(threadId.toString())
-        contentResolver.update(uri, contentValues, selection, selectionArgs)
     }
+    messagesDB.markLatestThreadMessageUnread(threadId)
     conversationsDB.markUnread(threadId)
 } 
 

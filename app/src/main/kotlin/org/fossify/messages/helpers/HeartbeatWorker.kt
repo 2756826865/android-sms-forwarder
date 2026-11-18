@@ -65,7 +65,8 @@ class HeartbeatWorker(
                 targetChannel = instance.channelType,
                 targetInstanceId = instance.id,
                 allowedChannels = setOf(instance.id),
-                isTest = false
+                isTest = false,
+                bodyAlreadyRendered = true
             )
         }
         legacyChannels.forEach { target ->
@@ -78,7 +79,8 @@ class HeartbeatWorker(
                 uniqueId = "$uniqueId-$target",
                 targetChannel = target,
                 allowedChannels = setOf(target),
-                isTest = false
+                isTest = false,
+                bodyAlreadyRendered = true
             )
         }
         config.lastReportTime = now // Last enqueue attempt, not a delivery acknowledgement.

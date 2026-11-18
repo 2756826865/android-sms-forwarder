@@ -209,7 +209,7 @@ fun Context.syncSmsHistory(source: String, strict: Boolean = false): SmsSyncResu
                 // this snapshot rather than allowing old read/body/SIM data to replace it.
                 getMessagesDB().runInTransaction {
                     check(pageRevision == ConversationRefreshRevision.current()) { "HISTORY_SNAPSHOT_SUPERSEDED" }
-                    writtenCount += batch.count { messagesDB.insertOrIgnore(it) != -1L }
+                    writtenCount += messagesDB.insertMessagesIgnore(batch).count { it != -1L }
                 }
                 batch.clear()
                 Thread.yield()
@@ -229,7 +229,7 @@ fun Context.syncSmsHistory(source: String, strict: Boolean = false): SmsSyncResu
                 diagnostics?.beforeBatch(this, mmsBatch)
                 getMessagesDB().runInTransaction {
                     check(metadataRevision == ConversationRefreshRevision.current()) { "HISTORY_SNAPSHOT_SUPERSEDED" }
-                    writtenCount += mmsBatch.count { messagesDB.insertOrIgnore(it) != -1L }
+                    writtenCount += messagesDB.insertMessagesIgnore(mmsBatch).count { it != -1L }
                 }
                 diagnostics?.afterBatch(this, mmsBatch)
             }
@@ -239,23 +239,28 @@ fun Context.syncSmsHistory(source: String, strict: Boolean = false): SmsSyncResu
         val conversations = getConversations(threadId = null, strict = true, diagnostics = diagnostics)
         diagnostics?.conversations("sync_provider", conversations)
         conversations.chunked(200).forEach { convBatch ->
-            convBatch.forEach { conv ->
-                getMessagesDB().runInTransaction {
-                    check(metadataRevision == ConversationRefreshRevision.current()) { "HISTORY_SNAPSHOT_SUPERSEDED" }
+            getMessagesDB().runInTransaction {
+                check(metadataRevision == ConversationRefreshRevision.current()) { "HISTORY_SNAPSHOT_SUPERSEDED" }
+                convBatch.forEach { conv ->
                     insertOrUpdateConversation(conv)
+                    threadsUpdatedCount++
                 }
-                threadsUpdatedCount++
             }
         }
 
         // 4. Fill any missing conversation summaries for remaining threads
-        messagesDB.getLatestMessagesWithoutConversation().forEach { msg ->
-            createConversationFromMessage(msg)?.let { conv ->
+        val missingMsgs = messagesDB.getLatestMessagesWithoutConversation()
+        if (missingMsgs.isNotEmpty()) {
+            missingMsgs.chunked(200).forEach { msgBatch ->
                 getMessagesDB().runInTransaction {
                     check(metadataRevision == ConversationRefreshRevision.current()) { "HISTORY_SNAPSHOT_SUPERSEDED" }
-                    insertOrUpdateConversation(conv)
+                    msgBatch.forEach { msg ->
+                        createConversationFromMessage(msg)?.let { conv ->
+                            insertOrUpdateConversation(conv)
+                            threadsUpdatedCount++
+                        }
+                    }
                 }
-                threadsUpdatedCount++
             }
         }
 

@@ -128,6 +128,7 @@ object ConfigBackupHelper {
         org.fossify.messages.helpers.LowBatteryCheckWorker.sync(context)
         org.fossify.messages.security.root.RootMaintenanceWorker.sync(context)
         org.fossify.messages.services.SmsKeepAliveService.ensureStarted(context)
+        org.fossify.messages.services.NotificationForwardListenerService.rebindService(context)
     }
 
     private fun applyImport(context: Context, jsonStr: String): Boolean = runCatching {

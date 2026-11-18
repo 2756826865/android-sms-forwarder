@@ -356,7 +356,12 @@ object DeviceCompatHelper {
 
         return config.autoStartComponents.any { component ->
             runCatching {
-                context.startActivity(Intent().apply { this.component = component })
+                context.startActivity(
+                    Intent().apply {
+                        this.component = component
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                )
                 true
             }.getOrDefault(false)
         }
@@ -367,7 +372,11 @@ object DeviceCompatHelper {
         if (!config.hasBatteryOptimization) return false
 
         return runCatching {
-            context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+            context.startActivity(
+                Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+            )
             true
         }.getOrDefault(false)
     }

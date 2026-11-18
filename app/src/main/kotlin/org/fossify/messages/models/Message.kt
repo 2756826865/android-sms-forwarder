@@ -12,7 +12,10 @@ import org.fossify.messages.helpers.generateStableId
 
 @Entity(
     tableName = "messages",
-    indices = [Index(value = ["thread_id", "date"])]
+    indices = [
+        Index(value = ["thread_id", "date"]),
+        Index(value = ["type", "date"])
+    ]
 )
 data class Message(
     @PrimaryKey val id: Long,

@@ -55,10 +55,15 @@ class CallStateReceiver : BroadcastReceiver() {
             }
 
             TelephonyManager.EXTRA_STATE_OFFHOOK -> {
-                prefs.edit()
-                    .putBoolean(KEY_ANSWERED, true)
-                    .putLong(KEY_CALL_START, now)
-                    .apply()
+                val existingRingStart = prefs.getLong(KEY_RING_START, 0L)
+                if (existingRingStart > 0L && now - existingRingStart <= MAX_RING_AGE_MS) {
+                    prefs.edit()
+                        .putBoolean(KEY_ANSWERED, true)
+                        .putLong(KEY_CALL_START, now)
+                        .apply()
+                } else {
+                    prefs.edit().clear().apply()
+                }
             }
 
             TelephonyManager.EXTRA_STATE_IDLE -> {
@@ -74,7 +79,7 @@ class CallStateReceiver : BroadcastReceiver() {
                 // 立即重置暂态缓存
                 prefs.edit().clear().apply()
 
-                if (number.isNotBlank() && ringStart > 0L) {
+                if (number.isNotBlank() && ringStart > 0L && now - ringStart <= MAX_CALL_AGE_MS) {
                     val pendingResult = goAsync()
                     val appContext = context.applicationContext
 
@@ -93,9 +98,11 @@ class CallStateReceiver : BroadcastReceiver() {
                             val ringDurationSeconds = ((now - ringStart) / 1000).coerceAtLeast(1)
                             val wasMissed = !isAnswered
 
-                            // “仅未接来电”不能反过来导致关闭后连未接来电也不发送。
-                            // 未接来电始终属于本功能范围；已接通话由独立开关控制。
+                            // “仅未接来电”开启时，若能从通话记录确认为用户主动拒接（REJECTED_TYPE），则忽略不转发
                             if (wasMissed) {
+                                if (callConfig.missedCallOnly && isRejectedInCallLog(appContext, ringStart)) {
+                                    return@launch
+                                }
                                 dispatchCallNotification(
                                     context = appContext,
                                     callerNumber = number,
@@ -104,8 +111,9 @@ class CallStateReceiver : BroadcastReceiver() {
                                     subId = confirmedCallSub,
                                     timestamp = now
                                 )
-                            } else if (!wasMissed && callConfig.forwardAnsweredCall) {
-                                val callDuration = ((now - callStart) / 1000).coerceAtLeast(1)
+                            } else if (!wasMissed && callConfig.forwardAnsweredCall && !callConfig.missedCallOnly) {
+                                val baseStart = callStart.takeIf { it > 0L } ?: ringStart
+                                val callDuration = ((now - baseStart) / 1000).coerceAtLeast(1)
                                 dispatchCallNotification(
                                     context = appContext,
                                     callerNumber = number,
@@ -169,10 +177,13 @@ class CallStateReceiver : BroadcastReceiver() {
                 .replace("[receiver]", receiverNumber)
         } ?: defaultBody
         val uniqueId = "call-${System.currentTimeMillis()}"
+        val allEnabledInstances = ChannelRepository.getInstance(context)
+            .getEnabledInstances()
+            .filterNot { it.id.startsWith("catalog:") }
 
         if (callConfig.hasChannelSelection) {
             val selectedIds = callConfig.channelInstanceIds
-            ChannelRepository.getInstance(context).getEnabledInstances()
+            allEnabledInstances
                 .filter { it.id in selectedIds }
                 .forEach { instance ->
                     MultiChannelForwardWorker.enqueueSingle(
@@ -181,7 +192,7 @@ class CallStateReceiver : BroadcastReceiver() {
                         body = body,
                         receivedAt = timestamp,
                         subscriptionId = subId,
-                        uniqueId = uniqueId,
+                        uniqueId = "$uniqueId-${instance.id}",
                         targetChannel = instance.channelType,
                         allowedChannels = setOf(instance.id),
                         isTest = false,
@@ -190,21 +201,63 @@ class CallStateReceiver : BroadcastReceiver() {
                     )
                 }
         } else {
-            multiConfig.enabledChannelIds().forEach { target ->
+            allEnabledInstances.forEach { instance ->
                 MultiChannelForwardWorker.enqueueSingle(
                     context = context,
                     sender = callerNumber,
                     body = body,
                     receivedAt = timestamp,
                     subscriptionId = subId,
-                    uniqueId = uniqueId,
-                    targetChannel = target,
-                    allowedChannels = setOf(target),
+                    uniqueId = "$uniqueId-${instance.id}",
+                    targetChannel = instance.channelType,
+                    allowedChannels = setOf(instance.id),
                     isTest = false,
+                    targetInstanceId = instance.id,
                     bodyAlreadyRendered = true
                 )
             }
+            val instanceTypes = allEnabledInstances.map { it.channelType }.toSet()
+            multiConfig.enabledChannelIds()
+                .filterNot { it in instanceTypes }
+                .forEach { target ->
+                    MultiChannelForwardWorker.enqueueSingle(
+                        context = context,
+                        sender = callerNumber,
+                        body = body,
+                        receivedAt = timestamp,
+                        subscriptionId = subId,
+                        uniqueId = "$uniqueId-legacy-$target",
+                        targetChannel = target,
+                        allowedChannels = setOf(target),
+                        isTest = false,
+                        bodyAlreadyRendered = true
+                    )
+                }
         }
+    }
+
+    private fun isRejectedInCallLog(context: Context, ringStart: Long): Boolean {
+        if (context.checkSelfPermission(android.Manifest.permission.READ_CALL_LOG) !=
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            return false
+        }
+        return runCatching {
+            Thread.sleep(400)
+            context.contentResolver.query(
+                android.provider.CallLog.Calls.CONTENT_URI,
+                arrayOf(android.provider.CallLog.Calls.TYPE),
+                "${android.provider.CallLog.Calls.DATE} >= ?",
+                arrayOf((ringStart - 5_000L).toString()),
+                "${android.provider.CallLog.Calls.DATE} DESC",
+            )?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    cursor.getInt(0) == android.provider.CallLog.Calls.REJECTED_TYPE
+                } else {
+                    false
+                }
+            } ?: false
+        }.getOrDefault(false)
     }
 
     companion object {
@@ -214,5 +267,7 @@ class CallStateReceiver : BroadcastReceiver() {
         private const val KEY_RING_START = "ring_start"
         private const val KEY_CALL_START = "call_start"
         private const val KEY_ANSWERED = "answered"
+        private const val MAX_RING_AGE_MS = 15 * 60_000L
+        private const val MAX_CALL_AGE_MS = 4 * 3600_000L
     }
 }

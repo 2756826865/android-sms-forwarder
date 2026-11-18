@@ -57,17 +57,15 @@ internal fun openSupportDestination(context: Context, destination: String) {
                 catch (_: android.content.ActivityNotFoundException) { context.startActivity(intent) }
             }
             "app:changelog" -> showTextDialog(
-                "1.2.10 更新日志",
-                "• 系统短信通知写入本地会话：彻底解决 ColorOS 17 / vivo / 小米 等强制夺取默认短信角色" +
-                    "或屏蔽验证码广播时，短信通知有弹窗但 App 对话列表不显示的顽疾。\n" +
-                    "• 通用发件人解析与双向号码归一化：智能解包 MessagingStyle person.uri 与 " +
-                    "conversationTitle，过滤「信息/短信/验证码」等占位词；支持带与不带 +86 双向匹配。\n" +
-                    "• 通知保底双卡识别与单卡自动推断：支持从通知 extras 提取 subId/simSlot 私有键，" +
-                    "单卡设备自动推断绑定唯一有效 SIM 卡，双卡设备精准映射，杜绝未知接收卡。\n" +
-                    "• 空白正文与模板穿透熔断：全面过滤零宽字符与全角/窄空格；模板渲染为空时前置拦截熔断，" +
-                    "杜绝外部通道出现空白暗色气泡。\n" +
-                    "• 内存健康与长时保活：缓存严格限定上限与修剪机制，工作线程池装配未捕获异常守护处理器，" +
-                    "超长会话采用差量写入与分页上限，确保打开万条会话永不卡死。"
+                "1.3.0 更新日志",
+                "• 零延迟通知兜底与标准规则引擎打通：当厂商收回默认短信或屏蔽验证码广播时，" +
+                    "系统短信通知 0ms 零延迟走标准短信规则、正则清洗、验证码提取与隐私脱敏秒发。\n" +
+                    "• 双向毫秒级防重与合成会话自愈：广播入口 T=0ms 原子抢占，真实短信落库时自动" +
+                    "原地替换临时合成记录，修复详情页刷新丢失保底短信及非默认模式无法删除会话问题。\n" +
+                    "• 3 万+ 短信全链路性能飞跃：新增 messages(type, date) 索引，重写会话列表查询为 EXISTS，" +
+                    "合并千次逐行独立事务为单次批量事务，彻底消除全量同步与列表刷新的 IO 风暴。\n" +
+                    "• 转发引擎与安全增强：补齐自定义规则模板隐私脱敏、报活与低电量原文标记、" +
+                    "来电转发多实例与主动拒接识别、无障碍验证码防误填聊天框保护。"
             )
             else -> context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(destination)))
         }

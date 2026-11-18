@@ -342,6 +342,7 @@ fun OperationsContent(
                                 onClick = {
                                     val opened = DeviceCompatHelper.openAutoStartSettings(context)
                                     if (!opened) {
+                                        DeviceCompatHelper.openAppDetails(context)
                                         Toast.makeText(context, "已打开应用详情，请在「权限」中允许后台运行", Toast.LENGTH_SHORT).show()
                                     }
                                 },

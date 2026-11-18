@@ -17,6 +17,16 @@ class SmsFallbackReceiver : BroadcastReceiver() {
             return
         }
         Log.i(TAG, "received ${intent.action} fallback broadcast; handing off to IncomingSmsService")
+        runCatching {
+            val parts = Telephony.Sms.Intents.getMessagesFromIntent(intent)
+            if (!parts.isNullOrEmpty()) {
+                val body = buildString { parts.forEach { append(it?.messageBody.orEmpty()) } }
+                org.fossify.messages.services.IncomingSmsService.markHandledByBroadcast(
+                    body,
+                    System.currentTimeMillis(),
+                )
+            }
+        }
         org.fossify.messages.messaging.SmsBroadcastDispatcher.dispatch(
             context,
             Intent(intent),

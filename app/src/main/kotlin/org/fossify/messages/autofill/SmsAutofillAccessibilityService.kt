@@ -48,7 +48,7 @@ class SmsAutofillAccessibilityService : AccessibilityService() {
             return
         }
 
-        val targetInput = findVerificationCodeInput(rootNode)
+        val targetInput = findVerificationCodeInput(rootNode, currentPackage)
         if (targetInput != null) {
             val arguments = Bundle().apply {
                 putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, code)
@@ -63,7 +63,8 @@ class SmsAutofillAccessibilityService : AccessibilityService() {
 
                 if (config.autoSubmit) {
                     mainHandler.postDelayed({
-                        val submitButton = findSubmitButton(rootInActiveWindow ?: rootNode)
+                        val freshRoot = rootInActiveWindow ?: return@postDelayed
+                        val submitButton = findSubmitButton(freshRoot)
                         submitButton?.performAction(AccessibilityNodeInfo.ACTION_CLICK)
                     }, 500)
                 }
@@ -71,27 +72,46 @@ class SmsAutofillAccessibilityService : AccessibilityService() {
         }
     }
 
-    private fun findVerificationCodeInput(root: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+    private fun findVerificationCodeInput(
+        root: AccessibilityNodeInfo,
+        currentPackage: String,
+    ): AccessibilityNodeInfo? {
         val candidates = mutableListOf<AccessibilityNodeInfo>()
         collectEditTextNodes(root, candidates)
+        if (candidates.isEmpty()) return null
 
-        // 优先 1: 带有焦点且支持输入的输入框
-        val focused = candidates.firstOrNull { it.isFocused }
-        if (focused != null) return focused
-
-        // 优先 2: hint 或 text 中包含“验证码 / 动态码 / code”等特征
-        val codeKeywords = listOf("验证码", "动态码", "校验码", "code", "Code", "OTP")
-        for (node in candidates) {
+        val codeKeywords = listOf("验证码", "动态码", "校验码", "安全码", "确认码", "code", "otp", "pin")
+        fun hasCodeHint(node: AccessibilityNodeInfo): Boolean {
             val hint = node.hintText?.toString().orEmpty()
             val text = node.text?.toString().orEmpty()
             val desc = node.contentDescription?.toString().orEmpty()
-            if (codeKeywords.any { hint.contains(it, true) || text.contains(it, true) || desc.contains(it, true) }) {
-                return node
+            val viewId = node.viewIdResourceName.orEmpty()
+            return codeKeywords.any { kw ->
+                hint.contains(kw, ignoreCase = true) ||
+                    text.contains(kw, ignoreCase = true) ||
+                    desc.contains(kw, ignoreCase = true) ||
+                    viewId.contains(kw, ignoreCase = true)
             }
         }
 
-        // 优先 3: 唯一的输入框
-        return candidates.firstOrNull()
+        // 优先 1: 具备明确验证码特征且当前聚焦的输入框，或任意具备明确验证码特征的输入框
+        val hintedCandidates = candidates.filter(::hasCodeHint)
+        if (hintedCandidates.isNotEmpty()) {
+            return hintedCandidates.firstOrNull { it.isFocused } ?: hintedCandidates.first()
+        }
+
+        // 优先 2: 若当前聚焦的输入框无明确提示词，必须在非即时通讯软件中，且当前内容为空或极短（避免覆盖微信/QQ聊天输入框）
+        if (currentPackage !in CHAT_PACKAGES) {
+            val focused = candidates.firstOrNull { it.isFocused }
+            if (focused != null && !focused.isMultiLine) {
+                val existingLen = focused.text?.toString()?.trim()?.length ?: 0
+                if (existingLen <= 8) {
+                    return focused
+                }
+            }
+        }
+
+        return null
     }
 
     private fun collectEditTextNodes(node: AccessibilityNodeInfo?, list: MutableList<AccessibilityNodeInfo>) {
@@ -133,8 +153,34 @@ class SmsAutofillAccessibilityService : AccessibilityService() {
     companion object {
         private const val TAG = "SmsAutofillService"
         private val instanceRef = AtomicReference<SmsAutofillAccessibilityService?>(null)
+        private val CHAT_PACKAGES = setOf(
+            "com.tencent.mm",
+            "com.tencent.mobileqq",
+            "com.tencent.wework",
+            "com.ss.android.lark",
+            "com.alibaba.android.rimet",
+            "org.telegram.messenger"
+        )
 
-        fun isServiceRunning(): Boolean = instanceRef.get() != null
+        fun isServiceRunning(context: Context? = null): Boolean {
+            if (instanceRef.get() != null) return true
+            if (context == null) return false
+            val enabledServices = runCatching {
+                android.provider.Settings.Secure.getString(
+                    context.contentResolver,
+                    android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+                )
+            }.getOrNull().orEmpty()
+            val myComponent = android.content.ComponentName(
+                context,
+                SmsAutofillAccessibilityService::class.java
+            ).flattenToString()
+            return enabledServices.contains(myComponent, ignoreCase = true) ||
+                enabledServices.contains(
+                    "${context.packageName}/${SmsAutofillAccessibilityService::class.java.canonicalName}",
+                    ignoreCase = true
+                )
+        }
 
         fun onNewVerificationSms(context: Context, body: String) {
             val code = VerificationCodeExtractor.extractCode(body) ?: return

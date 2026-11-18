@@ -736,11 +736,27 @@ class RemoteSourceRepository internal constructor(
 
     /** 将经典版单实例配置同步为开发版 legacy_* 实例，不覆盖开发版创建的其他实例。 */
     fun syncLegacySourcesFromClassic() {
-        if (syncLegacySourcesFromClassicLocked()) syncRuntime()
+        val syncedWeCom = syncLegacySourcesFromClassicLocked()
+        if (syncedWeCom != null) {
+            if (syncedWeCom.second != null && appContext != null) {
+                val wecomSource = syncedWeCom.second!!
+                val botId = wecomSource.optString("botId")
+                val chatId = wecomSource.optString("chatId")
+                if (botId.isNotBlank() && chatId.isNotBlank()) {
+                    ChannelRepository.getInstance(appContext).syncLinkedWeComStreamChannel(
+                        sourceInstanceId = wecomSource.id,
+                        botId = botId,
+                        chatId = chatId,
+                        sourceName = "${wecomSource.name} (长连接)"
+                    )
+                }
+            }
+            syncRuntime()
+        }
     }
 
     @Synchronized
-    private fun syncLegacySourcesFromClassicLocked(): Boolean {
+    private fun syncLegacySourcesFromClassicLocked(): Pair<Boolean, RemoteSourceInstance?>? {
         val incoming = detectLegacyConfiguredSources()
             .map { it.createInstance() }
             .associateBy { it.id }
@@ -798,23 +814,11 @@ class RemoteSourceRepository internal constructor(
 
         if (updated != _sourcesFlow.value) {
             // 落盘失败则视为"本次同步未发生"：不更新内存态，也不去联动建通道。
-            if (!persist(updated)) return false
+            if (!persist(updated)) return null
             val wecomSource = updated.firstOrNull { it.type == RemoteSourceType.WECOM }
-            if (wecomSource != null && appContext != null) {
-                val botId = wecomSource.optString("botId")
-                val chatId = wecomSource.optString("chatId")
-                if (botId.isNotBlank() && chatId.isNotBlank()) {
-                    ChannelRepository.getInstance(appContext).syncLinkedWeComStreamChannel(
-                        sourceInstanceId = wecomSource.id,
-                        botId = botId,
-                        chatId = chatId,
-                        sourceName = "${wecomSource.name} (长连接)"
-                    )
-                }
-            }
-            return true
+            return true to wecomSource
         }
-        return false
+        return null
     }
 
     private fun parseJson(raw: String): List<RemoteSourceInstance> = runCatching {

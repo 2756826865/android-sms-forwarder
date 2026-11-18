@@ -387,6 +387,14 @@ class ForwardingRuleEngine(
     }
 
     private fun matchesConditions(rule: ForwardingRule, sender: String, body: String): Boolean {
+        val messageText = "$sender\n$body"
+        if (rule.excludeKeywords.any { messageText.contains(it, ignoreCase = true) }) return false
+        if (rule.excludeRegex.isNotBlank() && runCatching {
+                Regex(rule.excludeRegex, RegexOption.IGNORE_CASE).containsMatchIn(messageText)
+            }.getOrDefault(false)) {
+            return false
+        }
+
         // 如果有结构化新条件，以结构化条件为准
         if (rule.conditions.isNotEmpty()) {
             val activeConds = rule.conditions.filter { it.enabled }
@@ -407,14 +415,6 @@ class ForwardingRuleEngine(
         }
 
         // 回退逻辑：老版本旧字段检查
-        val messageText = "$sender\n$body"
-        if (rule.excludeKeywords.any { messageText.contains(it, ignoreCase = true) }) return false
-        if (rule.excludeRegex.isNotBlank() && runCatching {
-                Regex(rule.excludeRegex, RegexOption.IGNORE_CASE).containsMatchIn(messageText)
-            }.getOrDefault(false)) {
-            return false
-        }
-
         val positive = buildList {
             if (rule.includeKeywords.isNotEmpty()) {
                 add(rule.includeKeywords.any { messageText.contains(it, ignoreCase = true) })
@@ -705,6 +705,17 @@ class ForwardingRulesConfig(context: Context) {
                     conditions
                 }
 
+                val legacyMatchMode = item.optString("matchMode", ForwardingRule.MATCH_ALL)
+                val resolvedConditionRelation = if (
+                    conditions.isEmpty() &&
+                    !item.has("conditionRelation") &&
+                    (legacyMatchMode == ForwardingRule.MATCH_ANY || (includeKeywords.size > 1 && includeRegex.isBlank()))
+                ) {
+                    RuleConditionRelation.ANY
+                } else {
+                    conditionRelation
+                }
+
                 add(
                     ForwardingRule(
                         id = id,
@@ -712,7 +723,7 @@ class ForwardingRulesConfig(context: Context) {
                         enabled = enabled,
                         priority = priority,
                         simScope = simScope,
-                        conditionRelation = conditionRelation,
+                        conditionRelation = resolvedConditionRelation,
                         conditions = resolvedConditions,
                         actions = resolvedActions,
                         customTemplate = customTemplate,

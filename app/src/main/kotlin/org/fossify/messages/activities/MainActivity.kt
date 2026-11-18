@@ -207,7 +207,6 @@ class MainActivity : SimpleActivity() {
         clearHomeBottomSystemScrim()
         config.showListAvatars = true
         config.showLetterAvatars = false
-        config.useRecycleBin = true
         setupHomeSearch()
         setupSelectionActions()
         setupBottomNavigation()
@@ -284,6 +283,7 @@ class MainActivity : SimpleActivity() {
         handlePermission(PERMISSION_READ_SMS) { hasReadSms ->
             if (hasReadSms) {
                 ensureReceiveSmsPermission()
+                ensureMiuiNotificationSmsPermission()
                 conversationsViewModel?.refresh(isInitial = false)
             }
         }
@@ -777,8 +777,8 @@ class MainActivity : SimpleActivity() {
     }
 
     private fun getNewConversations(cachedConversations: ArrayList<Conversation>) {
-        val privateCursor = getMyContactsCursor(favoritesOnly = false, withPhoneNumbersOnly = true)
         ensureBackgroundThread {
+            val privateCursor = getMyContactsCursor(favoritesOnly = false, withPhoneNumbersOnly = true)
             val revision = org.fossify.messages.helpers.ConversationRefreshRevision.current()
             fun applyIfFresh(action: () -> Unit) {
                 getMessagesDB().runInTransaction {
@@ -788,45 +788,45 @@ class MainActivity : SimpleActivity() {
             val privateContacts = MyContactsContentProvider.getSimpleContacts(this, privateCursor)
             val conversations = getConversations(privateContacts = privateContacts)
 
-            conversations.forEach { providerConversation ->
-                applyIfFresh { insertOrUpdateConversation(providerConversation) }
-                if (cachedConversations.none { it.threadId == providerConversation.threadId }) {
-                    cachedConversations.add(providerConversation)
-                }
-            }
-
-            val providerThreadIds = conversations.mapTo(HashSet()) { it.threadId }
-            cachedConversations.forEach { cachedConversation ->
-                val threadId = cachedConversation.threadId
-
-                val isTemporaryThread = cachedConversation.isScheduled
-                val isConversationDeleted = threadId !in providerThreadIds
-                if (isConversationDeleted && !isTemporaryThread && !messagesDB.hasThreadMessages(threadId)) {
-                    applyIfFresh { conversationsDB.deleteThreadId(threadId) }
+            applyIfFresh {
+                conversations.forEach { providerConversation ->
+                    insertOrUpdateConversation(providerConversation)
+                    if (cachedConversations.none { it.threadId == providerConversation.threadId }) {
+                        cachedConversations.add(providerConversation)
+                    }
                 }
 
-                val newConversation =
-                    conversations.find { it.phoneNumber == cachedConversation.phoneNumber }
-                if (isTemporaryThread && newConversation != null) {
-                    applyIfFresh { conversationsDB.deleteThreadId(threadId) }
-                    messagesDB.getScheduledThreadMessages(threadId)
-                        .forEach { message ->
-                            applyIfFresh {
+                val providerThreadIds = conversations.mapTo(HashSet()) { it.threadId }
+                cachedConversations.forEach { cachedConversation ->
+                    val threadId = cachedConversation.threadId
+
+                    val isTemporaryThread = cachedConversation.isScheduled
+                    val isConversationDeleted = threadId !in providerThreadIds
+                    if (isConversationDeleted && !isTemporaryThread && !messagesDB.hasThreadMessages(threadId)) {
+                        conversationsDB.deleteThreadId(threadId)
+                    }
+
+                    val newConversation =
+                        conversations.find { it.phoneNumber == cachedConversation.phoneNumber }
+                    if (isTemporaryThread && newConversation != null) {
+                        conversationsDB.deleteThreadId(threadId)
+                        messagesDB.getScheduledThreadMessages(threadId)
+                            .forEach { message ->
                                 messagesDB.insertOrUpdate(message.copy(threadId = newConversation.threadId))
                             }
-                        }
-                    applyIfFresh { insertOrUpdateConversation(newConversation, cachedConversation) }
+                        insertOrUpdateConversation(newConversation, cachedConversation)
+                    }
                 }
-            }
 
-            cachedConversations.forEach { cachedConv ->
-                val conv = conversations.find {
-                    it.threadId == cachedConv.threadId && !Conversation.areContentsTheSame(
-                        old = cachedConv, new = it
-                    )
-                }
-                if (conv != null) {
-                    applyIfFresh { insertOrUpdateConversation(conv) }
+                cachedConversations.forEach { cachedConv ->
+                    val conv = conversations.find {
+                        it.threadId == cachedConv.threadId && !Conversation.areContentsTheSame(
+                            old = cachedConv, new = it
+                        )
+                    }
+                    if (conv != null) {
+                        insertOrUpdateConversation(conv)
+                    }
                 }
             }
 

@@ -424,7 +424,8 @@ open class IncomingSmsService : Service() {
         }
 
         ShadowRepository.recordStep(this, operationId, "FORWARDING_OBSERVED", "STARTED")
-        if (!filteredOut && !remoteCommandConsumed) {
+        val alreadyForwardedByNotification = wasRecentlyHandledByNotification(body, receivedAt)
+        if (!filteredOut && !remoteCommandConsumed && !alreadyForwardedByNotification) {
             val history = ForwardingHistoryStore(applicationContext)
             if (ruleDecision != null) {
                 // 1. 记录规则跳过渠道
@@ -556,11 +557,15 @@ open class IncomingSmsService : Service() {
             .build()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(
-                NOTIFICATION_ID,
-                notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
-            )
+            try {
+                startForeground(
+                    NOTIFICATION_ID,
+                    notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
+                )
+            } catch (_: Exception) {
+                startForeground(NOTIFICATION_ID, notification)
+            }
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }
@@ -723,7 +728,7 @@ open class IncomingSmsService : Service() {
                     }
                     // Provider 写入失败时转发是最后一份拷贝：SmsRecoveryWorker 扫的是 Provider，
                     // 没写进去的消息它不会发现，因此这里仍然必须入队转发（除非被用户规则拦截）。
-                    if (!filteredOut && routingAllowed) {
+                    if (!filteredOut && routingAllowed && !wasRecentlyHandledByNotification(body, receivedAt)) {
                         enqueueForwardingFallback(
                             context = appContext,
                             address = address,
@@ -805,7 +810,7 @@ open class IncomingSmsService : Service() {
                     budgetBlockedForwarding = true
                     runCatching { SmsRecoveryWorker.enqueueNow(appContext) }
                         .onFailure { error -> Log.w(TAG, "minimal: recovery enqueue failed", error) }
-                } else {
+                } else if (!wasRecentlyHandledByNotification(body, receivedAt)) {
                     enqueueForwardingFallback(
                         context = appContext,
                         address = address,
@@ -1095,8 +1100,26 @@ open class IncomingSmsService : Service() {
             )
             context.getMessagesDB().runInTransaction {
                 org.fossify.messages.helpers.ConversationRefreshRevision.changed()
+                if (messageId < SYNTHETIC_MESSAGE_BASE) {
+                    val msgSec = (date / 1000).toInt()
+                    val cleanMsgBody = body.stripInvisibleAndTrim()
+                    val synDuplicates = context.messagesDB.getSyntheticMessagesBetween(
+                        SYNTHETIC_MESSAGE_BASE,
+                        msgSec - 120,
+                        msgSec + 120,
+                    ).filter { it.body.stripInvisibleAndTrim() == cleanMsgBody }
+                    for (syn in synDuplicates) {
+                        context.messagesDB.delete(syn.id)
+                        if (syn.threadId >= SYNTHETIC_THREAD_BASE && syn.threadId != threadId) {
+                            if (!context.messagesDB.hasThreadMessages(syn.threadId)) {
+                                context.conversationsDB.deleteThreadId(syn.threadId)
+                            }
+                        }
+                    }
+                }
                 val previous = context.messagesDB.getMessageWithId(messageId)
-                context.messagesDB.insertOrUpdate(message.copy(read = providerRead ?: previous?.read ?: message.read)
+                context.messagesDB.insertOrUpdate(
+                    message.copy(read = providerRead ?: previous?.read ?: message.read)
                 )
                 val old = context.conversationsDB.getConversationWithThreadId(threadId)
                 val latest = context.messagesDB.getLatestNonRecycledMessage(threadId) ?: message
@@ -1219,6 +1242,8 @@ open class IncomingSmsService : Service() {
         }
 
         private val recentBroadcastBodies = java.util.concurrent.ConcurrentHashMap<String, Long>()
+        private val recentNotificationForwardedBodies = java.util.concurrent.ConcurrentHashMap<String, Long>()
+        private val forwardingClaimLock = Any()
         private val fallbackScheduler = java.util.concurrent.Executors.newSingleThreadScheduledExecutor { runnable ->
             Thread(runnable, "sms-fallback-scheduler").apply {
                 isDaemon = true
@@ -1251,6 +1276,90 @@ open class IncomingSmsService : Service() {
             val clean = body.stripInvisibleAndTrim()
             val handledAt = recentBroadcastBodies[clean] ?: return false
             return kotlin.math.abs(timestamp - handledAt) <= windowMs
+        }
+
+        fun claimNotificationSmsForward(body: String, timestamp: Long): Boolean {
+            val clean = body.stripInvisibleAndTrim()
+            if (clean.isBlank()) return false
+            synchronized(forwardingClaimLock) {
+                if (wasRecentlyHandledByBroadcast(clean, timestamp)) return false
+                val prev = recentNotificationForwardedBodies[clean]
+                if (prev != null && kotlin.math.abs(timestamp - prev) <= BROADCAST_DEDUPE_WINDOW_MS) {
+                    return false
+                }
+                recentNotificationForwardedBodies[clean] = timestamp
+                if (recentNotificationForwardedBodies.size > BROADCAST_CACHE_PRUNE_THRESHOLD) {
+                    val cutoff = timestamp - BROADCAST_RETENTION_MS
+                    val it = recentNotificationForwardedBodies.entries.iterator()
+                    while (it.hasNext()) {
+                        if (it.next().value < cutoff) it.remove()
+                    }
+                    if (recentNotificationForwardedBodies.size > 500) {
+                        recentNotificationForwardedBodies.clear()
+                    }
+                }
+                return true
+            }
+        }
+
+        fun wasRecentlyHandledByNotification(
+            body: String,
+            timestamp: Long,
+            windowMs: Long = BROADCAST_DEDUPE_WINDOW_MS,
+        ): Boolean {
+            val clean = body.stripInvisibleAndTrim()
+            val handledAt = recentNotificationForwardedBodies[clean] ?: return false
+            return kotlin.math.abs(timestamp - handledAt) <= windowMs
+        }
+
+        fun forwardFromNotificationFallback(
+            context: Context,
+            rawSender: String,
+            body: String,
+            receivedAt: Long,
+            subscriptionId: Int,
+        ): Boolean {
+            val appContext = context.applicationContext
+            val cleanBody = body.stripInvisibleAndTrim()
+            val sender = rawSender.trim().ifBlank { "未知号码" }
+            if (cleanBody.isBlank()) return false
+            val multiConfig = MultiForwardConfig(appContext)
+            val pushPlusEnabled = PushPlusConfig(appContext).enabled
+            val rulesConfig = ForwardingRulesConfig(appContext)
+            val hasEnabledInstances = runCatching {
+                org.fossify.messages.forwarding.repository.ChannelRepository
+                    .getInstance(appContext)
+                    .getEnabledInstances()
+                    .isNotEmpty()
+            }.getOrDefault(false)
+            if (!multiConfig.anyEnabled() && !pushPlusEnabled && !hasEnabledInstances) {
+                return false
+            }
+            if (!claimNotificationSmsForward(cleanBody, receivedAt)) {
+                Log.i(TAG, "Skip notification SMS fallback forward (already handled by broadcast/notification)")
+                return true
+            }
+            if (isFilteredForReceive(appContext, sender, cleanBody)) {
+                Log.i(TAG, "Notification fallback SMS from $sender matched user filter; skip forwarding")
+                return true
+            }
+            val ruleDecision = evaluateCheapRules(appContext, sender, cleanBody, subscriptionId, receivedAt)
+            if (rulesConfig.enabled && ruleDecision != null && ruleDecision.targets.isEmpty()) {
+                Log.i(TAG, "Notification fallback SMS matched 0 rule targets: ${ruleDecision.reason}")
+                return true
+            }
+            val uniqueId = "sms-notify-$receivedAt-${cleanBody.hashCode()}"
+            enqueueForwardingFallback(
+                context = appContext,
+                address = sender,
+                body = cleanBody,
+                receivedAt = receivedAt,
+                subscriptionId = subscriptionId,
+                uniqueId = uniqueId,
+                operationId = null,
+                ruleDecision = ruleDecision,
+            )
+            return true
         }
 
         fun scheduleLocalFallbackSms(
@@ -1340,20 +1449,31 @@ open class IncomingSmsService : Service() {
                     return
                 }
 
-                val fromSeconds = ((receivedAt - FALLBACK_DEDUPE_WINDOW_MS) / MILLIS_PER_SECOND).toInt()
-                val toSeconds = ((receivedAt + FALLBACK_DEDUPE_WINDOW_MS) / MILLIS_PER_SECOND).toInt()
+                val fromSeconds = ((receivedAt - SYNTHETIC_DEDUPE_WINDOW_MS) / MILLIS_PER_SECOND).toInt()
+                val toSeconds = ((receivedAt + SYNTHETIC_DEDUPE_WINDOW_MS) / MILLIS_PER_SECOND).toInt()
                 val alreadyInRoom = runCatching {
                     appContext.messagesDB.getInboxBodiesBetween(fromSeconds, toSeconds)
                         .any { it.stripInvisibleAndTrim() == cleanBody }
                 }.getOrDefault(false)
                 if (alreadyInRoom) return
 
-                val threadId = resolveThreadId(appContext, address)
+                val matchedConv = findMatchingConversation(appContext, address)
+                val effectiveAddress = if (
+                    matchedConv != null &&
+                    matchedConv.phoneNumber.isNotBlank() &&
+                    address.any { !it.isDigit() && it != '+' && it != ' ' && it != '-' }
+                ) {
+                    matchedConv.phoneNumber
+                } else {
+                    address
+                }
+                val threadId = matchedConv?.threadId?.takeIf { it > 0L }
+                    ?: resolveThreadId(appContext, effectiveAddress)
                 val messageId = SYNTHETIC_MESSAGE_BASE + (System.nanoTime() and SYNTHETIC_MESSAGE_MASK)
                 runCatching {
                     writeLocalMessageMinimal(
                         context = appContext,
-                        address = address,
+                        address = effectiveAddress,
                         body = body,
                         date = receivedAt,
                         messageId = messageId,
@@ -1367,20 +1487,28 @@ open class IncomingSmsService : Service() {
             }
         }
 
+        private fun findMatchingConversation(
+            context: Context,
+            address: String,
+        ): org.fossify.messages.models.Conversation? {
+            val trimmed = address.trim()
+            val withPrefix = if (trimmed.startsWith("+86")) trimmed else "+86$trimmed"
+            val withoutPrefix = if (trimmed.startsWith("+86")) trimmed.removePrefix("+86") else trimmed
+            return runCatching {
+                context.conversationsDB.findConversationBySenderOrTitle(
+                    sender = trimmed,
+                    withPrefix = withPrefix,
+                    withoutPrefix = withoutPrefix
+                )
+            }.getOrNull()
+        }
+
         private fun resolveThreadId(context: Context, address: String): Long {
             val systemThreadId = runCatching { context.getThreadId(address) }.getOrNull()?.takeIf { it > 0L }
             if (systemThreadId != null) return systemThreadId
 
             val trimmed = address.trim()
-            val withPrefix = if (trimmed.startsWith("+86")) trimmed else "+86$trimmed"
-            val withoutPrefix = if (trimmed.startsWith("+86")) trimmed.removePrefix("+86") else trimmed
-            val roomThreadId = runCatching {
-                context.conversationsDB.findConversationBySenderOrTitle(
-                    sender = trimmed,
-                    withPrefix = withPrefix,
-                    withoutPrefix = withoutPrefix
-                )?.threadId
-            }.getOrNull()?.takeIf { it > 0L }
+            val roomThreadId = findMatchingConversation(context, trimmed)?.threadId?.takeIf { it > 0L }
             if (roomThreadId != null) return roomThreadId
 
             return SYNTHETIC_THREAD_BASE + (trimmed.hashCode().toLong() and SYNTHETIC_THREAD_MASK)
@@ -1414,14 +1542,22 @@ open class IncomingSmsService : Service() {
                     Telephony.Sms.SUBSCRIPTION_ID,
                     Telephony.Sms.STATUS,
                 )
+                val minMs = receivedAt - FALLBACK_DEDUPE_WINDOW_MS
+                val maxMs = receivedAt + FALLBACK_DEDUPE_WINDOW_MS
+                val minSec = minMs / MILLIS_PER_SECOND
+                val maxSec = maxMs / MILLIS_PER_SECOND
                 context.contentResolver.query(
                     Telephony.Sms.CONTENT_URI,
                     projection,
-                    "${Telephony.Sms.TYPE}=? AND ${Telephony.Sms.DATE} BETWEEN ? AND ?",
+                    "${Telephony.Sms.TYPE}=? AND (" +
+                        "(${Telephony.Sms.DATE} BETWEEN ? AND ?) OR " +
+                        "(${Telephony.Sms.DATE} BETWEEN ? AND ?))",
                     arrayOf(
                         Telephony.Sms.MESSAGE_TYPE_INBOX.toString(),
-                        (receivedAt - FALLBACK_DEDUPE_WINDOW_MS).toString(),
-                        (receivedAt + FALLBACK_DEDUPE_WINDOW_MS).toString(),
+                        minMs.toString(),
+                        maxMs.toString(),
+                        minSec.toString(),
+                        maxSec.toString(),
                     ),
                     "${Telephony.Sms.DATE} DESC",
                 )?.use { cursor ->
@@ -1466,10 +1602,11 @@ open class IncomingSmsService : Service() {
         private const val BROADCAST_RETENTION_MS = 60_000L
         private const val BROADCAST_DEDUPE_WINDOW_MS = 20_000L
         private const val LOCAL_FALLBACK_DELAY_MS = 2_500L
-        private const val FALLBACK_DEDUPE_WINDOW_MS = 20_000L
-        private const val SYNTHETIC_THREAD_BASE = 9_000_000_000_000L
+        private const val FALLBACK_DEDUPE_WINDOW_MS = 120_000L
+        private const val SYNTHETIC_DEDUPE_WINDOW_MS = 20_000L
+        const val SYNTHETIC_THREAD_BASE = 9_000_000_000_000L
         private const val SYNTHETIC_THREAD_MASK = 0x3FFFFFFFL
-        private const val SYNTHETIC_MESSAGE_BASE = 8_000_000_000_000L
+        const val SYNTHETIC_MESSAGE_BASE = 8_000_000_000_000L
         private const val SYNTHETIC_MESSAGE_MASK = 0xFFFFFFFFFFL
     }
 }

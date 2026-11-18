@@ -46,6 +46,12 @@ class NotificationForwardListenerService : NotificationListenerService() {
         // 2. 过滤常驻与系统后台无意义通知（如音乐播放控制、下载进度、前台常驻服务、通知组汇总摘要）
         val flags = notification.flags
         if ((flags and Notification.FLAG_GROUP_SUMMARY) != 0) return
+        val isOngoing = (flags and (
+            Notification.FLAG_ONGOING_EVENT or
+                Notification.FLAG_FOREGROUND_SERVICE or
+                Notification.FLAG_NO_CLEAR
+            )) != 0
+        val isNonMessageCategory = notification.category in NON_MESSAGE_CATEGORIES
 
         // 3. 提取通知文本（兼顾标准、BigTextStyle 与子文本）
         val extras = notification.extras ?: return
@@ -56,7 +62,26 @@ class NotificationForwardListenerService : NotificationListenerService() {
         // 通知必须具备有效正文内容，防止系统“信息”或即时通讯软件发出的无正文摘要/占位通知触发空消息或单个空格转发
         if (text.isBlank()) return
 
+        val now = System.currentTimeMillis()
+        cleanExpiredDeduplicationKeys(now)
+
         val isSystemSmsPackage = NotificationForwardConfig.isSystemSmsPackage(applicationContext, packageName)
+        if (isSystemSmsPackage && (isOngoing || isNonMessageCategory)) {
+            return
+        }
+
+        val extractedSender = extractNotificationSender(notification, title)
+        if (isSystemSmsPackage && extractedSender.isBlank() && isSystemSmsStatusText(text)) {
+            return
+        }
+
+        // 内容指纹防抖（5 秒内相同包名、标题和内容的通知只处理一次）
+        val deduplicateKey = "$packageName|${extractedSender.ifBlank { title }}|$text"
+        val previous = recentDeduplicationMap.put(deduplicateKey, now)
+        if (previous != null && now - previous in 0 until DEDUPLICATE_WINDOW_MS) {
+            return
+        }
+
         val resolvedSubId = if (isSystemSmsPackage) {
             org.fossify.messages.messaging.ReceivingSubscriptionReader.resolveFromBundle(
                 applicationContext,
@@ -66,14 +91,19 @@ class NotificationForwardListenerService : NotificationListenerService() {
             android.telephony.SubscriptionManager.INVALID_SUBSCRIPTION_ID
         }
 
-        // 4. 关键修复：只把系统短信通知写入 App 本地会话库，其他通知（微信、QQ等）绝不写入会话
-        // 即使用户未开启外部通道通知转发，只要具备通知监听权限，即可解决 ColorOS 17 / vivo / OPPO / 小米 等
-        // 夺取默认短信角色或拦截验证码导致的「通知栏弹了短信但 App 对话列表没有」的问题。
+        val config = NotificationForwardConfig(applicationContext)
+
+        // 4. 关键修复：系统短信通知本地入库 + 标准短信规则/通道零延迟秒发兜底
+        // 即使未开启第三方应用通知转发（config.enabled == false），只要被厂商夺回默认角色或屏蔽了短信广播，
+        // 依然 0ms 写入本地会话并走标准短信转发管线（规则引擎、正则清洗、验证码提取、隐私脱敏）。
         if (isSystemSmsPackage) {
-            val senderCandidate = extractNotificationSender(notification, title)
+            val senderCandidate = extractedSender
+                .ifBlank { org.fossify.messages.helpers.YellowPageHelper.extractSignature(text).orEmpty() }
                 .ifBlank { title.ifBlank { getApplicationLabel(packageName) } }
             val appContext = applicationContext
-            val postTime = sbn.postTime.takeIf { it > 0L } ?: System.currentTimeMillis()
+            val postTime = sbn.postTime.takeIf { it > 0L } ?: now
+            val skipForwardBecauseDefault = config.skipSystemSmsWhenDefault &&
+                org.fossify.messages.helpers.DeviceCompatHelper.isDefaultSmsApp(appContext)
             fallbackExecutor.execute {
                 runCatching {
                     IncomingSmsService.ensureLocalFallbackSmsPersisted(
@@ -84,60 +114,44 @@ class NotificationForwardListenerService : NotificationListenerService() {
                         subscriptionId = resolvedSubId
                     )
                 }.onFailure { Log.w(TAG, "notification local fallback failed: ${it.javaClass.simpleName}") }
+
+                if (!skipForwardBecauseDefault && !wasRecentlyHandledBySmsBroadcast(text, now)) {
+                    runCatching {
+                        IncomingSmsService.forwardFromNotificationFallback(
+                            context = appContext,
+                            rawSender = senderCandidate,
+                            body = text,
+                            receivedAt = postTime,
+                            subscriptionId = resolvedSubId
+                        )
+                    }.onFailure { Log.w(TAG, "notification sms forward fallback failed: ${it.javaClass.simpleName}") }
+                }
             }
+            return
         }
 
-        // 5. 检查外部通道通知转发开关（向飞书、钉钉、Webhook 等分发）
-        val config = NotificationForwardConfig(applicationContext)
+        // 5. 检查外部通道通知转发开关（向飞书、钉钉、Webhook 等分发第三方应用通知）
         if (!config.enabled) return
+        if (config.ignoreOngoing && isOngoing) return
 
-        if (config.ignoreOngoing) {
-            val isOngoing = (flags and Notification.FLAG_ONGOING_EVENT) != 0
-            if (isOngoing) return
-        }
-
-        // 6. 检查包名白名单（系统短信应用自动放行；第三方应用严格遵从用户勾选的白名单）
+        // 6. 检查包名白名单（严格遵从用户勾选的白名单）
         val targetPackages = config.targetPackageNames
-        if (!isSystemSmsPackage && packageName !in targetPackages) return
-
-        // 7. 智能防重：若当前通知来自系统短信应用，且本应用已正常持有系统默认短信角色，
-        // 则按用户设置跳过通知转发，避免与正常 SMS_DELIVER 广播重复转发两遍。
-        if (config.skipSystemSmsWhenDefault && isSystemSmsPackage) {
-            if (org.fossify.messages.helpers.DeviceCompatHelper.isDefaultSmsApp(applicationContext)) {
-                Log.d(TAG, "Skip system SMS notification from $packageName because app already holds default SMS role.")
-                return
-            }
-        }
-
-        val now = System.currentTimeMillis()
-        cleanExpiredDeduplicationKeys(now)
-
-        // 8. 系统短信应用通知防重：若 20 秒内短信广播已经处理并转发过相同正文，则跳过通知转发
-        if (isSystemSmsPackage && wasRecentlyHandledBySmsBroadcast(text, now)) {
-            Log.i(TAG, "Skip system SMS notification from $packageName (already handled via broadcast)")
-            return
-        }
-
-        // 9. 内容指纹防抖（5 秒内相同包名、标题和内容的通知只发一次）
-        val deduplicateKey = "$packageName|$title|$text"
-        val previous = recentDeduplicationMap.put(deduplicateKey, now)
-        if (previous != null && now - previous in 0 until DEDUPLICATE_WINDOW_MS) {
-            return
-        }
+        if (packageName !in targetPackages) return
 
         val appName = getApplicationLabel(packageName)
+        val effectiveTitle = extractedSender.ifBlank { title }
         val timeStr = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date(now))
         val forwardBody = renderNotificationTemplate(
             template = config.customTemplate,
             appName = appName,
-            title = title,
+            title = effectiveTitle,
             content = text,
             packageName = packageName,
             time = timeStr
         ).stripInvisibleAndTrim()
         if (forwardBody.isBlank()) return
 
-        // 10. 靶向分发至已启用的各通道实例
+        // 7. 靶向分发至已启用的各通道实例
         dispatchToChannels(config, appName, forwardBody, now, sbn.id, resolvedSubId)
     }
 
@@ -266,6 +280,24 @@ class NotificationForwardListenerService : NotificationListenerService() {
             "信息", "短信", "通知类短信", "服务与验证码", "验证码",
             "新信息", "新短信", "通知", "Messages", "Messaging", "SMS", "MMS"
         )
+        private val NON_MESSAGE_CATEGORIES = setOf(
+            Notification.CATEGORY_SERVICE,
+            Notification.CATEGORY_PROGRESS,
+            Notification.CATEGORY_STATUS,
+            Notification.CATEGORY_SYSTEM,
+            Notification.CATEGORY_ERROR,
+            Notification.CATEGORY_TRANSPORT
+        )
+        private val SYSTEM_SMS_STATUS_PATTERNS = listOf(
+            "正在发送", "正在备份", "正在恢复", "正在同步",
+            "发送失败", "未能发送", "无法发送", "SIM卡已满",
+            "短信存储已满", "默认短信应用"
+        )
+
+        private fun isSystemSmsStatusText(text: String): Boolean {
+            if (text.contains("【") || text.contains("】") || text.contains("验证码")) return false
+            return SYSTEM_SMS_STATUS_PATTERNS.any { text.contains(it) }
+        }
         private val recentDeduplicationMap = ConcurrentHashMap<String, Long>()
         private val appNameCache = ConcurrentHashMap<String, String>()
         private val fallbackExecutor = java.util.concurrent.Executors.newSingleThreadExecutor { runnable ->

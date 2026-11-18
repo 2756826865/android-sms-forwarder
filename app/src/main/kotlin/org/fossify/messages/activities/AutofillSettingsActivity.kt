@@ -29,7 +29,8 @@ class AutofillSettingsActivity : SimpleActivity() {
     private fun setupViews() {
         binding.autofillSwitchEnabled.isChecked = config.enabled && config.copyToClipboard
         binding.autofillSwitchEnabled.setOnCheckedChangeListener { _, isChecked ->
-            config.enabled = isChecked || config.enableFloatingPill
+            val a11yActive = org.fossify.messages.autofill.SmsAutofillAccessibilityService.isServiceRunning(this)
+            config.enabled = isChecked || config.enableFloatingPill || a11yActive
             config.copyToClipboard = isChecked
         }
 
