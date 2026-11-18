@@ -47,11 +47,10 @@ object ShizukuEnhancementManager {
     }.getOrDefault(false)
 
     fun checkStatus(context: Context): ShizukuStatus {
-        if (!isInstalled(context)) {
+        val isRunning = runCatching { Shizuku.pingBinder() }.getOrDefault(false)
+        if (!isRunning && !isInstalled(context)) {
             return ShizukuStatus(ShizukuState.NOT_INSTALLED, "未安装 Shizuku 客户端")
         }
-
-        val isRunning = runCatching { Shizuku.pingBinder() }.getOrDefault(false)
         if (!isRunning) {
             return ShizukuStatus(ShizukuState.NOT_RUNNING, "Shizuku 未运行 · 请在应用中启动无线调试")
         }
@@ -150,11 +149,28 @@ object ShizukuEnhancementManager {
             null
         ) as java.lang.Process
 
+        runCatching { process.outputStream.close() }
+        val stdoutRef = java.util.concurrent.atomic.AtomicReference("")
+        val stderrRef = java.util.concurrent.atomic.AtomicReference("")
+        val outThread = Thread({
+            runCatching { stdoutRef.set(process.inputStream.bufferedReader().use { it.readText() }) }
+        }, "shizuku-stdout-drain").apply { isDaemon = true; start() }
+        val errThread = Thread({
+            runCatching { stderrRef.set(process.errorStream.bufferedReader().use { it.readText() }) }
+        }, "shizuku-stderr-drain").apply { isDaemon = true; start() }
+
         val completed = process.waitFor(timeoutSeconds, TimeUnit.SECONDS)
         if (!completed) {
             process.destroyForcibly()
+            runCatching { process.inputStream.close() }
+            runCatching { process.errorStream.close() }
+            outThread.join(500)
+            errThread.join(500)
             return@runCatching ShizukuCommandResult(-1, "Shizuku 命令执行超时")
         }
-        ShizukuCommandResult(process.exitValue(), process.inputStream.bufferedReader().use { it.readText() })
+        outThread.join(1000)
+        errThread.join(1000)
+        val combined = stdoutRef.get().ifBlank { stderrRef.get() }
+        ShizukuCommandResult(process.exitValue(), combined)
     }.getOrNull()
 }

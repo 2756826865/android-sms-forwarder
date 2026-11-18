@@ -562,6 +562,7 @@ fun RuleEditorScreen(
                             start = uiState.dndStart,
                             end = uiState.dndEnd,
                             days = uiState.dndDays,
+                            errorMessage = uiState.dndError,
                             onUpdate = viewModel::updateDoNotDisturb
                         )
                     }

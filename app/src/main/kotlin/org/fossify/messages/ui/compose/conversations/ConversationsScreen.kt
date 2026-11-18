@@ -493,10 +493,16 @@ fun ConversationsScreen(
                             },
                             onClick = {
                                 conversationsViewModel.markThreadReadLocally(conv.threadId)
-                                val yellow = YellowPageHelper.lookup(context, conv.phoneNumber, conv.snippet)
-                                val titleToPass = if (conv.title.isBlank() ||
-                                    conv.title.equals(conv.phoneNumber, ignoreCase = true) ||
-                                    conv.title.replace("+", "").replace(" ", "").replace("-", "").all { it.isDigit() }
+                                val yellow = if (YellowPageHelper.isInitialized) {
+                                    YellowPageHelper.lookup(context, conv.phoneNumber, conv.snippet)
+                                } else {
+                                    null
+                                }
+                                val titleToPass = if (!conv.usesCustomTitle && (
+                                        conv.title.isBlank() ||
+                                            conv.title.equals(conv.phoneNumber, ignoreCase = true) ||
+                                            conv.title.replace("+", "").replace(" ", "").replace("-", "").all { it.isDigit() }
+                                        )
                                 ) {
                                     yellow?.brand ?: conv.title
                                 } else {
@@ -539,17 +545,32 @@ fun ConversationItem(
     val rowPadding = when (density) { 4 -> 18.dp; 8 -> 7.dp; 10 -> 4.dp; else -> 11.dp }
     val formattedDate = org.fossify.messages.helpers.formatDeveloperConversationDate(conversation.date)
 
-    val yellowResult = remember(conversation.phoneNumber, conversation.snippet) {
-        YellowPageHelper.lookup(context, conversation.phoneNumber, conversation.snippet)
+    var yellowResult by remember(conversation.phoneNumber, conversation.snippet) {
+        mutableStateOf(
+            if (YellowPageHelper.isInitialized) {
+                YellowPageHelper.lookup(context, conversation.phoneNumber, conversation.snippet)
+            } else {
+                null
+            }
+        )
+    }
+    LaunchedEffect(conversation.phoneNumber, conversation.snippet) {
+        if (!YellowPageHelper.isInitialized) {
+            yellowResult = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                YellowPageHelper.lookup(context, conversation.phoneNumber, conversation.snippet)
+            }
+        }
     }
 
-    val displayTitle = remember(conversation.title, yellowResult) {
-        val isJustNumber = conversation.title.isBlank() ||
-            conversation.title.equals(conversation.phoneNumber, ignoreCase = true) ||
-            conversation.title.replace("+", "").replace(" ", "").replace("-", "").all { it.isDigit() }
+    val displayTitle = remember(conversation.title, conversation.usesCustomTitle, yellowResult) {
+        val isJustNumber = !conversation.usesCustomTitle && (
+            conversation.title.isBlank() ||
+                conversation.title.equals(conversation.phoneNumber, ignoreCase = true) ||
+                conversation.title.replace("+", "").replace(" ", "").replace("-", "").all { it.isDigit() }
+            )
         if (yellowResult != null) {
             if (isJustNumber) {
-                yellowResult.brand
+                yellowResult?.brand ?: conversation.title
             } else {
                 conversation.title
             }
@@ -634,7 +655,7 @@ fun ConversationItem(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = yellowResult.brand.take(1),
+                        text = yellowResult?.brand?.take(1).orEmpty(),
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                         color = if (isDark) Color(0xFF64B5F6) else Color(0xFF1976D2)

@@ -251,15 +251,16 @@ class RemoteSourceRuntimeManager private constructor(private val appContext: Con
                                 sourceType = RemoteSourceType.DINGTALK,
                                 sourceInstanceId = instance.id,
                                 sourceMessageKey = cmd.messageId,
-                                senderId = cmd.senderId.ifBlank { cmd.senderNick },
+                                senderId = cmd.senderId,
                                 senderName = cmd.senderNick,
                                 groupId = cmd.conversationId.takeIf { cmd.conversationType == "2" }.orEmpty(),
                                 rawContent = cmd.rawContent,
                                 isMentioned = cmd.isMentioned,
-                                receivedAt = System.currentTimeMillis(),
+                                receivedAt = cmd.createdAt.takeIf { it > 0L } ?: System.currentTimeMillis(),
                                 extraMeta = mapOf("receiptTarget" to cmd.sessionWebhook)
                             )
-                            org.fossify.messages.remote.RemoteCommandProcessor.process(appContext, envelope)
+                            val result = org.fossify.messages.remote.RemoteCommandProcessor.process(appContext, envelope)
+                            handleBotCommandOutcome(currentHandle, instance.name, cmd.sessionWebhook, result)
                         },
                         onStatus = { status ->
                             val currentHandle = handleRef ?: return@DingTalkStreamClient
@@ -296,6 +297,11 @@ class RemoteSourceRuntimeManager private constructor(private val appContext: Con
                         onCommand = { cmd ->
                             val currentHandle = handleRef ?: return@FeishuStreamClient
                             if (!isHandleActive(currentHandle)) return@FeishuStreamClient
+                            val receiptTarget = if (cmd.chatId.isNotBlank()) {
+                                "chat_id:${cmd.chatId}"
+                            } else {
+                                "${cmd.senderIdType}:${cmd.senderId}"
+                            }
                             val envelope = org.fossify.messages.remote.RemoteCommandEnvelope(
                                 sourceType = RemoteSourceType.FEISHU,
                                 sourceInstanceId = instance.id,
@@ -304,16 +310,11 @@ class RemoteSourceRuntimeManager private constructor(private val appContext: Con
                                 groupId = cmd.chatId.takeIf { cmd.chatType == "group" }.orEmpty(),
                                 rawContent = cmd.rawContent,
                                 isMentioned = cmd.isMentioned,
-                                receivedAt = System.currentTimeMillis(),
-                                extraMeta = mapOf(
-                                    "receiptTarget" to if (cmd.chatId.isNotBlank()) {
-                                        "chat_id:${cmd.chatId}"
-                                    } else {
-                                        "${cmd.senderIdType}:${cmd.senderId}"
-                                    }
-                                )
+                                receivedAt = cmd.createdAt.takeIf { it > 0L } ?: System.currentTimeMillis(),
+                                extraMeta = mapOf("receiptTarget" to receiptTarget)
                             )
-                            org.fossify.messages.remote.RemoteCommandProcessor.process(appContext, envelope)
+                            val result = org.fossify.messages.remote.RemoteCommandProcessor.process(appContext, envelope)
+                            handleBotCommandOutcome(currentHandle, instance.name, receiptTarget, result)
                         },
                         onStatus = { status ->
                             val currentHandle = handleRef ?: return@FeishuStreamClient
@@ -358,12 +359,13 @@ class RemoteSourceRuntimeManager private constructor(private val appContext: Con
                                 groupId = cmd.chatId.takeIf { cmd.chatType == "group" }.orEmpty(),
                                 rawContent = cmd.rawContent,
                                 isMentioned = cmd.isMentioned,
-                                receivedAt = System.currentTimeMillis(),
+                                receivedAt = cmd.createdAt.takeIf { it > 0L } ?: System.currentTimeMillis(),
                                 extraMeta = mapOf(
                                     "receiptTarget" to cmd.reqId
                                 )
                             )
-                            org.fossify.messages.remote.RemoteCommandProcessor.process(appContext, envelope)
+                            val result = org.fossify.messages.remote.RemoteCommandProcessor.process(appContext, envelope)
+                            handleBotCommandOutcome(currentHandle, instance.name, cmd.reqId, result)
                         },
                         onStatus = { status ->
                             val currentHandle = handleRef ?: return@WeComStreamClient
@@ -409,6 +411,59 @@ class RemoteSourceRuntimeManager private constructor(private val appContext: Con
                     if (!isHandleActive(currentHandle)) return@start
                     MultiForwardConfig(appContext).appendEmailRemoteLog("[${instance.name}] $status")
                 })
+            }
+        }
+    }
+
+    private fun handleBotCommandOutcome(
+        handle: RuntimeHandle,
+        instanceName: String,
+        replyTarget: String,
+        result: org.fossify.messages.remote.RemoteProcessResult,
+    ) {
+        val config = MultiForwardConfig(appContext)
+        val logLine: String?
+        val replyText: String?
+        when (result) {
+            is org.fossify.messages.remote.RemoteProcessResult.Success -> {
+                logLine = "[$instanceName] 收到指令并加入队列 -> ${result.target}"
+                replyText = null
+            }
+            is org.fossify.messages.remote.RemoteProcessResult.Duplicate -> {
+                logLine = "[$instanceName] 抑制重复指令"
+                replyText = null
+            }
+            is org.fossify.messages.remote.RemoteProcessResult.Rejected -> {
+                val reasonText = result.detail.ifBlank { result.reason }
+                logLine = "[$instanceName] 指令被拒绝：$reasonText"
+                replyText = "指令已被拒绝：$reasonText"
+            }
+            is org.fossify.messages.remote.RemoteProcessResult.Ignored -> {
+                logLine = null
+                replyText = null
+            }
+        }
+        if (logLine != null) {
+            when (handle) {
+                is RuntimeHandle.DingTalk -> config.appendDingTalkRemoteLog(logLine)
+                is RuntimeHandle.Feishu -> config.appendFeishuRemoteLog(logLine)
+                is RuntimeHandle.WeCom -> config.appendWeComRemoteLog(logLine)
+                else -> Unit
+            }
+        }
+        if (!replyText.isNullOrBlank() && replyTarget.isNotBlank()) {
+            try {
+                whitelistReplyExecutor.execute {
+                    if (!isHandleActive(handle)) return@execute
+                    when (handle) {
+                        is RuntimeHandle.DingTalk -> handle.client.sendReply(replyTarget, replyText)
+                        is RuntimeHandle.Feishu -> handle.client.sendReply(replyTarget, replyText)
+                        is RuntimeHandle.WeCom -> handle.client.sendReply(replyTarget, replyText)
+                        else -> false
+                    }
+                }
+            } catch (_: java.util.concurrent.RejectedExecutionException) {
+                Log.w(TAG, "远程拒绝提示回复队列已满，已忽略")
             }
         }
     }
@@ -480,7 +535,8 @@ class RemoteSourceRuntimeManager private constructor(private val appContext: Con
                 TelegramRemotePoller.sendReply(appContext, pending.requester, "【短信远程指令回执】\n$body", sourceInstanceId)
             }
             RemoteSourceType.WEBSOCKET -> {
-                WebSocketRemoteClient.sendReceiptOverSocket(pending.commandId, status, body, sourceInstanceId)
+                val wsCommandId = pending.externalCommandId.ifBlank { pending.commandId }
+                WebSocketRemoteClient.sendReceiptOverSocket(wsCommandId, status, body, sourceInstanceId)
             }
             RemoteSourceType.DINGTALK -> {
                 val handle = runningHandles[sourceInstanceId] as? RuntimeHandle.DingTalk ?: return false

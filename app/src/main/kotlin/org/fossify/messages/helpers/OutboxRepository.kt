@@ -85,16 +85,58 @@ object OutboxRepository {
         }
     }
 
+    suspend fun recordSuccessNow(context: Context, taskId: String) = withContext(Dispatchers.IO) {
+        try {
+            context.getMessagesDB().OutboxTaskDao().markSuccess(taskId)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to mark success for task $taskId: ${e.message}")
+        }
+    }
+
     /**
      * 标记任务执行成功并归档
      */
     fun recordSuccess(context: Context, taskId: String) {
         outboxScope.launch {
-            try {
-                context.getMessagesDB().OutboxTaskDao().markSuccess(taskId)
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to mark success for task $taskId: ${e.message}")
+            recordSuccessNow(context, taskId)
+        }
+    }
+
+    suspend fun recordFailureNow(
+        context: Context,
+        taskId: String,
+        errorClass: String?,
+        errorMessage: String? = null
+    ) = withContext(Dispatchers.IO) {
+        try {
+            val dao = context.getMessagesDB().OutboxTaskDao()
+            val existing = dao.findById(taskId) ?: return@withContext
+            val newAttemptCount = existing.attemptCount + 1
+            val errorHmac = ShadowHmacHelper.calculateHmac(errorMessage)
+            val now = System.currentTimeMillis()
+
+            if (newAttemptCount < existing.maxAttempts) {
+                val backoffMultiplier = (1L shl min(newAttemptCount - 1, 6))
+                val delay = min(MAX_BACKOFF_MS, BASE_BACKOFF_MS * backoffMultiplier) + Random.nextLong(0, 1000)
+                val nextRetryAt = now + delay
+                dao.scheduleRetry(
+                    taskId = taskId,
+                    nextRetryAt = nextRetryAt,
+                    attemptCount = newAttemptCount,
+                    errorClass = errorClass,
+                    errorHmac = errorHmac,
+                    now = now
+                )
+            } else {
+                dao.markFailed(
+                    taskId = taskId,
+                    errorClass = errorClass,
+                    errorHmac = errorHmac,
+                    now = now
+                )
             }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to record failure for task $taskId: ${e.message}")
         }
     }
 
@@ -108,36 +150,26 @@ object OutboxRepository {
         errorMessage: String? = null
     ) {
         outboxScope.launch {
-            try {
-                val dao = context.getMessagesDB().OutboxTaskDao()
-                val existing = dao.findById(taskId) ?: return@launch
-                val newAttemptCount = existing.attemptCount + 1
-                val errorHmac = ShadowHmacHelper.calculateHmac(errorMessage)
-                val now = System.currentTimeMillis()
+            recordFailureNow(context, taskId, errorClass, errorMessage)
+        }
+    }
 
-                if (newAttemptCount < existing.maxAttempts) {
-                    val backoffMultiplier = (1L shl min(newAttemptCount - 1, 6))
-                    val delay = min(MAX_BACKOFF_MS, BASE_BACKOFF_MS * backoffMultiplier) + Random.nextLong(0, 1000)
-                    val nextRetryAt = now + delay
-                    dao.scheduleRetry(
-                        taskId = taskId,
-                        nextRetryAt = nextRetryAt,
-                        attemptCount = newAttemptCount,
-                        errorClass = errorClass,
-                        errorHmac = errorHmac,
-                        now = now
-                    )
-                } else {
-                    dao.markFailed(
-                        taskId = taskId,
-                        errorClass = errorClass,
-                        errorHmac = errorHmac,
-                        now = now
-                    )
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to record failure for task $taskId: ${e.message}")
-            }
+    suspend fun recordFatalFailureNow(
+        context: Context,
+        taskId: String,
+        errorClass: String?,
+        errorMessage: String? = null
+    ) = withContext(Dispatchers.IO) {
+        try {
+            val errorHmac = ShadowHmacHelper.calculateHmac(errorMessage)
+            context.getMessagesDB().OutboxTaskDao().markFailed(
+                taskId = taskId,
+                errorClass = errorClass,
+                errorHmac = errorHmac,
+                now = System.currentTimeMillis()
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to record fatal failure for task $taskId: ${e.message}")
         }
     }
 
@@ -151,17 +183,7 @@ object OutboxRepository {
         errorMessage: String? = null
     ) {
         outboxScope.launch {
-            try {
-                val errorHmac = ShadowHmacHelper.calculateHmac(errorMessage)
-                context.getMessagesDB().OutboxTaskDao().markFailed(
-                    taskId = taskId,
-                    errorClass = errorClass,
-                    errorHmac = errorHmac,
-                    now = System.currentTimeMillis()
-                )
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to record fatal failure for task $taskId: ${e.message}")
-            }
+            recordFatalFailureNow(context, taskId, errorClass, errorMessage)
         }
     }
 

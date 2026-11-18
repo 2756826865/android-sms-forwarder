@@ -39,13 +39,18 @@ class HeartbeatWorker(
         val instances = if (config.hasChannelSelection) {
             allEnabledInstances.filter { it.id in config.channelInstanceIds }
         } else {
-            allEnabledInstances
+            allEnabledInstances.filter {
+                it.channelType != org.fossify.messages.forwarding.ForwardingChannels.SMS_DIRECT
+            }
         }
-        val instanceTypes = instances.mapTo(mutableSetOf()) { it.channelType }
+        val instanceTypes = allEnabledInstances.mapTo(mutableSetOf()) { it.channelType }
         val legacyChannels = if (config.hasChannelSelection) {
             emptySet()
         } else {
-            multiConfig.enabledChannelIds().filterNotTo(mutableSetOf()) { it in instanceTypes }
+            multiConfig.enabledChannelIds()
+                .filterNotTo(mutableSetOf()) {
+                    it in instanceTypes || it == org.fossify.messages.forwarding.ForwardingChannels.SMS_DIRECT
+                }
         }
         if (instances.isEmpty() && legacyChannels.isEmpty()) return@withContext Result.success()
 
@@ -132,8 +137,8 @@ class HeartbeatWorker(
             val values = mapOf("DEVICE_NAME" to deviceName, "BATTERY" to batteryInfo,
                 "NETWORK" to networkInfo, "TRAFFIC" to trafficInfo, "SIM1" to sim1Desc,
                 "SIM2" to sim2Desc, "UPTIME" to uptimeInfo, "TIME" to timeFormatted)
-            return Regex("\\{\\{([A-Z0-9_]+)\\}\\}").replace(template) { match ->
-                values[match.groupValues[1]] ?: match.value
+            return Regex("\\{\\{([a-zA-Z0-9_]+)\\}\\}").replace(template) { match ->
+                values[match.groupValues[1].uppercase(Locale.ROOT)] ?: match.value
             }
         }
         return buildString {
@@ -193,7 +198,7 @@ class HeartbeatWorker(
         private const val TAG = "HeartbeatWorker"
         private const val WORK_NAME = "heartbeat_periodic_work"
 
-        fun sync(context: Context) {
+        fun sync(context: Context, forceUpdate: Boolean = false) {
             val config = HeartbeatConfig(context)
             val workManager = WorkManager.getInstance(context)
 
@@ -209,7 +214,7 @@ class HeartbeatWorker(
 
             workManager.enqueueUniquePeriodicWork(
                 WORK_NAME,
-                ExistingPeriodicWorkPolicy.UPDATE,
+                if (forceUpdate) ExistingPeriodicWorkPolicy.UPDATE else ExistingPeriodicWorkPolicy.KEEP,
                 request
             )
         }

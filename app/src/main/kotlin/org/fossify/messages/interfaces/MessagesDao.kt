@@ -141,7 +141,7 @@ interface MessagesDao {
     @Query("UPDATE messages SET read = 1 WHERE thread_id = :threadId AND read = 0")
     fun markThreadRead(threadId: Long)
 
-    @Query("UPDATE messages SET read = 0 WHERE id = (SELECT id FROM messages WHERE thread_id = :threadId ORDER BY date DESC, id DESC LIMIT 1)")
+    @Query("UPDATE messages SET read = 0 WHERE id = (SELECT id FROM messages WHERE thread_id = :threadId AND type = 1 AND is_scheduled = 0 AND id NOT IN (SELECT id FROM recycle_bin_messages) ORDER BY date DESC, id DESC LIMIT 1)")
     fun markLatestThreadMessageUnread(threadId: Long)
 
     @Query("UPDATE messages SET type = :type WHERE id = :id")

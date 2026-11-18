@@ -95,9 +95,12 @@ class SmsStatusSentReceiver : SendStatusReceiver() {
                 val type = if (effectiveResultCode == Activity.RESULT_OK) {
                     Sms.MESSAGE_TYPE_SENT
                 } else {
-                    showSendingFailedNotification(context, messageId)
+                    showSendingFailedNotification(context, messageId, intentAddress, intentThreadId)
                     Sms.MESSAGE_TYPE_FAILED
                 }
+
+                val isSyntheticMessage =
+                    messageId >= org.fossify.messages.services.IncomingSmsService.SYNTHETIC_MESSAGE_BASE
 
                 // Log local state before update
                 val localBefore = context.messagesDB.getMessageWithId(messageId)
@@ -109,7 +112,7 @@ class SmsStatusSentReceiver : SendStatusReceiver() {
                         phoneNumbers = arrayListOf(PhoneNumber(intentAddress, 0, "", intentAddress)),
                         birthdays = ArrayList(), anniversaries = ArrayList()
                     )
-                    val androidBody = try {
+                    val androidBody = if (isSyntheticMessage) "" else try {
                         context.contentResolver.query(messageUri, arrayOf(Sms.BODY), null, null, null)?.use {
                             if (it.moveToFirst()) it.getString(0) else ""
                         } ?: ""
@@ -131,9 +134,9 @@ class SmsStatusSentReceiver : SendStatusReceiver() {
 
                 val localAfter = context.messagesDB.getMessageWithId(messageId)
                 
-                // 3. System Provider info (Fail-safe with try-catch)
-                val androidThreadId = try { context.getSmsThreadId(messageId) } catch (_: Exception) { 0L }
-                val androidAddress = try { context.getMessageRecipientAddress(messageId) } catch (_: Exception) { "" }
+                // 3. System Provider info (skip for synthetic non-default SMS IDs)
+                val androidThreadId = if (isSyntheticMessage) 0L else try { context.getSmsThreadId(messageId) } catch (_: Exception) { 0L }
+                val androidAddress = if (isSyntheticMessage) "" else try { context.getMessageRecipientAddress(messageId) } catch (_: Exception) { "" }
 
                 // 4. Final Sync/Refresh
                 val finalThreadId = when {
@@ -147,7 +150,10 @@ class SmsStatusSentReceiver : SendStatusReceiver() {
                     else -> intentAddress
                 }
 
-                if (finalThreadId != 0L) {
+                val isSynthetic =
+                    messageId >= org.fossify.messages.services.IncomingSmsService.SYNTHETIC_MESSAGE_BASE ||
+                        finalThreadId >= org.fossify.messages.services.IncomingSmsService.SYNTHETIC_THREAD_BASE
+                if (finalThreadId != 0L && !isSynthetic) {
                     try {
                         context.syncThreadToLocal(finalThreadId, address = finalAddress)
                     } catch (_: Exception) {
@@ -166,16 +172,33 @@ class SmsStatusSentReceiver : SendStatusReceiver() {
         }
     }
 
-    private fun showSendingFailedNotification(context: Context, messageId: Long) {
+    private fun showSendingFailedNotification(
+        context: Context,
+        messageId: Long,
+        fallbackAddress: String,
+        fallbackThreadId: Long,
+    ) {
         Handler(Looper.getMainLooper()).post {
             if (ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
                 return@post
             }
-            val privateCursor = context.getMyContactsCursor(favoritesOnly = false, withPhoneNumbersOnly = true)
             ensureBackgroundThread {
-                val address = context.getMessageRecipientAddress(messageId)
-                val threadId = context.getThreadId(address)
-                val recipientName = context.getNameFromAddress(address, privateCursor)
+                val isSynthetic =
+                    messageId >= org.fossify.messages.services.IncomingSmsService.SYNTHETIC_MESSAGE_BASE
+                val address = (if (!isSynthetic) {
+                    runCatching { context.getMessageRecipientAddress(messageId) }.getOrNull()
+                } else null).orEmpty().ifBlank {
+                    context.messagesDB.getMessageWithId(messageId)?.senderPhoneNumber.orEmpty()
+                }.ifBlank { fallbackAddress }
+                val threadId = when {
+                    fallbackThreadId != 0L -> fallbackThreadId
+                    address.isNotBlank() -> runCatching { context.getThreadId(address) }.getOrDefault(0L)
+                    else -> 0L
+                }
+                val recipientName = context.getMyContactsCursor(favoritesOnly = false, withPhoneNumbersOnly = true)
+                    .use { privateCursor ->
+                        if (address.isNotBlank()) context.getNameFromAddress(address, privateCursor) else ""
+                    }
                 context.notificationHelper.showSendingFailedNotification(recipientName, threadId)
             }
         }

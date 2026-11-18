@@ -119,6 +119,9 @@ class FeishuStreamClient(
         streamClient?.close()
         streamClient = null
         botOpenId = null
+        http.dispatcher.cancelAll()
+        http.dispatcher.executorService.shutdown()
+        http.connectionPool.evictAll()
     }
 
     private fun handleMessage(event: P2MessageReceiveV1) {
@@ -167,6 +170,12 @@ class FeishuStreamClient(
         }
 
         RemoteSmsCommand.parse(cleanText, customPrefix)?.let { command ->
+            val rawCreateTime = message.createTime?.trim()?.toLongOrNull() ?: 0L
+            val createdAt = when {
+                rawCreateTime >= 1_000_000_000_000L -> rawCreateTime
+                rawCreateTime > 0L -> rawCreateTime * 1000L
+                else -> 0L
+            }
             runCatching {
                 onCommand(
                     FeishuRemoteCommand(
@@ -178,6 +187,7 @@ class FeishuStreamClient(
                         chatId = message.chatId.orEmpty(),
                         chatType = message.chatType.orEmpty(),
                         isMentioned = isMentioned,
+                        createdAt = createdAt,
                     )
                 )
             }.onFailure {
@@ -283,4 +293,5 @@ data class FeishuRemoteCommand(
     val chatId: String = "",
     val chatType: String = "",
     val isMentioned: Boolean = false,
+    val createdAt: Long = 0L,
 )

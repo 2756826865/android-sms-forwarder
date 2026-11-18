@@ -72,7 +72,7 @@ object OutboxDispatcher {
             val executor = OutboxExecutorRegistry.findExecutor(task.taskType)
             if (executor == null) {
                 Log.w(TAG, "No executor found for task type: ${task.taskType}, taskId: ${task.taskId}")
-                OutboxRepository.recordFatalFailure(
+                OutboxRepository.recordFatalFailureNow(
                     context,
                     task.taskId,
                     errorClass = "NoExecutorRegisteredException",
@@ -85,11 +85,11 @@ object OutboxDispatcher {
             try {
                 when (val result = executor.execute(context, task)) {
                     is OutboxExecutionResult.Success -> {
-                        OutboxRepository.recordSuccess(context, task.taskId)
+                        OutboxRepository.recordSuccessNow(context, task.taskId)
                         successCount++
                     }
                     is OutboxExecutionResult.Retry -> {
-                        OutboxRepository.recordFailure(
+                        OutboxRepository.recordFailureNow(
                             context,
                             task.taskId,
                             errorClass = result.errorClass,
@@ -98,7 +98,7 @@ object OutboxDispatcher {
                         retryCount++
                     }
                     is OutboxExecutionResult.FatalFailure -> {
-                        OutboxRepository.recordFatalFailure(
+                        OutboxRepository.recordFatalFailureNow(
                             context,
                             task.taskId,
                             errorClass = result.errorClass,
@@ -107,9 +107,11 @@ object OutboxDispatcher {
                         fatalCount++
                     }
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.w(TAG, "Unhandled exception during task execution ${task.taskId}: ${e.message}")
-                OutboxRepository.recordFailure(
+                OutboxRepository.recordFailureNow(
                     context,
                     task.taskId,
                     errorClass = e.javaClass.name,

@@ -19,6 +19,7 @@ import org.fossify.commons.extensions.toast
 import org.fossify.commons.models.PhoneNumber
 import org.fossify.commons.models.SimpleContact
 import org.fossify.messages.R
+import org.fossify.messages.extensions.conversationsDB
 import org.fossify.messages.extensions.getThreadId
 import org.fossify.messages.extensions.isPlainTextMimeType
 import org.fossify.messages.extensions.messagesDB
@@ -27,10 +28,12 @@ import org.fossify.messages.helpers.DeviceCompatHelper
 import org.fossify.messages.helpers.refreshConversations
 import org.fossify.messages.messaging.SmsException.Companion.ERROR_PERSISTING_MESSAGE
 import org.fossify.messages.models.Attachment
+import org.fossify.messages.models.Conversation
 import org.fossify.messages.models.SmsSendContext
 import org.fossify.messages.models.SmsSendTriggerType
 import org.fossify.messages.receivers.MmsSentReceiver
 import org.fossify.messages.receivers.SendStatusReceiver
+import org.fossify.messages.services.IncomingSmsService
 
 class MessagingUtils(val context: Context) {
 
@@ -112,29 +115,59 @@ class MessagingUtils(val context: Context) {
         beforeBillableSubmit: ((String) -> Unit)? = null,
     ): List<Uri> {
         val sentUris = mutableListOf<Uri>()
+        val isDefaultSms = DeviceCompatHelper.isDefaultSmsApp(context)
         if (addresses.size > 1) {
-            val broadCastThreadId = context.getThreadId(addresses.toSet())
+            val broadCastThreadId = runCatching { context.getThreadId(addresses.toSet()) }.getOrDefault(0L)
             val mergedAddresses = addresses.joinToString(ADDRESS_SEPARATOR)
-            insertSmsMessage(
-                subId = subId, dest = mergedAddresses, text = text,
-                timestamp = System.currentTimeMillis(), threadId = broadCastThreadId,
-                status = Sms.Sent.STATUS_COMPLETE, type = Sms.Sent.MESSAGE_TYPE_SENT,
-                messageId = messageId
-            )
+            if (isDefaultSms) {
+                insertSmsMessage(
+                    subId = subId, dest = mergedAddresses, text = text,
+                    timestamp = System.currentTimeMillis(), threadId = broadCastThreadId,
+                    status = Sms.Sent.STATUS_COMPLETE, type = Sms.Sent.MESSAGE_TYPE_SENT,
+                    messageId = messageId
+                )
+            } else if (broadCastThreadId > 0L) {
+                runCatching {
+                    insertSmsMessage(
+                        subId = subId, dest = mergedAddresses, text = text,
+                        timestamp = System.currentTimeMillis(), threadId = broadCastThreadId,
+                        status = Sms.Sent.STATUS_COMPLETE, type = Sms.Sent.MESSAGE_TYPE_SENT,
+                        messageId = messageId
+                    )
+                }
+            }
         }
 
         for (address in addresses) {
-            val threadId = context.getThreadId(address)
-            if (threadId <= 0L) throw SmsException(ERROR_PERSISTING_MESSAGE)
-            
-            val messageUri = insertSmsMessage(
-                subId = subId, dest = address, text = text,
-                timestamp = System.currentTimeMillis(), threadId = threadId,
-                messageId = messageId
-            )
-            
+            val providerThreadId = runCatching { context.getThreadId(address) }.getOrDefault(0L)
+            if (isDefaultSms && providerThreadId <= 0L) throw SmsException(ERROR_PERSISTING_MESSAGE)
+            val threadId = if (providerThreadId > 0L) {
+                providerThreadId
+            } else {
+                IncomingSmsService.resolveOrSynthesizeThreadId(context, address)
+            }
+
+            val providerUri = if (providerThreadId > 0L) {
+                runCatching {
+                    insertSmsMessage(
+                        subId = subId, dest = address, text = text,
+                        timestamp = System.currentTimeMillis(), threadId = providerThreadId,
+                        messageId = messageId
+                    )
+                }.getOrElse { e ->
+                    if (isDefaultSms) throw e
+                    null
+                }
+            } else {
+                null
+            }
+
+            val syntheticId = IncomingSmsService.SYNTHETIC_MESSAGE_BASE +
+                (System.nanoTime() and 0xFFFFFFFFFFL)
+            val messageUri = providerUri ?: Uri.parse("${Sms.CONTENT_URI}/$syntheticId")
             val insertedId = messageUri.lastPathSegment?.toLongOrNull() ?: 0L
             if (insertedId > 0L) {
+                val nowSec = (System.currentTimeMillis() / 1000).toInt()
                 val participant = SimpleContact(
                     rawId = 0, contactId = 0, name = address, photoUri = "",
                     phoneNumbers = arrayListOf(PhoneNumber(address, 0, "", address)),
@@ -142,17 +175,31 @@ class MessagingUtils(val context: Context) {
                 )
                 val localMessage = org.fossify.messages.models.Message(
                     id = insertedId, body = text, type = Sms.MESSAGE_TYPE_OUTBOX, status = Sms.STATUS_NONE,
-                    participants = arrayListOf(participant), date = (System.currentTimeMillis() / 1000).toInt(),
+                    participants = arrayListOf(participant), date = nowSec,
                     read = true, threadId = threadId, isMMS = false, attachment = null,
                     senderPhoneNumber = address, senderName = address, senderPhotoUri = "", subscriptionId = subId
                 )
-                
+
                 context.messagesDB.insertOrUpdate(localMessage)
+                if (providerUri == null) {
+                    val existingConv = context.conversationsDB.getConversationWithThreadId(threadId)
+                    context.conversationsDB.insertOrUpdate(
+                        existingConv?.copy(snippet = text, date = nowSec, isScheduled = false)
+                            ?: Conversation(
+                                threadId = threadId, snippet = text, date = nowSec, read = true,
+                                title = address, photoUri = "", isGroupConversation = false,
+                                phoneNumber = address
+                            )
+                    )
+                }
                 val verify = context.messagesDB.getMessageWithId(insertedId)
                 val isVerified = verify != null && verify.threadId == threadId && verify.senderPhoneNumber == address
-                
+
                 if (!isVerified) {
-                    android.util.Log.e("MessagingDebug", "LocalDB preinsert VERIFY FAILED! msgId=$insertedId, targetThreadId=$threadId")
+                    android.util.Log.e(
+                        "MessagingDebug",
+                        "LocalDB preinsert VERIFY FAILED! msgId=$insertedId, targetThreadId=$threadId"
+                    )
                     throw SmsException(ERROR_PERSISTING_MESSAGE)
                 }
             }
@@ -182,7 +229,9 @@ class MessagingUtils(val context: Context) {
                 )
                 sentUris += messageUri
             } catch (e: Exception) {
-                updateSmsMessageSendingStatus(messageUri, Sms.Outbox.MESSAGE_TYPE_FAILED)
+                if (insertedId < IncomingSmsService.SYNTHETIC_MESSAGE_BASE) {
+                    updateSmsMessageSendingStatus(messageUri, Sms.Outbox.MESSAGE_TYPE_FAILED)
+                }
                 if (insertedId > 0L) context.messagesDB.updateType(insertedId, Sms.MESSAGE_TYPE_FAILED)
                 throw e
             }
@@ -201,6 +250,8 @@ class MessagingUtils(val context: Context) {
     }
 
     fun updateSmsMessageSendingStatus(messageUri: Uri?, type: Int) {
+        val msgId = messageUri?.lastPathSegment?.toLongOrNull() ?: 0L
+        if (msgId >= IncomingSmsService.SYNTHETIC_MESSAGE_BASE) return
         val resolver = context.contentResolver
         val values = ContentValues().apply {
             put(Sms.Outbox.TYPE, type)

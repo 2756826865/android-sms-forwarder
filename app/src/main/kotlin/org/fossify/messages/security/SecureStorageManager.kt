@@ -27,7 +27,7 @@ class DefaultSecureStorageManager(private val context: Context) : SecureStorageM
     }
 
     override fun put(key: String, value: String) {
-        val cipherText = KeyStoreHelper.encrypt(value)
+        val cipherText = runCatching { KeyStoreHelper.encrypt(value) }.getOrNull() ?: return
         prefs.edit().putString(key, cipherText).apply()
         SecurityAuditManager.logEvent(SecurityAuditEventType.SECRET_UPDATED, key)
     }
@@ -63,7 +63,9 @@ class DefaultSecureStorageManager(private val context: Context) : SecureStorageM
                 val plainVal = oldPrefs.getString(key, null)
                 if (!plainVal.isNullOrBlank()) {
                     put(key, plainVal)
-                    editor.remove(key)
+                    if (prefs.contains(key)) {
+                        editor.remove(key)
+                    }
                 }
             }
         }

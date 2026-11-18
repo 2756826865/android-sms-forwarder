@@ -3,4 +3,26 @@
     <exclude domain="database" path="sms_ingress_identity.db" />
     <exclude domain="database" path="sms_ingress_identity.db-wal" />
     <exclude domain="database" path="sms_ingress_identity.db-shm" />
+    <exclude domain="database" path="conversations.db" />
+    <exclude domain="database" path="conversations.db-wal" />
+    <exclude domain="database" path="conversations.db-shm" />
+    <exclude domain="database" path="forwarding_history.db" />
+    <exclude domain="database" path="forwarding_history.db-wal" />
+    <exclude domain="database" path="forwarding_history.db-shm" />
+    <exclude domain="database" path="sms_direct_guard.db" />
+    <exclude domain="database" path="sms_direct_guard.db-wal" />
+    <exclude domain="database" path="sms_direct_guard.db-shm" />
+    <exclude domain="sharedpref" path="multi_channel_forwarding.xml" />
+    <exclude domain="sharedpref" path="remote_source_repository_prefs.xml" />
+    <exclude domain="sharedpref" path="pushplus_forwarding.xml" />
+    <exclude domain="sharedpref" path="sms_forwarder_encrypted_vault.xml" />
+    <exclude domain="sharedpref" path="forwarding_history.xml" />
+    <exclude domain="sharedpref" path="sms_forwarder_crash_diagnostics.xml" />
+    <exclude domain="sharedpref" path="forwarding_rules.xml" />
+    <exclude domain="sharedpref" path="call_forward_config.xml" />
+    <exclude domain="sharedpref" path="heartbeat_config.xml" />
+    <exclude domain="sharedpref" path="notification_forward_config.xml" />
+    <exclude domain="sharedpref" path="forwarding_fallback.xml" />
+    <exclude domain="sharedpref" path="remote_control_receipt.xml" />
+    <exclude domain="sharedpref" path="remote_control_receipt_pending.xml" />
 </full-backup-content>

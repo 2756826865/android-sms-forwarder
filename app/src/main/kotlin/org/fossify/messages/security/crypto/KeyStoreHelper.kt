@@ -24,7 +24,7 @@ object KeyStoreHelper {
     private val secureRandom by lazy { SecureRandom() }
 
     init {
-        ensureMasterKey()
+        runCatching { ensureMasterKey() }
     }
 
     private fun ensureMasterKey() {
@@ -48,7 +48,13 @@ object KeyStoreHelper {
 
     private fun getSecretKey(): SecretKey {
         val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
-        return (keyStore.getEntry(KEY_ALIAS, null) as KeyStore.SecretKeyEntry).secretKey
+        if (!keyStore.containsAlias(KEY_ALIAS)) {
+            ensureMasterKey()
+        }
+        val entry = keyStore.getEntry(KEY_ALIAS, null) as? KeyStore.SecretKeyEntry
+            ?: (keyStore.getKey(KEY_ALIAS, null) as? SecretKey)?.let { KeyStore.SecretKeyEntry(it) }
+            ?: error("AndroidKeyStore SecretKey unavailable for alias $KEY_ALIAS")
+        return entry.secretKey
     }
 
     /**

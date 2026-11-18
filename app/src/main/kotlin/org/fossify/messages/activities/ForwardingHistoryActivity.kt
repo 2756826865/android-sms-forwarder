@@ -143,7 +143,7 @@ class ForwardingHistoryActivity : SimpleActivity() {
                 setPadding(0, dp(8), 0, 0)
             })
 
-            records.sortedBy { ForwardingChannels.displayName(it.channel) }.forEachIndexed { index, record ->
+            records.sortedBy { resolveChannelDisplayName(it.channel) }.forEachIndexed { index, record ->
                 if (index > 0) {
                     addView(View(context).apply {
                         setBackgroundColor(ContextCompat.getColor(context, R.color.miui_divider))
@@ -160,7 +160,7 @@ class ForwardingHistoryActivity : SimpleActivity() {
                         orientation = LinearLayout.HORIZONTAL
                         gravity = Gravity.CENTER_VERTICAL
                         addView(TextView(context).apply {
-                            text = ForwardingChannels.displayName(record.channel)
+                            text = resolveChannelDisplayName(record.channel)
                             textSize = 15f
                             maxLines = 2
                             setTypeface(typeface, Typeface.BOLD)
@@ -264,6 +264,24 @@ class ForwardingHistoryActivity : SimpleActivity() {
             .setNegativeButton(android.R.string.cancel, null)
             .create()
             .showSmsStyled()
+    }
+
+    private fun resolveChannelDisplayName(channel: String): String {
+        if (channel == "system") return "系统规则决策"
+        if (channel.startsWith("instance_")) {
+            val instanceId = channel.removePrefix("instance_")
+            val instance = runCatching {
+                org.fossify.messages.forwarding.repository.ChannelRepository
+                    .getInstance(applicationContext)
+                    .getInstanceById(instanceId)
+            }.getOrNull()
+            if (instance != null) {
+                val typeName = ForwardingChannels.displayName(instance.channelType)
+                return if (instance.name.isBlank() || instance.name == typeName) typeName else "$typeName · ${instance.name}"
+            }
+            return "已删除的通道实例 (${instanceId.take(8)})"
+        }
+        return ForwardingChannels.displayName(channel)
     }
 
     private fun statusLabel(status: String) = when (status) {

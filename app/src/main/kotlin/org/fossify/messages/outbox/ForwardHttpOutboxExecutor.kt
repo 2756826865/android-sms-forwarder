@@ -28,7 +28,7 @@ import java.nio.charset.StandardCharsets
 class ForwardHttpOutboxExecutor : OutboxExecutor {
 
     override fun canExecute(taskType: String): Boolean =
-        taskType == OutboxTaskType.FORWARD_HTTP || taskType == OutboxTaskType.FORWARD_EMAIL
+        taskType == OutboxTaskType.FORWARD_HTTP
 
     override suspend fun execute(context: Context, task: OutboxTaskEntity): OutboxExecutionResult = withContext(Dispatchers.IO) {
         val payloadJson = task.payloadPayload ?: return@withContext OutboxExecutionResult.FatalFailure(
@@ -59,8 +59,13 @@ class ForwardHttpOutboxExecutor : OutboxExecutor {
 
         var connection: HttpURLConnection? = null
         try {
+            org.fossify.messages.forwarding.ForwardingUrlPolicy.requireAllowed(
+                urlStr,
+                allowPrivateHttp = json.optBoolean("allowPrivateHttp", true),
+            )
             val url = URL(urlStr)
             connection = (url.openConnection() as HttpURLConnection).apply {
+                instanceFollowRedirects = false
                 requestMethod = method
                 connectTimeout = CONNECT_TIMEOUT_MS
                 readTimeout = READ_TIMEOUT_MS

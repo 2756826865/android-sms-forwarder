@@ -43,7 +43,7 @@ interface OutboxTaskDao {
     @Query("SELECT COUNT(*) FROM outbox_tasks WHERE state = 'FAILED'")
     suspend fun getFailedTaskCount(): Int
 
-    @Query("UPDATE outbox_tasks SET state = 'RUNNING', locked_by = :workerId, lock_expires_at = :lockExpiresAt, updated_at = :now WHERE task_id = :taskId AND (lock_expires_at IS NULL OR lock_expires_at < :now)")
+    @Query("UPDATE outbox_tasks SET state = 'RUNNING', locked_by = :workerId, lock_expires_at = :lockExpiresAt, updated_at = :now WHERE task_id = :taskId AND state IN ('PENDING', 'RETRY_WAITING') AND (lock_expires_at IS NULL OR lock_expires_at < :now)")
     suspend fun claimTask(taskId: String, workerId: String, lockExpiresAt: Long, now: Long = System.currentTimeMillis()): Int
 
     @Query("UPDATE outbox_tasks SET state = :state, updated_at = :now WHERE task_id = :taskId")
@@ -67,6 +67,15 @@ interface OutboxTaskDao {
 
     @Query("UPDATE outbox_tasks SET locked_by = NULL, lock_expires_at = NULL, updated_at = :now WHERE task_id = :taskId")
     suspend fun releaseLock(taskId: String, now: Long = System.currentTimeMillis())
+
+    @Query("UPDATE outbox_tasks SET state = 'FAILED', last_error_class = :errorClass, last_error_hmac = NULL, locked_by = NULL, lock_expires_at = NULL, updated_at = :now WHERE task_id = :taskId AND state = 'RUNNING' AND lock_expires_at IS NOT NULL AND lock_expires_at < :now")
+    suspend fun recoverDeadlockedBillable(taskId: String, errorClass: String?, now: Long = System.currentTimeMillis()): Int
+
+    @Query("UPDATE outbox_tasks SET state = 'PENDING', locked_by = NULL, lock_expires_at = NULL, updated_at = :now WHERE task_id = :taskId AND state = 'RUNNING' AND lock_expires_at IS NOT NULL AND lock_expires_at < :now")
+    suspend fun recoverDeadlockedNonBillable(taskId: String, now: Long = System.currentTimeMillis()): Int
+
+    @Query("UPDATE outbox_tasks SET state = 'PENDING', updated_at = :now WHERE task_id = :taskId AND state = 'RETRY_WAITING' AND next_retry_at <= :now")
+    suspend fun advanceDueRetryTask(taskId: String, now: Long = System.currentTimeMillis()): Int
 
     @Query("DELETE FROM outbox_tasks WHERE created_at < :cutoff")
     suspend fun deleteExpired(cutoff: Long)

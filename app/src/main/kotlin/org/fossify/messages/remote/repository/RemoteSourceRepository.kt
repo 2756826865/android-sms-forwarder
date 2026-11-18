@@ -86,7 +86,7 @@ data class RemoteSourceInstance(
     val configJson: String = "{}"
 ) {
     fun optString(key: String, default: String = ""): String = runCatching {
-        JSONObject(configJson).optString(key, default)
+        JSONObject(configJson).optString(key, default).takeUnless { it.startsWith("ENC:") } ?: default
     }.getOrDefault(default)
 
     fun optInt(key: String, default: Int = 0): Int = runCatching {
@@ -299,6 +299,9 @@ class RemoteSourceRepository internal constructor(
 
     fun saveSource(instance: RemoteSourceInstance) {
         val persisted = saveSourceLocked(instance)
+        if (persisted) {
+            syncLegacySourceToClassic(instance)
+        }
         // 落盘失败（如加密失败）时不得联动建通道：来源根本没保存成功，
         // 拿它的 botId/chatId 去建联动通道会留下一个指向不存在来源的孤儿通道。
         if (persisted && instance.type == RemoteSourceType.WECOM) {
@@ -353,6 +356,7 @@ class RemoteSourceRepository internal constructor(
             Log.e(TAG, "deleteSource: 落盘失败，已中止下游联动删除，避免产生孤儿通道 (id=$id)")
             return
         }
+        clearDeletedLegacySourceInClassic(id)
         if (deleted?.type == RemoteSourceType.WECOM) {
             appContext?.let { ctx ->
                 ChannelRepository.getInstance(ctx).syncLinkedWeComStreamChannel(
@@ -366,13 +370,132 @@ class RemoteSourceRepository internal constructor(
     }
 
     fun toggleEnabled(id: String, enabled: Boolean) {
-        synchronized(this) {
+        val toggledTarget = synchronized(this) {
             val updated = _sourcesFlow.value.map {
                 if (it.id == id) it.copy(enabled = enabled) else it
             }
-            persist(updated)
+            if (persist(updated)) updated.firstOrNull { it.id == id } else null
         }
+        toggledTarget?.let(::syncLegacySourceToClassic)
         syncRuntime()
+    }
+
+    private fun syncLegacySourceToClassic(source: RemoteSourceInstance) {
+        val ctx = appContext ?: return
+        if (CredentialHealth.hasFailures()) return
+        val multi = MultiForwardConfig(ctx)
+        when (source.id) {
+            "legacy_remote_sms" -> {
+                val smsCfg = smsCommandConfig ?: RemoteSmsCommandConfig(ctx)
+                smsCfg.enabled = source.enabled
+                smsCfg.customPrefix = source.customCommandPrefix
+                smsCfg.authorizedNumbers = if (source.whitelistEnabled) source.authorizedUsers.joinToString("\n") else ""
+            }
+            "legacy_remote_telegram" -> {
+                multi.telegramRemoteControlEnabled = source.enabled
+                multi.telegramRemoteSendSimMode = source.defaultSimMode
+                multi.saveTelegramRemoteControl(
+                    botToken = source.optString("botToken"),
+                    chatId = source.optString("chatId"),
+                    customHost = source.optString("customHost"),
+                    authorizedUsers = if (source.whitelistEnabled) source.authorizedUsers.joinToString("\n") else "",
+                    customPrefix = source.customCommandPrefix,
+                )
+            }
+            "legacy_remote_dingtalk" -> {
+                multi.dingTalkRemoteControlEnabled = source.enabled
+                multi.dingTalkRemoteSendSimMode = source.defaultSimMode
+                multi.saveDingTalkRemoteControl(
+                    clientId = source.optString("clientId"),
+                    clientSecret = source.optString("clientSecret"),
+                    customPrefix = source.customCommandPrefix,
+                )
+            }
+            "legacy_remote_feishu" -> {
+                multi.feishuRemoteControlEnabled = source.enabled
+                multi.feishuRemoteSendSimMode = source.defaultSimMode
+                multi.saveFeishuRemoteControl(
+                    appId = source.optString("appId"),
+                    appSecret = source.optString("appSecret"),
+                    customPrefix = source.customCommandPrefix,
+                )
+            }
+            "legacy_remote_email" -> {
+                multi.emailRemoteControlEnabled = source.enabled
+                multi.emailRemoteSendSimMode = source.defaultSimMode
+                val security = if (JSONObject(source.configJson).has("ssl")) {
+                    if (source.optBoolean("ssl", true)) MultiForwardConfig.EMAIL_SECURITY_SSL else MultiForwardConfig.EMAIL_SECURITY_STARTTLS
+                } else {
+                    source.optInt("security", MultiForwardConfig.EMAIL_SECURITY_SSL)
+                }
+                multi.saveEmailRemoteControl(
+                    host = source.optString("host"),
+                    port = source.optInt("port", 993),
+                    user = source.optString("user"),
+                    pass = source.optString("pass"),
+                    authorizedSenders = if (source.whitelistEnabled) source.authorizedUsers.joinToString("\n") else "",
+                    security = security,
+                    customPrefix = source.customCommandPrefix,
+                )
+            }
+            "legacy_remote_wecom" -> {
+                multi.weComRemoteControlEnabled = source.enabled
+                multi.weComRemoteSendSimMode = source.defaultSimMode
+                multi.saveWeComRemoteControl(
+                    botId = source.optString("botId"),
+                    secret = source.optString("secret"),
+                    chatId = source.optString("chatId"),
+                    customPrefix = source.customCommandPrefix,
+                )
+            }
+            "legacy_remote_websocket" -> {
+                multi.websocketRemoteControlEnabled = source.enabled
+                multi.websocketRemoteSendSimMode = source.defaultSimMode
+                multi.saveWebSocketRemoteControl(
+                    serverUrl = source.optString("url"),
+                    token = source.optString("token"),
+                    customPrefix = source.customCommandPrefix,
+                )
+            }
+        }
+    }
+
+    private fun clearDeletedLegacySourceInClassic(id: String) {
+        val ctx = appContext ?: return
+        if (CredentialHealth.hasFailures()) return
+        val multi = MultiForwardConfig(ctx)
+        when (id) {
+            "legacy_remote_sms" -> {
+                val smsCfg = smsCommandConfig ?: RemoteSmsCommandConfig(ctx)
+                smsCfg.enabled = false
+                smsCfg.authorizedNumbers = ""
+                smsCfg.customPrefix = ""
+            }
+            "legacy_remote_telegram" -> {
+                multi.telegramRemoteControlEnabled = false
+                multi.saveTelegramRemoteControl("", "", "", "", "")
+            }
+            "legacy_remote_dingtalk" -> {
+                multi.dingTalkRemoteControlEnabled = false
+                multi.saveDingTalkRemoteControl("", "", "")
+            }
+            "legacy_remote_feishu" -> {
+                multi.feishuRemoteControlEnabled = false
+                multi.saveFeishuRemoteControl("", "", "")
+            }
+            "legacy_remote_email" -> {
+                multi.emailRemoteControlEnabled = false
+                multi.saveEmailRemoteControl("", 993, "", "", "", MultiForwardConfig.EMAIL_SECURITY_SSL, "")
+            }
+            "legacy_remote_wecom" -> {
+                multi.weComRemoteControlEnabled = false
+                multi.saveWeComRemoteControl("", "", "", "")
+            }
+            "legacy_remote_websocket" -> {
+                multi.websocketRemoteControlEnabled = false
+                multi.saveWebSocketRemoteControl("", "", "")
+            }
+        }
     }
 
     // Never acquire the runtime manager lock while holding this repository's monitor.
@@ -547,7 +670,7 @@ class RemoteSourceRepository internal constructor(
                             enabled = multiConfig.dingTalkRemoteControlEnabled,
                             connectionState = if (multiConfig.dingTalkRemoteControlEnabled) RemoteSourceConnectionState.CONNECTING else RemoteSourceConnectionState.DISABLED,
                             customCommandPrefix = multiConfig.dingTalkRemoteCustomPrefix(),
-                            whitelistEnabled = true,
+                            whitelistEnabled = false,
                             defaultSimMode = multiConfig.dingTalkRemoteSendSimMode,
                             configJson = json.toString()
                         )
@@ -577,7 +700,7 @@ class RemoteSourceRepository internal constructor(
                             enabled = multiConfig.feishuRemoteControlEnabled,
                             connectionState = if (multiConfig.feishuRemoteControlEnabled) RemoteSourceConnectionState.CONNECTING else RemoteSourceConnectionState.DISABLED,
                             customCommandPrefix = multiConfig.feishuRemoteCustomPrefix(),
-                            whitelistEnabled = true,
+                            whitelistEnabled = false,
                             defaultSimMode = multiConfig.feishuRemoteSendSimMode,
                             configJson = json.toString()
                         )
@@ -645,7 +768,7 @@ class RemoteSourceRepository internal constructor(
                             enabled = multiConfig.weComRemoteControlEnabled,
                             connectionState = if (multiConfig.weComRemoteControlEnabled) RemoteSourceConnectionState.CONNECTING else RemoteSourceConnectionState.DISABLED,
                             customCommandPrefix = multiConfig.weComRemoteCustomPrefix(),
-                            whitelistEnabled = true,
+                            whitelistEnabled = false,
                             defaultSimMode = multiConfig.weComRemoteSendSimMode,
                             configJson = json.toString()
                         )
@@ -673,7 +796,8 @@ class RemoteSourceRepository internal constructor(
                             type = RemoteSourceType.WEBSOCKET,
                             enabled = multiConfig.websocketRemoteControlEnabled,
                             connectionState = if (multiConfig.websocketRemoteControlEnabled) RemoteSourceConnectionState.CONNECTING else RemoteSourceConnectionState.DISABLED,
-                            whitelistEnabled = true,
+                            customCommandPrefix = multiConfig.websocketRemoteCustomPrefix(),
+                            whitelistEnabled = false,
                             defaultSimMode = multiConfig.websocketRemoteSendSimMode,
                             configJson = json.toString()
                         )
@@ -738,18 +862,16 @@ class RemoteSourceRepository internal constructor(
     fun syncLegacySourcesFromClassic() {
         val syncedWeCom = syncLegacySourcesFromClassicLocked()
         if (syncedWeCom != null) {
-            if (syncedWeCom.second != null && appContext != null) {
-                val wecomSource = syncedWeCom.second!!
-                val botId = wecomSource.optString("botId")
-                val chatId = wecomSource.optString("chatId")
-                if (botId.isNotBlank() && chatId.isNotBlank()) {
-                    ChannelRepository.getInstance(appContext).syncLinkedWeComStreamChannel(
-                        sourceInstanceId = wecomSource.id,
-                        botId = botId,
-                        chatId = chatId,
-                        sourceName = "${wecomSource.name} (长连接)"
-                    )
-                }
+            if (appContext != null) {
+                val wecomSource = syncedWeCom.second
+                val botId = wecomSource?.optString("botId").orEmpty()
+                val chatId = wecomSource?.optString("chatId").orEmpty()
+                ChannelRepository.getInstance(appContext).syncLinkedWeComStreamChannel(
+                    sourceInstanceId = wecomSource?.id ?: "legacy_remote_wecom",
+                    botId = botId,
+                    chatId = chatId,
+                    sourceName = "${wecomSource?.name ?: "企业微信长连接"} (长连接)"
+                )
             }
             syncRuntime()
         }
@@ -797,7 +919,7 @@ class RemoteSourceRepository internal constructor(
                     lastMessageAt = existing.lastMessageAt,
                     lastErrorCode = if (runtimeConfigChanged) 0 else existing.lastErrorCode,
                     lastErrorMessage = if (runtimeConfigChanged) "" else existing.lastErrorMessage,
-                    whitelistEnabled = existing.whitelistEnabled,
+                    whitelistEnabled = if (classicOwnsUserList) incomingInstance.whitelistEnabled else existing.whitelistEnabled,
                     authorizedUsers = if (classicOwnsUserList) incomingInstance.authorizedUsers else existing.authorizedUsers,
                     authorizedGroups = existing.authorizedGroups,
                     requireMention = existing.requireMention,
@@ -815,7 +937,7 @@ class RemoteSourceRepository internal constructor(
         if (updated != _sourcesFlow.value) {
             // 落盘失败则视为"本次同步未发生"：不更新内存态，也不去联动建通道。
             if (!persist(updated)) return null
-            val wecomSource = updated.firstOrNull { it.type == RemoteSourceType.WECOM }
+            val wecomSource = updated.firstOrNull { it.id == "legacy_remote_wecom" }
             return true to wecomSource
         }
         return null

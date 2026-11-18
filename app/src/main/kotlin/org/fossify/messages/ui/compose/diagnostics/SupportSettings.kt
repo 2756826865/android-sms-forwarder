@@ -58,6 +58,8 @@ fun SupportSettings(onOverlayChanged: (Boolean) -> Unit = {}) {
                         try {
                             val file = withContext(Dispatchers.IO) {
                                 val directory = java.io.File(context.cacheDir, "diagnostics").apply { mkdirs() }
+                                val cutoff = System.currentTimeMillis() - 24 * 3600_000L
+                                directory.listFiles()?.forEach { if (it.lastModified() < cutoff) it.delete() }
                                 java.io.File.createTempFile("sms-diagnostics-", ".json", directory).apply { writeText(snapshot) }
                             }
                             val uri = androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.provider", file)

@@ -75,6 +75,7 @@ class NotificationForwardConfig(context: Context) {
         private val NON_SMS_SYSTEM_DAEMON_PACKAGES = setOf(
             "com.xiaomi.xmsf",
             "com.heytap.mcs",
+            "com.coloros.mcs",
             "com.android.mms.service"
         )
 
@@ -83,7 +84,6 @@ class NotificationForwardConfig(context: Context) {
             "com.android.mms",                  // 原生 / MIUI / HyperOS / Flyme 系统短信
             "com.vivo.message",                 // vivo / iQOO 系统信息
             "com.coloros.mms",                  // OPPO / 一加 / Realme 系统信息
-            "com.coloros.mcs",                  // OPPO / 一加 / Realme 消息服务
             "com.oplus.mms",                    // Oplus 新版信息（ColorOS 13/14/15/17）
             "com.oneplus.mms",                  // 一加信息
             "com.huawei.message",               // 华为系统信息

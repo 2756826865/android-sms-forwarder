@@ -91,7 +91,17 @@ class SearchResultsAdapter(
                 setTextSize(TypedValue.COMPLEX_UNIT_PX, fontSize * 0.8f)
             }
 
-            val yellow = YellowPageHelper.lookup(activity, searchResult.title, searchResult.snippet)
+            val yellow = if (YellowPageHelper.isInitialized) {
+                YellowPageHelper.lookup(activity, searchResult.title, searchResult.snippet)
+            } else {
+                org.fossify.commons.helpers.ensureBackgroundThread {
+                    YellowPageHelper.ensureInitialized(activity.applicationContext)
+                    activity.runOnUiThread {
+                        if (!activity.isFinishing && !activity.isDestroyed) notifyDataSetChanged()
+                    }
+                }
+                null
+            }
             val isJustNumber = searchResult.title.isBlank() ||
                 searchResult.title.replace("+", "").replace(" ", "").replace("-", "").all { it.isDigit() }
             val displayTitle = if (yellow != null && isJustNumber) {

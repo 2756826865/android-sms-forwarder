@@ -64,6 +64,9 @@ class SmsAutofillAccessibilityService : AccessibilityService() {
                 if (config.autoSubmit) {
                     mainHandler.postDelayed({
                         val freshRoot = rootInActiveWindow ?: return@postDelayed
+                        if (freshRoot.packageName?.toString().orEmpty() != currentPackage) {
+                            return@postDelayed
+                        }
                         val submitButton = findSubmitButton(freshRoot)
                         submitButton?.performAction(AccessibilityNodeInfo.ACTION_CLICK)
                     }, 500)
@@ -80,22 +83,46 @@ class SmsAutofillAccessibilityService : AccessibilityService() {
         collectEditTextNodes(root, candidates)
         if (candidates.isEmpty()) return null
 
-        val codeKeywords = listOf("验证码", "动态码", "校验码", "安全码", "确认码", "code", "otp", "pin")
+        val cnCodeKeywords = listOf("验证码", "动态码", "校验码", "安全码", "确认码")
+        val enCodeHintRegex = Regex(
+            """(?:^|[^a-zA-Z])(otp|pin|code)(?:$|[^a-zA-Z])|(?:otp|pin|code)[A-Z]|[a-z](?:Otp|Pin|Code)""",
+            RegexOption.IGNORE_CASE,
+        )
+        fun existingInputLength(node: AccessibilityNodeInfo): Int {
+            if (android.os.Build.VERSION.SDK_INT >= 26 && node.isShowingHintText) return 0
+            val raw = node.text?.toString().orEmpty()
+            val hint = node.hintText?.toString().orEmpty()
+            if (hint.isNotEmpty() && raw == hint) return 0
+            return raw.trim().length
+        }
+        fun matchesHintLabel(label: String): Boolean {
+            if (label.isBlank()) return false
+            return cnCodeKeywords.any { label.contains(it, ignoreCase = true) } ||
+                enCodeHintRegex.containsMatchIn(label)
+        }
         fun hasCodeHint(node: AccessibilityNodeInfo): Boolean {
             val hint = node.hintText?.toString().orEmpty()
-            val text = node.text?.toString().orEmpty()
             val desc = node.contentDescription?.toString().orEmpty()
             val viewId = node.viewIdResourceName.orEmpty()
-            return codeKeywords.any { kw ->
-                hint.contains(kw, ignoreCase = true) ||
-                    text.contains(kw, ignoreCase = true) ||
-                    desc.contains(kw, ignoreCase = true) ||
-                    viewId.contains(kw, ignoreCase = true)
-            }
+            val placeholderText = if (
+                (android.os.Build.VERSION.SDK_INT >= 26 && node.isShowingHintText) ||
+                (!node.isFocused && node.text?.toString() == hint)
+            ) {
+                node.text?.toString().orEmpty().ifBlank { hint }
+            } else ""
+            return matchesHintLabel(hint) ||
+                matchesHintLabel(desc) ||
+                matchesHintLabel(viewId) ||
+                matchesHintLabel(placeholderText)
         }
 
-        // 优先 1: 具备明确验证码特征且当前聚焦的输入框，或任意具备明确验证码特征的输入框
-        val hintedCandidates = candidates.filter(::hasCodeHint)
+        // 优先 1: 具备明确验证码提示特征的输入框（即时通讯应用内仍保护多行与长草稿聊天框不被覆盖）
+        val hintedCandidates = candidates.filter { node ->
+            hasCodeHint(node) && (
+                currentPackage !in CHAT_PACKAGES ||
+                    (!node.isMultiLine && existingInputLength(node) <= 8)
+                )
+        }
         if (hintedCandidates.isNotEmpty()) {
             return hintedCandidates.firstOrNull { it.isFocused } ?: hintedCandidates.first()
         }
@@ -104,8 +131,7 @@ class SmsAutofillAccessibilityService : AccessibilityService() {
         if (currentPackage !in CHAT_PACKAGES) {
             val focused = candidates.firstOrNull { it.isFocused }
             if (focused != null && !focused.isMultiLine) {
-                val existingLen = focused.text?.toString()?.trim()?.length ?: 0
-                if (existingLen <= 8) {
+                if (existingInputLength(focused) <= 8) {
                     return focused
                 }
             }
@@ -126,14 +152,25 @@ class SmsAutofillAccessibilityService : AccessibilityService() {
     }
 
     private fun findSubmitButton(root: AccessibilityNodeInfo): AccessibilityNodeInfo? {
-        val submitKeywords = listOf("登录", "确定", "下一步", "提交", "验证", "完成", "Login", "Submit", "Verify", "Next", "OK")
+        val cnSubmitKeywords = listOf("登录", "确定", "下一步", "提交", "立即验证", "安全验证", "完成")
+        val excludeActionKeywords = listOf("获取", "发送", "重发", "重新", "倒计时", "get", "send", "resend")
+        val enSubmitRegex = Regex("""(?<![a-zA-Z])(?:login|sign\s*in|submit|verify|next|confirm|ok)(?![a-zA-Z])""", RegexOption.IGNORE_CASE)
         val buttons = mutableListOf<AccessibilityNodeInfo>()
         collectClickableNodes(root, buttons)
+
+        fun isSubmitLabel(label: String): Boolean {
+            val trimmed = label.trim()
+            if (trimmed.isBlank() || trimmed.length > 16) return false
+            if (excludeActionKeywords.any { trimmed.contains(it, ignoreCase = true) }) return false
+            return cnSubmitKeywords.any { trimmed.contains(it, ignoreCase = true) } ||
+                trimmed == "验证" ||
+                enSubmitRegex.containsMatchIn(trimmed)
+        }
 
         for (button in buttons) {
             val text = button.text?.toString().orEmpty()
             val desc = button.contentDescription?.toString().orEmpty()
-            if (submitKeywords.any { text.contains(it, true) || desc.contains(it, true) }) {
+            if (isSubmitLabel(text) || isSubmitLabel(desc)) {
                 return button
             }
         }

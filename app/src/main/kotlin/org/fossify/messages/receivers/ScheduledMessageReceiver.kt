@@ -67,7 +67,15 @@ class ScheduledMessageReceiver : BroadcastReceiver() {
 
             // Keep the schedule if submission throws; it may still need manual review.
             context.deleteScheduledMessage(messageId)
-            context.conversationsDB.deleteThreadId(messageId)
+            for (candidateThreadId in setOf(messageId, threadId)) {
+                if (candidateThreadId > 0L &&
+                    context.conversationsDB.getConversationWithThreadId(candidateThreadId)?.isScheduled == true &&
+                    context.messagesDB.getNonRecycledThreadMessages(candidateThreadId).isEmpty() &&
+                    context.messagesDB.getScheduledThreadMessages(candidateThreadId).isEmpty()
+                ) {
+                    context.conversationsDB.deleteThreadId(candidateThreadId)
+                }
+            }
             refreshMessages()
             refreshConversations()
         } catch (e: Exception) {

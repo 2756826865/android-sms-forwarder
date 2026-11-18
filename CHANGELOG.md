@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.1] - 2026-11-18
+
+版本代码：1301。全量代码三轮深度复盘加固：高频连发 1:1 守恒防漏发、运营商短信零误扣费闭环、Android 12-16 前台服务与数据库升级自愈、全转发协议栈与双 UI 双向对齐。
+
+### 收发守恒、防漏发与运营商计费防护
+
+- **跨路径一对一配对令牌与回滚机制**：重构广播与通知兜底防重为配对计数制，支持短时连发相同验证码与批量短信 1:1 守恒转发；当通知兜底缺少真实号码或规则 `0` 命中未入队时自动回滚释放令牌，确保广播与 `SmsRecoveryWorker` 凭真实号码及入站快照卡槽正常补发。
+- **严防 `SMS_DIRECT` 误发与计费死循环**：第三方通知转发默认排除 `SMS_DIRECT`；显式绑定规则的 `SMS_DIRECT` 实例仅在规则命中时执行，杜绝非命中短信走全局独立直发；区分同一短信多收件人并发与运营商回环回声；远程短信指令新增 15 秒跨路径内容级去重；`BulkSendWorker` 改为文件载荷与逐收件人断点持久化，防止系统重试重复扣费。
+
+### 系统稳定性、全协议栈与隐私安全加固
+
+- **根治前台服务超时崩溃与数据库升级异常**：在 `IncomingSmsService`、`SmsKeepAliveService`、`PushPlusWorker` 补齐每次启动的前台通知重申与 `stopService` 直接停机路径；`SmsIngressDatabase` 升至 v8 并通过 `PRAGMA table_info` 自动补齐历史缺失列。
+- **精确重试策略与多通道协议修复**：新增 `PreSubmitNetworkFailure` 将 SMTP `DATA` 前阶段、企微/飞书/微信测试号 Token 预取与未建连 WebSocket 纳入安全自动重试；修复 QQ OneBot/Qmsg 实例字段、Custom Webhook `GET` 请求及 URL 模板渲染、`ServerChan3` 安全校验、`ntfy` 标签清洗与 `WxPusher` 多订阅者判定。
+- **日志容量修复、全局崩溃脱敏与备份隔离**：修复 `RingBufferLogManager.clear()` 未重置计数导致日志容量永久为 0 的缺陷；增强 `+86` 号码、URL 密钥、验证码及年份时间戳防误伤脱敏；全局注册 `CrashDiagnosticsHandler` 并完善 Android 云备份敏感配置排除清单；修复 Root 管道死锁、Shizuku/Sui 识别及手动更新签名校验。
+
+### 规则引擎、备份恢复与经典版/开发版双向同步
+
+- **规则保真与跨天免打扰修正**：保留经典版规则发件人匹配及多关键词 `OR` + 正则 `AND` 组合语义；修正跨午夜免打扰凌晨时段归属前一自然日；模板渲染改为单遍替换防止正文占位符二次展开。
+- **双 UI 实时同步与列表性能优化**：解除 WebSocket 转发与远控配置串扰，打通旧版 PushPlus 自动迁移、经典版与开发版远控/渠道/规则双向读写及配置备份空值精确还原；将 `YellowPageHelper` 首次加载移出会话与搜索列表主线程绑定路径。
+
+[正式版说明](docs/release-1.3.1.md)
+
 ## [1.3.0] - 2026-11-18
 
 版本代码：1300。全链路架构升级：零延迟通知保底秒发、合成消息全生命周期自愈、3 万+ 大数据量性能飞跃与转发安全全面加固。

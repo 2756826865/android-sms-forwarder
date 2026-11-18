@@ -502,8 +502,8 @@ class MultiForwardConfig(
         saveSecret(KEY_WEBSOCKET_REMOTE_TOKEN, token)
         prefs.edit().putString(KEY_WEBSOCKET_REMOTE_CUSTOM_PREFIX, customPrefix.trim()).apply()
     }
-    fun websocketRemoteUrl() = getSecret(KEY_WEBSOCKET_REMOTE_URL).ifBlank { websocketUrl() }
-    fun websocketRemoteToken() = getSecret(KEY_WEBSOCKET_REMOTE_TOKEN).ifBlank { websocketToken() }
+    fun websocketRemoteUrl() = getSecret(KEY_WEBSOCKET_REMOTE_URL)
+    fun websocketRemoteToken() = getSecret(KEY_WEBSOCKET_REMOTE_TOKEN)
     fun websocketRemoteCustomPrefix() = prefs.getString(KEY_WEBSOCKET_REMOTE_CUSTOM_PREFIX, "").orEmpty()
 
     // 9. Bark
@@ -682,9 +682,20 @@ class MultiForwardConfig(
                 val obj = array.getJSONObject(i)
                 val stored = ForwardingChannelInstance.fromJson(obj)
                 val encryptedConfig = obj.optString("configJsonEncrypted")
-                val decryptedConfig = encryptedConfig.takeIf(String::isNotBlank)
-                    ?.let { cipher.decrypt(it) }
-                    .orEmpty()
+                val decryptedConfig = if (encryptedConfig.isNotBlank()) {
+                    cipher.decrypt(encryptedConfig).also { decrypted ->
+                        if (decrypted.isBlank()) {
+                            CredentialHealth.markDecryptFailed(KEY_CHANNEL_INSTANCES)
+                            SecurityAuditManager.logEvent(
+                                SecurityAuditEventType.SECRET_DECRYPT_FAILED,
+                                KEY_CHANNEL_INSTANCES,
+                                "failed to decrypt channel instance configJsonEncrypted"
+                            )
+                        }
+                    }
+                } else {
+                    ""
+                }
                 add(stored.copy(configJson = decryptedConfig.ifBlank { stored.configJson }))
             }
         }

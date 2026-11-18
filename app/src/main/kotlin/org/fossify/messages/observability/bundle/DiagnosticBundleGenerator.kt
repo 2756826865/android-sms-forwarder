@@ -113,7 +113,7 @@ object DiagnosticBundleGenerator {
                 put("triggerSource", rec.triggerSource)
                 put("objectType", rec.objectType)
                 put("actionTaken", rec.actionTaken)
-                put("details", rec.detailMessage)
+                put("details", RingBufferLogManager.maskSensitiveContent(rec.detailMessage.orEmpty()))
             })
         }
         root.put("recoveryAudit", recArr)
@@ -152,8 +152,8 @@ object DiagnosticBundleGenerator {
             val crashObj = JSONObject().apply {
                 put("timestamp", crash.timestamp)
                 put("exceptionClass", crash.exceptionClass)
-                put("exceptionMessage", crash.exceptionMessage)
-                put("stackTraceSummary", crash.stackTraceSummary)
+                put("exceptionMessage", RingBufferLogManager.maskSensitiveContent(crash.exceptionMessage))
+                put("stackTraceSummary", RingBufferLogManager.maskSensitiveContent(crash.stackTraceSummary))
             }
             root.put("lastCrash", crashObj)
         }
@@ -175,15 +175,20 @@ object DiagnosticBundleGenerator {
         val plainJson = root.toString(2)
         val checksum = calculateSha256(plainJson)
 
+        var encryptedSuccess = false
         val finalContent = if (encryptWithKeyStore) {
-            KeyStoreHelper.encrypt(plainJson)
+            runCatching { KeyStoreHelper.encrypt(plainJson) }
+                .onSuccess { encryptedSuccess = it.isNotEmpty() }
+                .getOrNull()
+                ?.takeIf(String::isNotEmpty)
+                ?: plainJson
         } else {
             plainJson
         }
 
         DiagnosticBundleResult(
             exportTimestamp = now,
-            isEncrypted = encryptWithKeyStore,
+            isEncrypted = encryptWithKeyStore && encryptedSuccess,
             bundleContent = finalContent,
             checksumSha256 = checksum,
             summaryItemCount = recoveryRecords.size + logs.size + securityEvents.size

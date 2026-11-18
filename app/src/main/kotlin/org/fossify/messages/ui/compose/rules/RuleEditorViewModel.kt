@@ -240,9 +240,11 @@ class RuleEditorViewModel(
 
         val previewSim = ForwardingMessageFormatter.previewSim(appContext, state.testSimSlot)
         val engine = ForwardingRuleEngine(listOf(draftRule.copy(enabled = true)))
-        val candidates = channelRepository.getEnabledInstances(includeGroups = true)
+        val rawCandidates = channelRepository.getEnabledInstances(includeGroups = true)
             .map { it.channelType }
             .toSet()
+        val rulesConfig = org.fossify.messages.forwarding.ForwardingRulesConfig(appContext)
+        val candidates = rulesConfig.channelCandidatesForScope(rawCandidates)
         val decision = engine.evaluate(
             sender = state.testSender,
             body = state.testBody,
@@ -291,18 +293,33 @@ class RuleEditorViewModel(
             enabledInstances.isEmpty() ->
                 "⚠️ 条件已命中，但所选通道实例均已停用"
 
+            decision.targets.isEmpty() ->
+                "⚠️ 条件已命中，但当前规则作用域未覆盖短信直发通道（短信直发将独立运行）"
+
             else -> {
-                val names = enabledInstances.map { it.name.ifBlank { it.channelType } }.distinct().joinToString("、")
-                val unavailableCount = draftRule.actions.size - enabledInstances.size
+                val activeTargetIds = decision.targets.map { it.instanceId }.toSet()
+                val dispatchedInstances = enabledInstances.filter { it.id in activeTargetIds }
+                    .ifEmpty { enabledInstances }
+                val names = dispatchedInstances.map { it.name.ifBlank { it.channelType } }.distinct().joinToString("、")
+                val unavailableCount = draftRule.actions.size - dispatchedInstances.size
                 if (unavailableCount > 0) {
-                    "✅ 条件已命中，将转发至：$names；另有 $unavailableCount 个目标不可用"
+                    "✅ 条件已命中，将转发至：$names；另有 $unavailableCount 个目标不可用或不受规则作用域控制"
                 } else {
                     "✅ 条件已命中，将转发至：$names"
                 }
             }
         }
 
-        val rendered = decision.targets.firstOrNull()?.renderedContent ?: engine.applyRegexReplacements(state.testBody, draftRule.regexReplacements)
+        val rendered = if (decision.targets.size > 1) {
+            decision.targets.mapIndexed { idx, target ->
+                val instName = state.availableInstances.firstOrNull { it.id == target.instanceId }?.name
+                    ?: target.channelType
+                "【目标 ${idx + 1} · $instName】\n${target.renderedContent}"
+            }.joinToString("\n\n")
+        } else {
+            decision.targets.firstOrNull()?.renderedContent
+                ?: engine.applyRegexReplacements(state.testBody, draftRule.regexReplacements)
+        }
 
         _uiState.update {
             it.copy(testResultSummary = summary + "\n" + decision.diagnostics.joinToString("\n"), testRenderedContent = rendered)
@@ -341,6 +358,28 @@ class RuleEditorViewModel(
             }
         }
 
+        if (condErr == null) {
+            for (rep in state.regexReplacements) {
+                if (rep.pattern.isNotBlank() && runCatching { Regex(rep.pattern) }.isFailure) {
+                    condErr = "正则替换表达式格式有误：${rep.pattern}"
+                    hasError = true
+                    break
+                }
+            }
+        }
+
+        var dndErr: String? = null
+        val timeFormatRegex = Regex("^([01]\\d|2[0-3]):[0-5]\\d$")
+        if (state.doNotDisturbEnabled) {
+            if (!timeFormatRegex.matches(state.dndStart.trim()) || !timeFormatRegex.matches(state.dndEnd.trim())) {
+                dndErr = "免打扰时间格式需为 HH:mm（例如 22:00）"
+                hasError = true
+            } else if (state.dndDays.isEmpty()) {
+                dndErr = "开启免打扰时段后请至少勾选一天生效星期"
+                hasError = true
+            }
+        }
+
         var actErr: String? = null
         if (state.actions.isEmpty()) {
             actErr = "至少需要选择一个发送目标通道实例"
@@ -349,7 +388,7 @@ class RuleEditorViewModel(
 
         if (hasError) {
             _uiState.update {
-                it.copy(nameError = nameErr, conditionError = condErr, actionError = actErr)
+                it.copy(nameError = nameErr, conditionError = condErr, actionError = actErr, dndError = dndErr)
             }
             return false
         }
@@ -362,6 +401,11 @@ class RuleEditorViewModel(
 
     private fun buildRuleFromState(): ForwardingRule {
         val state = _uiState.value
+        val existing = if (!state.isNew && state.ruleId.isNotBlank()) {
+            repository.getRuleById(state.ruleId)
+        } else {
+            null
+        }
         return ForwardingRule(
             id = state.ruleId,
             name = state.name.trim(),
@@ -374,9 +418,15 @@ class RuleEditorViewModel(
             customTemplate = state.customTemplate.trim(),
             regexReplacements = state.regexReplacements,
             doNotDisturbEnabled = state.doNotDisturbEnabled,
-            dndStart = state.dndStart,
-            dndEnd = state.dndEnd,
-            dndDays = state.dndDays
+            dndStart = state.dndStart.trim(),
+            dndEnd = state.dndEnd.trim(),
+            dndDays = state.dndDays,
+            excludeKeywords = existing?.excludeKeywords.orEmpty(),
+            excludeRegex = existing?.excludeRegex.orEmpty(),
+            timeWindowEnabled = existing?.timeWindowEnabled ?: false,
+            timeStart = existing?.timeStart ?: "00:00",
+            timeEnd = existing?.timeEnd ?: "23:59",
+            activeDays = existing?.activeDays ?: listOf(1, 2, 3, 4, 5, 6, 7),
         )
     }
 }

@@ -34,7 +34,7 @@ class LowBatterySettingsActivity : SimpleActivity() {
 
         val config = config
 
-        if (config.enableLowBatteryReminder && config.lowBatteryChannels.isEmpty()) {
+        if (config.enableLowBatteryReminder && config.lowBatteryChannels.isEmpty() && !config.hasLowBatteryInstanceSelection) {
             config.enableLowBatteryReminder = false
         }
         binding.lowBatteryEnableSwitch.isChecked = config.enableLowBatteryReminder
@@ -45,7 +45,8 @@ class LowBatterySettingsActivity : SimpleActivity() {
         updateChannelSummary()
 
         binding.lowBatteryEnableSwitch.setOnCheckedChangeListener { _, isChecked ->
-            if (isChecked && config.lowBatteryChannels.isEmpty()) {
+            val hasInstanceTargets = config.hasLowBatteryInstanceSelection && config.lowBatteryChannelInstanceIds.isNotEmpty()
+            if (isChecked && config.lowBatteryChannels.isEmpty() && !hasInstanceTargets) {
                 config.enableLowBatteryReminder = false
                 binding.lowBatteryEnableSwitch.isChecked = false
                 showChannelSelector(enableAfterSelection = true)
@@ -105,6 +106,17 @@ class LowBatterySettingsActivity : SimpleActivity() {
     }
 
     private fun updateChannelSummary() {
+        if (config.hasLowBatteryInstanceSelection) {
+            val ids = config.lowBatteryChannelInstanceIds
+            val names = org.fossify.messages.forwarding.repository.ChannelRepository
+                .getInstance(applicationContext)
+                .getInstances()
+                .filter { it.id in ids }
+                .map { it.name }
+            binding.lowBatteryChannelsSummary.text = names.joinToString("、")
+                .ifBlank { getString(R.string.low_battery_channels_empty) }
+            return
+        }
         val selected = config.lowBatteryChannels
         binding.lowBatteryChannelsSummary.text = ForwardingChannels.lowBatteryChannels
             .filter(selected::contains)

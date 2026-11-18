@@ -47,7 +47,11 @@ class DingTalkStreamClient(
         connectionGeneration.incrementAndGet()
         networkWakeup.signal()
         webSocket?.close(1000, "client stop")
+        webSocket?.cancel()
         webSocket = null
+        http.dispatcher.cancelAll()
+        http.dispatcher.executorService.shutdown()
+        http.connectionPool.evictAll()
     }
 
     private fun connectLoop() {
@@ -215,8 +219,16 @@ class DingTalkStreamClient(
                 val conversationType = data.optString("conversationType")
                 val sessionWebhook = data.optString("sessionWebhook")
                 val isInAtList = data.optBoolean("isInAtList", false)
+                val rawCreateAt = data.optLong("createAt", 0L)
+                val createdAt = when {
+                    rawCreateAt >= 1_000_000_000_000L -> rawCreateAt
+                    rawCreateAt > 0L -> rawCreateAt * 1000L
+                    else -> 0L
+                }
+                val cleanContent = RemoteSmsCommand.stripLeadingMentionBeforePrefix(content, customPrefix)
 
-                val identityKind = DingTalkWhitelistRequest.parseKind(content)
+                val identityKind = DingTalkWhitelistRequest.parseKind(cleanContent)
+                    ?: DingTalkWhitelistRequest.parseKind(content)
                 if (identityKind != null) {
                     // ACK before the HTTP reply; an unlisted user's ID request must not reach the
                     // SMS path.
@@ -236,7 +248,7 @@ class DingTalkStreamClient(
                     return
                 }
 
-                RemoteSmsCommand.parse(content, customPrefix)?.let { command ->
+                RemoteSmsCommand.parse(cleanContent, customPrefix)?.let { command ->
                     if (commandMessageId.isBlank()) {
                         onStatus("忽略缺少 messageId 的钉钉远程指令")
                     } else {
@@ -244,13 +256,14 @@ class DingTalkStreamClient(
                             DingTalkRemoteCommand(
                                 messageId = commandMessageId,
                                 command = command,
-                                rawContent = content,
+                                rawContent = cleanContent,
                                 senderId = senderId,
                                 senderNick = senderNick,
                                 conversationId = conversationId,
                                 conversationType = conversationType,
                                 sessionWebhook = sessionWebhook,
                                 isMentioned = isInAtList,
+                                createdAt = createdAt,
                             )
                         )
                     }
@@ -324,4 +337,5 @@ data class DingTalkRemoteCommand(
     val conversationType: String = "",
     val sessionWebhook: String = "",
     val isMentioned: Boolean = false,
+    val createdAt: Long = 0L,
 )

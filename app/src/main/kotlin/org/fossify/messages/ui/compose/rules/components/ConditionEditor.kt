@@ -183,6 +183,34 @@ fun ConditionRow(
                     unfocusedBorderColor = borderColor
                 )
             )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.End,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = if (condition.ignoreCase) {
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                    } else {
+                        borderColor
+                    },
+                    modifier = Modifier.clickable {
+                        onUpdate(condition.field, condition.operator, condition.value, !condition.ignoreCase)
+                    }
+                ) {
+                    Text(
+                        text = if (condition.ignoreCase) "✓ 忽略大小写" else "区分大小写",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = if (condition.ignoreCase) MaterialTheme.colorScheme.primary else secondaryText,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+            }
         }
     }
 }

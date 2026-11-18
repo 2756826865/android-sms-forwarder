@@ -9,7 +9,6 @@ class NotificationForwardConfigTest {
         val packages = NotificationForwardConfig.SYSTEM_SMS_PACKAGES
         assertTrue(packages.contains("com.android.mms"))
         assertTrue(packages.contains("com.vivo.message"))
-        assertTrue(packages.contains("com.coloros.mcs"))
         assertTrue(packages.contains("com.oplus.mms"))
         assertTrue(packages.contains("com.coloros.mms"))
         assertTrue(packages.contains("com.oneplus.mms"))
@@ -19,5 +18,7 @@ class NotificationForwardConfigTest {
         assertTrue(packages.contains("com.samsung.android.messaging"))
         assertTrue(packages.contains("com.google.android.apps.messaging"))
         org.junit.Assert.assertFalse(packages.contains("com.xiaomi.xmsf"))
+        org.junit.Assert.assertFalse(packages.contains("com.coloros.mcs"))
+        org.junit.Assert.assertFalse(packages.contains("com.heytap.mcs"))
     }
 }

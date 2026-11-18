@@ -275,7 +275,12 @@ class ForwardingRuleEngine(
 
             // 5. 生成该规则的靶向动作目标
             if (rule.actions.isNotEmpty()) {
-                val enabledActions = rule.actions.filter { it.enabled }
+                val enabledActions = rule.actions.filter { action ->
+                    action.enabled && (
+                        action.channelType != ForwardingChannels.SMS_DIRECT ||
+                            ForwardingChannels.SMS_DIRECT in channelCandidates
+                        )
+                }
                 for (action in enabledActions) {
                     val finalActionBody = applyRegexReplacements(textAfterRuleReplacements, action.regexReplacements)
                     val rendered = resolveContent(rule, action, finalActionBody)
@@ -370,6 +375,15 @@ class ForwardingRuleEngine(
 
     /** Local UI explanation: never include the number, body or configured secret values. */
     fun explainConditions(rule: ForwardingRule, sender: String, body: String): List<String> {
+        val messageText = "$sender\n$body"
+        if (rule.excludeKeywords.any { messageText.contains(it, ignoreCase = true) }) {
+            return listOf("命中排除关键词，不转发")
+        }
+        if (rule.excludeRegex.isNotBlank() && runCatching {
+                Regex(rule.excludeRegex, RegexOption.IGNORE_CASE).containsMatchIn(messageText)
+            }.getOrDefault(false)) {
+            return listOf("命中排除正则表达式，不转发")
+        }
         if (rule.conditions.isEmpty()) return listOf(
             if (matchesConditions(rule, sender, body)) "旧版条件匹配通过" else "旧版包含/排除条件未满足"
         )
@@ -463,6 +477,7 @@ class ForwardingRuleEngine(
         activeDays: List<Int>,
         nowMillis: Long = clock()
     ): Boolean = runCatching {
+        if (activeDays.isEmpty()) return@runCatching false
         val cal = Calendar.getInstance().apply { timeInMillis = nowMillis }
         val dayOfWeek = cal.get(Calendar.DAY_OF_WEEK)
         val standardDay = when (dayOfWeek) {
@@ -475,19 +490,18 @@ class ForwardingRuleEngine(
             Calendar.SATURDAY -> 6
             else -> 1
         }
-        if (activeDays.isNotEmpty() && !activeDays.contains(standardDay)) {
-            return false
-        }
 
         val currentMinutes = cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE)
         val startMinutes = parseMinutes(timeStart, 0)
         val endMinutes = parseMinutes(timeEnd, 23 * 60 + 59)
 
         if (startMinutes <= endMinutes) {
-            currentMinutes in startMinutes..endMinutes
+            activeDays.contains(standardDay) && currentMinutes in startMinutes..endMinutes
         } else {
-            // 跨午夜场景，如 22:00 ~ 06:00
-            currentMinutes >= startMinutes || currentMinutes <= endMinutes
+            // 跨午夜场景（如周五 22:00 ~ 次日 06:00）：后半夜归属前一自然日的跨夜时段
+            val prevDay = if (standardDay == 1) 7 else standardDay - 1
+            (currentMinutes >= startMinutes && activeDays.contains(standardDay)) ||
+                (currentMinutes <= endMinutes && activeDays.contains(prevDay))
         }
     }.getOrDefault(false)
 
@@ -509,8 +523,13 @@ class ForwardingRuleEngine(
 // 5. 持久化存储与 Schema v2 编解码 (ForwardingRulesConfig)
 // ========================================================
 
-class ForwardingRulesConfig(context: Context) {
-    private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+class ForwardingRulesConfig internal constructor(
+    context: Context? = null,
+    customPrefs: android.content.SharedPreferences? = null,
+) {
+    constructor(context: Context) : this(context = context, customPrefs = null)
+
+    private val prefs = customPrefs ?: context!!.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     var enabled: Boolean
         get() = prefs.getBoolean(KEY_ENABLED, false)
@@ -536,7 +555,15 @@ class ForwardingRulesConfig(context: Context) {
 
     fun channelCandidatesForScope(enabledChannels: Set<String>): Set<String> = when (scope) {
         SCOPE_FORWARDING_AND_SMS_DIRECT, SCOPE_ALL -> enabledChannels
-        else -> enabledChannels - ForwardingChannels.SMS_DIRECT
+        else -> {
+            val hasExplicitRuleSmsDirect = rules.any { rule ->
+                rule.enabled && (
+                    ForwardingChannels.SMS_DIRECT in rule.channels ||
+                        rule.actions.any { it.enabled && it.channelType == ForwardingChannels.SMS_DIRECT }
+                    )
+            }
+            if (hasExplicitRuleSmsDirect) enabledChannels else enabledChannels - ForwardingChannels.SMS_DIRECT
+        }
     }
 
     fun affectsRemoteCommands(): Boolean = enabled && scope == SCOPE_ALL
@@ -627,12 +654,14 @@ class ForwardingRulesConfig(context: Context) {
                     }
                 }
 
-                val dndEnabled = item.optBoolean("doNotDisturbEnabled", item.optBoolean("timeWindowEnabled", false))
-                val dndStart = item.optString("dndStart", item.optString("timeStart", "22:00"))
-                val dndEnd = item.optString("dndEnd", item.optString("timeEnd", "06:00"))
-                val dndDays = item.optJSONArray("dndDays")?.toIntList()
-                    ?: item.optJSONArray("activeDays")?.toIntList()
-                    ?: listOf(1, 2, 3, 4, 5, 6, 7)
+                val dndEnabled = item.optBoolean("doNotDisturbEnabled", false)
+                val dndStart = item.optString("dndStart", "22:00")
+                val dndEnd = item.optString("dndEnd", "06:00")
+                val dndDays = if (item.has("dndDays")) {
+                    item.optJSONArray("dndDays").toIntList(preserveEmpty = true)
+                } else {
+                    listOf(1, 2, 3, 4, 5, 6, 7)
+                }
 
                 // 历史字段严格按规则区分：
                 // 情况 A：无 channels 键 -> 旧版本数据
@@ -677,44 +706,10 @@ class ForwardingRulesConfig(context: Context) {
                     actions
                 }
 
-                // 如果 conditions 为空且来自旧版本，则从 includeKeywords/includeRegex 幂等迁移
-                val resolvedConditions = if (conditions.isEmpty() && (includeKeywords.isNotEmpty() || includeRegex.isNotBlank())) {
-                    buildList {
-                        includeKeywords.forEach { kw ->
-                            add(
-                                ForwardingRuleCondition(
-                                    field = RuleTargetField.BODY,
-                                    operator = RuleOperator.CONTAINS,
-                                    value = kw,
-                                    ignoreCase = true
-                                )
-                            )
-                        }
-                        if (includeRegex.isNotBlank()) {
-                            add(
-                                ForwardingRuleCondition(
-                                    field = RuleTargetField.BODY,
-                                    operator = RuleOperator.REGEX,
-                                    value = includeRegex,
-                                    ignoreCase = true
-                                )
-                            )
-                        }
-                    }
-                } else {
-                    conditions
-                }
-
-                val legacyMatchMode = item.optString("matchMode", ForwardingRule.MATCH_ALL)
-                val resolvedConditionRelation = if (
-                    conditions.isEmpty() &&
-                    !item.has("conditionRelation") &&
-                    (legacyMatchMode == ForwardingRule.MATCH_ANY || (includeKeywords.size > 1 && includeRegex.isBlank()))
-                ) {
-                    RuleConditionRelation.ANY
-                } else {
-                    conditionRelation
-                }
+                // 经典版旧规则（conditions 为空）必须保留空 conditions，交由 matchesConditions 按
+                // "$sender\n$body" 与 matchMode（含多关键词 OR + 正则 AND）精确执行，禁止有损重写为仅 BODY 条件。
+                val resolvedConditions = conditions
+                val resolvedConditionRelation = conditionRelation
 
                 add(
                     ForwardingRule(
@@ -742,7 +737,11 @@ class ForwardingRulesConfig(context: Context) {
                         timeWindowEnabled = item.optBoolean("timeWindowEnabled", false),
                         timeStart = item.optString("timeStart", "00:00"),
                         timeEnd = item.optString("timeEnd", "23:59"),
-                        activeDays = item.optJSONArray("activeDays")?.toIntList() ?: listOf(1, 2, 3, 4, 5, 6, 7)
+                        activeDays = if (item.has("activeDays")) {
+                            item.optJSONArray("activeDays").toIntList(preserveEmpty = true)
+                        } else {
+                            listOf(1, 2, 3, 4, 5, 6, 7)
+                        }
                     )
                 )
             }
@@ -758,13 +757,14 @@ class ForwardingRulesConfig(context: Context) {
         }
     }
 
-    private fun JSONArray?.toIntList(): List<Int> {
+    private fun JSONArray?.toIntList(preserveEmpty: Boolean = false): List<Int> {
         if (this == null) return listOf(1, 2, 3, 4, 5, 6, 7)
-        return buildList {
+        val parsed = buildList {
             for (index in 0 until length()) {
                 optInt(index, -1).takeIf { it in 1..7 }?.let(::add)
             }
-        }.ifEmpty { listOf(1, 2, 3, 4, 5, 6, 7) }
+        }
+        return if (preserveEmpty) parsed else parsed.ifEmpty { listOf(1, 2, 3, 4, 5, 6, 7) }
     }
 
     companion object {

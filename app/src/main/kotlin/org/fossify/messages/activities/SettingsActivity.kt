@@ -179,7 +179,6 @@ class SettingsActivity : SimpleActivity() {
             startActivity(Intent(this@SettingsActivity, BlockingSettingsActivity::class.java))
         }
         settingsRecentlyDeletedHolder.setOnClickListener {
-            config.useRecycleBin = true
             startActivity(Intent(this@SettingsActivity, RecycleBinConversationsActivity::class.java))
         }
         settingsBackupHolder.setOnClickListener {

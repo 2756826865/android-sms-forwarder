@@ -27,6 +27,10 @@ class TelegramRemotePoller(
         .build()
     private val networkWakeup = ReconnectWakeup()
     private val running = AtomicBoolean(false)
+    @Volatile
+    private var workerThread: Thread? = null
+    @Volatile
+    private var botUsername: String? = null
     private val whitelistReplies = BotWhitelistReplyLimiter()
     private var lastUpdateId = 0L
     private val offsetPrefs = context.getSharedPreferences(PREFS_OFFSET, Context.MODE_PRIVATE)
@@ -60,6 +64,7 @@ class TelegramRemotePoller(
         }.apply {
             name = "tg-remote-poller-${sourceInstanceId ?: "def"}"
             isDaemon = true
+            workerThread = this
             start()
         }
     }
@@ -73,7 +78,11 @@ class TelegramRemotePoller(
     fun stop() {
         running.set(false)
         networkWakeup.signal()
+        workerThread?.interrupt()
+        workerThread = null
         http.dispatcher.cancelAll()
+        http.dispatcher.executorService.shutdown()
+        http.connectionPool.evictAll()
     }
 
     private var webhookChecked = false
@@ -98,6 +107,22 @@ class TelegramRemotePoller(
                                 .updateConnectionState(instanceId, RemoteSourceConnectionState.ERROR, errorMessage = tip)
                         }
                         return false
+                    }
+                }
+            }
+            runCatching {
+                val meRequest = Request.Builder().url("$baseUrl/bot$token/getMe").build()
+                http.newCall(meRequest).execute().use { meResp ->
+                    val meBody = meResp.body?.string().orEmpty()
+                    if (meResp.isSuccessful && meBody.isNotBlank()) {
+                        val username = JSONObject(meBody).optJSONObject("result")
+                            ?.optString("username")
+                            ?.trim()
+                            ?.removePrefix("@")
+                            .orEmpty()
+                        if (username.isNotBlank()) {
+                            botUsername = username
+                        }
                     }
                 }
             }
@@ -127,16 +152,25 @@ class TelegramRemotePoller(
         if (token.isBlank()) {
             onStatus("缺少 Telegram Bot Token")
             if (isCurrent())
-            repo.updateConnectionState(instance.id, RemoteSourceConnectionState.CONFIG_REQUIRED)
-            Thread.sleep(10_000)
+                repo.updateConnectionState(instance.id, RemoteSourceConnectionState.CONFIG_REQUIRED)
+            networkWakeup.await(10_000)
             return
         }
 
         val rawHost = instance.optString("customHost")
-        val baseUrl = rawHost.trim().ifBlank { "https://api.telegram.org" }.trimEnd('/')
+        val baseUrl = normalizeTelegramBaseUrl(rawHost)
+        if (!org.fossify.messages.forwarding.ForwardingUrlPolicy.isAllowed(baseUrl, allowPrivateHttp = true)) {
+            val err = "Telegram 反代地址必须使用 HTTPS（局域网除外）"
+            onStatus(err)
+            if (isCurrent()) {
+                repo.updateConnectionState(instance.id, RemoteSourceConnectionState.ERROR, errorMessage = err)
+            }
+            networkWakeup.await(15_000)
+            return
+        }
 
         if (!checkWebhookConflict(baseUrl, token, instance.id)) {
-            Thread.sleep(15_000)
+            networkWakeup.await(15_000)
             return
         }
 
@@ -202,7 +236,46 @@ class TelegramRemotePoller(
         val chatId = chat?.optLong("id", 0L)?.toString() ?: ""
         val messageId = message.optLong("message_id", 0L).toString()
         val username = from?.optString("username").orEmpty()
-        val isMentioned = text.contains("@")
+        val entities = message.optJSONArray("entities")
+        val expectedBot = botUsername
+        val hasEntityMention = (0 until (entities?.length() ?: 0)).any { idx ->
+            val ent = entities?.optJSONObject(idx) ?: return@any false
+            val entType = ent.optString("type")
+            val offset = ent.optInt("offset", -1)
+            val len = ent.optInt("length", 0)
+            val slice = if (offset >= 0 && len > 0 && offset + len <= text.length) {
+                text.substring(offset, offset + len)
+            } else {
+                ""
+            }
+            when (entType) {
+                "mention" -> {
+                    val mentionedName = slice.removePrefix("@")
+                    if (!expectedBot.isNullOrBlank()) {
+                        mentionedName.equals(expectedBot, ignoreCase = true)
+                    } else {
+                        true
+                    }
+                }
+                "bot_command" -> {
+                    val atIdx = slice.indexOf('@')
+                    if (atIdx < 0) false
+                    else if (!expectedBot.isNullOrBlank()) {
+                        slice.substring(atIdx + 1).equals(expectedBot, ignoreCase = true)
+                    } else {
+                        true
+                    }
+                }
+                else -> false
+            }
+        }
+        val hasTextMention = if (!expectedBot.isNullOrBlank()) {
+            Regex("(?<!\\S)@${Regex.escape(expectedBot)}(?![A-Za-z0-9_])", RegexOption.IGNORE_CASE)
+                .containsMatchIn(text)
+        } else {
+            TG_MENTION_REGEX.containsMatchIn(text)
+        }
+        val isMentioned = hasEntityMention || hasTextMention
 
         val identityKind = DingTalkWhitelistRequest.parseKind(text)
         if (identityKind != null) {
@@ -223,6 +296,8 @@ class TelegramRemotePoller(
             return UpdateProcessResult.CONSUMED
         }
 
+        val msgDateSec = message.optLong("date", 0L)
+        val messageReceivedAt = if (msgDateSec > 0L) msgDateSec * 1000L else System.currentTimeMillis()
         val envelope = RemoteCommandEnvelope(
             sourceType = RemoteSourceType.TELEGRAM,
             sourceInstanceId = activeInstanceId,
@@ -232,7 +307,7 @@ class TelegramRemotePoller(
             groupId = if (chatId != senderId) chatId else "",
             rawContent = text,
             isMentioned = isMentioned,
-            receivedAt = System.currentTimeMillis(),
+            receivedAt = messageReceivedAt,
             subscriptionId = -1,
             extraMeta = mapOf(
                 "chatId" to chatId,
@@ -273,6 +348,18 @@ class TelegramRemotePoller(
     companion object {
         private const val TAG = "TelegramRemotePoller"
         private const val PREFS_OFFSET = "tg_remote_offset"
+        private val TG_MENTION_REGEX = Regex("(?<!\\S)@[A-Za-z0-9_]{3,}")
+        private val replyClient: OkHttpClient by lazy {
+            OkHttpClient.Builder()
+                .connectTimeout(10, TimeUnit.SECONDS)
+                .readTimeout(10, TimeUnit.SECONDS)
+                .build()
+        }
+
+        private fun normalizeTelegramBaseUrl(rawHost: String?): String =
+            rawHost?.trim()?.trimEnd('/')?.takeIf { it.isNotBlank() }?.let {
+                if (it.startsWith("http://") || it.startsWith("https://")) it else "https://$it"
+            } ?: "https://api.telegram.org"
 
         /** 发送 Telegram 回复，返回真实的 HTTP 执行结果（同步执行，必须在后台线程/Worker中调用） */
         fun sendReply(context: Context, chatId: String, text: String, sourceInstanceId: String): Boolean {
@@ -282,8 +369,8 @@ class TelegramRemotePoller(
             val token = instance.optString("botToken").ifBlank { null } ?: return false
 
             return try {
-                val rawHost = instance.optString("customHost").ifBlank { null }
-                val baseUrl = rawHost?.trim()?.ifBlank { "https://api.telegram.org" }?.trimEnd('/') ?: "https://api.telegram.org"
+                val baseUrl = normalizeTelegramBaseUrl(instance.optString("customHost"))
+                org.fossify.messages.forwarding.ForwardingUrlPolicy.requireAllowed(baseUrl, allowPrivateHttp = true)
                 val payload = JSONObject()
                     .put("chat_id", chatId)
                     .put("text", text)
@@ -291,11 +378,7 @@ class TelegramRemotePoller(
                     .url("$baseUrl/bot$token/sendMessage")
                     .post(payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType()))
                     .build()
-                val client = OkHttpClient.Builder()
-                    .connectTimeout(10, TimeUnit.SECONDS)
-                    .readTimeout(10, TimeUnit.SECONDS)
-                    .build()
-                client.newCall(request).execute().use { response ->
+                replyClient.newCall(request).execute().use { response ->
                     val body = response.body?.string().orEmpty()
                     val isOk = response.isSuccessful && JSONObject(body).optBoolean("ok", false)
                     if (!isOk) {

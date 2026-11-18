@@ -100,30 +100,55 @@ internal object SmsDirectSendGuard {
         }
     }
 
-    private val instances = java.util.concurrent.ConcurrentHashMap<String, GuardDatabase>()
-    private val recentOutboundBodyHashes = java.util.concurrent.ConcurrentHashMap<String, Long>()
+    private data class OutboundLoopEntry(val sentAtMs: Long, val source: String)
 
-    fun recordOutboundContent(rawBody: String, renderedContent: String, nowMs: Long = System.currentTimeMillis()) {
-        listOf(rawBody.trim(), renderedContent.trim())
-            .filter { it.isNotEmpty() }
-            .forEach { text ->
-                recentOutboundBodyHashes[sha256(text)] = nowMs
-            }
+    private val instances = java.util.concurrent.ConcurrentHashMap<String, GuardDatabase>()
+    private val recentOutboundBodyHashes = java.util.concurrent.ConcurrentHashMap<String, OutboundLoopEntry>()
+
+    fun recordOutboundContent(
+        renderedContent: String,
+        source: String = "",
+        nowMs: Long = System.currentTimeMillis(),
+    ) {
+        val clean = renderedContent.trim()
+        if (clean.isNotEmpty()) {
+            recentOutboundBodyHashes[sha256(clean)] = OutboundLoopEntry(nowMs, source)
+        }
         if (recentOutboundBodyHashes.size > 200) {
             val cutoff = nowMs - OUTBOUND_LOOP_WINDOW_MS
             val it = recentOutboundBodyHashes.entries.iterator()
             while (it.hasNext()) {
-                if (it.next().value < cutoff) it.remove()
+                if (it.next().value.sentAtMs < cutoff) it.remove()
             }
             if (recentOutboundBodyHashes.size > 500) recentOutboundBodyHashes.clear()
         }
     }
 
-    fun isRecentOutboundLoop(incomingBody: String, nowMs: Long = System.currentTimeMillis()): Boolean {
+    fun bodyHash(text: String): String {
+        val trimmed = text.trim()
+        return if (trimmed.isEmpty()) "" else sha256(trimmed)
+    }
+
+    fun isRecentOutboundLoop(
+        incomingBody: String,
+        currentSource: String = "",
+        nowMs: Long = System.currentTimeMillis(),
+        rawIncomingBodyHash: String = "",
+    ): Boolean {
+        if (rawIncomingBodyHash.isNotBlank()) {
+            val rawEntry = recentOutboundBodyHashes[rawIncomingBodyHash]
+            if (rawEntry != null &&
+                (currentSource.isBlank() || rawEntry.source != currentSource) &&
+                nowMs - rawEntry.sentAtMs in 0..OUTBOUND_LOOP_WINDOW_MS
+            ) {
+                return true
+            }
+        }
         val trimmed = incomingBody.trim()
         if (trimmed.isEmpty()) return false
-        val sentAt = recentOutboundBodyHashes[sha256(trimmed)] ?: return false
-        return nowMs - sentAt in 0..OUTBOUND_LOOP_WINDOW_MS
+        val entry = recentOutboundBodyHashes[sha256(trimmed)] ?: return false
+        if (currentSource.isNotBlank() && entry.source == currentSource) return false
+        return nowMs - entry.sentAtMs in 0..OUTBOUND_LOOP_WINDOW_MS
     }
 
     private fun sha256(text: String): String =

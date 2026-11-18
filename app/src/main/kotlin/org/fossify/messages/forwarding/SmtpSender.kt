@@ -39,9 +39,18 @@ internal object SmtpSender {
         if (security == MultiForwardConfig.EMAIL_SECURITY_STARTTLS) {
             sendEmailStartTls(host, port, account, password, recipients, subject, content)
         } else {
-            createTlsSocket(host, port).use { socket ->
-                expectSmtp(socket.inputStream.bufferedReader(StandardCharsets.UTF_8), 220)
-                runSmtpSession(socket, account, password, recipients, subject, content)
+            val socket = try {
+                createTlsSocket(host, port)
+            } catch (e: java.io.IOException) {
+                throw if (e is PreSubmitNetworkFailure) e else PreSubmitNetworkFailure(e)
+            }
+            socket.use { ssl ->
+                try {
+                    expectSmtp(ssl.inputStream.bufferedReader(StandardCharsets.UTF_8), 220)
+                } catch (e: java.io.IOException) {
+                    throw if (e is PreSubmitNetworkFailure) e else PreSubmitNetworkFailure(e)
+                }
+                runSmtpSession(ssl, account, password, recipients, subject, content)
             }
         }
     }
@@ -57,18 +66,28 @@ internal object SmtpSender {
     ) {
         val plainSocket = Socket()
         plainSocket.use {
-            it.connect(java.net.InetSocketAddress(host, port), SMTP_TIMEOUT_MS)
-            it.soTimeout = SMTP_TIMEOUT_MS
-            val reader = it.inputStream.bufferedReader(StandardCharsets.UTF_8)
-            val writer = it.outputStream.bufferedWriter(StandardCharsets.UTF_8)
-            expectSmtp(reader, 220)
-            smtpCommand(writer, reader, "EHLO android-sms-forwarder", 250)
-            smtpCommand(writer, reader, "STARTTLS", 220)
+            val tlsSocket = try {
+                it.connect(java.net.InetSocketAddress(host, port), SMTP_TIMEOUT_MS)
+                it.soTimeout = SMTP_TIMEOUT_MS
+                val reader = it.inputStream.bufferedReader(StandardCharsets.UTF_8)
+                val writer = it.outputStream.bufferedWriter(StandardCharsets.UTF_8)
+                expectSmtp(reader, 220)
+                smtpCommand(writer, reader, "EHLO android-sms-forwarder", 250)
+                smtpCommand(writer, reader, "STARTTLS", 220)
 
-            val tlsSocket = (SSLSocketFactory.getDefault() as SSLSocketFactory)
-                .createSocket(it, host, port, true) as SSLSocket
+                val upgraded = (SSLSocketFactory.getDefault() as SSLSocketFactory)
+                    .createSocket(it, host, port, true) as SSLSocket
+                try {
+                    configureTls(upgraded)
+                    upgraded
+                } catch (err: Throwable) {
+                    runCatching { upgraded.close() }
+                    throw err
+                }
+            } catch (e: java.io.IOException) {
+                throw if (e is PreSubmitNetworkFailure) e else PreSubmitNetworkFailure(e)
+            }
             tlsSocket.use { ssl ->
-                configureTls(ssl)
                 runSmtpSession(ssl, user, password, recipients, subject, content)
             }
         }
@@ -84,19 +103,40 @@ internal object SmtpSender {
     ) {
         val reader = socket.inputStream.bufferedReader(StandardCharsets.UTF_8)
         val writer = socket.outputStream.bufferedWriter(StandardCharsets.UTF_8)
-        smtpCommand(writer, reader, "EHLO android-sms-forwarder", 250)
-        smtpCommand(writer, reader, "AUTH LOGIN", 334)
-        smtpCommand(writer, reader, java.util.Base64.getEncoder().encodeToString(user.toByteArray(StandardCharsets.UTF_8)), 334)
-        smtpCommand(writer, reader, java.util.Base64.getEncoder().encodeToString(password.toByteArray(StandardCharsets.UTF_8)), 235)
-        smtpCommand(writer, reader, "MAIL FROM:<$user>", 250)
-        recipients.forEach {
-            smtpCommand(writer, reader, "RCPT TO:<$it>", 250, 251)
+        try {
+            smtpCommand(writer, reader, "EHLO android-sms-forwarder", 250)
+            writer.write("AUTH LOGIN\r\n")
+            writer.flush()
+            val authCode = SmtpProtocol.readReply(reader)
+            if (authCode == 334) {
+                smtpCommand(writer, reader, java.util.Base64.getEncoder().encodeToString(user.toByteArray(StandardCharsets.UTF_8)), 334)
+                smtpCommand(writer, reader, java.util.Base64.getEncoder().encodeToString(password.toByteArray(StandardCharsets.UTF_8)), 235)
+            } else if (authCode in setOf(502, 504)) {
+                val plainToken = "\u0000$user\u0000$password".toByteArray(StandardCharsets.UTF_8)
+                val encodedPlain = java.util.Base64.getEncoder().encodeToString(plainToken)
+                smtpCommand(writer, reader, "AUTH PLAIN $encodedPlain", 235)
+            } else {
+                error("SMTP 服务器拒绝认证请求（响应码 $authCode）")
+            }
+            smtpCommand(writer, reader, "MAIL FROM:<$user>", 250)
+            recipients.forEach {
+                smtpCommand(writer, reader, "RCPT TO:<$it>", 250, 251)
+            }
+            smtpCommand(writer, reader, "DATA", 354)
+        } catch (e: java.io.IOException) {
+            // Until DATA 354 is acknowledged, the SMTP server has NOT accepted any message body.
+            throw if (e is PreSubmitNetworkFailure) e else PreSubmitNetworkFailure(e)
         }
-        smtpCommand(writer, reader, "DATA", 354)
 
         val encodedSubject = java.util.Base64.getEncoder().encodeToString(subject.toByteArray(StandardCharsets.UTF_8))
         val encodedBody = java.util.Base64.getMimeEncoder(76, "\r\n".toByteArray())
             .encodeToString(content.toByteArray(StandardCharsets.UTF_8))
+        val rfcDate = java.text.SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss Z", java.util.Locale.US)
+            .format(java.util.Date())
+        val domain = user.substringAfter('@', "localhost").ifBlank { "localhost" }
+        val messageId = "<${java.util.UUID.randomUUID()}@$domain>"
+        writer.write("Date: $rfcDate\r\n")
+        writer.write("Message-ID: $messageId\r\n")
         writer.write("From: <$user>\r\n")
         writer.write("To: ${recipients.joinToString(", ")}\r\n")
         writer.write("Subject: =?UTF-8?B?$encodedSubject?=\r\n")

@@ -55,7 +55,10 @@ class PushPlusConfig(private val context: Context) {
             prefs.edit().remove(KEY_TOKEN).apply()
             return
         }
-        prefs.edit().putString(KEY_TOKEN, TokenCipher.encrypt(token.trim())).apply()
+        val encrypted = TokenCipher.encrypt(token.trim())
+        if (encrypted.isNotEmpty()) {
+            prefs.edit().putString(KEY_TOKEN, encrypted).apply()
+        }
     }
 
     /** Pure legacy-field decoding for routing snapshots; never migrates or removes credentials. */
@@ -68,10 +71,8 @@ class PushPlusConfig(private val context: Context) {
         val multiToken = multiConfig.pushPlusToken()
         if (multiToken.isNotBlank()) return multiToken
         val legacy = prefs.getString(KEY_TOKEN, null)?.let { encrypted ->
-            TokenCipher.decrypt(encrypted).ifEmpty {
-                prefs.edit().remove(KEY_TOKEN).apply()
-                ""
-            }
+            // Never delete KEY_TOKEN on transient Keystore decryption failure!
+            TokenCipher.decrypt(encrypted)
         }.orEmpty()
         if (legacy.isNotBlank()) {
             multiConfig.savePushPlus(legacy, multiConfig.pushPlusTopic())

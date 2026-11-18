@@ -91,7 +91,13 @@ object ChannelTestSender {
                     if (type == "qmsg" || !target.startsWith("http")) {
                         QmsgSender.send(target, text)
                     } else {
-                        postJson(target, JSONObject().put("message", text))
+                        ForwardingUrlPolicy.requireAllowed(target, target.startsWith("http://"))
+                        val res = postJson(target, JSONObject().put("message", text).put("auto_escape", false))
+                        if (res.has("retcode")) {
+                            check(res.optInt("retcode", -1) == 0) {
+                                res.optString("message").ifBlank { res.optString("wording", "OneBot 11 发送失败") }
+                            }
+                        }
                     }
                     if (type == "qmsg") "Qmsg 已受理（可凭消息 ID 查询最终回执）" else "QQ 消息已成功推送！"
                 }
@@ -213,7 +219,11 @@ object ChannelTestSender {
                     val token = config.telegramBotToken()
                     val chatId = config.telegramChatId()
                     require(token.isNotBlank() && chatId.isNotBlank()) { "Telegram 配置不完整，请先配置" }
-                    val url = "https://api.telegram.org/bot$token/sendMessage"
+                    val baseUrl = config.telegramRemoteCustomHost().trim().trimEnd('/')
+                        .ifBlank { "https://api.telegram.org" }
+                        .let { if (it.startsWith("http://") || it.startsWith("https://")) it else "https://$it" }
+                    ForwardingUrlPolicy.requireAllowed(baseUrl, allowPrivateHttp = true)
+                    val url = "$baseUrl/bot$token/sendMessage"
                     val payload = JSONObject().put("chat_id", chatId).put("text", "$title\n\n$content")
                     val res = postJson(url, payload)
                     check(res.optBoolean("ok", false)) { res.optString("description", "Telegram 发送失败") }
@@ -230,9 +240,12 @@ object ChannelTestSender {
                 }
                 ForwardingChannels.TENCENT_CLOUD -> {
                     val webhook = config.tencentCloudWebhook()
+                    val secret = config.tencentCloudSecret()
                     require(webhook.isNotBlank()) { "腾讯云告警 Webhook 不能为空，请先配置" }
                     ForwardingUrlPolicy.requireAllowed(webhook, false)
-                    postJson(webhook, JSONObject().put("text", "$title\n$content"))
+                    val payload = JSONObject().put("text", "$title\n$content")
+                    if (secret.isNotBlank()) payload.put("secret", secret)
+                    postJson(webhook, payload)
                     "腾讯云自定义告警触发成功！"
                 }
                 ForwardingChannels.CUSTOM_WEBHOOK -> {
@@ -392,26 +405,44 @@ object ChannelTestSender {
                     if (type == "qmsg" || !target.startsWith("http")) {
                         QmsgSender.send(target, text)
                     } else {
-                        val targetType = instance.optString("targetType").ifBlank { "private" }
-                        val targetId = instance.optString("targetId")
-                        require(targetId.isNotBlank()) { "OneBot 11 必须配置 user_id 或 group_id" }
-                        val isGroup = targetType == "group"
-                        val action = if (isGroup) "send_group_msg" else "send_private_msg"
-                        val idField = if (isGroup) "group_id" else "user_id"
-                        val baseUrl = target.trim().trimEnd('/')
-                            .removeSuffix("/send_private_msg")
-                            .removeSuffix("/send_group_msg")
-                        val payload = JSONObject()
-                            .put(idField, targetId.toLongOrNull() ?: targetId)
-                            .put("message", text)
-                            .put("auto_escape", false)
-                        val accessToken = instance.optString("accessToken")
-                        val headers = if (accessToken.isBlank()) emptyMap() else {
-                            mapOf("Authorization" to "Bearer ${accessToken.trim()}")
+                        val targetType = instance.optString("targetType").ifBlank {
+                            if (instance.optString("groupId").isNotBlank()) "group" else "private"
                         }
-                        val response = postJson("$baseUrl/$action", payload, headers)
-                        check(response.optInt("retcode", -1) == 0 && response.optString("status") == "ok") {
-                            response.optString("message").ifBlank { response.optString("wording", "OneBot 11 发送失败") }
+                        val targetId = instance.optString("targetId")
+                            .ifBlank { instance.optString("userId") }
+                            .ifBlank { instance.optString("groupId") }
+                        ForwardingUrlPolicy.requireAllowed(target, target.startsWith("http://"))
+                        if (targetId.isBlank() && (target.contains("user_id=") || target.contains("group_id="))) {
+                            val accessToken = instance.optString("accessToken")
+                            val headers = if (accessToken.isBlank()) emptyMap() else {
+                                mapOf("Authorization" to "Bearer ${accessToken.trim()}")
+                            }
+                            val response = postJson(target, JSONObject().put("message", text).put("auto_escape", false), headers)
+                            if (response.has("retcode")) {
+                                check(response.optInt("retcode", -1) == 0) {
+                                    response.optString("message").ifBlank { response.optString("wording", "OneBot 11 发送失败") }
+                                }
+                            }
+                        } else {
+                            require(targetId.isNotBlank()) { "OneBot 11 必须配置 user_id 或 group_id" }
+                            val isGroup = targetType == "group"
+                            val action = if (isGroup) "send_group_msg" else "send_private_msg"
+                            val idField = if (isGroup) "group_id" else "user_id"
+                            val baseUrl = target.trim().trimEnd('/')
+                                .removeSuffix("/send_private_msg")
+                                .removeSuffix("/send_group_msg")
+                            val payload = JSONObject()
+                                .put(idField, targetId.toLongOrNull() ?: targetId)
+                                .put("message", text)
+                                .put("auto_escape", false)
+                            val accessToken = instance.optString("accessToken")
+                            val headers = if (accessToken.isBlank()) emptyMap() else {
+                                mapOf("Authorization" to "Bearer ${accessToken.trim()}")
+                            }
+                            val response = postJson("$baseUrl/$action", payload, headers)
+                            check(response.optInt("retcode", -1) == 0 && response.optString("status") == "ok") {
+                                response.optString("message").ifBlank { response.optString("wording", "OneBot 11 发送失败") }
+                            }
                         }
                     }
                     if (type == "qmsg") "Qmsg 已受理（可凭消息 ID 查询最终回执）" else "QQ 消息已成功推送！"
@@ -545,7 +576,13 @@ object ChannelTestSender {
                     val token = instance.optString("botToken")
                     val chatId = instance.optString("chatId")
                     require(token.isNotBlank() && chatId.isNotBlank()) { "Telegram 配置不完整，请先配置" }
-                    val url = "https://api.telegram.org/bot$token/sendMessage"
+                    val baseUrl = instance.optString("customHost", config.telegramRemoteCustomHost())
+                        .trim()
+                        .trimEnd('/')
+                        .ifBlank { "https://api.telegram.org" }
+                        .let { if (it.startsWith("http://") || it.startsWith("https://")) it else "https://$it" }
+                    ForwardingUrlPolicy.requireAllowed(baseUrl, allowPrivateHttp = true)
+                    val url = "$baseUrl/bot$token/sendMessage"
                     val payload = JSONObject().put("chat_id", chatId).put("text", "$title\n\n$content")
                     val res = postJson(url, payload)
                     check(res.optBoolean("ok", false)) { res.optString("description", "Telegram 发送失败") }
@@ -562,9 +599,12 @@ object ChannelTestSender {
                 }
                 ForwardingChannels.TENCENT_CLOUD -> {
                     val webhook = instance.optString("webhook")
+                    val secret = instance.optString("secret")
                     require(webhook.isNotBlank()) { "腾讯云告警 Webhook 不能为空，请先配置" }
                     ForwardingUrlPolicy.requireAllowed(webhook, false)
-                    postJson(webhook, JSONObject().put("text", "$title\n$content"))
+                    val payload = JSONObject().put("text", "$title\n$content")
+                    if (secret.isNotBlank()) payload.put("secret", secret)
+                    postJson(webhook, payload)
                     "腾讯云自定义告警触发成功！"
                 }
                 ForwardingChannels.CUSTOM_WEBHOOK -> {
@@ -603,10 +643,13 @@ object ChannelTestSender {
                     val priority = instance.optString("priority").ifBlank { "default" }
                     require(topic.isNotBlank()) { "ntfy Topic 不能为空，请先配置" }
                     ForwardingUrlPolicy.requireAllowed(serverUrl, serverUrl.startsWith("http://"))
-                    val headers = mutableMapOf("Title" to NtfyProtocol.titleHeader(title), "Priority" to priority)
+                    val headers = mutableMapOf(
+                        "Title" to NtfyProtocol.titleHeader(title),
+                        "Priority" to NtfyProtocol.asciiHeaderValue(priority).ifBlank { "default" }
+                    )
                     if (token.isNotBlank()) headers["Authorization"] = "Bearer ${token.trim()}"
-                    instance.optString("tags").takeIf { it.isNotBlank() }?.let { headers["Tags"] = it.trim() }
-                    instance.optString("clickUrl").takeIf { it.isNotBlank() }?.let { headers["Click"] = it.trim() }
+                    NtfyProtocol.tagsHeader(instance.optString("tags")).takeIf { it.isNotBlank() }?.let { headers["Tags"] = it }
+                    NtfyProtocol.asciiHeaderValue(instance.optString("clickUrl")).takeIf { it.isNotBlank() }?.let { headers["Click"] = it }
                     postText(
                         "$serverUrl/${NtfyProtocol.requireTopic(topic)}",
                         content,
@@ -646,14 +689,15 @@ object ChannelTestSender {
                     require(sendKey.isNotBlank()) { "Server酱³ SendKey 不能为空，请先配置" }
                     val tags = instance.optString("tags").trim()
                     val url = if (sendKey.startsWith("http://") || sendKey.startsWith("https://")) {
+                        ForwardingUrlPolicy.requireAllowed(sendKey, allowPrivateHttp = false)
                         sendKey
                     } else {
                         val match = Regex("""^sctp(\d+)t""").find(sendKey)
                         val uid = match?.groupValues?.get(1)
                         if (uid != null) {
-                            "https://$uid.push.ft07.com/send/$sendKey.send"
+                            "https://$uid.push.ft07.com/send/${URLEncoder.encode(sendKey, "UTF-8")}.send"
                         } else {
-                            "https://push.ft07.com/send/$sendKey.send"
+                            "https://push.ft07.com/send/${URLEncoder.encode(sendKey, "UTF-8")}.send"
                         }
                     }
                     val payload = JSONObject()
@@ -792,25 +836,43 @@ object ChannelTestSender {
         val method = methodValue.trim().uppercase().ifBlank { "POST" }
         require(method in setOf("GET", "POST", "PUT")) { "请求方式仅支持 GET、POST 或 PUT" }
         val contentType = contentTypeValue.trim().ifBlank { "application/json" }
+        fun urlEncoded(value: String): String = URLEncoder.encode(value, "UTF-8")
         fun encoded(value: String): String = when {
-            method == "GET" -> URLEncoder.encode(value, "UTF-8")
+            method == "GET" -> urlEncoded(value)
             contentType.contains("json", ignoreCase = true) -> JSONObject.quote(value).removeSurrounding("\"")
-            contentType.contains("x-www-form-urlencoded", ignoreCase = true) -> URLEncoder.encode(value, "UTF-8")
+            contentType.contains("x-www-form-urlencoded", ignoreCase = true) -> urlEncoded(value)
             else -> value
         }
-        val body = WebhookTemplateRenderer.render(
-            template.ifBlank { MultiForwardConfig.DEFAULT_CUSTOM_WEBHOOK_BODY },
+        val simText = config.simOneLabel.ifBlank { "SIM1 · 中国移动（模拟）" }
+        val receiverText = config.simOneNumber.ifBlank { "13800138000（模拟）" }
+        val renderedBaseUrl = WebhookTemplateRenderer.render(
+            normalizedUrl,
+            mapOf(
+                "title" to urlEncoded(title), "msg" to urlEncoded(content),
+                "from" to urlEncoded("10086"), "time" to urlEncoded(time),
+                "sim" to urlEncoded(simText), "sim_slot" to urlEncoded("SIM1"),
+                "receiver" to urlEncoded(receiverText)
+            )
+        )
+        val effectiveTemplate = if (method == "GET" &&
+            (template.isBlank() || template.trim() == MultiForwardConfig.DEFAULT_CUSTOM_WEBHOOK_BODY)
+        ) {
+            ""
+        } else {
+            template.ifBlank { MultiForwardConfig.DEFAULT_CUSTOM_WEBHOOK_BODY }
+        }
+        val body = if (effectiveTemplate.isBlank()) "" else WebhookTemplateRenderer.render(
+            effectiveTemplate,
             mapOf(
                 "title" to encoded(title), "msg" to encoded(content),
                 "from" to encoded("10086"), "time" to encoded(time),
-                "sim" to encoded(config.simOneLabel.ifBlank { "SIM1 · 中国移动（模拟）" }),
-                "sim_slot" to encoded("SIM1"),
-                "receiver" to encoded(config.simOneNumber.ifBlank { "13800138000（模拟）" })
+                "sim" to encoded(simText), "sim_slot" to encoded("SIM1"),
+                "receiver" to encoded(receiverText)
             )
         )
         val requestUrl = if (method == "GET" && body.isNotBlank()) {
-            WebhookRequestUrl.appendQuery(normalizedUrl, body)
-        } else normalizedUrl
+            WebhookRequestUrl.appendQuery(renderedBaseUrl, body)
+        } else renderedBaseUrl
         val conn = URL(requestUrl).openConnection() as HttpURLConnection
         conn.withDisconnect {
             requestMethod = method

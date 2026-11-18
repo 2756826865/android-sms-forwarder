@@ -273,7 +273,7 @@ class AutoReplySettingsActivity : SimpleActivity() {
                     replyContent = replyContent,
                     rateLimitMinutes = calculatedMinutes,
                     simScope = simScope,
-                    enabled = true
+                    enabled = existingRule?.enabled ?: true
                 )
 
                 val currentRules = config.rules.toMutableList()

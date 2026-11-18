@@ -69,7 +69,11 @@ fun ActionInstanceSelector(
     val borderColor = if (isDark) DarkOutline else OutlineSoft
 
     var pickerExpanded by remember { mutableStateOf(false) }
-    var expandedTemplateIds by remember { mutableStateOf(setOf<String>()) }
+    var expandedTemplateIds by remember {
+        mutableStateOf(
+            actions.filter { !it.customTemplate.isNullOrBlank() }.map { it.id }.toSet()
+        )
+    }
 
     Column(modifier = Modifier.fillMaxWidth()) {
         if (availableInstances.isEmpty()) {
@@ -107,7 +111,7 @@ fun ActionInstanceSelector(
                         val emoji = ChannelRegistry.getIconEmoji(action.channelType)
 
                         val hasCustomTpl = !action.customTemplate.isNullOrBlank()
-                        val isTplExpanded = action.id in expandedTemplateIds || hasCustomTpl
+                        val isTplExpanded = action.id in expandedTemplateIds
 
                         Surface(
                             shape = RoundedCornerShape(10.dp),

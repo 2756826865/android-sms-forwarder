@@ -24,13 +24,15 @@ object YellowPageHelper {
     private const val TAG = "YellowPageHelper"
     private const val ASSETS_FILE = "yellow_pages.json"
 
-    // 匹配常见的短信开头签名：如【京东】、[招商银行]、〔中国移动〕
-    private val signatureStartRegex = Regex("""^(?:\[|【|〔)(.+?)(?:\]|】|〕)""")
-    // 匹配常见的短信结尾签名：如【腾讯科技】、[美团]
-    private val signatureEndRegex = Regex("""(?:\[|【|〔)(.+?)(?:\]|】|〕)$""")
+    // 匹配常见的短信开头签名：如【京东】、[招商银行]、〔中国移动〕（禁止内部跨嵌套括号）
+    private val signatureStartRegex = Regex("""^(?:\[|【|〔)([^\[【〔\]】〕]+)(?:\]|】|〕)""")
+    // 匹配常见的短信结尾签名：如【腾讯科技】、[美团]（禁止内部跨嵌套括号）
+    private val signatureEndRegex = Regex("""(?:\[|【|〔)([^\[【〔\]】〕]+)(?:\]|】|〕)$""")
+    private val pureCodeSignatureRegex = Regex("""^(?:[A-Za-z]-)?\d+$""")
 
     @Volatile
-    private var isInitialized = false
+    internal var isInitialized = false
+        private set
     private val lock = Any()
 
     private val numberMap = HashMap<String, YellowPageEntry>()
@@ -98,18 +100,19 @@ object YellowPageHelper {
             return true
         }
 
-        // 4. 特服短代码（长度 <= 8 位的特服号或政企接入号）
-        if (clean.length in 3..8 && clean.all { it.isDigit() }) return true
+        // 4. 特服短代码（长度 <= 8 位的纯数字国内特服号或政企接入号；带国际区号 + 的短号除外）
+        if (!address.trim().startsWith("+") && clean.length in 3..8 && clean.all { it.isDigit() }) return true
 
-        // 5. 包含非纯数字的地址（如字母网关、Email 发送方）
-        if (clean.any { !it.isDigit() }) return true
+        // 5. 包含字母/符号的网关地址（如字母网关 Alipay、Email 发送方；去掉前导国际区号 '+' 后判断，防止将 +1/+852 等境外私人号码误判为商业网关）
+        val withoutPlus = clean.removePrefix("+")
+        if (withoutPlus.isNotEmpty() && withoutPlus.any { !it.isDigit() }) return true
 
-        // 6. 普通 11 位私人手机号码（如 13x/15x/17x/18x/19x 等），绝不可启用正文签名匹配
+        // 6. 普通私人手机号码（含境内外私人号码），绝不可启用正文签名匹配
         return false
     }
 
     /**
-     * 从短信正文中提取【发件方】签名（优先取头部，次选尾部）
+     * 从短信正文中提取【发件方】签名（优先取头部，次选尾部；过滤纯数字验证码括号如 [123456]）
      */
     fun extractSignature(text: String?): String? {
         if (text.isNullOrBlank()) return null
@@ -117,12 +120,12 @@ object YellowPageHelper {
         val startMatch = signatureStartRegex.find(trimmed)
         if (startMatch != null) {
             val sig = startMatch.groupValues[1].trim()
-            if (sig.length in 2..30) return sig
+            if (sig.length in 2..30 && !pureCodeSignatureRegex.matches(sig)) return sig
         }
         val endMatch = signatureEndRegex.find(trimmed)
         if (endMatch != null) {
             val sig = endMatch.groupValues[1].trim()
-            if (sig.length in 2..30) return sig
+            if (sig.length in 2..30 && !pureCodeSignatureRegex.matches(sig)) return sig
         }
         return null
     }
@@ -183,13 +186,17 @@ object YellowPageHelper {
             }
         }
 
-        // 第二轮：签名包含品牌名，或品牌名包含签名
+        // 第二轮：签名包含品牌名，或品牌名包含足够长的签名主干（中文至少2字、纯英文至少3字符，防止单字“中/微/A”误配）
         val sigParts = signature.split(" ", "-", "_", "/", "·")
         val primarySig = sigParts.firstOrNull { it.isNotBlank() } ?: signature
+        val minPrimaryLen = if (primarySig.all { it.code < 128 }) 3 else 2
+        val allowReverseContain = primarySig.length >= minPrimaryLen
 
         for (entry in brandList) {
             val brand = entry.brand
-            if (signature.contains(brand, ignoreCase = true) || brand.contains(primarySig, ignoreCase = true)) {
+            if (signature.contains(brand, ignoreCase = true) ||
+                (allowReverseContain && brand.contains(primarySig, ignoreCase = true))
+            ) {
                 return entry
             }
         }

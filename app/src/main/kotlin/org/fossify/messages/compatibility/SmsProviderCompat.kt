@@ -36,7 +36,8 @@ class SmsProviderCompat(private val profile: DeviceProfile) {
         val now = System.currentTimeMillis()
         val bootCount = readBootCount(context)
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        removeExpiredEntries(prefs.all, prefs.edit(), now)
+        val editor = prefs.edit()
+        removeExpiredEntries(prefs.all, editor, now)
 
         val key = KEY_PREFIX + digest("$subId\u0000$destination\u0000$body")
         val existing = prefs.getString(key, null)?.split(ENTRY_SEPARATOR)
@@ -49,10 +50,13 @@ class SmsProviderCompat(private val profile: DeviceProfile) {
             } else {
                 SAME_BOOT_GUARD_MS
             }
-            if (age in 0 until guardWindow) return null
+            if (age in 0 until guardWindow) {
+                editor.apply()
+                return null
+            }
         }
 
-        prefs.edit().putString(key, "$now$ENTRY_SEPARATOR$bootCount").apply()
+        editor.putString(key, "$now$ENTRY_SEPARATOR$bootCount").commit()
         return key
     }
 
@@ -82,7 +86,6 @@ class SmsProviderCompat(private val profile: DeviceProfile) {
                 editor.remove(key)
             }
         }
-        editor.apply()
     }
 
     private fun digest(input: String): String {

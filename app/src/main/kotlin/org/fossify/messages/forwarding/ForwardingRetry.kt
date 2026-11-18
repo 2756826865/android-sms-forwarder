@@ -14,7 +14,7 @@ object ForwardingRetry {
         val channel = payload.optString("channel")
         if (channel == ForwardingChannels.CHANNEL_GROUP) return "请重试组内具体通道"
         val sms = channel == ForwardingChannels.SMS_DIRECT ||
-            (channel in setOf("", ForwardingChannels.ALL) && MultiForwardConfig(context).smsDirectEnabled)
+            (channel in setOf("", ForwardingChannels.ALL) && ForwardingChannels.SMS_DIRECT in MultiForwardConfig(context).enabledChannelIds())
         if (sms && record.attempts > 0 && !(channel == ForwardingChannels.SMS_DIRECT &&
             SmsDirectBillingPolicy.canResumePreparation(store.smsPhase(record.recordId))))
             return "已尝试收费发送，结果需核实，不能从日志重复提交"

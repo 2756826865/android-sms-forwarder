@@ -30,7 +30,7 @@ class PushPlusWorker(
     override suspend fun getForegroundInfo() = ForwardingForegroundInfo.create(applicationContext)
 
     override suspend fun doWork(): Result {
-        setForeground(getForegroundInfo())
+        runCatching { setForeground(getForegroundInfo()) }
         val config = PushPlusConfig(applicationContext)
         val isTest = inputData.getBoolean(KEY_IS_TEST, false)
         val history = ForwardingHistoryStore(applicationContext)

@@ -40,12 +40,13 @@ class HeartbeatSettingsActivity : SimpleActivity() {
         binding.heartbeatIntervalSlider.value = heartbeatConfig.intervalHours.toFloat().coerceIn(1f, 24f)
         updateIntervalSummary(heartbeatConfig.intervalHours)
 
-        binding.heartbeatIntervalSlider.addOnChangeListener { _, value, _ ->
+        binding.heartbeatIntervalSlider.addOnChangeListener { _, value, fromUser ->
+            if (!fromUser) return@addOnChangeListener
             val hours = value.toInt()
             heartbeatConfig.intervalHours = hours
             updateIntervalSummary(hours)
             if (heartbeatConfig.enabled) {
-                HeartbeatWorker.sync(applicationContext)
+                HeartbeatWorker.sync(applicationContext, forceUpdate = true)
             }
         }
 
@@ -55,13 +56,17 @@ class HeartbeatSettingsActivity : SimpleActivity() {
             val targetInstances = if (heartbeatConfig.hasChannelSelection) {
                 allEnabledInstances.filter { it.id in heartbeatConfig.channelInstanceIds }
             } else {
-                allEnabledInstances
+                allEnabledInstances.filter {
+                    it.channelType != org.fossify.messages.forwarding.ForwardingChannels.SMS_DIRECT
+                }
             }
-            val instanceTypes = targetInstances.mapTo(mutableSetOf()) { it.channelType }
+            val instanceTypes = allEnabledInstances.mapTo(mutableSetOf()) { it.channelType }
             val legacyChannels = if (heartbeatConfig.hasChannelSelection) {
                 emptySet()
             } else {
-                multiConfig.enabledChannelIds().filterNotTo(mutableSetOf()) { it in instanceTypes }
+                multiConfig.enabledChannelIds().filterNotTo(mutableSetOf()) {
+                    it in instanceTypes || it == org.fossify.messages.forwarding.ForwardingChannels.SMS_DIRECT
+                }
             }
             if (targetInstances.isEmpty() && legacyChannels.isEmpty()) {
                 toast(
@@ -99,7 +104,8 @@ class HeartbeatSettingsActivity : SimpleActivity() {
                     targetChannel = instance.channelType,
                     targetInstanceId = instance.id,
                     allowedChannels = setOf(instance.id),
-                    isTest = true
+                    isTest = true,
+                    bodyAlreadyRendered = true,
                 )
             }
             legacyChannels.forEach { target ->
@@ -112,7 +118,8 @@ class HeartbeatSettingsActivity : SimpleActivity() {
                     uniqueId = "test-hb-$now-$target",
                     targetChannel = target,
                     allowedChannels = setOf(target),
-                    isTest = true
+                    isTest = true,
+                    bodyAlreadyRendered = true,
                 )
             }
             toast("心跳保活测试消息已发送")

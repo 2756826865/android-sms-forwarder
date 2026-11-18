@@ -15,10 +15,22 @@ import org.fossify.messages.ui.compose.ksu.material.*
 internal fun MaterialAppearancePage(onBack: () -> Unit) {
     val value = LocalAppearance.current
     val update = LocalSetAppearance.current
+    val effectivePreviewKeyColor = if (value.dynamic) {
+        0
+    } else if (value.keyColor != 0) {
+        value.keyColor
+    } else {
+        when (value.accent) {
+            1 -> 0xFF2962C0.toInt()
+            2 -> 0xFF8050A0.toInt()
+            3 -> 0xFFF44336.toInt()
+            else -> 0xFF009688.toInt()
+        }
+    }
     KsuSettingsPage("主题设置", onBack) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp)) {
             Spacer(Modifier.height(32.dp))
-            ThemePreviewCard(keyColor = value.keyColor, isDark = org.fossify.messages.ui.compose.ksu.isInDarkTheme(),
+            ThemePreviewCard(keyColor = effectivePreviewKeyColor, isDark = org.fossify.messages.ui.compose.ksu.isInDarkTheme(),
                 isAmoled = value.amoled,
                 paletteStyle = com.materialkolor.PaletteStyle.entries.firstOrNull { it.name == value.palette } ?: com.materialkolor.PaletteStyle.TonalSpot,
                 colorSpec = if (value.spec2025) com.materialkolor.dynamiccolor.ColorSpec.SpecVersion.SPEC_2025 else com.materialkolor.dynamiccolor.ColorSpec.SpecVersion.SPEC_2021)

@@ -471,15 +471,10 @@ fun OperationsContent(
                                         color = secondaryTextColor
                                     )
                                     listOf(
-                                        "短信后台服务" to "sms_background_service",
+                                        "短信后台与远程长连接服务" to "sms_background_service",
                                         "短信接收处理中" to "incoming_sms_processing",
                                         "转发任务运行中" to "forwarding_delivery",
-                                        "钉钉远程来源" to "dingtalk_remote_control",
-                                        "企业微信远程来源" to "wecom_remote_control",
-                                        "飞书远程来源" to "feishu_remote_control",
-                                        "Telegram 远程来源" to "tg_remote_control",
-                                        "WebSocket 远程来源" to "ws_remote_control",
-                                        "邮箱远程来源" to "email_remote_control"
+                                        "默认短信状态提醒" to "default_sms_status_alerts"
                                     ).forEach { (label, channelId) ->
                                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                                             Text(label, modifier = Modifier.weight(1f), fontSize = 12.sp, color = primaryTextColor)
@@ -601,9 +596,19 @@ fun OperationsContent(
                                 ) {
                                     OutlinedButton(
                                         onClick = {
-                                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                            clipboard.setPrimaryClip(ClipData.newPlainText("SMS_Diagnostic_Bundle", bundle.bundleContent))
-                                            Toast.makeText(context, "诊断包内容已复制到剪贴板！", Toast.LENGTH_SHORT).show()
+                                            val maxClipChars = 250_000
+                                            val clipText = if (bundle.bundleContent.length > maxClipChars) {
+                                                bundle.bundleContent.take(maxClipChars) + "\n...(内容过长已截断，请使用一键分享导出完整文件)"
+                                            } else {
+                                                bundle.bundleContent
+                                            }
+                                            runCatching {
+                                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                                clipboard.setPrimaryClip(ClipData.newPlainText("SMS_Diagnostic_Bundle", clipText))
+                                                Toast.makeText(context, "诊断包内容已复制到剪贴板！", Toast.LENGTH_SHORT).show()
+                                            }.onFailure {
+                                                Toast.makeText(context, "内容过大无法写入剪贴板，请使用一键分享", Toast.LENGTH_LONG).show()
+                                            }
                                         },
                                         modifier = Modifier.weight(1f).height(40.dp),
                                         shape = RoundedCornerShape(12.dp),
@@ -615,13 +620,34 @@ fun OperationsContent(
 
                                     Button(
                                         onClick = {
-                                            val sendIntent = Intent().apply {
-                                                action = Intent.ACTION_SEND
-                                                putExtra(Intent.EXTRA_TEXT, bundle.bundleContent)
-                                                putExtra(Intent.EXTRA_TITLE, "SMS Forwarder 节点诊断数据")
-                                                type = "text/plain"
+                                            scope.launch {
+                                                runCatching {
+                                                    val file = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                                        val dir = java.io.File(context.cacheDir, "diagnostics").apply { mkdirs() }
+                                                        val cutoff = System.currentTimeMillis() - 24 * 3600_000L
+                                                        dir.listFiles()?.forEach { if (it.lastModified() < cutoff) it.delete() }
+                                                        val ext = if (bundle.isEncrypted) ".enc.txt" else ".json"
+                                                        java.io.File.createTempFile("sms-diagnostic-bundle-", ext, dir).apply {
+                                                            writeText(bundle.bundleContent)
+                                                        }
+                                                    }
+                                                    val uri = androidx.core.content.FileProvider.getUriForFile(
+                                                        context,
+                                                        "${context.packageName}.provider",
+                                                        file
+                                                    )
+                                                    val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                                                        type = if (bundle.isEncrypted) "text/plain" else "application/json"
+                                                        putExtra(Intent.EXTRA_STREAM, uri)
+                                                        putExtra(Intent.EXTRA_TITLE, "SMS Forwarder 节点诊断数据")
+                                                        clipData = ClipData.newRawUri("SMS Forwarder 节点诊断数据", uri)
+                                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                                    }
+                                                    context.startActivity(Intent.createChooser(sendIntent, "分享排障诊断数据"))
+                                                }.onFailure {
+                                                    Toast.makeText(context, "分享失败，请重试", Toast.LENGTH_SHORT).show()
+                                                }
                                             }
-                                            context.startActivity(Intent.createChooser(sendIntent, "分享排障诊断数据"))
                                         },
                                         modifier = Modifier.weight(1f).height(40.dp),
                                         shape = RoundedCornerShape(12.dp),

@@ -45,7 +45,9 @@ internal object WxPusherSender {
                 "WxPusher 拒绝发送（业务码 ${result.optInt("code", -1)}）"
             }
             val items = result.optJSONArray("data")
-            check(items != null && items.length() == 1 && items.optJSONObject(0)?.optInt("code", -1) == 1000) {
+            val anyAccepted = items != null && items.length() >= 1 &&
+                (0 until items.length()).any { items.optJSONObject(it)?.optInt("code", -1) == 1000 }
+            check(anyAccepted) {
                 "WxPusher 接收目标未创建发送任务"
             }
         } finally {

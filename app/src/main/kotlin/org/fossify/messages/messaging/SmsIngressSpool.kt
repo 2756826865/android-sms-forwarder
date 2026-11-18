@@ -69,10 +69,14 @@ internal class SmsIngressSpool(private val context: Context) {
     }
 
     fun drain(limit: Int = BATCH_SIZE) {
+        val prefs = context.getSharedPreferences("sms_ingress_spool_status", Context.MODE_PRIVATE)
         directory
             .listFiles()
             ?.filter { it.extension == "json" }
-            ?.sortedBy { it.lastModified() }
+            ?.sortedWith(
+                compareBy<File> { prefs.getInt("fail_count_${it.name}", 0) }
+                    .thenBy { it.lastModified() }
+            )
             ?.take(limit)
             ?.forEach { file ->
                 runCatching {
@@ -106,18 +110,31 @@ internal class SmsIngressSpool(private val context: Context) {
                     }
                     SmsIngressJournal(context).stage(intent)
                     AtomicFile(file).delete() // Only after the journal transaction committed.
+                    prefs.edit().remove("fail_count_${file.name}").apply()
                 }
-                    .onFailure {
-                        context
-                            .getSharedPreferences("sms_ingress_spool_status", Context.MODE_PRIVATE)
-                            .edit()
-                            .putString("error", it.javaClass.simpleName)
-                            .apply()
+                    .onFailure { err ->
+                        val failKey = "fail_count_${file.name}"
+                        val attempts = (prefs.getInt(failKey, 0) + 1).coerceAtMost(1000)
+                        val permanentlyMalformed = err is org.json.JSONException ||
+                            err is IllegalArgumentException
+                        val editor = prefs.edit().putString("error", err.javaClass.simpleName)
+                        if (permanentlyMalformed) {
+                            runCatching { AtomicFile(file).delete() }
+                            editor.remove(failKey)
+                        } else {
+                            editor.putInt(failKey, attempts)
+                        }
+                        editor.apply()
                     }
             }
     }
 
-    fun hasPending(): Boolean = directory.listFiles()?.any { it.extension == "json" } == true
+    fun hasPending(): Boolean {
+        val prefs = context.getSharedPreferences("sms_ingress_spool_status", Context.MODE_PRIVATE)
+        return directory.listFiles()?.any {
+            it.extension == "json" && prefs.getInt("fail_count_${it.name}", 0) < 5
+        } == true
+    }
 
     companion object {
         const val EXTRA_ID = "org.fossify.messages.SPOOL_ID"

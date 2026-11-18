@@ -766,9 +766,11 @@ class MainActivity : SimpleActivity() {
                 ArrayList()
             }
 
+            val snapshotForUi = ArrayList(conversations)
+            val snapshotForSync = ArrayList(conversations)
             runOnUiThread {
-                setupConversations(conversations, cached = true)
-                getNewConversations(conversations)
+                setupConversations(snapshotForUi, cached = true)
+                getNewConversations(snapshotForSync)
             }
             conversations.forEach {
                 clearExpiredScheduledMessages(it.threadId)
@@ -787,27 +789,35 @@ class MainActivity : SimpleActivity() {
             }
             val privateContacts = MyContactsContentProvider.getSimpleContacts(this, privateCursor)
             val conversations = getConversations(privateContacts = privateContacts)
+            val providerByThreadId = conversations.associateBy { it.threadId }
+            val providerByPhone = conversations.associateBy { it.phoneNumber }
+            val cachedThreadIds = cachedConversations.mapTo(HashSet()) { it.threadId }
 
             applyIfFresh {
                 conversations.forEach { providerConversation ->
                     insertOrUpdateConversation(providerConversation)
-                    if (cachedConversations.none { it.threadId == providerConversation.threadId }) {
+                    if (cachedThreadIds.add(providerConversation.threadId)) {
                         cachedConversations.add(providerConversation)
                     }
                 }
 
-                val providerThreadIds = conversations.mapTo(HashSet()) { it.threadId }
+                val synBase = org.fossify.messages.services.IncomingSmsService.SYNTHETIC_MESSAGE_BASE
+                val synThreadBase = org.fossify.messages.services.IncomingSmsService.SYNTHETIC_THREAD_BASE
                 cachedConversations.forEach { cachedConversation ->
                     val threadId = cachedConversation.threadId
 
                     val isTemporaryThread = cachedConversation.isScheduled
-                    val isConversationDeleted = threadId !in providerThreadIds
-                    if (isConversationDeleted && !isTemporaryThread && !messagesDB.hasThreadMessages(threadId)) {
-                        conversationsDB.deleteThreadId(threadId)
+                    val isConversationDeleted = threadId !in providerByThreadId
+                    if (isConversationDeleted && !isTemporaryThread) {
+                        val hasLocalOnlyMessages = threadId >= synThreadBase ||
+                            messagesDB.getThreadMessages(threadId).any { it.id >= synBase || it.isScheduled }
+                        if (!hasLocalOnlyMessages) {
+                            messagesDB.deleteThreadMessages(threadId)
+                            conversationsDB.deleteThreadId(threadId)
+                        }
                     }
 
-                    val newConversation =
-                        conversations.find { it.phoneNumber == cachedConversation.phoneNumber }
+                    val newConversation = providerByPhone[cachedConversation.phoneNumber]
                     if (isTemporaryThread && newConversation != null) {
                         conversationsDB.deleteThreadId(threadId)
                         messagesDB.getScheduledThreadMessages(threadId)
@@ -819,10 +829,8 @@ class MainActivity : SimpleActivity() {
                 }
 
                 cachedConversations.forEach { cachedConv ->
-                    val conv = conversations.find {
-                        it.threadId == cachedConv.threadId && !Conversation.areContentsTheSame(
-                            old = cachedConv, new = it
-                        )
+                    val conv = providerByThreadId[cachedConv.threadId]?.takeIf {
+                        !Conversation.areContentsTheSame(old = cachedConv, new = it)
                     }
                     if (conv != null) {
                         insertOrUpdateConversation(conv)
@@ -1223,7 +1231,7 @@ class MainActivity : SimpleActivity() {
 
     private fun launchPushPlusSettings() {
         hideKeyboard()
-        startActivity(Intent(applicationContext, PushPlusSettingsActivity::class.java))
+        startActivity(Intent(this, ForwardingChannelsActivity::class.java))
     }
 
     private fun launchBulkSend() {

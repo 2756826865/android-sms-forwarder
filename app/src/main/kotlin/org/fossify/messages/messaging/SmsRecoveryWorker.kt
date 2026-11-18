@@ -39,6 +39,7 @@ import org.fossify.messages.forwarding.RuleTemplateMode
 import org.fossify.messages.helpers.ShadowRepository
 import org.fossify.messages.helpers.refreshConversations
 import org.fossify.messages.helpers.refreshMessages
+import org.fossify.messages.helpers.stripInvisibleAndTrim
 import org.fossify.messages.services.IncomingSmsService
 
 /** Repairs SMS broadcasts delayed or suppressed by aggressive OEM background policies. */
@@ -119,6 +120,7 @@ class SmsRecoveryWorker(
         // 排队记录只证明已登记，不能证明已送达；无法证明安全的旧任务会标记未知，等待用户核实。
         // 扫描开始时读一次即可：扫描中自己新产生的记录不需要在本次扫描内立刻可见（每行只处理一次）。
         val forwardedMessageIds by lazy { readForwardedMessageIds() }
+        val notifyForwardClaims by lazy { readNotificationForwardClaims() }
         var repairedAny = false
         val threadIdsToSync = mutableSetOf<Long>()
         val requiredSmsIds = mutableMapOf<Long, MutableSet<Long>>()
@@ -274,7 +276,39 @@ class SmsRecoveryWorker(
                             // compacted. This proof is separate from the message owner.
                             val durableDecision =
                                 SmsForwardingProof(applicationContext).hasAny(uniqueId)
-                            if (providerAlreadyForwarded || ownerAlreadyForwarded || durableDecision) {
+                            val cleanBody = body.stripInvisibleAndTrim()
+                            val matchedNotifyIndex = if (
+                                !providerAlreadyForwarded && !ownerAlreadyForwarded && !durableDecision &&
+                                cleanBody.isNotBlank()
+                            ) {
+                                val rowDigest16 = IncomingSmsService.rawBodyDigest16(cleanBody)
+                                val rowHashStr = cleanBody.hashCode().toString()
+                                notifyForwardClaims.indexOfFirst { claim ->
+                                    kotlin.math.abs(claim.receivedAt - date) <= NOTIFY_CLAIM_WINDOW_MS &&
+                                        (claim.bodyDigest16 == rowDigest16 ||
+                                            (claim.legacyHashCode.isNotEmpty() && claim.legacyHashCode == rowHashStr))
+                                }
+                            } else {
+                                -1
+                            }
+                            val notifyAlreadyForwarded = matchedNotifyIndex >= 0
+                            if (notifyAlreadyForwarded) {
+                                notifyForwardClaims.removeAt(matchedNotifyIndex)
+                                ensureForwardingMarker(
+                                    uniqueId = uniqueId,
+                                    address = address,
+                                    body = body,
+                                    receivedAt = date,
+                                    subscriptionId = subscriptionId,
+                                )
+                                runCatching { SmsForwardingProof(applicationContext).record(uniqueId) }
+                            }
+                            if (
+                                providerAlreadyForwarded ||
+                                ownerAlreadyForwarded ||
+                                durableDecision ||
+                                notifyAlreadyForwarded
+                            ) {
                         if (!alreadyLocal) { threadIdsToSync.add(threadId)
                                     repairedAny = true }
                         ShadowRepository.incrementCounter(applicationContext, "RECOVERY_ITEM_SKIPPED")
@@ -303,9 +337,18 @@ class SmsRecoveryWorker(
                     val enabledForwardChannels = buildSet {
                         if (pushPlus.enabled) add(ForwardingChannels.PUSHPLUS)
                         addAll(multiConfig.enabledChannelIds())
+                        runCatching {
+                            org.fossify.messages.forwarding.repository.ChannelRepository
+                                .getInstance(applicationContext)
+                                .getEnabledInstances()
+                                .forEach { add(it.channelType) }
+                        }
                     }
-                    val historicalSim =
-                                org.fossify.messages.forwarding.ForwardingSimSnapshot(
+                    val snapshotSim = runCatching {
+                                SmsIngressSnapshots(applicationContext).snapshotForWork(uniqueId)
+                            }.getOrNull()
+                    val historicalSim = snapshotSim
+                                ?: org.fossify.messages.forwarding.ForwardingSimSnapshot(
                                     -1,
                                     "未知接收卡（历史卡槽不可核验）",
                                     "",
@@ -314,7 +357,8 @@ class SmsRecoveryWorker(
                                     source = "provider_recovery",
                                     observedAt = date,
                                 )
-                            val simSlotIndex: Int? = null
+                            val simSlotIndex: Int? = snapshotSim?.slotIndex?.takeIf { it >= 0 }
+                                ?: ReceivingSubscriptionReader.slotForSubscription(applicationContext, subscriptionId)
                             // P2-E：与 FULL 路径一样传 resolveContent，否则规则配了自定义模板时，
                     // 恢复补发的正文会退回默认模板（与正常链路不一致）。
                     val ruleDecision = if (rulesConfig.enabled) {
@@ -380,15 +424,18 @@ class SmsRecoveryWorker(
                             }
                     }
 
-                            if (!remoteCommandConsumed && (multiConfig.anyEnabled() || pushPlus.enabled)) {
+                            val hasAnyTarget = multiConfig.anyEnabled() ||
+                                pushPlus.enabled ||
+                                enabledForwardChannels.isNotEmpty()
+                            if (!remoteCommandConsumed && (ruleDecision != null || hasAnyTarget)) {
                         val targets = ruleDecision?.targets.orEmpty()
                         if (targets.isNotEmpty()) {
                             // P2-E：与 FULL 路径一致——按规则生成的目标精准投递，并携带规则渲染后的正文
                             // （`bodyAlreadyRendered = true`，避免 Worker 再用默认模板覆盖）。
                             targets.forEach { target ->
                                 MultiChannelForwardWorker.enqueueSingle(
-                                            originalSim = historicalSim,
-                                            context = applicationContext,
+                                    originalSim = historicalSim,
+                                    context = applicationContext,
                                     sender = address,
                                     body = target.renderedContent,
                                     receivedAt = ingress.receivedAt,
@@ -407,16 +454,29 @@ class SmsRecoveryWorker(
                                     actionId = target.actionId,
                                     bodyAlreadyRendered = true,
                                     allowSimLabelPrefix = target.allowSimLabelPrefix,
+                                    rawBody = body,
                                 )
                             }
+                            IncomingSmsService.enqueueStandaloneSmsDirectIfOutOfRuleScope(
+                                context = applicationContext,
+                                address = address,
+                                body = body,
+                                receivedAt = ingress.receivedAt,
+                                subscriptionId = subscriptionId,
+                                uniqueId = uniqueId,
+                                operationId = null,
+                                threadId = threadId,
+                                originalSim = historicalSim,
+                                rulesConfig = rulesConfig,
+                            )
                         } else {
                             IncomingSmsService.enqueueForwardingFallback(
                                 context = applicationContext, address = address, body = body,
                                 receivedAt = ingress.receivedAt, subscriptionId = subscriptionId,
                                 uniqueId = uniqueId, operationId = null, ruleDecision = ruleDecision,
                                 threadId = threadId,
-                                        originalSim = historicalSim,
-                                    )
+                                originalSim = historicalSim,
+                            )
                         }
                     }
 
@@ -514,6 +574,45 @@ class SmsRecoveryWorker(
         }.getOrDefault(emptySet())
     }
 
+    private data class NotifyForwardClaim(
+        val rootWorkId: String,
+        val bodyDigest16: String,
+        val legacyHashCode: String,
+        val receivedAt: Long,
+    )
+
+    private fun readNotificationForwardClaims(): MutableList<NotifyForwardClaim> {
+        return runCatching {
+            val digestRegex = Regex("^sms-notify-([0-9]+)-([a-f0-9]{16})-[0-9]+(?=-|$)")
+            val legacyRegex = Regex("^sms-notify-([0-9]+)-(-?[0-9]+)-[0-9]+(?=-|$)")
+            val seenRoots = HashSet<String>()
+            val list = mutableListOf<NotifyForwardClaim>()
+            for (record in ForwardingHistoryStore(applicationContext).records()) {
+                if (record.isTest) continue
+                if (record.channel == "system") continue
+                if (record.status.lowercase() in setOf("skipped", "failed")) continue
+                val digestMatch = digestRegex.find(record.workId)
+                if (digestMatch != null) {
+                    val root = digestMatch.value
+                    if (seenRoots.add(root)) {
+                        val ts = digestMatch.groupValues[1].toLongOrNull() ?: record.receivedAt
+                        list.add(NotifyForwardClaim(root, digestMatch.groupValues[2], "", ts))
+                    }
+                    continue
+                }
+                val legacyMatch = legacyRegex.find(record.workId)
+                if (legacyMatch != null) {
+                    val root = legacyMatch.value
+                    if (seenRoots.add(root)) {
+                        val ts = legacyMatch.groupValues[1].toLongOrNull() ?: record.receivedAt
+                        list.add(NotifyForwardClaim(root, "", legacyMatch.groupValues[2], ts))
+                    }
+                }
+            }
+            list
+        }.getOrElse { mutableListOf() }
+    }
+
     /**
      * 从 workId 中解析短信 id：`sms-12` / `sms-12-xxx` → 12。
      *
@@ -564,6 +663,7 @@ class SmsRecoveryWorker(
     companion object {
         private val scanMutex = Mutex()
         private const val PERIODIC_MINUTES = 15L
+        private const val NOTIFY_CLAIM_WINDOW_MS = 120_000L
         private const val DRAIN_BUDGET_MS = 5000L
         private const val SCAN_PAGE_SIZE = 100
         private const val SCAN_BUDGET_MS = 15_000L

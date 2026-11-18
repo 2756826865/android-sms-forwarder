@@ -15,4 +15,13 @@ internal object NtfyProtocol {
     } else {
         "=?UTF-8?B?${Base64.getEncoder().encodeToString(title.toByteArray(StandardCharsets.UTF_8))}?="
     }
+
+    fun asciiHeaderValue(value: String): String =
+        value.trim().filter { it.code in 32..126 }
+
+    fun tagsHeader(tags: String): String =
+        tags.split(',')
+            .map { segment -> segment.filter { it.code in 32..126 }.trim() }
+            .filter(String::isNotBlank)
+            .joinToString(",")
 }

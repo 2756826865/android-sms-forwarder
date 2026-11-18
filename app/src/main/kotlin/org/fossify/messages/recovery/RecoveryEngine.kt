@@ -66,10 +66,25 @@ object RecoveryEngine {
 
         for (task in deadlockedTasks) {
             try {
-                outboxDao.releaseLock(task.taskId, now)
-                outboxDao.updateState(task.taskId, OutboxTaskState.PENDING.name, now)
-                unlockedTasks++
+                val isBillableSms = task.taskType in setOf(
+                    org.fossify.messages.models.OutboxTaskType.SEND_SMS,
+                    org.fossify.messages.models.OutboxTaskType.FORWARD_SMS,
+                ) || (task.taskType == org.fossify.messages.models.OutboxTaskType.FORWARD_PLUGIN &&
+                    task.payloadPayload?.contains("sms_direct", ignoreCase = true) == true)
+                val affected = if (isBillableSms) {
+                    outboxDao.recoverDeadlockedBillable(
+                        taskId = task.taskId,
+                        errorClass = "LockExpiredOutcomeUnknown",
+                        now = now,
+                    ).also { if (it > 0) markedUnknownCount++ }
+                } else {
+                    outboxDao.recoverDeadlockedNonBillable(task.taskId, now)
+                        .also { if (it > 0) unlockedTasks++ }
+                }
+                if (affected <= 0) continue
 
+                val targetStatus = if (isBillableSms) OutboxTaskState.FAILED.name else OutboxTaskState.PENDING.name
+                val targetAction = if (isBillableSms) RecoveryAction.MARK_FAILED else RecoveryAction.UNLOCK_TASK
                 val record = RecoveryRecordEntity(
                     recordId = UUID.randomUUID().toString(),
                     scanTime = now,
@@ -77,9 +92,9 @@ object RecoveryEngine {
                     objectType = RecoveryObjectType.OUTBOX_TASK,
                     objectId = task.taskId,
                     initialStatus = OutboxTaskState.RUNNING.name,
-                    recoveredStatus = OutboxTaskState.PENDING.name,
-                    actionTaken = RecoveryAction.UNLOCK_TASK,
-                    detailMessage = "Unlocked deadlocked task after lock expired at ${task.lockExpiresAt}",
+                    recoveredStatus = targetStatus,
+                    actionTaken = targetAction,
+                    detailMessage = "Deadlocked task recovered after lock expired at ${task.lockExpiresAt}",
                     createdAt = now
                 )
                 recoveryDao.insert(record)
@@ -107,7 +122,8 @@ object RecoveryEngine {
 
         for (task in dueRetryTasks) {
             try {
-                outboxDao.updateState(task.taskId, OutboxTaskState.PENDING.name, now)
+                val affected = outboxDao.advanceDueRetryTask(task.taskId, now)
+                if (affected <= 0) continue
                 resetPendingTasks++
 
                 val record = RecoveryRecordEntity(

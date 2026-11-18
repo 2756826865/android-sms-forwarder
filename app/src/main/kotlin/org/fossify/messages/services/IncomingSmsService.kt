@@ -79,6 +79,18 @@ open class IncomingSmsService : Service() {
      */
     @Volatile
     private var foregroundStarted = false
+    private val activeTasks = java.util.concurrent.atomic.AtomicInteger(0)
+    @Volatile
+    private var lastStartId = 0
+
+    private fun finishStart(startId: Int) {
+        synchronized(this) {
+            if (startId > lastStartId) lastStartId = startId
+            if (activeTasks.decrementAndGet() <= 0) {
+                stopSelfResult(lastStartId)
+            }
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -107,8 +119,18 @@ open class IncomingSmsService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        synchronized(this) {
+            activeTasks.incrementAndGet()
+            if (startId > lastStartId) lastStartId = startId
+        }
+        // Every startForegroundService() call sets r.fgRequired on Android 12+; re-assert
+        // startForeground() before any early stopSelfResult() so rapid dual-action broadcasts
+        // (SMS_DELIVER + SMS_RECEIVED) never trigger ForegroundServiceDidNotStartInTimeException.
+        if (runCatching { startInForeground(); true }.getOrDefault(false)) {
+            foregroundStarted = true
+        }
         if (intent == null) {
-            stopSelfResult(startId)
+            finishStart(startId)
             return START_NOT_STICKY
         }
 
@@ -137,17 +159,24 @@ open class IncomingSmsService : Service() {
                                 .onFailure { Log.w(TAG, "completion recovery registration failed", it) }
                         }
                     } finally {
-                        stopSelfResult(startId)
+                        finishStart(startId)
                     }
                 }
             }
         } catch (_: java.util.concurrent.RejectedExecutionException) {
             val appCtx = applicationContext
-            fallbackScheduler.execute {
-                runCatching { processMinimal(appCtx, intent) }
-                runCatching { SmsRecoveryWorker.enqueueNow(appCtx) }
+            try {
+                fallbackScheduler.execute {
+                    try {
+                        runCatching { processMinimal(appCtx, intent) }
+                        runCatching { SmsRecoveryWorker.enqueueNow(appCtx) }
+                    } finally {
+                        finishStart(startId)
+                    }
+                }
+            } catch (_: Throwable) {
+                finishStart(startId)
             }
-            stopSelfResult(startId)
             return START_NOT_STICKY
         }
         return START_REDELIVER_INTENT
@@ -224,8 +253,6 @@ open class IncomingSmsService : Service() {
             ShadowRepository.recordStep(this, operationId, "DUPLICATE_CHECK", "SKIPPED", "Already persisted")
             return
         }
-
-        markHandledByBroadcast(body, receivedAt)
 
         val receiverStatus = PushPlusConfig(applicationContext)
         receiverStatus.lastReceiverStatus =
@@ -344,6 +371,12 @@ open class IncomingSmsService : Service() {
         val enabledForwardChannels = buildSet {
             if (receiverStatus.enabled) add(ForwardingChannels.PUSHPLUS)
             addAll(multiConfig.enabledChannelIds())
+            runCatching {
+                org.fossify.messages.forwarding.repository.ChannelRepository
+                    .getInstance(applicationContext)
+                    .getEnabledInstances()
+                    .forEach { add(it.channelType) }
+            }
         }
         // 命中过滤的短信不跑规则求值：它根本不会走到转发阶段，求值结果无人消费（下游
         // `lastDecision` 写入、`registerSkipped`、转发入队全都被 `!filteredOut` 守卫）。
@@ -422,7 +455,20 @@ open class IncomingSmsService : Service() {
         }
 
         ShadowRepository.recordStep(this, operationId, "FORWARDING_OBSERVED", "STARTED")
-        val alreadyForwardedByNotification = wasRecentlyHandledByNotification(body, receivedAt)
+        val alreadyForwardedByNotification = consumeNotificationForwardMatch(body)
+        if (!filteredOut && !remoteCommandConsumed && alreadyForwardedByNotification) {
+            recordNotificationAlreadyForwarded(
+                context = applicationContext,
+                workId = uniqueId,
+                sender = address,
+                body = body,
+                receivedAt = receivedAt,
+                subscriptionId = subscriptionId,
+            )
+        }
+        val hasAnyForwardTarget = multiConfig.anyEnabled() ||
+            receiverStatus.enabled ||
+            enabledForwardChannels.isNotEmpty()
         if (!filteredOut && !remoteCommandConsumed && !alreadyForwardedByNotification) {
             val history = ForwardingHistoryStore(applicationContext)
             if (ruleDecision != null) {
@@ -464,12 +510,25 @@ open class IncomingSmsService : Service() {
                             allowSimLabelPrefix = target.allowSimLabelPrefix,
                             threadId = resolvedThreadId,
                             originalSim = ingressSimSnapshot,
+                            rawBody = body,
                         )
                     }
                 } else {
                     Log.i(TAG, "rules enabled but matched 0 targets: ${ruleDecision.reason}")
                 }
-            } else if (multiConfig.anyEnabled() || receiverStatus.enabled) {
+                enqueueStandaloneSmsDirectIfOutOfRuleScope(
+                    context = this,
+                    address = address,
+                    body = body,
+                    receivedAt = receivedAt,
+                    subscriptionId = subscriptionId,
+                    uniqueId = uniqueId,
+                    operationId = operationId,
+                    threadId = resolvedThreadId,
+                    originalSim = ingressSimSnapshot,
+                    rulesConfig = rulesConfig,
+                )
+            } else if (hasAnyForwardTarget) {
                 // 规则未启用时仍按实例逐一投递，不能把同类型多个实例压缩成一个类型。
                 enqueueForwardingFallback(
                     context = this,
@@ -660,8 +719,6 @@ open class IncomingSmsService : Service() {
                     return
                 }
 
-                markHandledByBroadcast(body, receivedAt)
-
                 // 廉价过滤（微秒级，不查联系人）。命中时仍然写库保证不丢，只是不转发。
                 var filteredOut = isFilteredCheap(appContext, address, body)
                 if (filteredOut) {
@@ -726,7 +783,17 @@ open class IncomingSmsService : Service() {
                     }
                     // Provider 写入失败时转发是最后一份拷贝：SmsRecoveryWorker 扫的是 Provider，
                     // 没写进去的消息它不会发现，因此这里仍然必须入队转发（除非被用户规则拦截）。
-                    if (!filteredOut && routingAllowed && !wasRecentlyHandledByNotification(body, receivedAt)) {
+                    val alreadyByNotify = consumeNotificationForwardMatch(body)
+                    if (!filteredOut && routingAllowed && alreadyByNotify) {
+                        recordNotificationAlreadyForwarded(
+                            context = appContext,
+                            workId = ingress.workId,
+                            sender = address,
+                            body = body,
+                            receivedAt = ingress.receivedAt,
+                            subscriptionId = subscriptionId,
+                        )
+                    } else if (!filteredOut && routingAllowed) {
                         enqueueForwardingFallback(
                             context = appContext,
                             address = address,
@@ -735,7 +802,14 @@ open class IncomingSmsService : Service() {
                             subscriptionId = subscriptionId,
                             uniqueId = ingress.workId,
                             operationId = null,
-                            ruleDecision = evaluateCheapRules(appContext, address, body, subscriptionId, ingress.receivedAt),
+                            ruleDecision = evaluateCheapRules(
+                                appContext,
+                                address,
+                                body,
+                                subscriptionId,
+                                ingress.receivedAt,
+                                explicitSlotIndex = receipt?.slot,
+                            ),
                         )
                     }
                     if (!ownsSms && routingAllowed)
@@ -793,11 +867,22 @@ open class IncomingSmsService : Service() {
 
                 // Ordinary intake may defer an expensive phase; durable Worker replay must finish
                 // it instead of repeatedly deferring behind its own Provider ownership marker.
+                // Always consume paired notification credit even if filteredOut, preventing stale 60s credit leaks.
+                val alreadyByNotifyPersisted = consumeNotificationForwardMatch(body)
                 var budgetBlockedForwarding = false
                 if (filteredOut) {
                     Log.i(TAG, "minimal: skipped forwarding for filtered sender $address (id=$insertedMessageId)")
                 } else if (!routingAllowed) {
                     budgetBlockedForwarding = true
+                } else if (alreadyByNotifyPersisted) {
+                    recordNotificationAlreadyForwarded(
+                        context = appContext,
+                        workId = ingress.workId,
+                        sender = address,
+                        body = body,
+                        receivedAt = ingress.receivedAt,
+                        subscriptionId = subscriptionId,
+                    )
                 } else if (!org.fossify.messages.messaging.RecoveryExecutionPolicy.mayContinue(
                         recovery, System.currentTimeMillis() - startedAt, MINIMAL_BUDGET_MS)) {
                     Log.w(
@@ -808,7 +893,7 @@ open class IncomingSmsService : Service() {
                     budgetBlockedForwarding = true
                     runCatching { SmsRecoveryWorker.enqueueNow(appContext) }
                         .onFailure { error -> Log.w(TAG, "minimal: recovery enqueue failed", error) }
-                } else if (!wasRecentlyHandledByNotification(body, receivedAt)) {
+                } else {
                     enqueueForwardingFallback(
                         context = appContext,
                         address = address,
@@ -818,7 +903,14 @@ open class IncomingSmsService : Service() {
                         uniqueId = ingress.workId,
                         operationId = null,
                         // P1-B：降级期间也必须应用用户的渠道白名单，否则"屏蔽某渠道"会失效。
-                        ruleDecision = evaluateCheapRules(appContext, address, body, subscriptionId, ingress.receivedAt),
+                        ruleDecision = evaluateCheapRules(
+                            appContext,
+                            address,
+                            body,
+                            subscriptionId,
+                            ingress.receivedAt,
+                            explicitSlotIndex = receipt?.slot,
+                        ),
                         threadId = resolvedMinimalThreadId,
                     )
                 }
@@ -894,6 +986,7 @@ open class IncomingSmsService : Service() {
             body: String,
             subscriptionId: Int,
             receivedAt: Long = System.currentTimeMillis(),
+            explicitSlotIndex: Int? = null,
         ): ForwardingRuleDecision? {
             val rulesConfig = runCatching { ForwardingRulesConfig(context) }.getOrNull() ?: return null
             if (!rulesConfig.enabled) return null
@@ -901,10 +994,14 @@ open class IncomingSmsService : Service() {
                 buildSet {
                     if (PushPlusConfig(context).enabled) add(ForwardingChannels.PUSHPLUS)
                     addAll(MultiForwardConfig(context).enabledChannelIds())
+                    org.fossify.messages.forwarding.repository.ChannelRepository
+                        .getInstance(context)
+                        .getEnabledInstances()
+                        .forEach { add(it.channelType) }
                 }
             }.getOrDefault(emptySet())
-            val simSlotIndex =
-                ReceivingSubscriptionReader.slotForSubscription(context, subscriptionId)
+            val simSlotIndex = explicitSlotIndex?.takeIf { it >= 0 }
+                ?: ReceivingSubscriptionReader.slotForSubscription(context, subscriptionId)
             return runCatching {
                 ForwardingRuleEngine(rulesConfig.rules) { receivedAt }
                     .evaluate(
@@ -944,9 +1041,17 @@ open class IncomingSmsService : Service() {
             ruleDecision: ForwardingRuleDecision? = null,
             threadId: Long = 0L,
             originalSim: org.fossify.messages.forwarding.ForwardingSimSnapshot? = null,
-        ) {
+            allowedInstanceIdsOverride: Set<String>? = null,
+        ): Int {
             if (ruleDecision != null) {
+                var enqueued = 0
                 ruleDecision.targets.forEach { target ->
+                    if (allowedInstanceIdsOverride != null &&
+                        target.instanceId.isNotBlank() &&
+                        target.instanceId !in allowedInstanceIdsOverride
+                    ) {
+                        return@forEach
+                    }
                     MultiChannelForwardWorker.enqueueSingle(
                         originalSim = originalSim,
                         context = context, sender = address,
@@ -956,9 +1061,25 @@ open class IncomingSmsService : Service() {
                         allowedChannels = setOf(target.instanceId.ifBlank { target.channelType }),
                         isTest = false, operationId = operationId, targetInstanceId = target.instanceId,
                         ruleId = target.ruleId, actionId = target.actionId, bodyAlreadyRendered = true,
-                        allowSimLabelPrefix = target.allowSimLabelPrefix, threadId = threadId)
+                        allowSimLabelPrefix = target.allowSimLabelPrefix, threadId = threadId,
+                        rawBody = body)
+                    enqueued++
                 }
-                return
+                if (enqueueStandaloneSmsDirectIfOutOfRuleScope(
+                    context = context,
+                    address = address,
+                    body = body,
+                    receivedAt = receivedAt,
+                    subscriptionId = subscriptionId,
+                    uniqueId = uniqueId,
+                    operationId = operationId,
+                    threadId = threadId,
+                    originalSim = originalSim,
+                    rulesConfig = runCatching { ForwardingRulesConfig(context) }.getOrNull(),
+                )) {
+                    enqueued++
+                }
+                return enqueued
             }
             val multiConfig = MultiForwardConfig(context)
             val pushPlusEnabled = PushPlusConfig(context).enabled
@@ -970,29 +1091,13 @@ open class IncomingSmsService : Service() {
                 Log.e(TAG, "forwarding: channel instances unavailable", error)
             }.getOrDefault(emptyList())
 
-            // P1-B：降级期间也必须尊重用户配置的渠道白名单，否则规则"屏蔽渠道 Z"会失效，
-            // 消息会被投递到用户明确不想让内容进入的渠道。
-            val allowedInstances = if (ruleDecision == null) {
-                enabledInstances
+            val allowedInstances = if (allowedInstanceIdsOverride != null) {
+                enabledInstances.filter { it.id in allowedInstanceIdsOverride }
             } else {
-                enabledInstances.filter { instance ->
-                    // 若规则明确指定了实例列表，则以 allowedInstanceIds 判定；
-                    // 否则回退到按渠道类型 allowedChannels 判定。
-                    if (ruleDecision.allowedInstanceIds.isNotEmpty()) {
-                        ruleDecision.isInstanceAllowed(instance.id)
-                    } else {
-                        ruleDecision.isAllowed(instance.channelType)
-                    }
-                }
-            }
-            if (ruleDecision != null && allowedInstances.size != enabledInstances.size) {
-                Log.i(
-                    TAG,
-                    "forwarding: rule subset blocked ${enabledInstances.size - allowedInstances.size} " +
-                    "of ${enabledInstances.size} instance(s)",
-                )
+                enabledInstances
             }
 
+            var enqueued = 0
             allowedInstances.forEach { instance ->
                 operationId?.let { ShadowRepository.recordDelivery(context, it, instance.id, "QUEUED") }
                 MultiChannelForwardWorker.enqueueSingle(
@@ -1010,16 +1115,20 @@ open class IncomingSmsService : Service() {
                     targetInstanceId = instance.id,
                     threadId = threadId
                 )
+                enqueued++
             }
 
             // 兼容尚未转换成实例的旧版配置；同类型已有实例时避免重复发送。
             // instanceTypes 用"全部启用实例"（而非 allowedInstances）计算，这样被规则屏蔽的实例
             // 其同类型 legacy 通道也会一并被排除，不会绕过实例级屏蔽。
             val instanceTypes = enabledInstances.map { it.channelType }.toSet()
-            val legacyChannels = (multiConfig.enabledChannelIds() +
-                if (pushPlusEnabled) setOf(ForwardingChannels.PUSHPLUS) else emptySet())
-                .filter { channel -> ruleDecision == null || ruleDecision.isAllowed(channel) }
-                .toSet() - instanceTypes
+            val legacyChannels = if (allowedInstanceIdsOverride != null) {
+                emptySet()
+            } else {
+                (multiConfig.enabledChannelIds() +
+                    if (pushPlusEnabled) setOf(ForwardingChannels.PUSHPLUS) else emptySet())
+                    .toSet() - instanceTypes
+            }
             legacyChannels.forEach { channel ->
                 operationId?.let { ShadowRepository.recordDelivery(context, it, channel, "QUEUED") }
                 MultiChannelForwardWorker.enqueueSingle(
@@ -1036,8 +1145,103 @@ open class IncomingSmsService : Service() {
                     operationId = operationId,
                     threadId = threadId
                 )
+                enqueued++
             }
+            return enqueued
         }
+
+        fun enqueueStandaloneSmsDirectIfOutOfRuleScope(
+            context: Context,
+            address: String,
+            body: String,
+            receivedAt: Long,
+            subscriptionId: Int,
+            uniqueId: String,
+            operationId: String?,
+            threadId: Long = 0L,
+            originalSim: org.fossify.messages.forwarding.ForwardingSimSnapshot? = null,
+            rulesConfig: ForwardingRulesConfig? = runCatching { ForwardingRulesConfig(context) }.getOrNull(),
+        ): Boolean {
+            if (rulesConfig == null || !rulesConfig.enabled ||
+                rulesConfig.scope != ForwardingRulesConfig.SCOPE_FORWARDING_ONLY
+            ) {
+                return false
+            }
+            // Any SMS_DIRECT instance explicitly bound to a rule is governed by that rule's conditions
+            // and MUST NOT fire unconditionally on non-matching/spam SMS!
+            val allRules = rulesConfig.rules
+            val ruleBoundSmsDirectIds = buildSet {
+                for (rule in allRules) {
+                    rule.targetInstanceIds.filter(String::isNotBlank).forEach(::add)
+                    rule.actions.forEach { action ->
+                        if (action.channelType == ForwardingChannels.SMS_DIRECT && action.targetInstanceId.isNotBlank()) {
+                            add(action.targetInstanceId)
+                        }
+                    }
+                }
+            }
+            val hasRuleBoundLegacySmsDirect = allRules.any { rule ->
+                ForwardingChannels.SMS_DIRECT in rule.channels ||
+                    rule.actions.any { it.channelType == ForwardingChannels.SMS_DIRECT && it.targetInstanceId.isBlank() }
+            }
+            val enabledInstances = runCatching {
+                org.fossify.messages.forwarding.repository.ChannelRepository
+                    .getInstance(context)
+                    .getEnabledInstances()
+            }.getOrDefault(emptyList())
+            val smsDirectInstances = enabledInstances
+                .filter { it.channelType == ForwardingChannels.SMS_DIRECT && it.id !in ruleBoundSmsDirectIds }
+            var dispatched = false
+            smsDirectInstances.forEach { instance ->
+                operationId?.let { ShadowRepository.recordDelivery(context, it, instance.id, "QUEUED") }
+                MultiChannelForwardWorker.enqueueSingle(
+                    originalSim = originalSim,
+                    context = context,
+                    sender = address,
+                    body = body,
+                    receivedAt = receivedAt,
+                    subscriptionId = subscriptionId,
+                    uniqueId = "$uniqueId-${instance.id}",
+                    targetChannel = ForwardingChannels.SMS_DIRECT,
+                    allowedChannels = setOf(instance.id),
+                    isTest = false,
+                    operationId = operationId,
+                    targetInstanceId = instance.id,
+                    threadId = threadId,
+                    rawBody = body,
+                )
+                dispatched = true
+            }
+            val hasAnySmsDirectInstance = enabledInstances.any { it.channelType == ForwardingChannels.SMS_DIRECT }
+            if (!hasAnySmsDirectInstance && !hasRuleBoundLegacySmsDirect &&
+                MultiForwardConfig(context).isChannelEnabled(ForwardingChannels.SMS_DIRECT)
+            ) {
+                operationId?.let { ShadowRepository.recordDelivery(context, it, ForwardingChannels.SMS_DIRECT, "QUEUED") }
+                MultiChannelForwardWorker.enqueueSingle(
+                    originalSim = originalSim,
+                    context = context,
+                    sender = address,
+                    body = body,
+                    receivedAt = receivedAt,
+                    subscriptionId = subscriptionId,
+                    uniqueId = "$uniqueId-legacy-${ForwardingChannels.SMS_DIRECT}",
+                    targetChannel = ForwardingChannels.SMS_DIRECT,
+                    allowedChannels = setOf(ForwardingChannels.SMS_DIRECT),
+                    isTest = false,
+                    operationId = operationId,
+                    threadId = threadId,
+                    rawBody = body,
+                )
+                dispatched = true
+            }
+            return dispatched
+        }
+
+        fun rawBodyDigest16(cleanBody: String): String =
+            MessageDigest.getInstance("SHA-256")
+                .digest(cleanBody.toByteArray(Charsets.UTF_8))
+                .take(8)
+                .joinToString("") { "%02x".format(it) }
 
         private fun writeLocalMessageMinimal(
             context: Context,
@@ -1101,17 +1305,15 @@ open class IncomingSmsService : Service() {
                 if (messageId < SYNTHETIC_MESSAGE_BASE) {
                     val msgSec = (date / 1000).toInt()
                     val cleanMsgBody = body.stripInvisibleAndTrim()
-                    val synDuplicates = context.messagesDB.getSyntheticMessagesBetween(
+                    val matchedSyn = context.messagesDB.getSyntheticMessagesBetween(
                         SYNTHETIC_MESSAGE_BASE,
                         msgSec - 120,
                         msgSec + 120,
-                    ).filter { it.body.stripInvisibleAndTrim() == cleanMsgBody }
-                    for (syn in synDuplicates) {
-                        context.messagesDB.delete(syn.id)
-                        if (syn.threadId >= SYNTHETIC_THREAD_BASE && syn.threadId != threadId) {
-                            if (!context.messagesDB.hasThreadMessages(syn.threadId)) {
-                                context.conversationsDB.deleteThreadId(syn.threadId)
-                            }
+                    ).firstOrNull { it.body.stripInvisibleAndTrim() == cleanMsgBody }
+                    if (matchedSyn != null) {
+                        context.messagesDB.delete(matchedSyn.id)
+                        if (matchedSyn.threadId != threadId && !context.messagesDB.hasThreadMessages(matchedSyn.threadId)) {
+                            context.conversationsDB.deleteThreadId(matchedSyn.threadId)
                         }
                     }
                 }
@@ -1239,8 +1441,17 @@ open class IncomingSmsService : Service() {
                 .joinToString("") { "%02x".format(it) }
         }
 
-        private val recentBroadcastBodies = java.util.concurrent.ConcurrentHashMap<String, Long>()
-        private val recentNotificationForwardedBodies = java.util.concurrent.ConcurrentHashMap<String, Long>()
+        data class LocalFallbackSmsResult(
+            val resolvedAddress: String,
+            val providerMessageId: Long,
+            val threadId: Long,
+            val subscriptionId: Int,
+        )
+
+        private val unmatchedBroadcastTokens = HashMap<String, java.util.ArrayDeque<Long>>()
+        private val unmatchedNotificationTokens = HashMap<String, java.util.ArrayDeque<Long>>()
+        private val pairedBroadcastCredits = HashMap<String, java.util.ArrayDeque<Long>>()
+        private val recentBroadcastSignatures = HashMap<String, Pair<String, Long>>()
         private val notifyFallbackSeq = java.util.concurrent.atomic.AtomicLong(0L)
         private val forwardingClaimLock = Any()
         private val serviceExecutor = Executors.newSingleThreadExecutor { runnable ->
@@ -1260,19 +1471,70 @@ open class IncomingSmsService : Service() {
             }
         }
 
-        fun markHandledByBroadcast(body: String, timestamp: Long) {
+        private fun pruneCrossPathTokensLocked(nowMs: Long) {
+            fun pruneDequeMap(map: HashMap<String, java.util.ArrayDeque<Long>>, windowMs: Long) {
+                val it = map.entries.iterator()
+                while (it.hasNext()) {
+                    val q = it.next().value
+                    while (q.isNotEmpty() && kotlin.math.abs(nowMs - q.peekFirst()!!) > windowMs) {
+                        q.removeFirst()
+                    }
+                    if (q.isEmpty()) it.remove()
+                }
+                if (map.size > 500) map.clear()
+            }
+            pruneDequeMap(unmatchedBroadcastTokens, BROADCAST_DEDUPE_WINDOW_MS)
+            pruneDequeMap(unmatchedNotificationTokens, BROADCAST_DEDUPE_WINDOW_MS)
+            pruneDequeMap(pairedBroadcastCredits, BROADCAST_RETENTION_MS)
+            if (recentBroadcastSignatures.size > BROADCAST_CACHE_PRUNE_THRESHOLD) {
+                val sigIt = recentBroadcastSignatures.entries.iterator()
+                while (sigIt.hasNext()) {
+                    if (kotlin.math.abs(nowMs - sigIt.next().value.second) > BROADCAST_DEDUPE_WINDOW_MS) {
+                        sigIt.remove()
+                    }
+                }
+                if (recentBroadcastSignatures.size > 500) recentBroadcastSignatures.clear()
+            }
+        }
+
+        fun onSmsBroadcastReceived(
+            action: String,
+            sender: String,
+            body: String,
+            sentAt: Long,
+            timestamp: Long = System.currentTimeMillis(),
+        ) {
             val clean = body.stripInvisibleAndTrim()
             if (clean.isBlank()) return
-            recentBroadcastBodies[clean] = timestamp
-            if (recentBroadcastBodies.size <= BROADCAST_CACHE_PRUNE_THRESHOLD) return
-            val cutoff = timestamp - BROADCAST_RETENTION_MS
-            val it = recentBroadcastBodies.entries.iterator()
-            while (it.hasNext()) {
-                if (it.next().value < cutoff) it.remove()
+            synchronized(forwardingClaimLock) {
+                pruneCrossPathTokensLocked(timestamp)
+                val sig = "${sender.trim()}\u0000$clean\u0000$sentAt"
+                val prevSig = recentBroadcastSignatures[sig]
+                if (prevSig != null && prevSig.first != action &&
+                    kotlin.math.abs(timestamp - prevSig.second) <= SAME_PDU_DUAL_ACTION_WINDOW_MS
+                ) {
+                    return
+                }
+                recentBroadcastSignatures[sig] = action to timestamp
+                val notifQueue = unmatchedNotificationTokens[clean]
+                if (notifQueue != null && notifQueue.isNotEmpty()) {
+                    notifQueue.removeFirst()
+                    if (notifQueue.isEmpty()) unmatchedNotificationTokens.remove(clean)
+                    pairedBroadcastCredits.getOrPut(clean) { java.util.ArrayDeque() }.addLast(timestamp)
+                } else {
+                    unmatchedBroadcastTokens.getOrPut(clean) { java.util.ArrayDeque() }.addLast(timestamp)
+                }
             }
-            if (recentBroadcastBodies.size > 500) {
-                recentBroadcastBodies.clear()
-            }
+        }
+
+        fun markHandledByBroadcast(body: String, timestamp: Long) {
+            onSmsBroadcastReceived(
+                action = "legacy",
+                sender = "",
+                body = body,
+                sentAt = timestamp,
+                timestamp = timestamp,
+            )
         }
 
         fun wasRecentlyHandledByBroadcast(
@@ -1281,42 +1543,99 @@ open class IncomingSmsService : Service() {
             windowMs: Long = BROADCAST_DEDUPE_WINDOW_MS,
         ): Boolean {
             val clean = body.stripInvisibleAndTrim()
-            val handledAt = recentBroadcastBodies[clean] ?: return false
-            return kotlin.math.abs(timestamp - handledAt) <= windowMs
+            if (clean.isBlank()) return false
+            synchronized(forwardingClaimLock) {
+                pruneCrossPathTokensLocked(timestamp)
+                val q = unmatchedBroadcastTokens[clean] ?: return false
+                return q.any { kotlin.math.abs(timestamp - it) <= windowMs }
+            }
         }
 
         fun claimNotificationSmsForward(body: String, timestamp: Long): Boolean {
             val clean = body.stripInvisibleAndTrim()
             if (clean.isBlank()) return false
             synchronized(forwardingClaimLock) {
-                if (wasRecentlyHandledByBroadcast(clean, timestamp)) return false
-                val prev = recentNotificationForwardedBodies[clean]
-                if (prev != null && kotlin.math.abs(timestamp - prev) <= BROADCAST_DEDUPE_WINDOW_MS) {
+                pruneCrossPathTokensLocked(timestamp)
+                val bcastQueue = unmatchedBroadcastTokens[clean]
+                if (bcastQueue != null && bcastQueue.isNotEmpty()) {
+                    bcastQueue.removeFirst()
+                    if (bcastQueue.isEmpty()) unmatchedBroadcastTokens.remove(clean)
                     return false
                 }
-                recentNotificationForwardedBodies[clean] = timestamp
-                if (recentNotificationForwardedBodies.size > BROADCAST_CACHE_PRUNE_THRESHOLD) {
-                    val cutoff = timestamp - BROADCAST_RETENTION_MS
-                    val it = recentNotificationForwardedBodies.entries.iterator()
-                    while (it.hasNext()) {
-                        if (it.next().value < cutoff) it.remove()
-                    }
-                    if (recentNotificationForwardedBodies.size > 500) {
-                        recentNotificationForwardedBodies.clear()
-                    }
-                }
+                unmatchedNotificationTokens.getOrPut(clean) { java.util.ArrayDeque() }.addLast(timestamp)
                 return true
             }
         }
 
-        fun wasRecentlyHandledByNotification(
+        fun releaseNotificationSmsForward(body: String) {
+            val clean = body.stripInvisibleAndTrim()
+            if (clean.isBlank()) return
+            synchronized(forwardingClaimLock) {
+                val notifQueue = unmatchedNotificationTokens[clean]
+                if (notifQueue != null && notifQueue.isNotEmpty()) {
+                    notifQueue.removeLast()
+                    if (notifQueue.isEmpty()) unmatchedNotificationTokens.remove(clean)
+                    return
+                }
+                val paired = pairedBroadcastCredits[clean]
+                if (paired != null && paired.isNotEmpty()) {
+                    paired.removeLast()
+                    if (paired.isEmpty()) pairedBroadcastCredits.remove(clean)
+                }
+            }
+        }
+
+        fun consumeNotificationForwardMatch(
             body: String,
-            timestamp: Long,
-            windowMs: Long = BROADCAST_DEDUPE_WINDOW_MS,
+            nowMs: Long = System.currentTimeMillis(),
         ): Boolean {
             val clean = body.stripInvisibleAndTrim()
-            val handledAt = recentNotificationForwardedBodies[clean] ?: return false
-            return kotlin.math.abs(timestamp - handledAt) <= windowMs
+            if (clean.isBlank()) return false
+            synchronized(forwardingClaimLock) {
+                pruneCrossPathTokensLocked(nowMs)
+                val paired = pairedBroadcastCredits[clean]
+                if (paired != null && paired.isNotEmpty()) {
+                    paired.removeFirst()
+                    if (paired.isEmpty()) pairedBroadcastCredits.remove(clean)
+                    return true
+                }
+                val notifQueue = unmatchedNotificationTokens[clean]
+                if (notifQueue != null && notifQueue.isNotEmpty()) {
+                    notifQueue.removeFirst()
+                    if (notifQueue.isEmpty()) unmatchedNotificationTokens.remove(clean)
+                    val bcastQueue = unmatchedBroadcastTokens[clean]
+                    if (bcastQueue != null && bcastQueue.isNotEmpty()) {
+                        bcastQueue.removeFirst()
+                        if (bcastQueue.isEmpty()) unmatchedBroadcastTokens.remove(clean)
+                    }
+                    return true
+                }
+                return false
+            }
+        }
+
+        private fun recordNotificationAlreadyForwarded(
+            context: Context,
+            workId: String,
+            sender: String,
+            body: String,
+            receivedAt: Long,
+            subscriptionId: Int,
+        ) {
+            runCatching {
+                ForwardingHistoryStore(context).registerSkipped(
+                    workId = workId,
+                    channel = "system",
+                    sender = sender,
+                    body = body,
+                    receivedAt = receivedAt,
+                    subscriptionId = subscriptionId,
+                    detail = "已由系统短信通知零延迟通道转发，跳过重复投递",
+                )
+                if (workId.startsWith("sms-") && workId.length > 4) {
+                    org.fossify.messages.messaging.SmsForwardingProof(context).record(workId)
+                }
+            }
         }
 
         fun forwardFromNotificationFallback(
@@ -1325,6 +1644,10 @@ open class IncomingSmsService : Service() {
             body: String,
             receivedAt: Long,
             subscriptionId: Int,
+            dedupeNowMs: Long = System.currentTimeMillis(),
+            providerMessageId: Long = -1L,
+            threadId: Long = 0L,
+            allowedNotificationInstanceIds: Set<String>? = null,
         ): Boolean {
             val appContext = context.applicationContext
             val cleanBody = body.stripInvisibleAndTrim()
@@ -1342,21 +1665,112 @@ open class IncomingSmsService : Service() {
             if (!multiConfig.anyEnabled() && !pushPlusEnabled && !hasEnabledInstances) {
                 return false
             }
-            if (!claimNotificationSmsForward(cleanBody, receivedAt)) {
-                Log.i(TAG, "Skip notification SMS fallback forward (already handled by broadcast/notification)")
+            if (!claimNotificationSmsForward(cleanBody, dedupeNowMs)) {
+                Log.i(TAG, "Skip notification SMS fallback forward (already paired with broadcast)")
                 return true
             }
+            val uniqueId = if (providerMessageId > 0L && providerMessageId < SYNTHETIC_MESSAGE_BASE) {
+                "sms-$providerMessageId"
+            } else {
+                "sms-notify-$receivedAt-${rawBodyDigest16(cleanBody)}-${notifyFallbackSeq.incrementAndGet()}"
+            }
+            val hasDigitSender = sender.any { it.isDigit() }
             if (isFilteredForReceive(appContext, sender, cleanBody)) {
                 Log.i(TAG, "Notification fallback SMS from $sender matched user filter; skip forwarding")
+                if (!hasDigitSender || providerMessageId <= 0L) {
+                    // Notification title lacked a real phone number; release claim so broadcast/provider
+                    // with the real sender address can evaluate whitelist/contact rules accurately.
+                    releaseNotificationSmsForward(cleanBody)
+                    return false
+                }
+                runCatching {
+                    ForwardingHistoryStore(appContext).registerSkipped(
+                        workId = uniqueId,
+                        channel = "system",
+                        sender = sender,
+                        body = cleanBody,
+                        receivedAt = receivedAt,
+                        subscriptionId = subscriptionId,
+                        detail = "用户规则拦截（含陌生人/黑名单/关键词），不予转发",
+                    )
+                    if (uniqueId.startsWith("sms-") && !uniqueId.startsWith("sms-notify-")) {
+                        org.fossify.messages.messaging.SmsForwardingProof(appContext).record(uniqueId)
+                    }
+                }
                 return true
             }
             val ruleDecision = evaluateCheapRules(appContext, sender, cleanBody, subscriptionId, receivedAt)
-            if (rulesConfig.enabled && ruleDecision != null && ruleDecision.targets.isEmpty()) {
-                Log.i(TAG, "Notification fallback SMS matched 0 rule targets: ${ruleDecision.reason}")
+            val remoteCommandAllowed = !rulesConfig.affectsRemoteCommands() ||
+                !rulesConfig.enabled ||
+                rulesConfig.rules.none { it.enabled } ||
+                ruleDecision?.matchedRules?.isNotEmpty() == true
+            val smsCmdCfg = org.fossify.messages.remote.RemoteSmsCommandConfig(appContext)
+            val looksLikeRemoteSmsCmd = smsCmdCfg.enabled &&
+                org.fossify.messages.remote.RemoteSmsCommand.parse(cleanBody, smsCmdCfg.customPrefix) != null
+            if (!hasDigitSender && looksLikeRemoteSmsCmd) {
+                // Notification only has a contact display name; defer to broadcast so phone-number
+                // whitelist authorization can succeed cleanly.
+                releaseNotificationSmsForward(cleanBody)
+                return false
+            }
+            val consumedAsRemoteCmd = runCatching {
+                val cmdConsumed = if (hasDigitSender) {
+                    RemoteSmsCommandProcessor.tryConsume(
+                        context = appContext,
+                        sender = sender,
+                        body = cleanBody,
+                        subscriptionId = subscriptionId,
+                        messageTimestamp = receivedAt,
+                        messageId = providerMessageId.takeIf { it > 0L } ?: -1L,
+                        allowExecution = remoteCommandAllowed,
+                    )
+                } else {
+                    false
+                }
+                cmdConsumed || looksLikeRemoteSmsCmd
+            }.getOrDefault(false)
+            if (consumedAsRemoteCmd) {
+                runCatching {
+                    ForwardingHistoryStore(appContext).registerSkipped(
+                        workId = uniqueId,
+                        channel = "system",
+                        sender = sender,
+                        body = cleanBody,
+                        receivedAt = receivedAt,
+                        subscriptionId = subscriptionId,
+                        detail = "识别为远程发信指令，跳过外部渠道转发",
+                    )
+                    if (uniqueId.startsWith("sms-") && !uniqueId.startsWith("sms-notify-")) {
+                        org.fossify.messages.messaging.SmsForwardingProof(appContext).record(uniqueId)
+                    }
+                }
                 return true
             }
-            val uniqueId = "sms-notify-$receivedAt-${cleanBody.hashCode()}-${notifyFallbackSeq.incrementAndGet()}"
-            enqueueForwardingFallback(
+            if (rulesConfig.enabled && ruleDecision != null && ruleDecision.targets.isEmpty()) {
+                val dispatchedStandaloneSmsDirect = enqueueStandaloneSmsDirectIfOutOfRuleScope(
+                    context = appContext,
+                    address = sender,
+                    body = cleanBody,
+                    receivedAt = receivedAt,
+                    subscriptionId = subscriptionId,
+                    uniqueId = uniqueId,
+                    operationId = null,
+                    threadId = threadId,
+                    rulesConfig = rulesConfig,
+                )
+                Log.i(TAG, "Notification fallback SMS matched 0 rule targets: ${ruleDecision.reason}")
+                if (!dispatchedStandaloneSmsDirect) {
+                    // Notification may lack real phone number or SIM slot; release claim and omit
+                    // SmsForwardingProof so broadcast/recovery with authoritative metadata can evaluate.
+                    releaseNotificationSmsForward(cleanBody)
+                    return false
+                }
+                if (uniqueId.startsWith("sms-") && !uniqueId.startsWith("sms-notify-")) {
+                    runCatching { org.fossify.messages.messaging.SmsForwardingProof(appContext).record(uniqueId) }
+                }
+                return true
+            }
+            val enqueuedCount = enqueueForwardingFallback(
                 context = appContext,
                 address = sender,
                 body = cleanBody,
@@ -1365,7 +1779,16 @@ open class IncomingSmsService : Service() {
                 uniqueId = uniqueId,
                 operationId = null,
                 ruleDecision = ruleDecision,
+                threadId = threadId,
+                allowedInstanceIdsOverride = allowedNotificationInstanceIds,
             )
+            if (enqueuedCount <= 0) {
+                releaseNotificationSmsForward(cleanBody)
+                return false
+            }
+            if (uniqueId.startsWith("sms-") && !uniqueId.startsWith("sms-notify-")) {
+                runCatching { org.fossify.messages.messaging.SmsForwardingProof(appContext).record(uniqueId) }
+            }
             return true
         }
 
@@ -1415,54 +1838,51 @@ open class IncomingSmsService : Service() {
             receivedAt: Long,
             subscriptionId: Int = -1,
             status: Int = Telephony.Sms.STATUS_NONE,
-        ) {
+        ): LocalFallbackSmsResult? {
             check(android.os.Looper.myLooper() != android.os.Looper.getMainLooper()) {
                 "local_fallback_on_main_thread"
             }
             val address = rawSender.trim()
             val cleanBody = body.stripInvisibleAndTrim()
-            if (address.isBlank() || cleanBody.isBlank()) return
+            if (address.isBlank() || cleanBody.isBlank()) return null
             val appContext = context.applicationContext
             synchronized(localFallbackLock) {
                 val providerRow = findInboxMessageFromProvider(appContext, cleanBody, receivedAt)
                 if (providerRow != null) {
-                    if (appContext.messagesDB.getMessageWithId(providerRow.id) != null) {
-                        return
-                    }
                     val resolvedAddress = providerRow.address.ifBlank { address }
                     val resolvedThreadId = providerRow.threadId.takeIf { it > 0L }
                         ?: resolveThreadId(appContext, resolvedAddress)
-                    runCatching {
-                        writeLocalMessageMinimal(
-                            context = appContext,
-                            address = resolvedAddress,
-                            body = providerRow.body.ifBlank { body },
-                            date = providerRow.dateMillis,
-                            messageId = providerRow.id,
-                            threadId = resolvedThreadId,
-                            subscriptionId = if (
-                                providerRow.subscriptionId !=
-                                android.telephony.SubscriptionManager.INVALID_SUBSCRIPTION_ID
-                            ) {
-                                providerRow.subscriptionId
-                            } else {
-                                subscriptionId
-                            },
-                            status = providerRow.status,
-                        )
-                    }.onFailure { error ->
-                        Log.w(TAG, "provider import write failed: ${error.javaClass.simpleName}")
+                    val resolvedSubId = if (
+                        providerRow.subscriptionId !=
+                        android.telephony.SubscriptionManager.INVALID_SUBSCRIPTION_ID
+                    ) {
+                        providerRow.subscriptionId
+                    } else {
+                        subscriptionId
                     }
-                    return
+                    if (appContext.messagesDB.getMessageWithId(providerRow.id) == null) {
+                        runCatching {
+                            writeLocalMessageMinimal(
+                                context = appContext,
+                                address = resolvedAddress,
+                                body = providerRow.body.ifBlank { body },
+                                date = providerRow.dateMillis,
+                                messageId = providerRow.id,
+                                threadId = resolvedThreadId,
+                                subscriptionId = resolvedSubId,
+                                status = providerRow.status,
+                            )
+                        }.onFailure { error ->
+                            Log.w(TAG, "provider import write failed: ${error.javaClass.simpleName}")
+                        }
+                    }
+                    return LocalFallbackSmsResult(
+                        resolvedAddress = resolvedAddress,
+                        providerMessageId = providerRow.id,
+                        threadId = resolvedThreadId,
+                        subscriptionId = resolvedSubId,
+                    )
                 }
-
-                val fromSeconds = ((receivedAt - SYNTHETIC_DEDUPE_WINDOW_MS) / MILLIS_PER_SECOND).toInt()
-                val toSeconds = ((receivedAt + SYNTHETIC_DEDUPE_WINDOW_MS) / MILLIS_PER_SECOND).toInt()
-                val alreadyInRoom = runCatching {
-                    appContext.messagesDB.getInboxBodiesBetween(fromSeconds, toSeconds)
-                        .any { it.stripInvisibleAndTrim() == cleanBody }
-                }.getOrDefault(false)
-                if (alreadyInRoom) return
 
                 val matchedConv = findMatchingConversation(appContext, address)
                 val effectiveAddress = if (
@@ -1476,6 +1896,22 @@ open class IncomingSmsService : Service() {
                 }
                 val threadId = matchedConv?.threadId?.takeIf { it > 0L }
                     ?: resolveThreadId(appContext, effectiveAddress)
+
+                val fromSeconds = ((receivedAt - SYNTHETIC_DEDUPE_WINDOW_MS) / MILLIS_PER_SECOND).toInt()
+                val toSeconds = ((receivedAt + SYNTHETIC_DEDUPE_WINDOW_MS) / MILLIS_PER_SECOND).toInt()
+                val alreadyInRoom = runCatching {
+                    appContext.messagesDB.getInboxBodiesBetween(fromSeconds, toSeconds)
+                        .any { it.stripInvisibleAndTrim() == cleanBody }
+                }.getOrDefault(false)
+                if (alreadyInRoom) {
+                    return LocalFallbackSmsResult(
+                        resolvedAddress = effectiveAddress,
+                        providerMessageId = -1L,
+                        threadId = threadId,
+                        subscriptionId = subscriptionId,
+                    )
+                }
+
                 val messageId = SYNTHETIC_MESSAGE_BASE + (System.nanoTime() and SYNTHETIC_MESSAGE_MASK)
                 runCatching {
                     writeLocalMessageMinimal(
@@ -1491,6 +1927,12 @@ open class IncomingSmsService : Service() {
                 }.onFailure { error ->
                     Log.w(TAG, "local fallback write failed: ${error.javaClass.simpleName}")
                 }
+                return LocalFallbackSmsResult(
+                    resolvedAddress = effectiveAddress,
+                    providerMessageId = -1L,
+                    threadId = threadId,
+                    subscriptionId = subscriptionId,
+                )
             }
         }
 
@@ -1510,13 +1952,20 @@ open class IncomingSmsService : Service() {
             }.getOrNull()
         }
 
-        private fun resolveThreadId(context: Context, address: String): Long {
-            val systemThreadId = runCatching { context.getThreadId(address) }.getOrNull()?.takeIf { it > 0L }
-            if (systemThreadId != null) return systemThreadId
+        fun resolveOrSynthesizeThreadId(context: Context, address: String): Long =
+            resolveThreadId(context, address)
 
+        private fun resolveThreadId(context: Context, address: String): Long {
             val trimmed = address.trim()
             val roomThreadId = findMatchingConversation(context, trimmed)?.threadId?.takeIf { it > 0L }
             if (roomThreadId != null) return roomThreadId
+
+            val looksLikePhone = trimmed.any { it.isDigit() } &&
+                trimmed.all { it.isDigit() || it == '+' || it == ' ' || it == '-' || it == '(' || it == ')' }
+            if (looksLikePhone) {
+                val systemThreadId = runCatching { context.getThreadId(trimmed) }.getOrNull()?.takeIf { it > 0L }
+                if (systemThreadId != null) return systemThreadId
+            }
 
             return SYNTHETIC_THREAD_BASE + (trimmed.hashCode().toLong() and SYNTHETIC_THREAD_MASK)
         }
@@ -1600,7 +2049,9 @@ open class IncomingSmsService : Service() {
                             if (id <= 0L || context.messagesDB.getMessageWithId(id) == null) {
                                 return@use row
                             }
-                            if (firstMatchedRow == null) {
+                            if (firstMatchedRow == null &&
+                                kotlin.math.abs(dateMillis - receivedAt) <= BROADCAST_DEDUPE_WINDOW_MS
+                            ) {
                                 firstMatchedRow = row
                             }
                         }
@@ -1614,7 +2065,8 @@ open class IncomingSmsService : Service() {
         private const val MILLIS_PER_SECOND = 1000L
         private const val BROADCAST_CACHE_PRUNE_THRESHOLD = 200
         private const val BROADCAST_RETENTION_MS = 60_000L
-        private const val BROADCAST_DEDUPE_WINDOW_MS = 20_000L
+        private const val BROADCAST_DEDUPE_WINDOW_MS = 8_000L
+        private const val SAME_PDU_DUAL_ACTION_WINDOW_MS = 2_500L
         private const val LOCAL_FALLBACK_DELAY_MS = 2_500L
         private const val FALLBACK_DEDUPE_WINDOW_MS = 120_000L
         private const val SYNTHETIC_DEDUPE_WINDOW_MS = 20_000L

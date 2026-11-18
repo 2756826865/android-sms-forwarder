@@ -47,20 +47,7 @@ class SmsKeepAliveService : Service() {
         super.onCreate()
         try {
             createChannel()
-            val notification = buildNotification(getString(R.string.background_service_starting))
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                try {
-                    startForeground(
-                        NOTIFICATION_ID,
-                        notification,
-                        ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
-                    )
-                } catch (_: Exception) {
-                    startForeground(NOTIFICATION_ID, notification)
-                }
-            } else {
-                startForeground(NOTIFICATION_ID, notification)
-            }
+            promoteForeground(getString(R.string.background_service_starting))
             running = true
             record(this, "foreground", "")
             retireLegacyServices(this)
@@ -121,12 +108,39 @@ class SmsKeepAliveService : Service() {
         super.onDestroy()
     }
 
+    private fun promoteForeground(text: String) {
+        val notification = buildNotification(text)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            try {
+                startForeground(
+                    NOTIFICATION_ID,
+                    notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
+                )
+            } catch (_: Exception) {
+                startForeground(NOTIFICATION_ID, notification)
+            }
+        } else {
+            startForeground(NOTIFICATION_ID, notification)
+        }
+    }
+
     @Suppress("TooGenericExceptionCaught")
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (!running) {
+        // Every startForegroundService() re-entry sets r.fgRequired on Android 12+; always call
+        // startForeground() before any stopSelfResult() so ForegroundServiceDidNotStartInTimeException
+        // can never occur.
+        val promoted = runCatching {
+            createChannel()
+            promoteForeground(lastText ?: getString(R.string.background_service_starting))
+            true
+        }.getOrDefault(false)
+        if (!running && !promoted) {
             stopSelfResult(startId)
             return START_NOT_STICKY
         }
+        running = true
+        startupFailed = false
         latestStartId = startId
         retireLegacyServices(this)
         return try {
@@ -308,8 +322,14 @@ class SmsKeepAliveService : Service() {
         }
 
         fun stop(context: Context) {
+            val appCtx = context.applicationContext
+            if (!smsGuardEnabled(appCtx) && !snapshot(appCtx).required) {
+                retireLegacyServices(appCtx)
+                runCatching { appCtx.stopService(Intent(appCtx, SmsKeepAliveService::class.java)) }
+                return
+            }
             // A caller disabling SMS or one source must not stop the other enabled listeners.
-            ensureStarted(context)
+            ensureStarted(appCtx)
         }
     }
 }

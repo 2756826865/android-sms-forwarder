@@ -152,33 +152,52 @@ class ForwardingRulesSettingsActivity : SimpleActivity() {
         if (loadingEditor) return workingRules.getOrNull(selectedRuleIndex)
         val includeRegex = binding.rulesAllowRegex.text?.toString().orEmpty().trim()
         val excludeRegex = binding.rulesExcludeRegex.text?.toString().orEmpty().trim()
-        val parsedReplacements = parseRegexReplacements(binding.rulesRegexReplacements.text?.toString().orEmpty())
+        val existing = workingRules.getOrNull(selectedRuleIndex)
+        val parsedReplacements = parseRegexReplacements(
+            binding.rulesRegexReplacements.text?.toString().orEmpty(),
+            existing?.regexReplacements.orEmpty(),
+        )
         if (!isRegexValid(includeRegex) || !isRegexValid(excludeRegex) || parsedReplacements.any { !isRegexValid(it.pattern) }) {
             if (showError) toast(R.string.forwarding_rules_invalid_regex)
             return null
         }
         val fallbackName = getString(R.string.forwarding_rules_rule_default, selectedRuleIndex + 1)
-        val existing = workingRules.getOrNull(selectedRuleIndex)
+        val newMatchMode = if (binding.rulesMatchMode.selectedItemPosition == 1) {
+            ForwardingRule.MATCH_ANY
+        } else {
+            ForwardingRule.MATCH_ALL
+        }
+        val newIncludeKeywords = splitValues(binding.rulesAllowKeywords.text?.toString().orEmpty())
+        val newExcludeKeywords = splitValues(binding.rulesExcludeKeywords.text?.toString().orEmpty())
+        val newCustomTemplate = binding.rulesCustomTemplate.text?.toString().orEmpty().trim()
+        val newChannels = selectedChannels.toList()
+        val conditionsChangedInClassic = existing != null && (
+            newIncludeKeywords != existing.includeKeywords ||
+                includeRegex != existing.includeRegex ||
+                newMatchMode != existing.matchMode
+            )
+        val actionsChangedInClassic = existing != null && (
+            newChannels != existing.channels ||
+                newCustomTemplate != existing.customTemplate
+            )
         return (existing ?: ForwardingRule(name = fallbackName)).copy(
             name = binding.rulesName.text?.toString().orEmpty().trim().ifBlank { fallbackName },
             enabled = binding.ruleItemEnabled.isChecked,
-            matchMode = if (binding.rulesMatchMode.selectedItemPosition == 1) {
-                ForwardingRule.MATCH_ANY
-            } else {
-                ForwardingRule.MATCH_ALL
-            },
+            matchMode = newMatchMode,
             simScope = when (binding.rulesSimScope.selectedItemPosition) {
                 1 -> ForwardingRule.SIM_1
                 2 -> ForwardingRule.SIM_2
                 else -> ForwardingRule.SIM_ALL
             },
-            includeKeywords = splitValues(binding.rulesAllowKeywords.text?.toString().orEmpty()),
-            excludeKeywords = splitValues(binding.rulesExcludeKeywords.text?.toString().orEmpty()),
+            includeKeywords = newIncludeKeywords,
+            excludeKeywords = newExcludeKeywords,
             includeRegex = includeRegex,
             excludeRegex = excludeRegex,
-            customTemplate = binding.rulesCustomTemplate.text?.toString().orEmpty().trim(),
+            customTemplate = newCustomTemplate,
             regexReplacements = parsedReplacements,
-            channels = selectedChannels.toList(),
+            channels = newChannels,
+            conditions = if (conditionsChangedInClassic) emptyList() else existing?.conditions.orEmpty(),
+            actions = if (actionsChangedInClassic) emptyList() else existing?.actions.orEmpty(),
         )
     }
 
@@ -250,12 +269,16 @@ class ForwardingRulesSettingsActivity : SimpleActivity() {
 
     private fun testRule() {
         val rule = readEditor() ?: return
-        val candidates = if (binding.rulesScope.selectedItemPosition == ForwardingRulesConfig.SCOPE_FORWARDING_ONLY) {
-            selectedChannels - ForwardingChannels.SMS_DIRECT
+        val testRuleEnabled = rule.copy(enabled = true)
+        val actionChannelTypes = testRuleEnabled.actions.filter { it.enabled }.map { it.channelType }.filter(String::isNotBlank).toSet()
+        val allConfiguredChannels = selectedChannels + actionChannelTypes
+        val hasExplicitSmsDirect = ForwardingChannels.SMS_DIRECT in allConfiguredChannels
+        val candidates = if (binding.rulesScope.selectedItemPosition == ForwardingRulesConfig.SCOPE_FORWARDING_ONLY && !hasExplicitSmsDirect) {
+            allConfiguredChannels - ForwardingChannels.SMS_DIRECT
         } else {
-            selectedChannels.toSet()
+            allConfiguredChannels.toSet()
         }
-        val decision = ForwardingRuleEngine(listOf(rule)).evaluate(
+        val decision = ForwardingRuleEngine(listOf(testRuleEnabled)).evaluate(
             sender = binding.rulesTestSender.text?.toString()?.trim().orEmpty(),
             body = binding.rulesTestBody.text?.toString().orEmpty(),
             subscriptionId = -1,
@@ -266,20 +289,23 @@ class ForwardingRulesSettingsActivity : SimpleActivity() {
                 else -> null
             },
         )
-        val result = if (candidates.isEmpty()) {
+        val result = if (candidates.isEmpty() && testRuleEnabled.targetInstanceIds.isEmpty() && testRuleEnabled.actions.isEmpty()) {
             binding.rulesTestResult.setTextColor(ContextCompat.getColor(this, R.color.miui_unread_red))
             getString(R.string.forwarding_rules_test_no_channels)
-        } else if (decision.allowedChannels.isNotEmpty()) {
+        } else if (decision.targets.isNotEmpty() || decision.allowedChannels.isNotEmpty()) {
             binding.rulesTestResult.setTextColor(ContextCompat.getColor(this, R.color.miui_action_blue))
+            val matchedLabels = decision.allowedChannels.map(ForwardingChannels::displayName)
+                .ifEmpty { decision.targets.map { it.instanceId.ifBlank { it.channelType } } }
+                .distinct()
             getString(
                 R.string.forwarding_rules_match,
-                decision.allowedChannels.map(ForwardingChannels::displayName).joinToString("、"),
+                matchedLabels.joinToString("、"),
             )
         } else {
             binding.rulesTestResult.setTextColor(ContextCompat.getColor(this, R.color.miui_unread_red))
             getString(R.string.forwarding_rules_test_no_match_reason, decision.reason)
         }
-        binding.rulesTestResult.text = result + if (binding.rulesEnabled.isChecked) "" else
+        binding.rulesTestResult.text = result + if (binding.rulesEnabled.isChecked && rule.enabled) "" else
             getString(R.string.forwarding_rules_test_disabled_notice)
     }
 
@@ -300,22 +326,26 @@ class ForwardingRulesSettingsActivity : SimpleActivity() {
         .filter(String::isNotBlank)
         .distinct()
 
-    private fun parseRegexReplacements(raw: String): List<org.fossify.messages.forwarding.RegexReplacement> =
+    private fun parseRegexReplacements(
+        raw: String,
+        existing: List<org.fossify.messages.forwarding.RegexReplacement> = emptyList(),
+    ): List<org.fossify.messages.forwarding.RegexReplacement> =
         raw.lineSequence()
-            .map(String::trim)
-            .filter(String::isNotBlank)
+            .filter { it.trim().isNotBlank() }
             .mapNotNull { line ->
-                val sep = when {
-                    "=> " in line -> "=> "
-                    "=>" in line -> "=>"
-                    "->" in line -> "->"
-                    else -> null
-                }
-                if (sep != null) {
-                    val idx = line.indexOf(sep)
-                    val pattern = line.substring(0, idx).trim()
-                    val replacement = line.substring(idx + sep.length).trim()
-                    if (pattern.isNotBlank()) org.fossify.messages.forwarding.RegexReplacement(pattern, replacement, true) else null
+                val arrowIdx = line.indexOf("=>").takeIf { it >= 0 } ?: line.indexOf("->").takeIf { it >= 0 }
+                if (arrowIdx != null) {
+                    val pattern = line.substring(0, arrowIdx).trim()
+                    val afterArrow = line.substring(arrowIdx + 2)
+                    // Strip only the single formatting space added by "${pattern} => ${replacement}",
+                    // preserving intentional whitespace replacements like " ".
+                    val replacement = if (afterArrow.startsWith(" ")) afterArrow.substring(1) else afterArrow
+                    if (pattern.isNotBlank()) {
+                        val preservedIgnoreCase = existing.firstOrNull {
+                            it.pattern == pattern && it.replacement == replacement
+                        }?.ignoreCase ?: true
+                        org.fossify.messages.forwarding.RegexReplacement(pattern, replacement, preservedIgnoreCase)
+                    } else null
                 } else null
             }
             .toList()

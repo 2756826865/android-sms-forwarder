@@ -57,15 +57,14 @@ internal fun openSupportDestination(context: Context, destination: String) {
                 catch (_: android.content.ActivityNotFoundException) { context.startActivity(intent) }
             }
             "app:changelog" -> showTextDialog(
-                "1.3.0 更新日志",
-                "• 零延迟通知兜底与标准规则引擎打通：当厂商收回默认短信或屏蔽验证码广播时，" +
-                    "系统短信通知 0ms 零延迟走标准短信规则、正则清洗、验证码提取与隐私脱敏秒发。\n" +
-                    "• 双向毫秒级防重与合成会话自愈：广播入口 T=0ms 原子抢占，真实短信落库时自动" +
-                    "原地替换临时合成记录，修复详情页刷新丢失保底短信及非默认模式无法删除会话问题。\n" +
-                    "• 3 万+ 短信全链路性能飞跃：新增 messages(type, date) 索引，重写会话列表查询为 EXISTS，" +
-                    "合并千次逐行独立事务为单次批量事务，彻底消除全量同步与列表刷新的 IO 风暴。\n" +
-                    "• 转发引擎与安全增强：补齐自定义规则模板隐私脱敏、报活与低电量原文标记、" +
-                    "来电转发多实例与主动拒接识别、无障碍验证码防误填聊天框保护。"
+                "1.3.1 更新日志",
+                "• 收发守恒与防漏发加固：广播与通知配对制防重支持连发同内容验证码 1:1 守恒；" +
+                    "通知兜底无真实号码或 0 命中时自动释放占位，确保广播与补偿扫描不漏发。\n" +
+                    "• 零误扣费与远控安全：第三方通知默认隔离短信直发，规则绑定直发严守命中范围；" +
+                    "远程短信指令增加跨路径去重，群发短信支持落盘断点续发防重试双扣费。\n" +
+                    "• 全协议栈与系统稳定性：修复 Android 12+ 前台服务超时崩溃与数据库跨版本升级自愈；" +
+                    "优化 SMTP/OAuth 提交前重试、QQ/Webhook/ntfy/WxPusher 协议细节与跨天免打扰。\n" +
+                    "• 经典版与开发版全量对齐：打通多实例渠道、远控来源、规则引擎、备份恢复双向同步，消除列表卡顿。"
             )
             else -> context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(destination)))
         }

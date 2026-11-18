@@ -105,9 +105,15 @@ class WeComStreamClient(
         networkWakeup.signal()
         isAuthenticated.set(false)
         stopHeartbeat()
+        pendingAcks.values.forEach { it.latch.countDown() }
         pendingAcks.clear()
+        runCatching { sendExecutor.shutdownNow() }
         webSocket?.close(1000, "Client stopped")
+        webSocket?.cancel()
         webSocket = null
+        http.dispatcher.cancelAll()
+        http.dispatcher.executorService.shutdown()
+        http.connectionPool.evictAll()
     }
 
     private fun connectLoop() {
@@ -267,7 +273,7 @@ class WeComStreamClient(
 
             // 消息回调
             "aibot_msg_callback" -> {
-                handleMessageCallback(headers, body)
+                handleMessageCallback(headers, body, json.optLong("createtime", 0L))
             }
 
             // 事件回调（如踢线事件）
@@ -298,7 +304,10 @@ class WeComStreamClient(
         }
     }
 
-    private fun handleMessageCallback(headers: JSONObject, body: JSONObject) {
+    private fun handleMessageCallback(headers: JSONObject, body: JSONObject) =
+        handleMessageCallback(headers, body, 0L)
+
+    private fun handleMessageCallback(headers: JSONObject, body: JSONObject, rootCreateTime: Long) {
         val reqId = headers.optString("req_id")
         val msgId = body.optString("msgid")
         val chatType = body.optString("chattype") // "single" | "group"
@@ -306,6 +315,12 @@ class WeComStreamClient(
         val fromObj = body.optJSONObject("from") ?: JSONObject()
         val senderId = fromObj.optString("userid")
         val msgType = body.optString("msgtype")
+        val rawCreateTime = body.optLong("createtime", 0L).takeIf { it > 0L } ?: rootCreateTime
+        val createdAt = when {
+            rawCreateTime >= 1_000_000_000_000L -> rawCreateTime
+            rawCreateTime > 0L -> rawCreateTime * 1000L
+            else -> 0L
+        }
 
         if (msgType != "text") {
             return
@@ -318,7 +333,7 @@ class WeComStreamClient(
         val chatTarget = if (chatType == "group") "群聊 Chat ID: $chatId" else "单聊 User ID: $senderId"
         onStatus("收到消息 -> $chatTarget (内容: ${rawContent.take(20)})")
 
-        // 去掉企微群聊中自动附加的前导 @机器人昵称（如 "@智能机器人 /短信发送 ..."）
+        // 去掉企微群聊中自动附加的前导 @机器人昵称（含空格昵称及全角/四分之一空格）
         val cleanContent = cleanAtPrefix(rawContent)
 
         val identityKind = DingTalkWhitelistRequest.parseKind(cleanContent)
@@ -339,22 +354,15 @@ class WeComStreamClient(
                     senderId = senderId,
                     rawContent = cleanContent,
                     isMentioned = chatType == "group", // 群聊中被 @ 触发长连接回调
-                    command = command
+                    command = command,
+                    createdAt = createdAt,
                 )
             )
         }
     }
 
-    private fun cleanAtPrefix(text: String): String {
-        var result = text.trim()
-        if (result.startsWith("@")) {
-            val spaceIndex = result.indexOf(' ')
-            if (spaceIndex != -1) {
-                result = result.substring(spaceIndex + 1).trim()
-            }
-        }
-        return result
-    }
+    private fun cleanAtPrefix(text: String): String =
+        RemoteSmsCommand.stripLeadingMentionBeforePrefix(text, customPrefix)
 
     private fun startHeartbeat(ws: WebSocket) {
         stopHeartbeat()
@@ -429,10 +437,14 @@ class WeComStreamClient(
                 pendingAcks.remove(callbackReqId)
                 if (ok && ack.responseJson != null) {
                     val res = ack.responseJson!!
-                    val errCode = if (res.has("errcode")) res.optInt("errcode") else res.optJSONObject("body")?.optInt("errcode", 0) ?: 0
+                    val errCode = if (res.has("errcode")) {
+                        res.optInt("errcode")
+                    } else {
+                        res.optJSONObject("body")?.optInt("errcode", 0) ?: 0
+                    }
                     errCode == 0
                 } else {
-                    true
+                    false
                 }
             }.get(7, TimeUnit.SECONDS)
         } catch (e: Throwable) {
@@ -514,4 +526,5 @@ data class WeComRemoteCommand(
     val rawContent: String,
     val isMentioned: Boolean,
     val command: RemoteSmsCommand,
+    val createdAt: Long = 0L,
 )

@@ -178,6 +178,7 @@ fun AutoReplyEmbeddedScreen() {
 
 @Composable
 private fun AutoReplyRuleDialog(existing: AutoReplyRule?, onSave: (AutoReplyRule) -> Unit, onDismiss: () -> Unit) {
+    val context = LocalContext.current
     var name by remember(existing?.id) { mutableStateOf(existing?.name.orEmpty()) }
     var sender by remember(existing?.id) { mutableStateOf(existing?.senderFilter.orEmpty()) }
     var keywords by remember(existing?.id) { mutableStateOf(existing?.includeKeywords?.joinToString(",").orEmpty()) }
@@ -210,7 +211,14 @@ private fun AutoReplyRuleDialog(existing: AutoReplyRule?, onSave: (AutoReplyRule
             }
         } },
         confirmButton = { Button(onClick = {
-            if (reply.isBlank()) { return@Button }
+            if (reply.isBlank()) {
+                Toast.makeText(context, "请填写自动回复内容", Toast.LENGTH_SHORT).show()
+                return@Button
+            }
+            if (regex.isNotBlank() && runCatching { Regex(regex.trim()) }.isFailure) {
+                Toast.makeText(context, "匹配正则表达式语法无效，请检查", Toast.LENGTH_SHORT).show()
+                return@Button
+            }
             onSave((existing ?: AutoReplyRule()).copy(
                 name = name.trim(), senderFilter = sender.trim(),
                 includeKeywords = keywords.split(',', '，').map(String::trim).filter(String::isNotBlank),
@@ -235,9 +243,12 @@ fun MissedCallEmbeddedScreen() {
     var enabled by remember { mutableStateOf(cfg.enabled) }
     var missedOnly by remember { mutableStateOf(cfg.missedCallOnly) }
     var answered by remember { mutableStateOf(cfg.forwardAnsweredCall) }
+    var customTemplate by remember { mutableStateOf(cfg.customTemplate) }
     var selectedIds by remember { mutableStateOf(cfg.channelInstanceIds) }
     var hasSelection by remember { mutableStateOf(cfg.hasChannelSelection) }
     var choosingChannels by remember { mutableStateOf(false) }
+    var enableOnConfirm by remember { mutableStateOf(false) }
+    var enableOnChannelConfirm by remember { mutableStateOf(false) }
     val accessScope = androidx.compose.runtime.rememberCoroutineScope()
     var accessCheckRunning by remember { mutableStateOf(false) }
     var accessResult by remember { mutableStateOf<org.fossify.messages.helpers.CallAccessResult?>(null) }
@@ -255,8 +266,10 @@ fun MissedCallEmbeddedScreen() {
                     if (!result.canEnable) {
                         enabled = false; cfg.enabled = false
                         Toast.makeText(context, "来电访问检测未通过，请查看检测结果", Toast.LENGTH_LONG).show()
-                    } else if (hasSelection && selectedIds.isEmpty()) choosingChannels = true
-                    else { enabled = true; cfg.enabled = true }
+                    } else if (hasSelection && selectedIds.isEmpty()) {
+                        enableOnChannelConfirm = true
+                        choosingChannels = true
+                    } else { enabled = true; cfg.enabled = true }
                 }
             } finally { accessCheckRunning = false }
         }
@@ -302,6 +315,17 @@ fun MissedCallEmbeddedScreen() {
             accessResult?.let { Text(it.summary(), fontSize = 12.sp, color = TextSecondary) }
             SettingSwitch("仅未接来电", "忽略已接听和主动拒接的来电", missedOnly) { missedOnly = it; cfg.missedCallOnly = it }
             SettingSwitch("已接来电也提醒", "接听后的通话记录也发送提醒", answered) { answered = it; cfg.forwardAnsweredCall = it }
+            OutlinedTextField(
+                value = customTemplate,
+                onValueChange = {
+                    customTemplate = it
+                    cfg.customTemplate = it
+                },
+                label = { Text("自定义提醒模板（留空使用默认模板）") },
+                placeholder = { Text("例如：【来电提醒】[caller] ([number]) 卡槽：[sim]") },
+                minLines = 2,
+                modifier = Modifier.fillMaxWidth()
+            )
         } }
         item { FeatureCard {
             Text("发送通道", fontSize = 15.sp, fontWeight = FontWeight.Bold)
@@ -320,14 +344,16 @@ fun MissedCallEmbeddedScreen() {
                 onClick = {
                     val selectedInstances = realInstances.filter { instance ->
                         instance.enabled && instance.hasDispatchConfiguration() &&
-                            (!hasSelection || instance.id in selectedIds)
+                            (if (hasSelection) instance.id in selectedIds else instance.channelType != ForwardingChannels.SMS_DIRECT)
                     }
-                    val selectedInstanceTypes = selectedInstances.mapTo(mutableSetOf()) { it.channelType }
+                    val selectedInstanceTypes = realInstances
+                        .filter { it.enabled && it.hasDispatchConfiguration() }
+                        .mapTo(mutableSetOf()) { it.channelType }
                     val legacyChannels = if (hasSelection) {
                         emptySet()
                     } else {
                         MultiForwardConfig(context).enabledChannelIds().filterNotTo(mutableSetOf()) {
-                            it in selectedInstanceTypes
+                            it in selectedInstanceTypes || it == ForwardingChannels.SMS_DIRECT
                         }
                     }
                     if (selectedInstances.isEmpty() && legacyChannels.isEmpty()) {
@@ -392,7 +418,10 @@ fun MissedCallEmbeddedScreen() {
         }
         AlertDialog(
             modifier = Modifier.navigationBarsPadding(),
-            onDismissRequest = { choosingChannels = false },
+            onDismissRequest = {
+                enableOnChannelConfirm = false
+                choosingChannels = false
+            },
             title = { Text("选择来电提醒通道") },
             text = { LazyColumn {
                 if (selected.any { id -> realInstances.none { it.id == id } }) {
@@ -433,10 +462,15 @@ fun MissedCallEmbeddedScreen() {
                 selectedIds = retained
                 hasSelection = true
                 cfg.channelInstanceIds = retained
-                if (retained.isEmpty()) { enabled = false; cfg.enabled = false }
+                if (retained.isEmpty()) {
+                    enabled = false; cfg.enabled = false
+                } else if (enableOnChannelConfirm) {
+                    enabled = true; cfg.enabled = true
+                }
+                enableOnChannelConfirm = false
                 choosingChannels = false
             }) { Text("确定") } },
-            dismissButton = { TextButton(onClick = { choosingChannels = false }) { Text("取消") } }
+            dismissButton = { TextButton(onClick = { enableOnChannelConfirm = false; choosingChannels = false }) { Text("取消") } }
         )
     }
 }
@@ -454,6 +488,7 @@ fun LowBatteryEmbeddedScreen() {
     var selectedIds by remember { mutableStateOf(cfg.lowBatteryChannelInstanceIds) }
     var hasSelection by remember { mutableStateOf(cfg.hasLowBatteryInstanceSelection) }
     var choosingChannels by remember { mutableStateOf(false) }
+    var enableOnConfirm by remember { mutableStateOf(false) }
     val testScope = androidx.compose.runtime.rememberCoroutineScope()
     var testSending by remember { mutableStateOf(false) }
     var testStatus by remember { mutableStateOf("") }
@@ -463,7 +498,10 @@ fun LowBatteryEmbeddedScreen() {
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item { FeatureCard {
             SettingSwitch("电量提醒", "电量低于阈值时发送一次提醒", enabled) { checked ->
-                if (checked && hasSelection && selectedIds.isEmpty()) choosingChannels = true else {
+                if (checked && hasSelection && selectedIds.isEmpty()) {
+                    enableOnConfirm = true
+                    choosingChannels = true
+                } else {
                     enabled = checked; cfg.enableLowBatteryReminder = checked
                     if (!checked) cfg.lowBatteryLastNotifiedLevel = -1
                     LowBatteryCheckWorker.sync(context.applicationContext)
@@ -565,7 +603,7 @@ fun LowBatteryEmbeddedScreen() {
         }
         AlertDialog(
             modifier = Modifier.navigationBarsPadding(),
-            onDismissRequest = { choosingChannels = false },
+            onDismissRequest = { enableOnConfirm = false; choosingChannels = false },
             title = { Text("选择发送通道") },
             text = { LazyColumn {
                 if (selected.any { id -> realInstances.none { it.id == id } }) {
@@ -598,10 +636,11 @@ fun LowBatteryEmbeddedScreen() {
                 hasSelection = true
                 cfg.lowBatteryChannelInstanceIds = retained
                 if (retained.isEmpty()) { enabled = false; cfg.enableLowBatteryReminder = false }
-                else if (!enabled) { enabled = true; cfg.enableLowBatteryReminder = true }
+                else if (enableOnConfirm) { enabled = true; cfg.enableLowBatteryReminder = true }
+                enableOnConfirm = false
                 LowBatteryCheckWorker.sync(context.applicationContext); choosingChannels = false
             }) { Text("确定") } },
-            dismissButton = { TextButton(onClick = { choosingChannels = false }) { Text("取消") } }
+            dismissButton = { TextButton(onClick = { enableOnConfirm = false; choosingChannels = false }) { Text("取消") } }
         )
     }
 }
@@ -707,6 +746,7 @@ fun HeartbeatEmbeddedScreen() {
     var selectedIds by remember { mutableStateOf(cfg.channelInstanceIds) }
     var hasSelection by remember { mutableStateOf(cfg.hasChannelSelection) }
     var choosingChannels by remember { mutableStateOf(false) }
+    var enableOnConfirm by remember { mutableStateOf(false) }
     val hasUnavailableSelection = hasSelection && selectedIds.any { selectedId ->
         realInstances.none { it.id == selectedId && it.enabled && it.hasDispatchConfiguration() }
     }
@@ -719,17 +759,24 @@ fun HeartbeatEmbeddedScreen() {
         item {
             FeatureCard {
                 SettingSwitch("定时心跳", "周期发送设备状态，确认手机仍在线", enabled) { checked ->
+                    val defaultTargetsExist = enabledInstances.any { it.channelType != ForwardingChannels.SMS_DIRECT } ||
+                        channelConfig.enabledChannelIds().any { it != ForwardingChannels.SMS_DIRECT }
+                    if (checked && hasSelection && selectedIds.isEmpty()) {
+                        enableOnConfirm = true
+                        choosingChannels = true
+                        return@SettingSwitch
+                    }
                     val hasTarget = if (hasSelection) {
                         enabledInstances.any { it.id in selectedIds }
                     } else {
-                        enabledInstances.isNotEmpty() || channelConfig.enabledChannelIds().isNotEmpty()
+                        defaultTargetsExist
                     }
                     if (checked && !hasTarget) {
                         android.widget.Toast.makeText(context, "请先启用至少一个发送通道", android.widget.Toast.LENGTH_SHORT).show()
                     } else {
                         enabled = checked
                         cfg.enabled = checked
-                        HeartbeatWorker.sync(context.applicationContext)
+                        HeartbeatWorker.sync(context.applicationContext, forceUpdate = true)
                     }
                 }
                 OutlinedTextField(
@@ -750,7 +797,7 @@ fun HeartbeatEmbeddedScreen() {
                             onClick = {
                                 intervalHours = hours
                                 cfg.intervalHours = hours
-                                if (enabled) HeartbeatWorker.sync(context.applicationContext)
+                                if (enabled) HeartbeatWorker.sync(context.applicationContext, forceUpdate = true)
                             },
                             contentPadding = PaddingValues(horizontal = 8.dp),
                             border = BorderStroke(1.dp, if (intervalHours == hours) BrandGreen else OutlineSoft)
@@ -780,10 +827,14 @@ fun HeartbeatEmbeddedScreen() {
                 ) { Text("选择通道实例") }
                 Button(
                     onClick = {
-                        val targetInstances = enabledInstances.filter { !hasSelection || it.id in selectedIds }
-                        val instanceTypes = targetInstances.mapTo(mutableSetOf()) { it.channelType }
+                        val targetInstances = enabledInstances.filter {
+                            if (hasSelection) it.id in selectedIds else it.channelType != ForwardingChannels.SMS_DIRECT
+                        }
+                        val instanceTypes = enabledInstances.mapTo(mutableSetOf()) { it.channelType }
                         val legacyChannels = if (hasSelection) emptySet() else {
-                            channelConfig.enabledChannelIds().filterNotTo(mutableSetOf()) { it in instanceTypes }
+                            channelConfig.enabledChannelIds().filterNotTo(mutableSetOf()) {
+                                it in instanceTypes || it == ForwardingChannels.SMS_DIRECT
+                            }
                         }
                         if (targetInstances.isEmpty() && legacyChannels.isEmpty()) {
                             android.widget.Toast.makeText(
@@ -854,7 +905,7 @@ fun HeartbeatEmbeddedScreen() {
         }
         AlertDialog(
             modifier = Modifier.navigationBarsPadding(),
-            onDismissRequest = { choosingChannels = false },
+            onDismissRequest = { enableOnConfirm = false; choosingChannels = false },
             title = { Text("选择心跳发送通道") },
             text = {
                 LazyColumn {
@@ -908,13 +959,17 @@ fun HeartbeatEmbeddedScreen() {
                     if (retained.isEmpty()) {
                         enabled = false
                         cfg.enabled = false
+                    } else if (enableOnConfirm) {
+                        enabled = true
+                        cfg.enabled = true
                     }
-                    HeartbeatWorker.sync(context.applicationContext)
+                    enableOnConfirm = false
+                    HeartbeatWorker.sync(context.applicationContext, forceUpdate = true)
                     choosingChannels = false
                 }) { Text("确定") }
             },
             dismissButton = {
-                TextButton(onClick = { choosingChannels = false }) { Text("取消") }
+                TextButton(onClick = { enableOnConfirm = false; choosingChannels = false }) { Text("取消") }
             }
         )
     }
@@ -1014,6 +1069,7 @@ fun NotificationForwardEmbeddedScreen() {
     }
 
     var choosingChannels by remember { mutableStateOf(false) }
+    var enableOnConfirm by remember { mutableStateOf(false) }
     var choosingPackages by remember { mutableStateOf(false) }
     var customPackageInput by remember { mutableStateOf("") }
     var customTemplate by remember { mutableStateOf(cfg.customTemplate) }
@@ -1073,6 +1129,7 @@ fun NotificationForwardEmbeddedScreen() {
                         return@SettingSwitch
                     }
                     if (checked && selectedIds.isEmpty()) {
+                        enableOnConfirm = true
                         choosingChannels = true
                         return@SettingSwitch
                     }
@@ -1284,7 +1341,7 @@ fun NotificationForwardEmbeddedScreen() {
         }
         AlertDialog(
             modifier = Modifier.navigationBarsPadding(),
-            onDismissRequest = { choosingChannels = false },
+            onDismissRequest = { enableOnConfirm = false; choosingChannels = false },
             title = { Text("选择推送通道") },
             text = {
                 LazyColumn {
@@ -1334,14 +1391,18 @@ fun NotificationForwardEmbeddedScreen() {
                     if (retained.isEmpty()) {
                         enabled = false
                         cfg.enabled = false
+                    } else if (enableOnConfirm) {
+                        enabled = true
+                        cfg.enabled = true
                     }
+                    enableOnConfirm = false
                     choosingChannels = false
                 }) {
                     Text("确定")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { choosingChannels = false }) { Text("取消") }
+                TextButton(onClick = { enableOnConfirm = false; choosingChannels = false }) { Text("取消") }
             }
         )
     }

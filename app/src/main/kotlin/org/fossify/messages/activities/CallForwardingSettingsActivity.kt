@@ -31,6 +31,18 @@ class CallForwardingSettingsActivity : SimpleActivity() {
         binding.callForwardSwitchEnabled.isChecked = callConfig.enabled
         binding.callForwardSwitchEnabled.setOnCheckedChangeListener { _, isChecked ->
             callConfig.enabled = isChecked
+            if (isChecked) {
+                val missing = listOf(
+                    android.Manifest.permission.READ_PHONE_STATE,
+                    android.Manifest.permission.READ_CALL_LOG,
+                ).filter {
+                    androidx.core.content.ContextCompat.checkSelfPermission(this, it) !=
+                        android.content.pm.PackageManager.PERMISSION_GRANTED
+                }
+                if (missing.isNotEmpty()) {
+                    androidx.core.app.ActivityCompat.requestPermissions(this, missing.toTypedArray(), 1091)
+                }
+            }
         }
 
         binding.callForwardSwitchMissedOnly.isChecked = callConfig.missedCallOnly
@@ -45,10 +57,22 @@ class CallForwardingSettingsActivity : SimpleActivity() {
 
         binding.callForwardBtnTest.setOnClickListener {
             val multiConfig = MultiForwardConfig(this)
+            val allEnabledInstances = ChannelRepository.getInstance(this).getEnabledInstances()
             val selectedInstances = if (callConfig.hasChannelSelection) {
-                ChannelRepository.getInstance(this).getEnabledInstances().filter { it.id in callConfig.channelInstanceIds }
-            } else emptyList()
-            val channels = if (callConfig.hasChannelSelection) emptySet() else multiConfig.enabledChannelIds()
+                allEnabledInstances.filter { it.id in callConfig.channelInstanceIds }
+            } else {
+                allEnabledInstances.filter {
+                    it.channelType != org.fossify.messages.forwarding.ForwardingChannels.SMS_DIRECT
+                }
+            }
+            val instanceTypes = allEnabledInstances.mapTo(mutableSetOf()) { it.channelType }
+            val channels = if (callConfig.hasChannelSelection) {
+                emptySet()
+            } else {
+                multiConfig.enabledChannelIds().filterNotTo(mutableSetOf()) {
+                    it in instanceTypes || it == org.fossify.messages.forwarding.ForwardingChannels.SMS_DIRECT
+                }
+            }
             if (channels.isEmpty() && selectedInstances.isEmpty()) {
                 toast("请先在「转发通道」中启用至少一个推送渠道")
                 return@setOnClickListener
@@ -64,10 +88,11 @@ class CallForwardingSettingsActivity : SimpleActivity() {
                     body = testBody,
                     receivedAt = now,
                     subscriptionId = -1,
-                    uniqueId = "test-call-$now",
+                    uniqueId = "test-call-$now-$target",
                     targetChannel = target,
                     allowedChannels = setOf(target),
-                    isTest = true
+                    isTest = true,
+                    bodyAlreadyRendered = true,
                 )
             }
             selectedInstances.forEach { instance ->
@@ -77,11 +102,12 @@ class CallForwardingSettingsActivity : SimpleActivity() {
                     body = testBody,
                     receivedAt = now,
                     subscriptionId = -1,
-                    uniqueId = "test-call-$now",
+                    uniqueId = "test-call-$now-${instance.id}",
                     targetChannel = instance.channelType,
                     allowedChannels = setOf(instance.id),
                     isTest = true,
-                    targetInstanceId = instance.id
+                    targetInstanceId = instance.id,
+                    bodyAlreadyRendered = true,
                 )
             }
             toast("未接来电模拟测试消息已发送")

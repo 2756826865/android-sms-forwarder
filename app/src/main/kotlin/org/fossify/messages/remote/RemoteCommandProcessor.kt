@@ -123,6 +123,14 @@ object RemoteCommandProcessor {
             )
         }
 
+        if (whitelistEnabled && envelope.senderId.isBlank()) {
+            return RemoteProcessResult.Rejected(
+                commandId = null,
+                reason = "NOT_AUTHORIZED_USER",
+                detail = "缺少真实发件人标识，已拒绝执行"
+            )
+        }
+
         val isAuthorized = !whitelistEnabled || effectiveAuthorizedUsers.any { auth ->
             if (isSmsSource) {
                 NumberMatcher.equivalent(auth, envelope.senderId)
@@ -165,11 +173,11 @@ object RemoteCommandProcessor {
             if (isSmsSource) RemoteSmsCommandConfig(context).customPrefix else ""
         }.orEmpty()
 
-        // 容错处理群聊消息中可能残余的前导 @ 提及（如 @机器人 /发信 ...）
-        val normalizedRawContent = envelope.rawContent.trim()
-            .replaceFirst(Regex("^(\\s*@[^\\s]+\\s*)+"), "")
-            .trim()
-            .trim('　', ' ')
+        // 容错处理群聊消息中可能残余的前导 @ 提及（如 @机器人 /发信 ... 或含空格昵称）
+        val normalizedRawContent = RemoteSmsCommand.stripLeadingMentionBeforePrefix(
+            envelope.rawContent,
+            customPrefix
+        )
 
         val parsedCommand = RemoteSmsCommand.parse(normalizedRawContent, customPrefix)
             ?: RemoteSmsCommand.parse(envelope.rawContent, customPrefix)
@@ -235,12 +243,40 @@ object RemoteCommandProcessor {
             receivedAt = envelope.receivedAt
         )
 
+        val ownNumbers = runCatching {
+            val multiCfg = org.fossify.messages.forwarding.MultiForwardConfig(context)
+            buildSet {
+                add(multiCfg.simOneNumber)
+                add(multiCfg.simTwoNumber)
+                SubscriptionResolver.getActiveSubscriptionSnapshots(context).forEach { add(it.number) }
+            }
+        }.getOrDefault(emptySet())
+        if (org.fossify.messages.forwarding.SmsDirectBillingPolicy.isSelfNumber(targetNumber, ownNumbers)) {
+            return RemoteProcessResult.Rejected(
+                commandId = "",
+                reason = "SELF_NUMBER_LOOP",
+                detail = "目标号码与本机 SIM 卡号码相同，已拒绝发送以防循环扣费"
+            )
+        }
+
+        if (isSmsSource && RemoteSmsCommandConfig(context).hasRecentCrossPathCommand(envelope.senderId, targetNumber, content)) {
+            return RemoteProcessResult.Duplicate("cross-path-sms")
+        }
+
         val claimResult = runBlocking {
             RemoteCommandRepository.claimOrGetDuplicate(context, cmdContext)
         }
 
         if (claimResult is RemoteCommandRepository.ClaimResult.Duplicate) {
             return RemoteProcessResult.Duplicate(claimResult.existingCommandId)
+        }
+
+        if (claimResult is RemoteCommandRepository.ClaimResult.Error) {
+            return RemoteProcessResult.Rejected(
+                commandId = "",
+                reason = "CLAIM_STORE_UNAVAILABLE",
+                detail = "幂等状态库不可用，已阻断发信以防止重复扣费"
+            )
         }
 
         val commandId = (claimResult as? RemoteCommandRepository.ClaimResult.NewCommand)?.commandId.orEmpty()
@@ -335,7 +371,11 @@ object RemoteCommandProcessor {
         }
 
         if (isSmsSource) {
-            RemoteSmsCommandConfig(context).markExecution(envelope.senderId)
+            val smsCfg = RemoteSmsCommandConfig(context)
+            if (!smsCfg.claimCrossPathCommand(envelope.senderId, targetNumber, content)) {
+                return RemoteProcessResult.Duplicate("cross-path-sms")
+            }
+            smsCfg.markExecution(envelope.senderId)
         }
 
         val uniqueFingerprint = sha256("${envelope.sourceType.name}-$idempotencyMessageKey-$targetNumber-$content")
@@ -350,6 +390,7 @@ object RemoteCommandProcessor {
             requester = envelope.extraMeta["receiptTarget"].orEmpty().ifBlank { envelope.senderId },
             source = mapSourceLabel(envelope.sourceType),
             commandId = commandId,
+            externalCommandId = envelope.sourceMessageKey,
             sourceInstanceId = envelope.sourceInstanceId
         )
 

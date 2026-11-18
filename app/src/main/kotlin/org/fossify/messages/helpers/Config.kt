@@ -173,8 +173,8 @@ class Config(context: Context) : BaseConfig(context) {
         set(value) = prefs.edit().putBoolean("show_letter_avatars", value).apply()
 
     var bulkSendDelaySeconds: Int
-        get() = prefs.getInt("bulk_send_delay_seconds", 1).coerceIn(0, 5)
-        set(value) = prefs.edit().putInt("bulk_send_delay_seconds", value.coerceIn(0, 5)).apply()
+        get() = prefs.getInt("bulk_send_delay_seconds", 1).coerceIn(0, 60)
+        set(value) = prefs.edit().putInt("bulk_send_delay_seconds", value.coerceIn(0, 60)).apply()
 
     var whitelistedNumbers: Set<String>
         get() = prefs.getStringSet("whitelisted_numbers", emptySet()) ?: emptySet()

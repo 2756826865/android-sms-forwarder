@@ -27,13 +27,21 @@ internal object MultipartSendResults {
         val prefs = context.getSharedPreferences("multipart_sent_results", Context.MODE_PRIVATE)
         val key = "result_$id"
         val state = runCatching { JSONObject(prefs.getString(key, "{}").orEmpty()) }.getOrDefault(JSONObject())
+        if (state.optBoolean("completed", false)) {
+            // An earlier part failure or final part already emitted the aggregate outcome for this
+            // operation; suppress subsequent part callbacks to prevent duplicate failure notifications/receipts.
+            return null
+        }
         val parts = state.optJSONObject("parts") ?: JSONObject()
         // A duplicate success callback cannot erase a previous failure for that part.
         if (!parts.has(index.toString()) || parts.optInt(index.toString()) == Activity.RESULT_OK) {
             parts.put(index.toString(), resultCode)
         }
+        val outcome = aggregate(count, buildMap {
+            for (i in 0 until count) if (parts.has(i.toString())) put(i, parts.getInt(i.toString()))
+        })
         val now = System.currentTimeMillis()
-        state.put("parts", parts).put("updatedAt", now)
+        state.put("parts", parts).put("updatedAt", now).put("completed", outcome != null)
         val editor = prefs.edit().putString(key, state.toString())
         prefs.all.forEach { (oldKey, value) ->
             if (oldKey != key) {
@@ -42,8 +50,6 @@ internal object MultipartSendResults {
             }
         }
         check(editor.commit()) { "Unable to persist multipart sent results" }
-        return aggregate(count, buildMap {
-            for (i in 0 until count) if (parts.has(i.toString())) put(i, parts.getInt(i.toString()))
-        })
+        return outcome
     }
 }

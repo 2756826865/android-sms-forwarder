@@ -19,22 +19,37 @@ internal class SmsIngressDatabase private constructor(context: Context) :
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         if (oldVersion < JOURNAL_VERSION) createJournal(db)
-        if (oldVersion == JOURNAL_VERSION)
-            db.execSQL("ALTER TABLE ingress_journal ADD COLUMN sim_snapshot TEXT")
         if (oldVersion < SNAPSHOTS_VERSION) createExecutionSnapshots(db)
         if (oldVersion < TIMING_VERSION) createTiming(db)
-        if (oldVersion in JOURNAL_VERSION until ROUTING_VERSION)
-            db.execSQL(
-                "ALTER TABLE ingress_journal ADD COLUMN routing_digest TEXT NOT NULL DEFAULT ''"
-            )
-        if (oldVersion < DELIVERY_VERSION) {
-            if (oldVersion >= SNAPSHOTS_VERSION)
-                db.execSQL(
-                    "ALTER TABLE ingress_execution_sim ADD COLUMN created_at INTEGER NOT NULL DEFAULT 0"
-                )
-            createAlerts(db)
-        }
+        if (oldVersion < DELIVERY_VERSION) createAlerts(db)
         if (oldVersion < FORWARDING_PROOF_VERSION) createForwardingProof(db)
+        // Self-healing additive column guarantees across all historical DB versions (v1..v7).
+        ensureColumn(db, "ingress_journal", "sim_snapshot", "TEXT")
+        ensureColumn(db, "ingress_journal", "routing_digest", "TEXT NOT NULL DEFAULT ''")
+        ensureColumn(db, "ingress_journal", "notification_claimed", "INTEGER NOT NULL DEFAULT 0")
+        ensureColumn(db, "ingress_execution_sim", "created_at", "INTEGER NOT NULL DEFAULT 0")
+    }
+
+    private fun ensureColumn(
+        db: SQLiteDatabase,
+        table: String,
+        column: String,
+        definition: String,
+    ) {
+        val exists = db.rawQuery("PRAGMA table_info($table)", null).use { cursor ->
+            val nameIdx = cursor.getColumnIndex("name")
+            var found = false
+            while (cursor.moveToNext()) {
+                if (nameIdx >= 0 && cursor.getString(nameIdx).equals(column, ignoreCase = true)) {
+                    found = true
+                    break
+                }
+            }
+            found
+        }
+        if (!exists) {
+            db.execSQL("ALTER TABLE $table ADD COLUMN $column $definition")
+        }
     }
 
     private fun createJournal(db: SQLiteDatabase) {
@@ -91,13 +106,14 @@ internal class SmsIngressDatabase private constructor(context: Context) :
     }
 
     companion object {
+        private const val NOTIFICATION_CLAIMED_FIX_VERSION = 8
         private const val FORWARDING_PROOF_VERSION = 7
         private const val JOURNAL_VERSION = 2
         private const val SNAPSHOTS_VERSION = 3
         private const val ROUTING_VERSION = 4
         private const val TIMING_VERSION = 5
         private const val DELIVERY_VERSION = 6
-        private const val DATABASE_VERSION = FORWARDING_PROOF_VERSION
+        private const val DATABASE_VERSION = NOTIFICATION_CLAIMED_FIX_VERSION
         private val instances = mutableMapOf<String, SmsIngressDatabase>()
 
         @Synchronized

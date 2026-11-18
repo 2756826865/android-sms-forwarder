@@ -18,7 +18,8 @@ object RootWatchdog {
         val heartbeat = File(directory, "heartbeat")
         val user = android.os.Process.myUid() / 100000
         val service = "$pkg/org.fossify.messages.services.SmsKeepAliveService"
-        script.writeText("""
+        val tmpScript = File(directory, "watch.sh.tmp")
+        tmpScript.writeText("""
             #!/system/bin/sh
             mkdir '${lock.absolutePath}' 2>/dev/null || exit 0
             trap "rmdir '${lock.absolutePath}' 2>/dev/null" EXIT
@@ -28,13 +29,17 @@ object RootWatchdog {
                 case "${'$'}state" in
                     *stopped=true*) rm -f '${enabled.absolutePath}'; break ;;
                     *stopped=false*)
-                        if ! pidof '$pkg' >/dev/null 2>&1; then
+                        if ! pidof '$pkg' >/dev/null 2>&1 || ! dumpsys activity services '$service' 2>/dev/null | grep -F 'ServiceRecord' >/dev/null 2>&1; then
                             am start-foreground-service --user $user -n '$service' >/dev/null 2>&1
                         fi ;;
                 esac
                 sleep 60
             done
         """.trimIndent())
+        if (!tmpScript.renameTo(script)) {
+            script.writeText(tmpScript.readText())
+            tmpScript.delete()
+        }
         enabled.writeText("enabled")
         // Root shell lives outside the app process; all output is discarded, no SMS data is logged.
         // Stale lock is removed only when the previous PID is no longer alive.

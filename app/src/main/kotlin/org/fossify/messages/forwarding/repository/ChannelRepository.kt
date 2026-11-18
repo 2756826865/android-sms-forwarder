@@ -207,15 +207,18 @@ class ChannelRepository internal constructor(
     fun detectLegacyConfiguredChannels(): List<LegacyChannelInfo> {
         val list = mutableListOf<LegacyChannelInfo>()
 
-        // 1. PushPlus
-        if (multiConfig.pushPlusToken().isNotBlank()) {
+        // 1. PushPlus（兼容独立 pushplus_forwarding.xml 旧存储）
+        val legacyPushPlusCfg = appContext?.let { runCatching { org.fossify.messages.forwarding.PushPlusConfig(it) }.getOrNull() }
+        val resolvedPushPlusToken = multiConfig.pushPlusToken().ifBlank { legacyPushPlusCfg?.getToken().orEmpty() }
+        val resolvedPushPlusEnabled = multiConfig.pushPlusEnabled || (legacyPushPlusCfg?.enabled == true)
+        if (resolvedPushPlusToken.isNotBlank()) {
             list.add(
                 LegacyChannelInfo(
                     channelType = ForwardingChannels.PUSHPLUS,
                     defaultName = "PushPlus (导入)",
-                    isEnabled = multiConfig.pushPlusEnabled,
+                    isEnabled = resolvedPushPlusEnabled,
                     configJson = JSONObject()
-                        .put("token", multiConfig.pushPlusToken())
+                        .put("token", resolvedPushPlusToken)
                         .put("topic", multiConfig.pushPlusTopic())
                         .toString()
                 )

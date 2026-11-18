@@ -149,11 +149,23 @@ object RootEnhancementManager {
         val process = ProcessBuilder("su", "-c", command)
             .redirectErrorStream(true)
             .start()
+        val outputRef = java.util.concurrent.atomic.AtomicReference("")
+        val readerThread = Thread({
+            runCatching {
+                outputRef.set(process.inputStream.bufferedReader().use { it.readText() })
+            }
+        }, "root-stdout-drain").apply {
+            isDaemon = true
+            start()
+        }
         val completed = process.waitFor(timeoutSeconds, TimeUnit.SECONDS)
         if (!completed) {
             process.destroyForcibly()
+            runCatching { process.inputStream.close() }
+            readerThread.join(500)
             return@runCatching CommandResult(-1, "命令执行超时")
         }
-        CommandResult(process.exitValue(), process.inputStream.bufferedReader().use { it.readText() })
+        readerThread.join(1000)
+        CommandResult(process.exitValue(), outputRef.get())
     }.getOrNull()
 }

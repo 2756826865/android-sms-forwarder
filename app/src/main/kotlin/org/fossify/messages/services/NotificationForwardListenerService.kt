@@ -95,34 +95,41 @@ class NotificationForwardListenerService : NotificationListenerService() {
 
         // 4. 关键修复：系统短信通知本地入库 + 标准短信规则/通道零延迟秒发兜底
         // 即使未开启第三方应用通知转发（config.enabled == false），只要被厂商夺回默认角色或屏蔽了短信广播，
-        // 依然 0ms 写入本地会话并走标准短信转发管线（规则引擎、正则清洗、验证码提取、隐私脱敏）。
+        // 且用户未在目标应用白名单中主动取消勾选该系统短信包名，即 0ms 写入本地会话并走标准短信转发管线。
         if (isSystemSmsPackage) {
             val senderCandidate = extractedSender
                 .ifBlank { org.fossify.messages.helpers.YellowPageHelper.extractSignature(text).orEmpty() }
                 .ifBlank { title.ifBlank { getApplicationLabel(packageName) } }
             val appContext = applicationContext
             val postTime = sbn.postTime.takeIf { it > 0L } ?: now
+            val eventTime = maxOf(postTime, notification.`when`)
+            val isStaleStatusBarReplay = eventTime > 0L && now - eventTime > STALE_SMS_NOTIFICATION_MAX_AGE_MS
+            val allowSystemSmsForward = packageName in config.targetPackageNames
             val skipForwardBecauseDefault = config.skipSystemSmsWhenDefault &&
                 org.fossify.messages.helpers.DeviceCompatHelper.isDefaultSmsApp(appContext)
             fallbackExecutor.execute {
-                runCatching {
+                val localResult = runCatching {
                     IncomingSmsService.ensureLocalFallbackSmsPersisted(
                         context = appContext,
                         rawSender = senderCandidate,
                         body = text,
-                        receivedAt = postTime,
+                        receivedAt = if (isStaleStatusBarReplay) postTime else now,
                         subscriptionId = resolvedSubId
                     )
                 }.onFailure { Log.w(TAG, "notification local fallback failed: ${it.javaClass.simpleName}") }
+                    .getOrNull()
 
-                if (!skipForwardBecauseDefault && !wasRecentlyHandledBySmsBroadcast(text, now)) {
+                if (allowSystemSmsForward && !skipForwardBecauseDefault && !isStaleStatusBarReplay) {
                     runCatching {
                         IncomingSmsService.forwardFromNotificationFallback(
                             context = appContext,
-                            rawSender = senderCandidate,
+                            rawSender = localResult?.resolvedAddress?.ifBlank { senderCandidate } ?: senderCandidate,
                             body = text,
-                            receivedAt = postTime,
-                            subscriptionId = resolvedSubId
+                            receivedAt = now,
+                            subscriptionId = localResult?.subscriptionId?.takeIf { it >= 0 } ?: resolvedSubId,
+                            dedupeNowMs = now,
+                            providerMessageId = localResult?.providerMessageId ?: -1L,
+                            threadId = localResult?.threadId ?: 0L,
                         )
                     }.onFailure { Log.w(TAG, "notification sms forward fallback failed: ${it.javaClass.simpleName}") }
                 }
@@ -159,8 +166,24 @@ class NotificationForwardListenerService : NotificationListenerService() {
     private fun extractCleanText(notification: Notification, extras: android.os.Bundle): String {
         val messagingStyle = androidx.core.app.NotificationCompat.MessagingStyle
             .extractMessagingStyleFromNotification(notification)
-        if (messagingStyle != null && messagingStyle.messages.size > 1) {
-            val latestMsg = messagingStyle.messages.lastOrNull()?.text?.toString().orEmpty().stripInvisibleAndTrim()
+        if (messagingStyle != null && messagingStyle.messages.isNotEmpty()) {
+            val userKey = messagingStyle.user.key
+            val userName = messagingStyle.user.name?.toString()?.stripInvisibleAndTrim()
+            fun isSelf(msg: androidx.core.app.NotificationCompat.MessagingStyle.Message): Boolean {
+                val p = msg.person ?: return false
+                return (userKey != null && p.key == userKey) ||
+                    (!userName.isNullOrBlank() && p.name?.toString()?.stripInvisibleAndTrim() == userName)
+            }
+            val lastMessage = messagingStyle.messages.last()
+            if (messagingStyle.messages.size > 1 && isSelf(lastMessage) && messagingStyle.messages.any { !isSelf(it) }) {
+                // Inline quick-reply appended the user's own outgoing reply to the notification;
+                // never re-forward the older incoming message or self-reply text.
+                return ""
+            }
+            val latestIncoming = messagingStyle.messages.lastOrNull { msg ->
+                msg.person != null && !isSelf(msg)
+            } ?: messagingStyle.messages.lastOrNull()
+            val latestMsg = latestIncoming?.text?.toString().orEmpty().stripInvisibleAndTrim()
             if (latestMsg.isNotBlank()) return latestMsg
         }
         return extractNotificationText(
@@ -217,13 +240,18 @@ class NotificationForwardListenerService : NotificationListenerService() {
             val selectedIds = config.channelInstanceIds
             allEnabledInstances.filter { it.id in selectedIds }
         } else {
-            allEnabledInstances
+            // Never implicitly broadcast third-party app notifications over paid carrier SMS!
+            allEnabledInstances.filter {
+                it.channelType != org.fossify.messages.forwarding.ForwardingChannels.SMS_DIRECT
+            }
         }
 
         val multiConfig = MultiForwardConfig(applicationContext)
         val legacyChannels = if (!config.hasChannelSelection) {
             val instanceTypes = allEnabledInstances.map { it.channelType }.toSet()
-            multiConfig.enabledChannelIds().filterNot { it in instanceTypes }
+            multiConfig.enabledChannelIds().filterNot {
+                it in instanceTypes || it == org.fossify.messages.forwarding.ForwardingChannels.SMS_DIRECT
+            }
         } else {
             emptyList()
         }
@@ -284,6 +312,7 @@ class NotificationForwardListenerService : NotificationListenerService() {
     companion object {
         private const val TAG = "NotifyForwardService"
         private const val DEDUPLICATE_WINDOW_MS = 5_000L
+        private const val STALE_SMS_NOTIFICATION_MAX_AGE_MS = 5 * 60_000L
         private val GENERIC_SMS_TITLES = setOf(
             "信息", "短信", "通知类短信", "服务与验证码", "验证码",
             "新信息", "新短信", "通知", "Messages", "Messaging", "SMS", "MMS"
@@ -373,8 +402,6 @@ class NotificationForwardListenerService : NotificationListenerService() {
          */
         fun rebindService(context: Context) {
             runCatching {
-                val config = NotificationForwardConfig(context)
-                if (!config.enabled) return
                 if (isNotificationAccessGranted(context)) {
                     val component = ComponentName(context, NotificationForwardListenerService::class.java)
                     val pm = context.packageManager
@@ -441,13 +468,17 @@ class NotificationForwardListenerService : NotificationListenerService() {
                 val selectedIds = config.channelInstanceIds
                 allEnabledInstances.filter { it.id in selectedIds }
             } else {
-                allEnabledInstances
+                allEnabledInstances.filter {
+                    it.channelType != org.fossify.messages.forwarding.ForwardingChannels.SMS_DIRECT
+                }
             }
 
             val multiConfig = MultiForwardConfig(appContext)
             val legacyChannels = if (!config.hasChannelSelection) {
                 val instanceTypes = allEnabledInstances.map { it.channelType }.toSet()
-                multiConfig.enabledChannelIds().filterNot { it in instanceTypes }
+                multiConfig.enabledChannelIds().filterNot {
+                    it in instanceTypes || it == org.fossify.messages.forwarding.ForwardingChannels.SMS_DIRECT
+                }
             } else {
                 emptyList()
             }

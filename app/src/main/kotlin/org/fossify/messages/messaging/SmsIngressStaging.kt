@@ -152,7 +152,7 @@ internal class SmsIngressStaging(
                 arrayOf(
                     p.hash,
                     (p.now - PAIR_WINDOW_MS).toString(),
-                    p.now.toString(),
+                    (p.now + PAIR_WINDOW_MS).toString(),
                     p.source.action.orEmpty(),
                     p.rawSub.toString(),
                     p.rawSub.toString(),

@@ -91,9 +91,15 @@ class ConversationsViewModel(application: Application) : AndroidViewModel(applic
             try {
                 withContext(Dispatchers.IO) {
                     val isDefault = org.fossify.messages.helpers.DeviceCompatHelper.isDefaultSmsApp(context)
+                    val hasReadSms = androidx.core.content.ContextCompat.checkSelfPermission(
+                        context,
+                        android.Manifest.permission.READ_SMS,
+                    ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                    val isSyntheticThread =
+                        threadId >= org.fossify.messages.services.IncomingSmsService.SYNTHETIC_THREAD_BASE
                     if (context.config.useRecycleBin) {
-                        if (isDefault) {
-                            context.syncThreadToLocal(threadId, loadAll = true)
+                        if (hasReadSms && !isSyntheticThread) {
+                            runCatching { context.syncThreadToLocal(threadId, loadAll = true) }
                         }
                         context.moveConversationToRecycleBin(threadId)
                     } else {
@@ -197,13 +203,25 @@ class ConversationsViewModel(application: Application) : AndroidViewModel(applic
             if (org.fossify.messages.helpers.ConversationRefreshRevision.current() != providerRevision) {
                 return@runInTransaction
             }
+            val synBase = org.fossify.messages.services.IncomingSmsService.SYNTHETIC_MESSAGE_BASE
+            val synThreadBase = org.fossify.messages.services.IncomingSmsService.SYNTHETIC_THREAD_BASE
             for (thread in threads) {
                 val current = context.conversationsDB.getConversationWithThreadId(thread.threadId)
-                if (current == null || current.date <= thread.date) {
+                val hasNewerSyntheticLocal = current != null &&
+                    current.date > thread.date &&
+                    (current.threadId >= synThreadBase ||
+                        context.messagesDB.getThreadMessages(thread.threadId)
+                            .any { it.id >= synBase && it.date >= current.date })
+                if (current == null || !hasNewerSyntheticLocal) {
+                    val preservedArchive = current?.isArchived ?: thread.isArchived
                     val toWrite = if (current?.usesCustomTitle == true) {
-                        thread.copy(title = current.title, usesCustomTitle = true)
+                        thread.copy(
+                            title = current.title,
+                            usesCustomTitle = true,
+                            isArchived = preservedArchive,
+                        )
                     } else {
-                        thread
+                        thread.copy(isArchived = preservedArchive)
                     }
                     if (current != toWrite) {
                         context.conversationsDB.insertOrUpdate(toWrite)

@@ -20,10 +20,15 @@ class SmsFallbackReceiver : BroadcastReceiver() {
         runCatching {
             val parts = Telephony.Sms.Intents.getMessagesFromIntent(intent)
             if (!parts.isNullOrEmpty()) {
+                val sender = parts.lastOrNull()?.originatingAddress.orEmpty()
                 val body = buildString { parts.forEach { append(it?.messageBody.orEmpty()) } }
-                org.fossify.messages.services.IncomingSmsService.markHandledByBroadcast(
-                    body,
-                    System.currentTimeMillis(),
+                val sentAt = parts.minOfOrNull { it?.timestampMillis ?: 0L } ?: 0L
+                org.fossify.messages.services.IncomingSmsService.onSmsBroadcastReceived(
+                    action = intent.action.orEmpty(),
+                    sender = sender,
+                    body = body,
+                    sentAt = sentAt,
+                    timestamp = System.currentTimeMillis(),
                 )
             }
         }

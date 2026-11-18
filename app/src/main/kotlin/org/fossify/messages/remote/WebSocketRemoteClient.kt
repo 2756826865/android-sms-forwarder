@@ -52,7 +52,11 @@ class WebSocketRemoteClient(
                 val repo = RemoteSourceRepository.getInstance(context)
                 val instance = sourceInstanceId?.let { repo.getSourceById(it) }
                 if (instance == null || !instance.enabled) {
-                    Thread.sleep(5_000)
+                    try {
+                        networkWakeup.await(5_000)
+                    } catch (_: InterruptedException) {
+                        break
+                    }
                     continue
                 }
 
@@ -62,7 +66,11 @@ class WebSocketRemoteClient(
                     if (url.isBlank()) {
                         onStatus("缺少 WebSocket 服务器 URL")
                         repo.updateConnectionState(instance.id, RemoteSourceConnectionState.CONFIG_REQUIRED)
-                        Thread.sleep(10_000)
+                        try {
+                            networkWakeup.await(10_000)
+                        } catch (_: InterruptedException) {
+                            break
+                        }
                         continue
                     }
                     onStatus("正在连接 WebSocket…")
@@ -103,7 +111,11 @@ class WebSocketRemoteClient(
         networkWakeup.signal()
         isAuthenticated.set(false)
         webSocket?.close(1000, "Client stopped")
+        webSocket?.cancel()
         webSocket = null
+        http.dispatcher.cancelAll()
+        http.dispatcher.executorService.shutdown()
+        http.connectionPool.evictAll()
         sourceInstanceId?.let { activeClients.remove(it, this) }
     }
 
@@ -263,7 +275,8 @@ class WebSocketRemoteClient(
             return
         }
 
-        val target = json.optString("target").ifBlank { json.optString("phone") }.trim()
+        val target = json.optString("target").ifBlank { json.optString("phone") }
+            .filterNot(Char::isWhitespace)
         val content = json.optString("content").ifBlank { json.optString("msg") }.trim()
         val simSlotStr = json.optString("simSlot").ifBlank { json.optString("sim") }.trim()
         val senderId = json.optString("senderId")

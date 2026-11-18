@@ -109,7 +109,7 @@ fun GatewayTheme(
     val dark = when (settings.mode) { 1 -> false; 2 -> true; else -> darkTheme }
     // Keep the saved Monet configuration, but do not apply it while its switch is off.
     val fallbackAccent = when (settings.accent) { 1 -> Color(0xFF2962C0); 2 -> Color(0xFF8050A0); 3 -> Color(0xFFF44336); else -> if (context.config.useGatewayDeveloperUi) Color(0xFF009688) else LightPrimary }
-    val accent = if (settings.dynamic && settings.keyColor != 0) Color(settings.keyColor) else fallbackAccent
+    val accent = if (settings.keyColor != 0) Color(settings.keyColor) else fallbackAccent
     val base = if (settings.dynamic && Build.VERSION.SDK_INT >= 31) {
         if (dark) androidx.compose.material3.dynamicDarkColorScheme(context) else androidx.compose.material3.dynamicLightColorScheme(context)
     } else {

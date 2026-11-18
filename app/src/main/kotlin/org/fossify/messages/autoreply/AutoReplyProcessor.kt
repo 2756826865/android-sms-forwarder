@@ -52,6 +52,17 @@ object AutoReplyProcessor {
     internal fun ruleDigest(rule: AutoReplyRule): String = java.security.MessageDigest.getInstance("SHA-256")
         .digest(rule.toString().toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
 
+    private fun normalizeSenderKey(phone: String): String {
+        val compact = phone.trim().filterNot { it.isWhitespace() || it in "-()" }
+        val local = when {
+            compact.startsWith("+86") -> compact.removePrefix("+86")
+            compact.startsWith("0086") -> compact.removePrefix("0086")
+            compact.length == 13 && compact.startsWith("86") -> compact.removePrefix("86")
+            else -> compact
+        }
+        return if (local.length == 11 && local.startsWith("1") && local.all { it in '0'..'9' }) local else compact
+    }
+
     /** One atomic reservation immediately before submission; unknown outcomes retain the claim. */
     internal fun reserveSubmission(context: Context, source: String, sender: String, rule: AutoReplyRule): Boolean =
         synchronized(this) {
@@ -62,14 +73,23 @@ object AutoReplyProcessor {
             val today = getTodayKey()
             val count = if (limits.getString("day", "") == today) limits.getInt("count", 0) else 0
             val now = System.currentTimeMillis()
-            val cooldownKey = "cooldown_" + android.net.Uri.encode(sender)
+            val cooldownKey = "cooldown_" + android.net.Uri.encode(normalizeSenderKey(sender))
             val last = limits.getLong(cooldownKey, 0L)
             if (count >= config.dailyLimit ||
                 (rule.rateLimitMinutes > 0 && now - last < TimeUnit.MINUTES.toMillis(rule.rateLimitMinutes.toLong()))) {
                 config.lastDecision = "自动回复取消：已达到每日上限或号码冷却期"
                 return@synchronized false
             }
-            limits.edit().putString("day", today).putInt("count", count + 1)
+            val editor = limits.edit()
+            if (limits.all.size > 300) {
+                val cutoff = now - TimeUnit.DAYS.toMillis(2)
+                limits.all.forEach { (k, v) ->
+                    if ((k.startsWith("submitted_") || k.startsWith("cooldown_")) && v is Long && v < cutoff) {
+                        editor.remove(k)
+                    }
+                }
+            }
+            editor.putString("day", today).putInt("count", count + 1)
                 .putLong(cooldownKey, now).putLong("submitted_$source", now).commit()
         }
 
@@ -82,6 +102,22 @@ object AutoReplyProcessor {
         val config = AutoReplyConfig(context)
         if (!config.enabled) {
             return Result.Skipped("自动回复功能未启用")
+        }
+
+        val ownNumbers = runCatching {
+            val multiCfg = org.fossify.messages.forwarding.MultiForwardConfig(context)
+            buildSet {
+                add(multiCfg.simOneNumber)
+                add(multiCfg.simTwoNumber)
+                org.fossify.messages.messaging.SubscriptionResolver
+                    .getActiveSubscriptionSnapshots(context)
+                    .forEach { add(it.number) }
+            }
+        }.getOrDefault(emptySet())
+        if (org.fossify.messages.forwarding.SmsDirectBillingPolicy.isSelfNumber(senderNumber, ownNumbers)) {
+            val msg = "发件人为本机 SIM 号码，已拦截自动回复以防循环发信"
+            config.lastDecision = msg
+            return Result.Skipped(msg)
         }
 
         val rules = config.rules.filter { it.enabled }
@@ -100,6 +136,8 @@ object AutoReplyProcessor {
             return Result.Skipped(msg)
         }
 
+        val normalizedSender = normalizeSenderKey(senderNumber)
+        var lastSkipReason: String? = null
         for (rule in rules) {
             if (!matchesRule(rule, senderNumber, messageBody)) {
                 continue
@@ -107,26 +145,37 @@ object AutoReplyProcessor {
 
             // Rate limit check for this sender
             if (rule.rateLimitMinutes > 0) {
-                val lastReplyTime = limits.getLong("cooldown_" + android.net.Uri.encode(senderNumber), 0L)
+                val lastReplyTime = limits.getLong("cooldown_" + android.net.Uri.encode(normalizedSender), 0L)
                 val cooldownMillis = TimeUnit.MINUTES.toMillis(rule.rateLimitMinutes.toLong())
                 val now = System.currentTimeMillis()
                 if (now - lastReplyTime < cooldownMillis) {
                     val minutesRemaining = ((cooldownMillis - (now - lastReplyTime)) / (1000 * 60)).coerceAtLeast(1)
-                    val msg = "号码 $senderNumber 处于冷却期中 (设定冷却: ${rule.formatCooldownLabel()}，还剩约 ${minutesRemaining} 分钟)"
+                    val msg = "号码 $senderNumber 处于冷却期中 " +
+                        "(设定冷却: ${rule.formatCooldownLabel()}，还剩约 ${minutesRemaining} 分钟)"
                     config.lastDecision = msg
                     Log.i(TAG, msg)
-                    return Result.Skipped(msg)
+                    lastSkipReason = msg
+                    continue
                 }
             }
 
             // Perform auto-reply
             val replyText = rule.replyContent.trim()
             if (replyText.isBlank()) {
-                return Result.Skipped("规则 [${rule.name}] 回复内容为空")
+                lastSkipReason = "规则 [${rule.name}] 回复内容为空"
+                continue
             }
 
-            val targetSubId = resolveSubscriptionId(context, rule.simScope, incomingSubId)
-            
+            val targetSubId = runCatching {
+                resolveSubscriptionId(context, rule.simScope, incomingSubId)
+            }.getOrElse { e ->
+                val msg = "规则 [${rule.name}] 发送卡不可用 (${e.message ?: e.javaClass.simpleName})"
+                config.lastDecision = msg
+                Log.w(TAG, msg)
+                lastSkipReason = msg
+                continue
+            }
+
             return Result.Executed(
                 ruleName = rule.name,
                 replyContent = replyText,
@@ -137,7 +186,7 @@ object AutoReplyProcessor {
             )
         }
 
-        return Result.Skipped("未匹配到适用的自动回复规则")
+        return Result.Skipped(lastSkipReason ?: "未匹配到适用的自动回复规则")
     }
 
     private fun matchesRule(rule: AutoReplyRule, sender: String, body: String): Boolean {

@@ -41,7 +41,8 @@ object PrivacyDataMasker {
         }
 
         if (maskVerificationCode && !verificationCode.isNullOrBlank()) {
-            masked = masked.replace(verificationCode, "[******]")
+            val safeCodeRegex = Regex("(?<![0-9-])" + Regex.escape(verificationCode) + "(?![0-9-])")
+            masked = masked.replace(safeCodeRegex, "[******]")
         }
 
         return masked

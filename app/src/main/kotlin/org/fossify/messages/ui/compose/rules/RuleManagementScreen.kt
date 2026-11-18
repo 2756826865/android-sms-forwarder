@@ -76,7 +76,22 @@ fun RuleManagementScreen(
 
     var isRulesEnabled by remember { mutableStateOf(repository.isRulesEnabled()) }
     var ruleScope by remember { mutableStateOf(repository.getScope()) }
-    val lastDecision = remember(rules, isRulesEnabled) { repository.getLastDecision() }
+    var resumeTick by remember { mutableStateOf(0) }
+    val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                repository.refresh()
+                channelRepository.refresh()
+                isRulesEnabled = repository.isRulesEnabled()
+                ruleScope = repository.getScope()
+                resumeTick++
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    val lastDecision = remember(rules, isRulesEnabled, resumeTick) { repository.getLastDecision() }
     var ruleToDelete by remember { mutableStateOf<String?>(null) }
 
     val isDark = org.fossify.messages.ui.compose.theme.LocalGatewayDark.current

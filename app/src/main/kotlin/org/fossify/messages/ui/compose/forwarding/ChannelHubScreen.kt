@@ -162,6 +162,7 @@ private fun splitAccessList(value: String): Set<String> = value
 
 private fun syncLinkedDingTalkSource(context: Context, channel: ForwardingChannelInstance) {
     if (channel.channelType != ForwardingChannels.DINGTALK) return
+    if (org.fossify.messages.security.crypto.CredentialHealth.hasFailures()) return
     val clientId = channel.optString("clientId")
     val clientSecret = channel.optString("clientSecret")
     val repository = RemoteSourceRepository.getInstance(context)
@@ -185,10 +186,10 @@ private fun syncLinkedDingTalkSource(context: Context, channel: ForwardingChanne
                 else -> existing.connectionState
             },
             customCommandPrefix = channel.optString("customCommandPrefix"),
-            whitelistEnabled = channel.optBoolean("whitelistEnabled", false),
+            whitelistEnabled = channel.optBoolean("whitelistEnabled", existing?.whitelistEnabled ?: false),
             authorizedUsers = splitAccessList(channel.optString("authorizedUsers")),
             authorizedGroups = splitAccessList(channel.optString("authorizedGroups")),
-            requireMention = true,
+            requireMention = existing?.requireMention ?: true,
             configJson = JSONObject()
                 .put("clientId", clientId)
                 .put("clientSecret", clientSecret)
@@ -578,6 +579,16 @@ fun ChannelHubScreen(
                         Text("通道管理", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = primaryTextColor)
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        if (onBack != null) {
+                            HeaderPill("📋 记录", primaryTextColor, if (isDark) Color(0xFF252D3A) else Color(0xFFF1F5F9)) {
+                                context.startActivity(
+                                    android.content.Intent(
+                                        context,
+                                        org.fossify.messages.activities.ForwardingHistoryActivity::class.java
+                                    )
+                                )
+                            }
+                        }
                         HeaderPill("⚙️ 转发设置", GatewayBlue, if (isDark) Color(0xFF1E293B) else Color(0xFFEFF6FF)) {
                             showForwardSettingsDialog = true
                         }
@@ -788,7 +799,15 @@ fun ChannelHubScreen(
                                                 editingInstance = instance
                                             } else {
                                                 channelRepo.toggleInstanceEnabled(instance.id, targetState)
-                                                syncLinkedDingTalkSource(context, instance.copy(enabled = targetState))
+                                                if (instance.channelType == ForwardingChannels.DINGTALK) {
+                                                    val remoteRepo = RemoteSourceRepository.getInstance(context)
+                                                    val linkedId = linkedDingTalkSourceId(instance.id)
+                                                    if (remoteRepo.getSourceById(linkedId) != null) {
+                                                        remoteRepo.toggleEnabled(linkedId, targetState)
+                                                    } else {
+                                                        syncLinkedDingTalkSource(context, instance.copy(enabled = targetState))
+                                                    }
+                                                }
                                                 Toast.makeText(context, "【${instance.name}】已${if (targetState) "启用" else "停用"}", Toast.LENGTH_SHORT).show()
                                             }
                                         },
@@ -1118,6 +1137,7 @@ fun InstanceEditorDialog(
                 ForwardingChannels.EMAIL -> existingInstance?.optString("password") ?: ""
                 ForwardingChannels.NTFY -> existingInstance?.optString("token") ?: ""
                 ForwardingChannels.DINGTALK -> existingInstance?.optString("clientId") ?: ""
+                ForwardingChannels.TELEGRAM -> existingInstance?.optString("customHost") ?: ""
                 else -> ""
             }
         )
@@ -1309,7 +1329,7 @@ fun InstanceEditorDialog(
                 .put("group", barkGroup.trim())
                 .put("autoCopyCode", barkAutoCopyCode)
             ForwardingChannels.WEBSOCKET -> configJson.put("serverUrl", f1).put("token", f2)
-            ForwardingChannels.TELEGRAM -> configJson.put("botToken", f1).put("chatId", f2)
+            ForwardingChannels.TELEGRAM -> configJson.put("botToken", f1).put("chatId", f2).put("customHost", f3.trim())
             ForwardingChannels.DISCORD -> configJson.put("webhook", f1)
             ForwardingChannels.TENCENT_CLOUD -> configJson.put("webhook", f1).put("secret", f2)
             ForwardingChannels.EMAIL -> {
@@ -1318,12 +1338,16 @@ fun InstanceEditorDialog(
             }
             ForwardingChannels.CHANNEL_GROUP -> configJson.put("members", org.json.JSONArray(groupMembers))
                 .put("executionMode", groupMode)
-            ForwardingChannels.SMS_DIRECT -> configJson.put("phone", f1)
-                .put("onlyOnNoNetwork", smsDirectOnlyOnNoNetwork)
-                .put("simMode", smsDirectSimMode)
-                .put("rateLimitEnabled", smsDirectRateLimitEnabled)
-                .put("minuteLimit", (smsDirectMinuteLimitText.toIntOrNull() ?: MultiForwardConfig.DEFAULT_SMS_DIRECT_MINUTE_LIMIT).coerceIn(1, 200))
-                .put("hourLimit", (smsDirectHourLimitText.toIntOrNull() ?: MultiForwardConfig.DEFAULT_SMS_DIRECT_HOUR_LIMIT).coerceIn(1, 1000))
+            ForwardingChannels.SMS_DIRECT -> {
+                val parsedHour = (smsDirectHourLimitText.toIntOrNull() ?: MultiForwardConfig.DEFAULT_SMS_DIRECT_HOUR_LIMIT).coerceIn(1, 1000)
+                val parsedMin = (smsDirectMinuteLimitText.toIntOrNull() ?: MultiForwardConfig.DEFAULT_SMS_DIRECT_MINUTE_LIMIT).coerceIn(1, parsedHour.coerceAtMost(200))
+                configJson.put("phone", f1)
+                    .put("onlyOnNoNetwork", smsDirectOnlyOnNoNetwork)
+                    .put("simMode", smsDirectSimMode)
+                    .put("rateLimitEnabled", smsDirectRateLimitEnabled)
+                    .put("minuteLimit", parsedMin)
+                    .put("hourLimit", parsedHour)
+            }
             ForwardingChannels.CUSTOM_WEBHOOK -> configJson.put("url", f1).put("headers", f2)
                 .put("method", customWebhookMethod.uppercase())
                 .put("contentType", customWebhookContentType)
@@ -1398,7 +1422,7 @@ fun InstanceEditorDialog(
                                             ForwardingChannels.NTFY -> "https://ntfy.sh"
                                             else -> ""
                                         }
-                                        f2 = ""
+                                        f2 = if (def.type == ForwardingChannels.QQ) "qmsg" else ""
                                         f3 = ""
                                         f4 = when (def.type) {
                                             ForwardingChannels.WECOM, ForwardingChannels.WECOM_APP -> "@all"
@@ -1408,6 +1432,12 @@ fun InstanceEditorDialog(
                                         f5 = ""
                                         f6 = ""
                                         f7 = ""
+                                        qqTargetType = "private"
+                                        webhookSuccessMode = "http"
+                                        webhookSuccessField = ""
+                                        webhookSuccessValue = ""
+                                        barkLevel = "active"
+                                        barkGroup = ""
                                         emailPort = "465"
                                         emailSecurity = MultiForwardConfig.EMAIL_SECURITY_SSL
                                         dingTalkWhitelistEnabled = false
@@ -1711,8 +1741,25 @@ fun InstanceEditorDialog(
                         OutlinedTextField(value = f2, onValueChange = { f2 = it }, label = { Text("客户端 Token / 频道号") }, visualTransformation = secretVisualTransformation, modifier = Modifier.fillMaxWidth())
                     }
                     ForwardingChannels.TELEGRAM -> {
-                        OutlinedTextField(value = f1, onValueChange = { f1 = it }, label = { Text("Bot Token (如 123456:ABC-DEF...)") }, visualTransformation = secretVisualTransformation, modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(value = f2, onValueChange = { f2 = it }, label = { Text("Chat ID (如 -100123456)") }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(
+                            value = f1,
+                            onValueChange = { f1 = it },
+                            label = { Text("Bot Token (如 123456:ABC-DEF...)") },
+                            visualTransformation = secretVisualTransformation,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = f2,
+                            onValueChange = { f2 = it },
+                            label = { Text("Chat ID (如 -100123456)") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = f3,
+                            onValueChange = { f3 = it },
+                            label = { Text("自定义反代域名 (选填，如 https://tg-proxy.example.com)") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
                     ForwardingChannels.DISCORD -> {
                         OutlinedTextField(value = f1, onValueChange = { f1 = it }, label = { Text("Webhook URL (https://discord.com/api/...)") }, modifier = Modifier.fillMaxWidth())
@@ -2232,6 +2279,18 @@ fun ForwardSettingsDialog(onDismiss: () -> Unit) {
     var delayEnabled by remember { mutableStateOf(config.forwardingDelaySeconds > 0) }
     var delaySeconds by remember { mutableStateOf(if (config.forwardingDelaySeconds > 0) config.forwardingDelaySeconds else 5) }
 
+    fun persistAndDismiss() {
+        config.simOneLabel = simOneLabel
+        config.simTwoLabel = simTwoLabel
+        config.simOneNumber = simOneNumber
+        config.simTwoNumber = simTwoNumber
+        val parsedHour = (smsDirectHourLimitText.toIntOrNull() ?: MultiForwardConfig.DEFAULT_SMS_DIRECT_HOUR_LIMIT).coerceIn(1, 1000)
+        val parsedMin = (smsDirectMinuteLimitText.toIntOrNull() ?: MultiForwardConfig.DEFAULT_SMS_DIRECT_MINUTE_LIMIT).coerceIn(1, parsedHour.coerceAtMost(200))
+        config.smsDirectHourLimit = parsedHour
+        config.smsDirectMinuteLimit = parsedMin
+        onDismiss()
+    }
+
     AlertDialog(
         modifier = Modifier.navigationBarsPadding(),
         onDismissRequest = onDismiss,
@@ -2687,18 +2746,15 @@ fun ForwardSettingsDialog(onDismiss: () -> Unit) {
         },
         confirmButton = {
             Button(
-                onClick = {
-                    config.simOneLabel = simOneLabel
-                    config.simTwoLabel = simTwoLabel
-                    config.simOneNumber = simOneNumber
-                    config.simTwoNumber = simTwoNumber
-                    config.smsDirectMinuteLimit = (smsDirectMinuteLimitText.toIntOrNull() ?: MultiForwardConfig.DEFAULT_SMS_DIRECT_MINUTE_LIMIT).coerceIn(1, 200)
-                    config.smsDirectHourLimit = (smsDirectHourLimitText.toIntOrNull() ?: MultiForwardConfig.DEFAULT_SMS_DIRECT_HOUR_LIMIT).coerceIn(1, 1000)
-                    onDismiss()
-                },
+                onClick = ::persistAndDismiss,
                 colors = ButtonDefaults.buttonColors(containerColor = BrandGreen)
             ) {
-                Text("完成")
+                Text("保存")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
             }
         }
     )

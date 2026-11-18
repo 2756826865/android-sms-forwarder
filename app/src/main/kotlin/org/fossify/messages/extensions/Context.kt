@@ -428,7 +428,7 @@ private fun Context.getUnreadCountsByThreadStrict(threadId: Long?): Map<Long, In
 /** Read message timestamps in two batched queries rather than trusting OEM thread metadata. */
 private fun Context.getStoredThreadDates(threadId: Long?): Map<Long, Int> {
     val dates = HashMap<Long, Int>()
-    val rowCap = if (threadId != null) 1 else 500
+    val rowCap = if (threadId != null) 1 else 2000
     for ((uri, threadColumn, dateColumn, milliseconds) in listOf(
         StoredThreadDateSource(Sms.CONTENT_URI, Sms.THREAD_ID, Sms.DATE, true),
         StoredThreadDateSource(Mms.CONTENT_URI, Mms.THREAD_ID, Mms.DATE, false)
@@ -1229,14 +1229,44 @@ fun Context.markThreadMessagesRead(threadId: Long) {
 
 fun Context.markThreadMessagesUnread(threadId: Long) {
     runCatching {
-        arrayOf(Sms.CONTENT_URI, Mms.CONTENT_URI).forEach { uri ->
-            val contentValues = ContentValues().apply {
-                put(Sms.READ, 0)
-                put(Sms.SEEN, 0)
+        val contentValues = ContentValues().apply {
+            put(Sms.READ, 0)
+            put(Sms.SEEN, 0)
+        }
+        val latestSmsId = contentResolver.query(
+            Sms.CONTENT_URI,
+            arrayOf(Sms._ID),
+            "${Sms.THREAD_ID} = ? AND ${Sms.TYPE} = ?",
+            arrayOf(threadId.toString(), Sms.MESSAGE_TYPE_INBOX.toString()),
+            "${Sms.DATE} DESC, ${Sms._ID} DESC",
+        )?.use { cursor ->
+            if (cursor.moveToFirst()) cursor.getLong(0) else 0L
+        } ?: 0L
+        if (latestSmsId > 0L) {
+            contentResolver.update(
+                Sms.CONTENT_URI,
+                contentValues,
+                "${Sms._ID} = ?",
+                arrayOf(latestSmsId.toString()),
+            )
+        } else {
+            val latestMmsId = contentResolver.query(
+                Mms.CONTENT_URI,
+                arrayOf(Mms._ID),
+                "${Mms.THREAD_ID} = ? AND ${Mms.MESSAGE_BOX} = ?",
+                arrayOf(threadId.toString(), Mms.MESSAGE_BOX_INBOX.toString()),
+                "${Mms.DATE} DESC, ${Mms._ID} DESC",
+            )?.use { cursor ->
+                if (cursor.moveToFirst()) cursor.getLong(0) else 0L
+            } ?: 0L
+            if (latestMmsId > 0L) {
+                contentResolver.update(
+                    Mms.CONTENT_URI,
+                    contentValues,
+                    "${Mms._ID} = ?",
+                    arrayOf(latestMmsId.toString()),
+                )
             }
-            val selection = "${Sms.THREAD_ID} = ?"
-            val selectionArgs = arrayOf(threadId.toString())
-            contentResolver.update(uri, contentValues, selection, selectionArgs)
         }
     }
     messagesDB.markLatestThreadMessageUnread(threadId)
@@ -1473,11 +1503,16 @@ fun Context.insertOrUpdateConversation(
     cachedConv: Conversation? = conversationsDB.getConversationWithThreadId(conversation.threadId),
 ) {
     var updatedConv = conversation
-    if (cachedConv != null && cachedConv.usesCustomTitle) {
-        updatedConv = updatedConv.copy(
-            title = cachedConv.title,
-            usesCustomTitle = true
-        )
+    if (cachedConv != null) {
+        if (cachedConv.isArchived != updatedConv.isArchived) {
+            updatedConv = updatedConv.copy(isArchived = cachedConv.isArchived)
+        }
+        if (cachedConv.usesCustomTitle) {
+            updatedConv = updatedConv.copy(
+                title = cachedConv.title,
+                usesCustomTitle = true
+            )
+        }
     }
     conversationsDB.insertOrUpdate(updatedConv)
 }

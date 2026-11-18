@@ -53,7 +53,8 @@ internal object BackupPreferences {
         "call_forward_config" to setOf("call_forward_enabled", "call_forward_missed_only", "call_forward_answered", "call_forward_custom_template", "call_forward_channel_instance_ids"),
         "notification_forward_config" to setOf("notification_forward_enabled", "notification_forward_ignore_ongoing", "notification_forward_skip_system_sms_when_default", "notification_forward_channel_instance_ids", "notification_forward_target_packages", "notification_forward_custom_template"),
         "gateway_appearance" to setOf("mode", "dynamic", "accent", "amoled", "blur", "key_color", "palette", "spec2025", "floating", "material"),
-        "thread_layout" to setOf("composer_offset_dp")
+        "thread_layout" to setOf("composer_offset_dp"),
+        "remote_control_receipt" to setOf("enabled", "include_delivered", "channels")
     )
     fun export(context: Context): JSONObject = JSONObject().apply {
         portableKeys.forEach { (name, keys) ->
@@ -73,7 +74,7 @@ internal object BackupPreferences {
                         "palette" -> require(value is String && value.length <= 64)
                         else -> require(value is Boolean)
                     }
-                    name == "forwarding_fallback" || key.startsWith("sim_") || key.endsWith("template") || key in setOf("bark_level", "bark_group") -> require(value is String)
+                    name == "forwarding_fallback" || key.startsWith("sim_") || key.endsWith("template") || key in setOf("bark_level", "bark_group", "channels") -> require(value is String)
                     key.endsWith("instance_ids") || key.endsWith("packages") -> require(value is Set<*>)
                     key in setOf("forwarding_delay_seconds", "composer_offset_dp", "heartbeat_interval_hours", "sms_direct_sim_mode", "sms_direct_minute_limit", "sms_direct_hour_limit") -> require(value is Int)
                     else -> require(value is Boolean)

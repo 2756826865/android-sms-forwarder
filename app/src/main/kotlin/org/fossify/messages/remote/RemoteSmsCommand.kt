@@ -78,6 +78,50 @@ class RemoteSmsCommandConfig(
         }
     }
 
+    fun hasRecentCrossPathCommand(
+        sender: String,
+        targetNumber: String,
+        content: String,
+        now: Long = System.currentTimeMillis(),
+    ): Boolean {
+        val raw = "${NumberMatcher.normalize(sender)}\u0000${NumberMatcher.normalize(targetNumber)}\u0000$content"
+        val digest = MessageDigest.getInstance("SHA-256")
+            .digest(raw.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
+        val key = "crosspath:$digest"
+        synchronized(fingerprintLock) {
+            val recent = decodeFingerprints(prefs.getString(KEY_RECENT_FINGERPRINTS, "[]").orEmpty())
+            return recent.any { it.value == key && kotlin.math.abs(now - it.claimedAt) <= CROSS_PATH_DUPLICATE_WINDOW_MS }
+        }
+    }
+
+    fun claimCrossPathCommand(
+        sender: String,
+        targetNumber: String,
+        content: String,
+        now: Long = System.currentTimeMillis(),
+    ): Boolean {
+        val raw = "${NumberMatcher.normalize(sender)}\u0000${NumberMatcher.normalize(targetNumber)}\u0000$content"
+        val digest = MessageDigest.getInstance("SHA-256")
+            .digest(raw.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
+        val key = "crosspath:$digest"
+        synchronized(fingerprintLock) {
+            val recent = decodeFingerprints(prefs.getString(KEY_RECENT_FINGERPRINTS, "[]").orEmpty())
+                .filter { now - it.claimedAt in 0L..DUPLICATE_WINDOW_MS }
+            if (recent.any { it.value == key && kotlin.math.abs(now - it.claimedAt) <= CROSS_PATH_DUPLICATE_WINDOW_MS }) {
+                return false
+            }
+            val updated = (recent.filterNot { it.value == key } + FingerprintEntry(key, now)).takeLast(MAX_RECENT_FINGERPRINTS)
+            val encoded = JSONArray().apply {
+                updated.forEach { entry ->
+                    put(JSONObject().put("value", entry.value).put("claimedAt", entry.claimedAt))
+                }
+            }.toString()
+            return prefs.edit().putString(KEY_RECENT_FINGERPRINTS, encoded).commit()
+        }
+    }
+
     fun isRateLimited(sender: String, now: Long = System.currentTimeMillis()): Boolean {
         val key = KEY_RATE_PREFIX + NumberMatcher.normalize(sender)
         val values = prefs.getString(key, "[]").orEmpty()
@@ -166,6 +210,7 @@ class RemoteSmsCommandConfig(
         private const val KEY_RECENT_FINGERPRINTS = "recent_fingerprints"
         private const val KEY_RATE_PREFIX = "rate_"
         private const val DUPLICATE_WINDOW_MS = 10 * 60 * 1000L
+        private const val CROSS_PATH_DUPLICATE_WINDOW_MS = 15_000L
         private const val MAX_RECENT_FINGERPRINTS = 100
         private const val RATE_WINDOW_MS = 60 * 60 * 1000L
         private const val RATE_LIMIT_COUNT = 5
@@ -185,24 +230,64 @@ data class RemoteSmsCommand(
     fun sendModeLabel(): String = SimSendResolver.modeLabel(sendMode)
 
     companion object {
+        private val DEFAULT_PREFIXES = listOf("/短信发送", "/发信", "/发短信", "#发信", "#发短信")
+        private val LEADING_MENTION_WS_REGEX = Regex("^[\\s\\u00A0\\u2005\\u3000]+")
+
+        private fun String.trimUnicodeSpaces(): String =
+            trim { it.isWhitespace() || it == '\u00A0' || it == '\u2005' || it == '\u3000' }
+
+        fun stripLeadingMentionBeforePrefix(text: String, customPrefix: String = ""): String {
+            val trimmed = text.trimUnicodeSpaces()
+            if (!trimmed.startsWith("@")) return trimmed
+            val prefixes = buildList {
+                if (customPrefix.isNotBlank()) add(customPrefix.trim())
+                addAll(DEFAULT_PREFIXES)
+            }
+            if (prefixes.any { trimmed.startsWith(it) }) return trimmed
+
+            val strippedTokens = trimmed
+                .replaceFirst(Regex("^(@[^\\s\\u00A0\\u2005\\u3000]+[\\s\\u00A0\\u2005\\u3000]+)+"), "")
+                .trimUnicodeSpaces()
+            if (prefixes.any { strippedTokens.startsWith(it) }) return strippedTokens
+
+            // 兼容机器人昵称本身包含空格的场景（例如 "@SMS Bot /发信 138..."），仅在首部 48 字符内查找
+            val searchLimit = minOf(trimmed.length, 48)
+            var bestIdx = -1
+            for (prefix in prefixes) {
+                var idx = trimmed.indexOf(prefix, startIndex = 1)
+                while (idx in 1 until searchLimit) {
+                    val prev = trimmed[idx - 1]
+                    if (prev.isWhitespace() || prev == '\u00A0' || prev == '\u2005' || prev == '\u3000') {
+                        if (bestIdx == -1 || idx < bestIdx) bestIdx = idx
+                        break
+                    }
+                    idx = trimmed.indexOf(prefix, startIndex = idx + 1)
+                }
+            }
+            return if (bestIdx > 0) trimmed.substring(bestIdx).trimUnicodeSpaces() else strippedTokens
+        }
+
         fun parse(text: String, customPrefix: String = ""): RemoteSmsCommand? {
-            val trimmed = text.trim()
-            val prefixes = mutableListOf("/短信发送", "/发信", "/发短信", "#发信", "#发短信")
-            if (customPrefix.isNotBlank()) {
-                prefixes.add(0, customPrefix.trim())
+            val trimmed = text.trimUnicodeSpaces()
+            val prefixes = mutableListOf<String>().apply {
+                if (customPrefix.isNotBlank()) add(customPrefix.trim())
+                addAll(DEFAULT_PREFIXES)
             }
 
             var matchedPrefix: String? = null
-            var commandText = trimmed
             for (p in prefixes) {
                 if (trimmed.startsWith(p)) {
                     matchedPrefix = p
-                    commandText = trimmed
                     break
                 }
             }
             if (matchedPrefix == null) return null
-            val remainder = trimmed.substring(matchedPrefix.length).trim()
+            var rawRemainder = trimmed.substring(matchedPrefix.length)
+            // 兼容 Telegram 群聊指令自动补全（如 /发信@my_bot 13800138000 你好）
+            if (matchedPrefix.startsWith("/") && rawRemainder.startsWith("@")) {
+                rawRemainder = rawRemainder.replaceFirst(Regex("^@[A-Za-z0-9_]+(?=[\\s\\u00A0\\u2005\\u3000])"), "")
+            }
+            val remainder = rawRemainder.replaceFirst(LEADING_MENTION_WS_REGEX, "").trimUnicodeSpaces()
             if (remainder.isBlank()) return null
 
             val firstSpace = remainder.indexOfFirst { it.isWhitespace() }
@@ -323,7 +408,25 @@ class RemoteSmsCommandWorker(appContext: Context, params: WorkerParameters) : Co
         val requester = inputData.getString(KEY_REQUESTER).orEmpty()
         val source = inputData.getString(KEY_SOURCE).orEmpty().ifBlank { SOURCE_SMS }
         val commandId = inputData.getString(KEY_COMMAND_ID).orEmpty()
+        val externalCommandId = inputData.getString(KEY_EXTERNAL_COMMAND_ID).orEmpty()
         val sourceInstanceId = inputData.getString(KEY_SOURCE_INSTANCE_ID).orEmpty()
+
+        if (runAttemptCount > 0) {
+            appendRemoteLog(source, "已阻断延迟重试以防止重复发短信扣费：$target")
+            return Result.failure()
+        }
+
+        if (commandId.isNotBlank()) {
+            val existingState = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                runCatching {
+                    applicationContext.getMessagesDB().RemoteCommandDao().findById(commandId)?.executionState
+                }.getOrNull()
+            }
+            if (existingState in setOf("SUBMITTING", "SUBMITTED", "SENT", "DELIVERED", "SUCCESS", "DUPLICATE", "REJECTED")) {
+                appendRemoteLog(source, "抑制重复执行（状态=$existingState）：$target")
+                return Result.success()
+            }
+        }
 
         if (target.isBlank() || content.isBlank()) {
             if (commandId.isNotBlank()) {
@@ -361,6 +464,7 @@ class RemoteSmsCommandWorker(appContext: Context, params: WorkerParameters) : Co
             awaitDelivered = false,
             sendSimLabel = sendSimLabel,
             commandId = commandId,
+            externalCommandId = externalCommandId,
             sourceInstanceId = sourceInstanceId,
         )
         if (resolvedSubId == null) {
@@ -382,7 +486,12 @@ class RemoteSmsCommandWorker(appContext: Context, params: WorkerParameters) : Co
             return Result.success()
         }
         if (commandId.isNotBlank()) {
-            RemoteCommandRepository.recordSubmitting(applicationContext, commandId)
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                runCatching {
+                    applicationContext.getMessagesDB().RemoteCommandDao()
+                        .updateState(commandId, org.fossify.messages.models.RemoteCommandState.SUBMITTING.name)
+                }
+            }
         }
         val triggerType = when (source) {
             SOURCE_DINGTALK -> org.fossify.messages.models.SmsSendTriggerType.REMOTE_DINGTALK_COMMAND
@@ -458,6 +567,7 @@ class RemoteSmsCommandWorker(appContext: Context, params: WorkerParameters) : Co
         private const val KEY_REQUESTER = "requester"
         private const val KEY_SOURCE = "source"
         private const val KEY_COMMAND_ID = "command_id"
+        private const val KEY_EXTERNAL_COMMAND_ID = "external_command_id"
         private const val KEY_SOURCE_INSTANCE_ID = "source_instance_id"
 
         fun enqueue(
@@ -470,6 +580,7 @@ class RemoteSmsCommandWorker(appContext: Context, params: WorkerParameters) : Co
             requester: String = "",
             source: String = SOURCE_SMS,
             commandId: String = "",
+            externalCommandId: String = "",
             sourceInstanceId: String = "",
         ) {
             val request = OneTimeWorkRequestBuilder<RemoteSmsCommandWorker>()
@@ -483,6 +594,7 @@ class RemoteSmsCommandWorker(appContext: Context, params: WorkerParameters) : Co
                         KEY_REQUESTER to requester,
                         KEY_SOURCE to source,
                         KEY_COMMAND_ID to commandId,
+                        KEY_EXTERNAL_COMMAND_ID to externalCommandId,
                         KEY_SOURCE_INSTANCE_ID to sourceInstanceId,
                     ),
                 )

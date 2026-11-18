@@ -103,7 +103,7 @@
         <activity
             android:name=".activities.RecycleBinConversationsActivity"
             android:configChanges="orientation"
-            android:exported="true"
+            android:exported="false"
             android:label="@string/recycle_bin"
             android:parentActivityName=".activities.MainActivity" />
 
@@ -524,7 +524,8 @@
 
         <receiver
             android:name=".receivers.SmsFallbackReceiver"
-            android:exported="true">
+            android:exported="true"
+            android:permission="android.permission.BROADCAST_SMS">
             <intent-filter android:priority="998">
                 <action android:name="android.provider.Telephony.SMS_RECEIVED" />
             </intent-filter>

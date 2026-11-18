@@ -60,6 +60,8 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -113,6 +115,7 @@ fun RemoteControlScreen(
     var showAddDialog by remember { mutableStateOf(false) }
     var selectedNewSourceType by remember { mutableStateOf<RemoteSourceType?>(null) }
     var editingSource by remember { mutableStateOf<RemoteSourceInstance?>(null) }
+    var sourcePendingDelete by remember { mutableStateOf<RemoteSourceInstance?>(null) }
     var showReceiptDialog by remember { mutableStateOf(false) }
 
     val bgColor = androidx.compose.material3.MaterialTheme.colorScheme.background
@@ -237,11 +240,36 @@ fun RemoteControlScreen(
                         autoBackfilled = source.id in autoBackfilledIds,
                         onToggle = { enabled -> remoteRepo.toggleEnabled(source.id, enabled) },
                         onEdit = { editingSource = source },
-                        onDelete = { remoteRepo.deleteSource(source.id) }
+                        onDelete = { sourcePendingDelete = source }
                     )
                 }
             }
         }
+    }
+
+    sourcePendingDelete?.let { pending ->
+        AlertDialog(
+            modifier = Modifier.navigationBarsPadding(),
+            onDismissRequest = { sourcePendingDelete = null },
+            title = { Text("删除远程来源？", fontWeight = FontWeight.Bold) },
+            text = { Text("确定要删除远程来源【${pending.name}】吗？删除后将立即断开连接并清除该来源的白名单配置。") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        remoteRepo.deleteSource(pending.id)
+                        sourcePendingDelete = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = GatewayRed)
+                ) {
+                    Text("确认删除", color = Color.White)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { sourcePendingDelete = null }) {
+                    Text("取消")
+                }
+            }
+        )
     }
 
     if (showAddDialog) {
@@ -948,40 +976,70 @@ private fun RemoteSourceEditDialog(
 
     var param1 by remember {
         mutableStateOf(
-            initialSource?.optString("token").orEmpty()
-                .ifBlank { initialSource?.optString("botToken").orEmpty() }
-                .ifBlank { initialSource?.optString("clientId").orEmpty() }
-                .ifBlank { initialSource?.optString("appId").orEmpty() }
-                .ifBlank { initialSource?.optString("botId").orEmpty() }
-                .ifBlank { initialSource?.optString("corpId").orEmpty() }
-                .ifBlank { initialSource?.optString("host").orEmpty() }
-                .ifBlank { initialSource?.optString("url").orEmpty() }
-                .ifBlank { initialSource?.optString("wsUrl").orEmpty() }
+            when (initialSource?.type) {
+                RemoteSourceType.WEBSOCKET -> initialSource.optString("url")
+                    .ifBlank { initialSource.optString("wsUrl") }
+                RemoteSourceType.EMAIL -> initialSource.optString("host")
+                RemoteSourceType.TELEGRAM -> initialSource.optString("botToken")
+                    .ifBlank { initialSource.optString("token") }
+                RemoteSourceType.DINGTALK -> initialSource.optString("clientId")
+                RemoteSourceType.FEISHU -> initialSource.optString("appId")
+                RemoteSourceType.WECOM -> initialSource.optString("botId")
+                    .ifBlank { initialSource.optString("corpId") }
+                else -> ""
+            }
         )
     }
     var param2 by remember {
         mutableStateOf(
-            initialSource?.optString("clientSecret").orEmpty()
-                .ifBlank { initialSource?.optString("appSecret").orEmpty() }
-                .ifBlank { initialSource?.optString("secret").orEmpty() }
-                .ifBlank { initialSource?.optString("user").orEmpty() }
-                .ifBlank { initialSource?.optString("token").orEmpty() }
+            when (initialSource?.type) {
+                RemoteSourceType.WEBSOCKET -> initialSource.optString("token")
+                RemoteSourceType.EMAIL -> initialSource.optString("user")
+                RemoteSourceType.DINGTALK -> initialSource.optString("clientSecret")
+                RemoteSourceType.FEISHU -> initialSource.optString("appSecret")
+                RemoteSourceType.WECOM -> initialSource.optString("secret")
+                else -> ""
+            }
         )
     }
     var param3 by remember {
         mutableStateOf(
-            initialSource?.optString("pass").orEmpty()
-                .ifBlank { initialSource?.optString("chatId").orEmpty() }
-                .ifBlank { initialSource?.optString("agentId").orEmpty() }
+            when (initialSource?.type) {
+                RemoteSourceType.EMAIL -> initialSource.optString("pass")
+                RemoteSourceType.TELEGRAM -> initialSource.optString("chatId")
+                RemoteSourceType.WECOM -> initialSource.optString("chatId")
+                    .ifBlank { initialSource.optString("agentId") }
+                else -> ""
+            }
         )
     }
     var emailPortText by remember { mutableStateOf(initialSource?.optInt("port", 993)?.toString() ?: "993") }
-    var emailSsl by remember { mutableStateOf(initialSource?.optBoolean("ssl", true) ?: true) }
+    var emailSsl by remember {
+        mutableStateOf(
+            initialSource?.let { src ->
+                val raw = runCatching { JSONObject(src.configJson) }.getOrNull()
+                when {
+                    raw?.has("ssl") == true -> raw.optBoolean("ssl", true)
+                    raw?.has("security") == true -> raw.optInt("security", 0) != org.fossify.messages.forwarding.MultiForwardConfig.EMAIL_SECURITY_STARTTLS
+                    else -> true
+                }
+            } ?: true
+        )
+    }
     var telegramCustomHost by remember {
         mutableStateOf(
             initialSource?.optString("customHost").orEmpty()
                 .ifBlank { org.fossify.messages.forwarding.MultiForwardConfig(context).telegramRemoteCustomHost() }
         )
+    }
+    var showSecrets by remember { mutableStateOf(false) }
+    val secretVisual = if (showSecrets) VisualTransformation.None else PasswordVisualTransformation()
+    val hasValidCredentialsInput = when (type) {
+        RemoteSourceType.SMS -> true
+        RemoteSourceType.TELEGRAM -> param1.isNotBlank()
+        RemoteSourceType.DINGTALK, RemoteSourceType.FEISHU, RemoteSourceType.WECOM -> param1.isNotBlank() && param2.isNotBlank()
+        RemoteSourceType.EMAIL -> param1.isNotBlank() && param2.isNotBlank() && param3.isNotBlank()
+        RemoteSourceType.WEBSOCKET -> param1.isNotBlank()
     }
 
     val scrollState = rememberScrollState()
@@ -1087,7 +1145,22 @@ private fun RemoteSourceEditDialog(
                 }
 
                 // 4. 各平台专有凭证与连接配置
-                Text("连接与鉴权凭据", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = TextSecondary)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("连接与鉴权凭据", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = TextSecondary)
+                    if (type != RemoteSourceType.SMS) {
+                        TextButton(
+                            onClick = { showSecrets = !showSecrets },
+                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                            modifier = Modifier.height(26.dp)
+                        ) {
+                            Text(if (showSecrets) "隐藏密钥" else "显示密钥", fontSize = 11.sp)
+                        }
+                    }
+                }
                 when (type) {
                     RemoteSourceType.SMS -> {
                         Surface(
@@ -1111,6 +1184,7 @@ private fun RemoteSourceEditDialog(
                             onValueChange = { param1 = it },
                             label = { Text("Telegram Bot Token") },
                             placeholder = { Text("例如 123456789:ABCdefGhI...") },
+                            visualTransformation = secretVisual,
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -1149,6 +1223,7 @@ private fun RemoteSourceEditDialog(
                             value = param2,
                             onValueChange = { param2 = it },
                             label = { Text("Client Secret (AppSecret)") },
+                            visualTransformation = secretVisual,
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -1173,6 +1248,7 @@ private fun RemoteSourceEditDialog(
                             value = param2,
                             onValueChange = { param2 = it },
                             label = { Text("App Secret") },
+                            visualTransformation = secretVisual,
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -1218,6 +1294,7 @@ private fun RemoteSourceEditDialog(
                             value = param2,
                             onValueChange = { param2 = it },
                             label = { Text("Secret (机器人密钥)") },
+                            visualTransformation = secretVisual,
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -1285,6 +1362,7 @@ private fun RemoteSourceEditDialog(
                             value = param3,
                             onValueChange = { param3 = it },
                             label = { Text("邮箱授权码 / 密码") },
+                            visualTransformation = secretVisual,
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -1321,6 +1399,7 @@ private fun RemoteSourceEditDialog(
                             value = param2,
                             onValueChange = { param2 = it },
                             label = { Text("鉴权 Token / API Key (选填)") },
+                            visualTransformation = secretVisual,
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -1481,10 +1560,11 @@ private fun RemoteSourceEditDialog(
                                 put("chatId", param3.trim())
                             }
                             RemoteSourceType.EMAIL -> {
+                                remove("security")
                                 put("host", param1.trim())
                                 put("user", param2.trim())
                                 put("pass", param3.trim())
-                                put("port", emailPortText.toIntOrNull() ?: 993)
+                                put("port", (emailPortText.toIntOrNull() ?: 993).coerceIn(1, 65535))
                                 put("ssl", emailSsl)
                             }
                             RemoteSourceType.WEBSOCKET -> {
@@ -1505,7 +1585,10 @@ private fun RemoteSourceEditDialog(
                     }
 
                     // 拒绝虚假就绪：网络来源若有效则标记为 CONNECTING 等待后台服务握手，SMS 在权限满足时标为 READY
-                    val calculatedState = if (type == RemoteSourceType.SMS) {
+                    val isSourceEnabled = initialSource?.enabled ?: true
+                    val calculatedState = if (!isSourceEnabled) {
+                        RemoteSourceConnectionState.DISABLED
+                    } else if (type == RemoteSourceType.SMS) {
                         val hasSmsPerm = ContextCompat.checkSelfPermission(
                             context,
                             Manifest.permission.SEND_SMS
@@ -1529,16 +1612,17 @@ private fun RemoteSourceEditDialog(
                         requireMention = requireMention,
                         defaultSimMode = simMode,
                         quietHoursEnabled = quietHoursEnabled,
-                        quietHoursStart = quietStartText.toIntOrNull() ?: 23,
-                        quietHoursEnd = quietEndText.toIntOrNull() ?: 7,
-                        hourlyLimit = hourlyLimitText.toIntOrNull() ?: 10,
-                        dailyLimit = dailyLimitText.toIntOrNull() ?: 50,
+                        quietHoursStart = (quietStartText.toIntOrNull() ?: 23).coerceIn(0, 23),
+                        quietHoursEnd = (quietEndText.toIntOrNull() ?: 7).coerceIn(0, 23),
+                        hourlyLimit = (hourlyLimitText.toIntOrNull() ?: 10).coerceIn(1, 1000),
+                        dailyLimit = (dailyLimitText.toIntOrNull() ?: 50).coerceIn(1, 5000),
                         configJson = json.toString(),
                         connectionState = calculatedState
                     )
                     onSave(item)
                 },
-                enabled = !whitelistEnabled || authUsersText.lines().any { it.isNotBlank() },
+                enabled = hasValidCredentialsInput &&
+                    (!whitelistEnabled || authUsersText.lines().any { it.isNotBlank() }),
                 colors = ButtonDefaults.buttonColors(containerColor = BrandGreen)
             ) {
                 Text("保存")

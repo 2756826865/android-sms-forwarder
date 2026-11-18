@@ -210,10 +210,22 @@ abstract class BaseConversationsAdapter(
                 if (isSelected) R.drawable.selection_circle_checked else R.drawable.selection_circle_unchecked
             )
 
-            val yellow = YellowPageHelper.lookup(activity, conversation.phoneNumber, conversation.snippet)
-            val isJustNumber = conversation.title.isBlank() ||
-                conversation.title.equals(conversation.phoneNumber, ignoreCase = true) ||
-                conversation.title.replace("+", "").replace(" ", "").replace("-", "").all { it.isDigit() }
+            val yellow = if (YellowPageHelper.isInitialized) {
+                YellowPageHelper.lookup(activity, conversation.phoneNumber, conversation.snippet)
+            } else {
+                ensureBackgroundThread {
+                    YellowPageHelper.ensureInitialized(activity.applicationContext)
+                    activity.runOnUiThread {
+                        if (!activity.isFinishing && !activity.isDestroyed) notifyDataSetChanged()
+                    }
+                }
+                null
+            }
+            val isJustNumber = !conversation.usesCustomTitle && (
+                conversation.title.isBlank() ||
+                    conversation.title.equals(conversation.phoneNumber, ignoreCase = true) ||
+                    conversation.title.replace("+", "").replace(" ", "").replace("-", "").all { it.isDigit() }
+                )
             val displayTitle = if (yellow != null) {
                 if (isJustNumber) yellow.brand else conversation.title
             } else if (isJustNumber) {

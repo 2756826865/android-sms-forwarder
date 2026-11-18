@@ -16,11 +16,17 @@ class MarkAsReadReceiver : BroadcastReceiver() {
         when (intent.action) {
             MARK_AS_READ -> {
                 val threadId = intent.getLongExtra(THREAD_ID, 0L)
-                context.notificationManager.cancel(threadId.hashCode())
+                val pendingResult = goAsync()
+                val appContext = context.applicationContext
+                appContext.notificationManager.cancel(threadId.hashCode())
                 ensureBackgroundThread {
-                    context.markThreadMessagesRead(threadId)
-                    context.conversationsDB.markRead(threadId)
-                    refreshConversations()
+                    try {
+                        appContext.markThreadMessagesRead(threadId)
+                        appContext.conversationsDB.markRead(threadId)
+                        refreshConversations()
+                    } finally {
+                        pendingResult.finish()
+                    }
                 }
             }
         }

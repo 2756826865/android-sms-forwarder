@@ -191,17 +191,25 @@ class EmailRemoteCommandPoller(
                     val checkedKey = "$host|$user|$uidValidity|$uid"
                     if (wasNonCommandChecked(checkedKey)) continue
 
-                    val fetchLines = send("UID FETCH $uid (BODY.PEEK[HEADER.FIELDS (FROM SUBJECT MESSAGE-ID)] BODY.PEEK[TEXT])")
+                    val fetchLines = send(
+                        "UID FETCH $uid (INTERNALDATE BODY.PEEK[HEADER.FIELDS " +
+                            "(FROM SUBJECT MESSAGE-ID DATE CONTENT-TYPE CONTENT-TRANSFER-ENCODING)] BODY.PEEK[TEXT])"
+                    )
                     check(isTaggedOk(fetchLines)) { "IMAP UID FETCH 失败：${fetchLines.lastOrNull()}" }
-                    val headerText = fetchLines.joinToString("\n")
+                    val textMarkerIdx = fetchLines.indexOfFirst { it.contains("BODY[TEXT]", ignoreCase = true) }
+                    val headerLines = if (textMarkerIdx >= 0) fetchLines.subList(0, textMarkerIdx + 1) else fetchLines
+                    val unfoldedHeaders = headerLines.joinToString("\n").replace(Regex("\\r?\\n[ \\t]+"), " ")
 
-                    val rawFrom = extractHeader(headerText, "From")
+                    val rawFrom = extractHeader(unfoldedHeaders, "From")
                     val decodedFrom = decodeMimeHeader(rawFrom)
                     val senderEmail = extractEmailAddress(decodedFrom)
 
-                    val rawSubject = extractHeader(headerText, "Subject")
+                    val rawSubject = extractHeader(unfoldedHeaders, "Subject")
                     val decodedSubject = decodeMimeHeader(rawSubject)
-                    val messageId = extractHeader(headerText, "Message-ID").ifBlank { "email-$uidValidity-$uid" }
+                    val messageId = extractHeader(unfoldedHeaders, "Message-ID").ifBlank { "email-$uidValidity-$uid" }
+                    val contentType = extractHeader(unfoldedHeaders, "Content-Type")
+                    val transferEncoding = extractHeader(unfoldedHeaders, "Content-Transfer-Encoding").lowercase()
+                    val emailReceivedAt = parseEmailReceivedAt(headerLines.joinToString("\n"), extractHeader(unfoldedHeaders, "Date"))
 
                     if (instance.whitelistEnabled) {
                         val isAuthorized = authorizedSenders.any { auth ->
@@ -210,19 +218,28 @@ class EmailRemoteCommandPoller(
                         }
                         if (!isAuthorized) {
                             config.appendEmailRemoteLog("忽略未授权发件人 [$senderEmail]")
-                            send("UID STORE $uid +FLAGS (\\Seen)")
+                            rememberNonCommandChecked(checkedKey)
                             continue
                         }
                     }
 
                     val customPrefix = instance.customCommandPrefix
-                    val command = RemoteSmsCommand.parse(decodedSubject, customPrefix)
-                        ?: RemoteSmsCommand.parse(headerText, customPrefix)
-                    if (command != null) {
-                        val rawContent = if (RemoteSmsCommand.parse(decodedSubject, customPrefix) != null) decodedSubject else headerText
-                        handleEmailCommand(rawContent, senderEmail, messageId, instance.id)
-                        send("UID STORE $uid +FLAGS (\\Seen)")
-                        processedCount++
+                    val subjectCmd = RemoteSmsCommand.parse(decodedSubject, customPrefix)
+                    val bodyCandidate = if (subjectCmd == null) {
+                        extractBodyCommandLine(fetchLines, contentType, transferEncoding, customPrefix)
+                    } else {
+                        null
+                    }
+                    val matchedRawContent = when {
+                        subjectCmd != null -> decodedSubject
+                        bodyCandidate != null -> bodyCandidate
+                        else -> null
+                    }
+                    if (matchedRawContent != null) {
+                        if (handleEmailCommand(matchedRawContent, senderEmail, messageId, instance.id, emailReceivedAt)) {
+                            send("UID STORE $uid +FLAGS (\\Seen)")
+                            processedCount++
+                        }
                     } else {
                         // 普通未读邮件不应被本应用擅自标记为已读，同时也不应每分钟重复下载全文。
                         rememberNonCommandChecked(checkedKey)
@@ -247,8 +264,14 @@ class EmailRemoteCommandPoller(
         return processedCount
     }
 
-    private fun handleEmailCommand(rawContent: String, sender: String, messageId: String, activeInstanceId: String) {
-        if (!isCurrent()) return
+    private fun handleEmailCommand(
+        rawContent: String,
+        sender: String,
+        messageId: String,
+        activeInstanceId: String,
+        emailReceivedAt: Long,
+    ): Boolean {
+        if (!isCurrent()) return false
         val config = MultiForwardConfig(context)
         val envelope = RemoteCommandEnvelope(
             sourceType = RemoteSourceType.EMAIL,
@@ -256,7 +279,7 @@ class EmailRemoteCommandPoller(
             sourceMessageKey = messageId.ifBlank { "email-$sender-${System.currentTimeMillis()}" },
             senderId = sender,
             rawContent = rawContent,
-            receivedAt = System.currentTimeMillis()
+            receivedAt = emailReceivedAt
         )
 
         when (val result = RemoteCommandProcessor.process(context, envelope)) {
@@ -271,6 +294,7 @@ class EmailRemoteCommandPoller(
             }
             is RemoteProcessResult.Ignored -> {}
         }
+        return true
     }
 
     private fun extractHeader(text: String, name: String): String {
@@ -367,6 +391,101 @@ class EmailRemoteCommandPoller(
             ?.contains(key) == true
     }
 
+    private fun extractBodyCommandLine(
+        fetchLines: List<String>,
+        contentType: String,
+        transferEncoding: String,
+        customPrefix: String,
+    ): String? {
+        val textStartIdx = fetchLines.indexOfFirst { it.contains("BODY[TEXT]", ignoreCase = true) }
+        val rawBodyLines = if (textStartIdx >= 0 && textStartIdx + 1 < fetchLines.size) {
+            val slice = fetchLines.subList(textStartIdx + 1, fetchLines.size - 1).toMutableList()
+            // 仅剥离 IMAP FETCH 响应末尾单独成行或包裹在最后一行的右括号，不误删短信正文自身的括号
+            while (slice.isNotEmpty() && slice.last().trim() == ")") {
+                slice.removeAt(slice.lastIndex)
+            }
+            slice
+        } else {
+            emptyList()
+        }
+        if (rawBodyLines.isEmpty()) return null
+        val joinedRaw = rawBodyLines.joinToString("\n")
+        val boundary = Regex("""boundary\s*=\s*"?([^";\s]+)"?""", RegexOption.IGNORE_CASE)
+            .find(contentType)
+            ?.groupValues
+            ?.getOrNull(1)
+        val candidateTexts = if (!boundary.isNullOrBlank()) {
+            extractMultipartPlainBodies(joinedRaw, boundary)
+        } else {
+            listOf(decodeMimeBody(rawBodyLines, joinedRaw, transferEncoding))
+        }
+        for (decodedBody in candidateTexts) {
+            val matchedLine = decodedBody.lineSequence()
+                .map { it.trim() }
+                .firstOrNull { line -> line.isNotBlank() && RemoteSmsCommand.parse(line, customPrefix) != null }
+            if (matchedLine != null) return matchedLine
+        }
+        return null
+    }
+
+    private fun extractMultipartPlainBodies(rawMultipart: String, boundary: String): List<String> {
+        val delimiter = "--$boundary"
+        return rawMultipart.split(delimiter)
+            .drop(1)
+            .filterNot { it.trimStart().startsWith("--") }
+            .mapNotNull { part ->
+                val splitIdx = part.indexOf("\n\n")
+                if (splitIdx < 0) return@mapNotNull null
+                val partHeaders = part.substring(0, splitIdx).replace(Regex("\\r?\\n[ \\t]+"), " ")
+                val partType = extractHeader(partHeaders, "Content-Type").lowercase()
+                if (partType.isNotBlank() && !partType.contains("text/plain")) return@mapNotNull null
+                val partEncoding = extractHeader(partHeaders, "Content-Transfer-Encoding").lowercase()
+                val partBody = part.substring(splitIdx + 2).trim()
+                decodeMimeBody(partBody.lines(), partBody, partEncoding)
+            }
+    }
+
+    private fun decodeMimeBody(lines: List<String>, joinedRaw: String, transferEncoding: String): String {
+        return when {
+            transferEncoding.contains("base64") -> runCatching {
+                val compact = lines.joinToString("") { it.trim() }
+                String(android.util.Base64.decode(compact, android.util.Base64.DEFAULT), Charsets.UTF_8)
+            }.getOrDefault(joinedRaw)
+            transferEncoding.contains("quoted-printable") -> runCatching {
+                val softJoined = joinedRaw.replace("=\r\n", "").replace("=\n", "")
+                val bytes = softJoined.replace("=([0-9A-Fa-f]{2})".toRegex()) { m ->
+                    m.groupValues[1].toInt(16).toChar().toString()
+                }.toByteArray(Charsets.ISO_8859_1)
+                String(bytes, Charsets.UTF_8)
+            }.getOrDefault(joinedRaw)
+            else -> joinedRaw
+        }
+    }
+
+    private fun parseEmailReceivedAt(rawFetchText: String, dateHeader: String): Long {
+        val internalMatch = INTERNAL_DATE_REGEX.find(rawFetchText)?.groupValues?.getOrNull(1)
+        if (!internalMatch.isNullOrBlank()) {
+            val parsed = runCatching {
+                java.text.SimpleDateFormat("dd-MMM-yyyy HH:mm:ss Z", java.util.Locale.US)
+                    .parse(internalMatch)?.time
+            }.getOrNull()
+            if (parsed != null && parsed > 0L) return parsed
+        }
+        if (dateHeader.isNotBlank()) {
+            val patterns = listOf(
+                "EEE, d MMM yyyy HH:mm:ss Z",
+                "d MMM yyyy HH:mm:ss Z"
+            )
+            for (pat in patterns) {
+                val parsed = runCatching {
+                    java.text.SimpleDateFormat(pat, java.util.Locale.US).parse(dateHeader.trim())?.time
+                }.getOrNull()
+                if (parsed != null && parsed > 0L) return parsed
+            }
+        }
+        return System.currentTimeMillis()
+    }
+
     private fun rememberNonCommandChecked(key: String) {
         val prefs = context.getSharedPreferences(PREFS_CHECKED_MAIL, Context.MODE_PRIVATE)
         val checked = prefs.getStringSet(KEY_CHECKED_NON_COMMANDS, emptySet())
@@ -374,7 +493,10 @@ class EmailRemoteCommandPoller(
             ?: mutableSetOf()
         checked.add(key)
         if (checked.size > MAX_CHECKED_NON_COMMANDS) {
-            checked.sorted().take(checked.size - MAX_CHECKED_NON_COMMANDS).forEach(checked::remove)
+            checked.sortedWith(
+                compareBy<String> { it.substringBeforeLast('|') }
+                    .thenBy { it.substringAfterLast('|').toLongOrNull() ?: 0L }
+            ).take(checked.size - MAX_CHECKED_NON_COMMANDS).forEach(checked::remove)
         }
         prefs.edit().putStringSet(KEY_CHECKED_NON_COMMANDS, checked).apply()
     }
@@ -385,5 +507,6 @@ class EmailRemoteCommandPoller(
         private const val KEY_CHECKED_NON_COMMANDS = "non_command_uids"
         private const val MAX_CHECKED_NON_COMMANDS = 500
         private val UID_VALIDITY_REGEX = "\\[UIDVALIDITY\\s+(\\d+)]".toRegex(RegexOption.IGNORE_CASE)
+        private val INTERNAL_DATE_REGEX = "INTERNALDATE\\s+\"([^\"]+)\"".toRegex(RegexOption.IGNORE_CASE)
     }
 }

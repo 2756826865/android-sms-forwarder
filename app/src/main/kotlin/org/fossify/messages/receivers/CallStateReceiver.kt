@@ -37,11 +37,23 @@ class CallStateReceiver : BroadcastReceiver() {
 
         when (stateStr) {
             TelephonyManager.EXTRA_STATE_RINGING -> {
-                val num = incomingNumber.ifBlank { prefs.getString(KEY_LAST_NUMBER, "").orEmpty() }
+                val answered = prefs.getBoolean(KEY_ANSWERED, false)
+                val prevCallStart = prefs.getLong(KEY_CALL_START, 0L)
+                if (answered && prevCallStart > 0L && now - prevCallStart <= MAX_CALL_AGE_MS) {
+                    return
+                }
+                if (answered) {
+                    prefs.edit().clear().apply()
+                }
                 val existingRingStart = prefs.getLong(KEY_RING_START, 0L)
-                val rememberedSubId = prefs.getInt(KEY_RECEIVING_SUB, -1)
+                    .takeIf { it > 0L && now - it <= MAX_RING_AGE_MS }
+                    ?: 0L
+                val num = incomingNumber.ifBlank {
+                    if (existingRingStart > 0L) prefs.getString(KEY_LAST_NUMBER, "").orEmpty() else ""
+                }
+                val rememberedSubId = if (existingRingStart > 0L) prefs.getInt(KEY_RECEIVING_SUB, -1) else -1
                 val identityConflict =
-                    prefs.getBoolean("receiving_conflict", false) ||
+                    (existingRingStart > 0L && prefs.getBoolean("receiving_conflict", false)) ||
                         (rememberedSubId >= 0 && subId >= 0 && rememberedSubId != subId)
                 prefs.edit()
                     .putBoolean("receiving_conflict", identityConflict)
@@ -100,7 +112,7 @@ class CallStateReceiver : BroadcastReceiver() {
 
                             // “仅未接来电”开启时，若能从通话记录确认为用户主动拒接（REJECTED_TYPE），则忽略不转发
                             if (wasMissed) {
-                                if (callConfig.missedCallOnly && isRejectedInCallLog(appContext, ringStart)) {
+                                if (callConfig.missedCallOnly && isRejectedInCallLog(appContext, number, ringStart)) {
                                     return@launch
                                 }
                                 dispatchCallNotification(
@@ -111,7 +123,7 @@ class CallStateReceiver : BroadcastReceiver() {
                                     subId = confirmedCallSub,
                                     timestamp = now
                                 )
-                            } else if (!wasMissed && callConfig.forwardAnsweredCall && !callConfig.missedCallOnly) {
+                            } else if (callConfig.forwardAnsweredCall) {
                                 val baseStart = callStart.takeIf { it > 0L } ?: ringStart
                                 val callDuration = ((now - baseStart) / 1000).coerceAtLeast(1)
                                 dispatchCallNotification(
@@ -236,26 +248,29 @@ class CallStateReceiver : BroadcastReceiver() {
         }
     }
 
-    private fun isRejectedInCallLog(context: Context, ringStart: Long): Boolean {
+    private fun isRejectedInCallLog(context: Context, callerNumber: String, ringStart: Long): Boolean {
         if (context.checkSelfPermission(android.Manifest.permission.READ_CALL_LOG) !=
             android.content.pm.PackageManager.PERMISSION_GRANTED
         ) {
             return false
         }
         return runCatching {
+            val targetDigits = callerNumber.filter { it.isDigit() }.takeLast(11)
             Thread.sleep(400)
             context.contentResolver.query(
                 android.provider.CallLog.Calls.CONTENT_URI,
-                arrayOf(android.provider.CallLog.Calls.TYPE),
+                arrayOf(android.provider.CallLog.Calls.TYPE, android.provider.CallLog.Calls.NUMBER),
                 "${android.provider.CallLog.Calls.DATE} >= ?",
                 arrayOf((ringStart - 5_000L).toString()),
                 "${android.provider.CallLog.Calls.DATE} DESC",
             )?.use { cursor ->
-                if (cursor.moveToFirst()) {
-                    cursor.getInt(0) == android.provider.CallLog.Calls.REJECTED_TYPE
-                } else {
-                    false
+                while (cursor.moveToNext()) {
+                    val loggedDigits = cursor.getString(1).orEmpty().filter { it.isDigit() }.takeLast(11)
+                    if (targetDigits.isBlank() || loggedDigits == targetDigits) {
+                        return@use cursor.getInt(0) == android.provider.CallLog.Calls.REJECTED_TYPE
+                    }
                 }
+                false
             } ?: false
         }.getOrDefault(false)
     }

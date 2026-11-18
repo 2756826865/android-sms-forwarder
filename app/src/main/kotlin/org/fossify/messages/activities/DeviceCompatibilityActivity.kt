@@ -403,31 +403,63 @@ class DeviceCompatibilityActivity : SimpleActivity() {
             }
         }.getOrElse { "读取失败或缺少电话状态权限" }
 
+        val allInstances = ChannelRepository.getInstance(applicationContext).getInstances()
+        fun instanceOrLegacyState(label: String, types: Set<String>, legacyEnabled: Boolean, legacyComplete: Boolean): String {
+            val matching = allInstances.filter { it.channelType in types }
+            return if (matching.isNotEmpty()) {
+                val enabledList = matching.filter { it.enabled }
+                configState(label, enabledList.isNotEmpty(), enabledList.any { it.hasDispatchConfiguration() })
+            } else {
+                configState(label, legacyEnabled, legacyComplete)
+            }
+        }
         val channelStates = listOf(
-            configState("PushPlus", pushPlus.enabled, pushPlus.getToken().isNotBlank()),
-            configState("微信测试号", multi.isChannelEnabled(ForwardingChannels.WECHAT_TEST), multi.wechatTestAppId().isNotBlank()),
-            configState("QQ推送", multi.isChannelEnabled(ForwardingChannels.QQ), multi.qqWebhook().isNotBlank()),
-            configState("钉钉群机器人", multi.dingTalkEnabled, multi.dingTalkWebhook().isNotBlank()),
-            configState("飞书群机器人", multi.feishuEnabled, multi.feishuWebhook().isNotBlank()),
-            configState("飞书自建应用", multi.isChannelEnabled(ForwardingChannels.FEISHU_APP), multi.feishuAppId().isNotBlank()),
-            configState("企业微信自建应用", multi.weComEnabled, multi.weComCorpId().isNotBlank() && multi.weComSecret().isNotBlank()),
-            configState("企业微信群机器人", multi.weComBotEnabled, multi.weComBotWebhook().isNotBlank()),
-            configState("邮箱SMTP", multi.emailEnabled, multi.emailHost().isNotBlank() && multi.emailUser().isNotBlank()),
-            configState("短信直发", multi.smsDirectEnabled, multi.smsDirectPhone().isNotBlank()),
-            configState("Bark", multi.barkEnabled, multi.barkServerUrl().isNotBlank() && multi.barkDeviceKey().isNotBlank()),
-            configState("Gotify", multi.gotifyEnabled, multi.gotifyServerUrl().isNotBlank() && multi.gotifyToken().isNotBlank()),
-            configState("Telegram", multi.isChannelEnabled(ForwardingChannels.TELEGRAM), multi.telegramBotToken().isNotBlank()),
-            configState("Discord", multi.isChannelEnabled(ForwardingChannels.DISCORD), multi.discordWebhook().isNotBlank()),
-            configState("WebSocket", multi.isChannelEnabled(ForwardingChannels.WEBSOCKET), multi.websocketUrl().isNotBlank()),
-            configState("自定义Webhook", multi.isChannelEnabled(ForwardingChannels.CUSTOM_WEBHOOK), multi.customWebhookUrl().isNotBlank()),
+            instanceOrLegacyState("PushPlus", setOf(ForwardingChannels.PUSHPLUS), pushPlus.enabled, pushPlus.getToken().isNotBlank()),
+            instanceOrLegacyState("微信测试号", setOf(ForwardingChannels.WECHAT_TEST), multi.isChannelEnabled(ForwardingChannels.WECHAT_TEST), multi.wechatTestAppId().isNotBlank()),
+            instanceOrLegacyState("QQ推送", setOf(ForwardingChannels.QQ), multi.isChannelEnabled(ForwardingChannels.QQ), multi.qqWebhook().isNotBlank()),
+            instanceOrLegacyState("钉钉群机器人", setOf(ForwardingChannels.DINGTALK), multi.dingTalkEnabled, multi.dingTalkWebhook().isNotBlank()),
+            instanceOrLegacyState("飞书群机器人", setOf(ForwardingChannels.FEISHU, ForwardingChannels.FEISHU_BOT), multi.feishuEnabled, multi.feishuWebhook().isNotBlank()),
+            instanceOrLegacyState("飞书自建应用", setOf(ForwardingChannels.FEISHU_APP), multi.isChannelEnabled(ForwardingChannels.FEISHU_APP), multi.feishuAppId().isNotBlank()),
+            instanceOrLegacyState("企业微信自建应用", setOf(ForwardingChannels.WECOM, ForwardingChannels.WECOM_APP), multi.weComEnabled, multi.weComCorpId().isNotBlank() && multi.weComSecret().isNotBlank()),
+            instanceOrLegacyState("企业微信群机器人", setOf(ForwardingChannels.WECOM_BOT), multi.weComBotEnabled, multi.weComBotWebhook().isNotBlank()),
+            instanceOrLegacyState("企业微信长连接", setOf(ForwardingChannels.WECOM_STREAM), false, false),
+            instanceOrLegacyState("邮箱SMTP", setOf(ForwardingChannels.EMAIL), multi.emailEnabled, multi.emailHost().isNotBlank() && multi.emailUser().isNotBlank()),
+            instanceOrLegacyState("短信直发", setOf(ForwardingChannels.SMS_DIRECT), multi.smsDirectEnabled, multi.smsDirectPhone().isNotBlank()),
+            instanceOrLegacyState("Bark", setOf(ForwardingChannels.BARK), multi.barkEnabled, multi.barkServerUrl().isNotBlank() && multi.barkDeviceKey().isNotBlank()),
+            instanceOrLegacyState("Gotify", setOf(ForwardingChannels.GOTIFY), multi.gotifyEnabled, multi.gotifyServerUrl().isNotBlank() && multi.gotifyToken().isNotBlank()),
+            instanceOrLegacyState("ntfy", setOf(ForwardingChannels.NTFY), false, false),
+            instanceOrLegacyState("WxPusher", setOf(ForwardingChannels.WXPUSHER), false, false),
+            instanceOrLegacyState("Server酱³", setOf(ForwardingChannels.SERVERCHAN3), false, false),
+            instanceOrLegacyState("Telegram", setOf(ForwardingChannels.TELEGRAM), multi.isChannelEnabled(ForwardingChannels.TELEGRAM), multi.telegramBotToken().isNotBlank()),
+            instanceOrLegacyState("Discord", setOf(ForwardingChannels.DISCORD), multi.isChannelEnabled(ForwardingChannels.DISCORD), multi.discordWebhook().isNotBlank()),
+            instanceOrLegacyState("WebSocket", setOf(ForwardingChannels.WEBSOCKET), multi.isChannelEnabled(ForwardingChannels.WEBSOCKET), multi.websocketUrl().isNotBlank()),
+            instanceOrLegacyState("自定义Webhook", setOf(ForwardingChannels.CUSTOM_WEBHOOK), multi.isChannelEnabled(ForwardingChannels.CUSTOM_WEBHOOK), multi.customWebhookUrl().isNotBlank()),
         )
+        val allRemoteSources = org.fossify.messages.remote.repository.RemoteSourceRepository
+            .getInstance(applicationContext)
+            .getAllSources()
+        fun remoteOrLegacyState(
+            label: String,
+            type: org.fossify.messages.remote.repository.RemoteSourceType,
+            legacyEnabled: Boolean,
+            legacyComplete: Boolean,
+        ): String {
+            val matching = allRemoteSources.filter { it.type == type }
+            return if (matching.isNotEmpty()) {
+                val enabledList = matching.filter { it.enabled }
+                configState(label, enabledList.isNotEmpty(), enabledList.any { it.hasValidCredentials() })
+            } else {
+                configState(label, legacyEnabled, legacyComplete)
+            }
+        }
         val remoteStates = listOf(
-            configState("短信远程", remoteSms.enabled, remoteSms.authorizedList().isNotEmpty()),
-            configState("钉钉Stream", multi.dingTalkRemoteControlEnabled, multi.dingTalkRemoteClientId().isNotBlank()),
-            configState("飞书Stream", multi.feishuRemoteControlEnabled, multi.feishuRemoteAppId().isNotBlank()),
-            configState("邮箱IMAP", multi.emailRemoteControlEnabled, multi.emailRemoteHost().isNotBlank()),
-            configState("TelegramBot", multi.telegramRemoteControlEnabled, multi.telegramRemoteBotToken().isNotBlank()),
-            configState("WebSocket", multi.websocketRemoteControlEnabled, multi.websocketRemoteUrl().isNotBlank()),
+            remoteOrLegacyState("短信远程", org.fossify.messages.remote.repository.RemoteSourceType.SMS, remoteSms.enabled, remoteSms.authorizedList().isNotEmpty()),
+            remoteOrLegacyState("钉钉Stream", org.fossify.messages.remote.repository.RemoteSourceType.DINGTALK, multi.dingTalkRemoteControlEnabled, multi.dingTalkRemoteClientId().isNotBlank()),
+            remoteOrLegacyState("飞书Stream", org.fossify.messages.remote.repository.RemoteSourceType.FEISHU, multi.feishuRemoteControlEnabled, multi.feishuRemoteAppId().isNotBlank()),
+            remoteOrLegacyState("企微长连接", org.fossify.messages.remote.repository.RemoteSourceType.WECOM, multi.weComRemoteControlEnabled, multi.weComRemoteBotId().isNotBlank()),
+            remoteOrLegacyState("邮箱IMAP", org.fossify.messages.remote.repository.RemoteSourceType.EMAIL, multi.emailRemoteControlEnabled, multi.emailRemoteHost().isNotBlank()),
+            remoteOrLegacyState("TelegramBot", org.fossify.messages.remote.repository.RemoteSourceType.TELEGRAM, multi.telegramRemoteControlEnabled, multi.telegramRemoteBotToken().isNotBlank()),
+            remoteOrLegacyState("WebSocket", org.fossify.messages.remote.repository.RemoteSourceType.WEBSOCKET, multi.websocketRemoteControlEnabled, multi.websocketRemoteUrl().isNotBlank()),
         )
         val lowBatteryInstanceNames = if (config.hasLowBatteryInstanceSelection) {
             val ids = config.lowBatteryChannelInstanceIds

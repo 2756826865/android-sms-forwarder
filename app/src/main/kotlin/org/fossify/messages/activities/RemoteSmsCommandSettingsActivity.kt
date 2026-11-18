@@ -48,6 +48,9 @@ class RemoteSmsCommandSettingsActivity : SimpleActivity() {
             receiptConfig.enabled = binding.remoteSmsReceiptEnabled.isChecked
             receiptConfig.includeDelivered = binding.remoteSmsReceiptDelivered.isChecked
             receiptConfig.channels = selectedReceiptChannels
+            org.fossify.messages.remote.repository.RemoteSourceRepository
+                .getInstance(applicationContext)
+                .syncLegacySourcesFromClassic()
             toast(R.string.forwarding_saved)
             loadConfig()
         }

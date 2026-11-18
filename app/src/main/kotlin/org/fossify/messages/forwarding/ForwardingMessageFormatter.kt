@@ -11,8 +11,13 @@ import org.fossify.messages.extensions.getNameAndPhotoFromPhoneNumber
 data class ForwardingPayload(val title: String, val content: String)
 
 object ForwardingMessageFormatter {
-    private fun String.replaceWhenPresent(tag: String, value: () -> String): String =
-        if (contains(tag)) replace(tag, value()) else this
+    /** 单遍占位符替换，彻底阻断外来短信正文中夹带 {{RECEIVER_NUMBER}} / {{IP_LIST}} 的二次模板注入泄露。 */
+    private val PLACEHOLDER_REGEX = Regex("""\{\{([^\{\}]+)\}\}|\{([a-zA-Z_]+)\}""")
+
+    private fun renderSinglePass(template: String, resolve: (String) -> String?): String =
+        PLACEHOLDER_REGEX.replace(template) { match ->
+            resolve(match.value) ?: match.value
+        }
 
     /** Text-only endpoints have no separate title field to carry the configured SIM name. */
     @SuppressLint("MissingPermission")
@@ -61,60 +66,38 @@ object ForwardingMessageFormatter {
         val receiverNumber by lazy { receivedSim?.receiverNumber.orEmpty() }
         val simIndex by lazy { receivedSim?.slotIndex?.takeIf { it >= 0 }?.let { (it + 1).toString() }.orEmpty() }
         val code by lazy { org.fossify.messages.rule.template.TemplateRenderer.extractVerificationCode(body) }
-        return template
-            .replaceWhenPresent("{{CODE}}") { code }.replaceWhenPresent("{{code}}") { code }
-            .replaceWhenPresent("{{VERIFICATION_CODE}}") { code }.replaceWhenPresent("{{verification_code}}") { code }
-            .replaceWhenPresent("{{验证码}}") { code }
-            .replace("{{FROM}}", sender).replace("{{from}}", sender)
-            .replace("{{SENDER}}", sender).replace("{{sender}}", sender)
-            .replaceWhenPresent("{{发件人}}") { sender }
-            .replaceWhenPresent("{{CONTACT_NAME}}") { contactName }.replaceWhenPresent("{{contact_name}}") { contactName }
-            .replaceWhenPresent("{{联系人}}") { contactName }
-            .replace("{{SMS}}", body).replace("{{sms}}", body)
-            .replace("{{BODY}}", body).replace("{{body}}", body)
-            .replace("{{CONTENT}}", body).replace("{{content}}", body)
-            .replaceWhenPresent("{{短信内容}}") { body }.replaceWhenPresent("{{正文}}") { body }
-            .replaceWhenPresent("{{RECEIVE_TIME}}") { formattedTime }.replaceWhenPresent("{{receive_time}}") { formattedTime }
-            .replaceWhenPresent("{{TIME}}") { formattedTime }.replaceWhenPresent("{{time}}") { formattedTime }
-            .replaceWhenPresent("{{接收时间}}") { formattedTime }.replaceWhenPresent("{{时间}}") { formattedTime }
-            .replaceWhenPresent("{{DATE_YMD}}") { dateOnly }.replaceWhenPresent("{{date_ymd}}") { dateOnly }
-            .replaceWhenPresent("{{日期}}") { dateOnly }
-            .replaceWhenPresent("{{DATE_HMS}}") { timeOnly }.replaceWhenPresent("{{date_hms}}") { timeOnly }
-            .replace("{{TIMESTAMP}}", receivedAt.toString()).replace("{{timestamp}}", receivedAt.toString())
-            .replaceWhenPresent("{{SIM_SLOT}}") { sim }.replaceWhenPresent("{{sim_slot}}") { sim }
-            .replaceWhenPresent("{{CARD_SLOT}}") { sim }.replaceWhenPresent("{{card_slot}}") { sim }
-            .replaceWhenPresent("{{SIM}}") { sim }.replaceWhenPresent("{{sim}}") { sim }
-            .replaceWhenPresent("{sim}") { sim }
-            .replaceWhenPresent("{{卡槽}}") { sim }.replaceWhenPresent("{{卡槽备注}}") { sim }
-            .replaceWhenPresent("{{SIM_INDEX}}") { simIndex }.replaceWhenPresent("{{sim_index}}") { simIndex }
-            .replaceWhenPresent("{{SIM_ID}}") { simIndex }.replaceWhenPresent("{{sim_id}}") { simIndex }
-            .replaceWhenPresent("{{卡槽序号}}") { simIndex }
-            .replaceWhenPresent("{{RECEIVER_NUMBER}}") { receiverNumber }.replaceWhenPresent("{{receiver_number}}") { receiverNumber }
-            .replaceWhenPresent("{{RECEIVER}}") { receiverNumber }.replaceWhenPresent("{{receiver}}") { receiverNumber }
-            .replaceWhenPresent("{receiver}") { receiverNumber }
-            .replaceWhenPresent("{{接收号码}}") { receiverNumber }
-            .replaceWhenPresent("{{DEVICE_NAME}}") { TemplateDataRetriever.getDeviceName() }
-            .replaceWhenPresent("{{device_name}}") { TemplateDataRetriever.getDeviceName() }
-            .replaceWhenPresent("{{设备名称}}") { TemplateDataRetriever.getDeviceName() }
-            .replaceWhenPresent("{{DEVICE_BRAND}}") { TemplateDataRetriever.getDeviceBrand() }
-            .replaceWhenPresent("{{device_brand}}") { TemplateDataRetriever.getDeviceBrand() }
-            .replaceWhenPresent("{{DEVICE_MODEL}}") { TemplateDataRetriever.getDeviceModel() }
-            .replaceWhenPresent("{{device_model}}") { TemplateDataRetriever.getDeviceModel() }
-            .replaceWhenPresent("{{BATTERY_INFO}}") { battery.info }.replaceWhenPresent("{{battery_info}}") { battery.info }
-            .replaceWhenPresent("{{电量}}") { battery.info }
-            .replaceWhenPresent("{{BATTERY_PCT}}") { battery.percent }.replaceWhenPresent("{{battery_pct}}") { battery.percent }
-            .replaceWhenPresent("{{NET_TYPE}}") { TemplateDataRetriever.getNetworkType(context) }
-            .replaceWhenPresent("{{net_type}}") { TemplateDataRetriever.getNetworkType(context) }
-            .replaceWhenPresent("{{网络类型}}") { TemplateDataRetriever.getNetworkType(context) }
-            .replaceWhenPresent("{{IP_LIST}}") { TemplateDataRetriever.getIpAddress() }
-            .replaceWhenPresent("{{ip_list}}") { TemplateDataRetriever.getIpAddress() }
-            .replaceWhenPresent("{{IP地址}}") { TemplateDataRetriever.getIpAddress() }
-            .replaceWhenPresent("{{APP_VERSION}}") { TemplateDataRetriever.getAppVersion() }
-            .replaceWhenPresent("{{app_version}}") { TemplateDataRetriever.getAppVersion() }
-            .replaceWhenPresent("{{版本号}}") { TemplateDataRetriever.getAppVersion() }
-            .replaceWhenPresent("{{CURRENT_TIME}}") { TemplateDataRetriever.getCurrentTime() }
-            .replaceWhenPresent("{{current_time}}") { TemplateDataRetriever.getCurrentTime() }
-            .let { rendered ->
+        val netType by lazy { TemplateDataRetriever.getNetworkType(context) }
+        val ipAddress by lazy { TemplateDataRetriever.getIpAddress() }
+        val deviceName by lazy { TemplateDataRetriever.getDeviceName() }
+        val deviceBrand by lazy { TemplateDataRetriever.getDeviceBrand() }
+        val deviceModel by lazy { TemplateDataRetriever.getDeviceModel() }
+        val appVersion by lazy { TemplateDataRetriever.getAppVersion() }
+        val currentTime by lazy { TemplateDataRetriever.getCurrentTime() }
+        return renderSinglePass(template) { token ->
+            when (token) {
+                "{{CODE}}", "{{code}}", "{{VERIFICATION_CODE}}", "{{verification_code}}", "{{验证码}}" -> code
+                "{{FROM}}", "{{from}}", "{{SENDER}}", "{{sender}}", "{{发件人}}" -> sender
+                "{{CONTACT_NAME}}", "{{contact_name}}", "{{联系人}}" -> contactName
+                "{{SMS}}", "{{sms}}", "{{BODY}}", "{{body}}", "{{CONTENT}}", "{{content}}", "{{短信内容}}", "{{正文}}" -> body
+                "{{RECEIVE_TIME}}", "{{receive_time}}", "{{TIME}}", "{{time}}", "{{接收时间}}", "{{时间}}" -> formattedTime
+                "{{DATE_YMD}}", "{{date_ymd}}", "{{日期}}" -> dateOnly
+                "{{DATE_HMS}}", "{{date_hms}}" -> timeOnly
+                "{{TIMESTAMP}}", "{{timestamp}}" -> receivedAt.toString()
+                "{{SIM_SLOT}}", "{{sim_slot}}", "{{CARD_SLOT}}", "{{card_slot}}", "{{SIM}}", "{{sim}}", "{sim}", "{{卡槽}}", "{{卡槽备注}}" -> sim
+                "{{SIM_INDEX}}", "{{sim_index}}", "{{SIM_ID}}", "{{sim_id}}", "{{卡槽序号}}" -> simIndex
+                "{{RECEIVER_NUMBER}}", "{{receiver_number}}", "{{RECEIVER}}", "{{receiver}}", "{receiver}", "{{接收号码}}" -> receiverNumber
+                "{{DEVICE_NAME}}", "{{device_name}}", "{{设备名称}}" -> deviceName
+                "{{DEVICE_BRAND}}", "{{device_brand}}" -> deviceBrand
+                "{{DEVICE_MODEL}}", "{{device_model}}" -> deviceModel
+                "{{BATTERY_INFO}}", "{{battery_info}}", "{{电量}}" -> battery.info
+                "{{BATTERY_PCT}}", "{{battery_pct}}" -> battery.percent
+                "{{NET_TYPE}}", "{{net_type}}", "{{网络类型}}" -> netType
+                "{{IP_LIST}}", "{{ip_list}}", "{{IP地址}}" -> ipAddress
+                "{{APP_VERSION}}", "{{app_version}}", "{{版本号}}" -> appVersion
+                "{{CURRENT_TIME}}", "{{current_time}}" -> currentTime
+                else -> null
+            }
+        }.let { rendered ->
                 val config = runCatching { MultiForwardConfig(context) }.getOrNull()
                 if (config?.enablePrivacyMask == true) {
                     PrivacyDataMasker.mask(
@@ -209,64 +192,39 @@ object ForwardingMessageFormatter {
                             ?.takeIf { it >= 0 }?.let { (it + 1).toString() }.orEmpty()
                     }
 
-                    val result = customTemplate
-                        // 1. 验证码提取 (核心修复)
-                        .replaceWhenPresent("{{CODE}}") { code }
-                        .replaceWhenPresent("{{code}}") { code }
-                        .replaceWhenPresent("{code}") { code }
-                        .replaceWhenPresent("{{VERIFICATION_CODE}}") { code }
-                        .replaceWhenPresent("{{验证码}}") { code }
-                        // 2. 发件人相关
-                        .replace("{{FROM}}", sender)
-                        .replace("{{SENDER}}", sender)
-                        .replace("{sender}", sender)
-                        .replace("{from}", sender)
-                        .replace("{{发件人}}", sender)
-                        .replaceWhenPresent("{{CONTACT_NAME}}") { contactName ?: sender }
-                        .replaceWhenPresent("{{NAME}}") { contactName ?: sender }
-                        .replaceWhenPresent("{name}") { contactName ?: sender }
-                        // 3. 短信正文
-                        .replace("{{SMS}}", body)
-                        .replace("{{BODY}}", body)
-                        .replace("{{CONTENT}}", body)
-                        .replace("{sms}", body)
-                        .replace("{body}", body)
-                        .replace("{{短信内容}}", body)
-                        // 4. 时间相关
-                        .replaceWhenPresent("{{RECEIVE_TIME}}") { formattedTime }
-                        .replaceWhenPresent("{{TIME}}") { formattedTime }
-                        .replaceWhenPresent("{time}") { formattedTime }
-                        .replaceWhenPresent("{{接收时间}}") { formattedTime }
-                        .replaceWhenPresent("{{DATE_YMD}}") { dateOnly }
-                        .replaceWhenPresent("{{DATE}}") { dateOnly }
-                        .replaceWhenPresent("{date}") { dateOnly }
-                        .replaceWhenPresent("{{DATE_HMS}}") { timeOnly }
-                        .replaceWhenPresent("{{TIME_HMS}}") { timeOnly }
-                        .replace("{{TIMESTAMP}}", receivedAt.toString())
-                        // 5. 卡槽与接收号码
-                        .replaceWhenPresent("{{SIM_SLOT}}") { sim }
-                        .replaceWhenPresent("{{CARD_SLOT}}") { sim }
-                        .replaceWhenPresent("{{SIM}}") { sim }
-                        .replaceWhenPresent("{{sim}}") { sim }
-                        .replaceWhenPresent("{sim}") { sim }
-                        .replaceWhenPresent("{{卡槽}}") { sim }
-                        .replaceWhenPresent("{{SIM_INDEX}}") { simSlotIdx }
-                        .replaceWhenPresent("{{SIM_ID}}") { simSlotIdx }
-                        .replaceWhenPresent("{{卡槽序号}}") { simSlotIdx }
-                        .replaceWhenPresent("{{RECEIVER_NUMBER}}") { receiverNumber }
-                        .replaceWhenPresent("{{RECEIVER}}") { receiverNumber }
-                        .replaceWhenPresent("{receiver}") { receiverNumber }
-                        .replaceWhenPresent("{{接收号码}}") { receiverNumber }
-                        // 6. 设备与网络状态
-                        .replaceWhenPresent("{{DEVICE_NAME}}") { TemplateDataRetriever.getDeviceName() }
-                        .replaceWhenPresent("{{DEVICE_BRAND}}") { TemplateDataRetriever.getDeviceBrand() }
-                        .replaceWhenPresent("{{DEVICE_MODEL}}") { TemplateDataRetriever.getDeviceModel() }
-                        .replaceWhenPresent("{{BATTERY_INFO}}") { battery.info }
-                        .replaceWhenPresent("{{BATTERY_PCT}}") { battery.percent }
-                        .replaceWhenPresent("{{IP_LIST}}") { TemplateDataRetriever.getIpAddress() }
-                        .replaceWhenPresent("{{NET_TYPE}}") { TemplateDataRetriever.getNetworkType(context) }
-                        .replaceWhenPresent("{{APP_VERSION}}") { TemplateDataRetriever.getAppVersion() }
-                        .replaceWhenPresent("{{CURRENT_TIME}}") { TemplateDataRetriever.getCurrentTime() }
+                    val netType by lazy { TemplateDataRetriever.getNetworkType(context) }
+                    val ipAddress by lazy { TemplateDataRetriever.getIpAddress() }
+                    val deviceName by lazy { TemplateDataRetriever.getDeviceName() }
+                    val deviceBrand by lazy { TemplateDataRetriever.getDeviceBrand() }
+                    val deviceModel by lazy { TemplateDataRetriever.getDeviceModel() }
+                    val appVersion by lazy { TemplateDataRetriever.getAppVersion() }
+                    val currentTime by lazy { TemplateDataRetriever.getCurrentTime() }
+
+                    val result = renderSinglePass(customTemplate) { token ->
+                        when (token) {
+                            "{{CODE}}", "{{code}}", "{code}", "{{VERIFICATION_CODE}}", "{{verification_code}}", "{{验证码}}" -> code
+                            "{{FROM}}", "{{from}}", "{{SENDER}}", "{{sender}}", "{sender}", "{from}", "{{发件人}}" -> sender
+                            "{{CONTACT_NAME}}", "{{contact_name}}", "{{NAME}}", "{{name}}", "{name}", "{{联系人}}" -> contactName ?: sender
+                            "{{SMS}}", "{{sms}}", "{{BODY}}", "{{body}}", "{{CONTENT}}", "{{content}}", "{sms}", "{body}", "{{短信内容}}", "{{正文}}" -> body
+                            "{{RECEIVE_TIME}}", "{{receive_time}}", "{{TIME}}", "{{time}}", "{time}", "{{接收时间}}", "{{时间}}" -> formattedTime
+                            "{{DATE_YMD}}", "{{date_ymd}}", "{{DATE}}", "{{date}}", "{date}", "{{日期}}" -> dateOnly
+                            "{{DATE_HMS}}", "{{date_hms}}", "{{TIME_HMS}}", "{{time_hms}}" -> timeOnly
+                            "{{TIMESTAMP}}", "{{timestamp}}" -> receivedAt.toString()
+                            "{{SIM_SLOT}}", "{{sim_slot}}", "{{CARD_SLOT}}", "{{card_slot}}", "{{SIM}}", "{{sim}}", "{sim}", "{{卡槽}}", "{{卡槽备注}}" -> sim
+                            "{{SIM_INDEX}}", "{{sim_index}}", "{{SIM_ID}}", "{{sim_id}}", "{{卡槽序号}}" -> simSlotIdx
+                            "{{RECEIVER_NUMBER}}", "{{receiver_number}}", "{{RECEIVER}}", "{{receiver}}", "{receiver}", "{{接收号码}}" -> receiverNumber
+                            "{{DEVICE_NAME}}", "{{device_name}}", "{{设备名称}}" -> deviceName
+                            "{{DEVICE_BRAND}}", "{{device_brand}}" -> deviceBrand
+                            "{{DEVICE_MODEL}}", "{{device_model}}" -> deviceModel
+                            "{{BATTERY_INFO}}", "{{battery_info}}", "{{电量}}" -> battery.info
+                            "{{BATTERY_PCT}}", "{{battery_pct}}" -> battery.percent
+                            "{{IP_LIST}}", "{{ip_list}}", "{{IP地址}}" -> ipAddress
+                            "{{NET_TYPE}}", "{{net_type}}", "{{网络类型}}" -> netType
+                            "{{APP_VERSION}}", "{{app_version}}", "{{版本号}}" -> appVersion
+                            "{{CURRENT_TIME}}", "{{current_time}}" -> currentTime
+                            else -> null
+                        }
+                    }
                     
                     listOf(result)
                 } else {
@@ -283,6 +241,11 @@ object ForwardingMessageFormatter {
             }
         }.joinToString("\n")
         
+        val finalTitle = if (config.enablePrivacyMask) {
+            PrivacyDataMasker.mask(content = title, maskVerificationCode = false)
+        } else {
+            title
+        }
         val finalContent = if (config.enablePrivacyMask) {
             val code by lazy { org.fossify.messages.rule.template.TemplateRenderer.extractVerificationCode(body) }
             PrivacyDataMasker.mask(
@@ -294,7 +257,7 @@ object ForwardingMessageFormatter {
             content
         }
         
-        return ForwardingPayload(title, finalContent)
+        return ForwardingPayload(finalTitle, finalContent)
     }
 
     /** Subscription IDs are identities, never physical slot numbers. */

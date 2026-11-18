@@ -60,6 +60,10 @@ class SmsDirectChannelPlugin(
             }
         }
 
+        if (SmsDirectSendGuard.isRecentOutboundLoop(text, source)) {
+            return@withContext ChannelResult.Failed("SmsDirectLoopBlocked", "检测到短信内容与本机近期发出的直发短信一致，已拦截回环转发")
+        }
+
         try {
             var submitted = false
             SmsDirectSendGuard.sendPrepared(context, source, destination) { before ->
@@ -69,7 +73,10 @@ class SmsDirectChannelPlugin(
                     subId = subId,
                     requireDeliveryReport = false,
                     triggerType = SmsSendTriggerType.FORWARDING_SMS_DIRECT,
-                    beforeBillableSubmit = before
+                    beforeBillableSubmit = { token ->
+                        before(token)
+                        SmsDirectSendGuard.recordOutboundContent(text, source)
+                    }
                 )
                 submitted = uris.isNotEmpty()
             }

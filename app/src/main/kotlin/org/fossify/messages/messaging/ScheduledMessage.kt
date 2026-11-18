@@ -15,13 +15,15 @@ import org.fossify.messages.receivers.ScheduledMessageReceiver
  * All things related to scheduled messages are here.
  */
 
+private fun scheduleRequestCode(messageId: Long): Int = (messageId xor (messageId ushr 32)).toInt()
+
 fun Context.getScheduleSendPendingIntent(message: Message): PendingIntent {
     val intent = Intent(this, ScheduledMessageReceiver::class.java)
     intent.putExtra(THREAD_ID, message.threadId)
     intent.putExtra(SCHEDULED_MESSAGE_ID, message.id)
 
     val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-    return PendingIntent.getBroadcast(this, message.id.toInt(), intent, flags)
+    return PendingIntent.getBroadcast(this, scheduleRequestCode(message.id), intent, flags)
 }
 
 fun Context.scheduleMessage(message: Message) {
@@ -54,5 +56,12 @@ fun Context.scheduleMessage(message: Message) {
 fun Context.cancelScheduleSendPendingIntent(messageId: Long) {
     val intent = Intent(this, ScheduledMessageReceiver::class.java)
     val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-    PendingIntent.getBroadcast(this, messageId.toInt(), intent, flags).cancel()
+    val alarmManager = getSystemService(Context.ALARM_SERVICE) as? AlarmManager
+    // Cancel both the collision-resistant requestCode and legacy messageId.toInt() for pre-existing alarms.
+    val codes = setOf(scheduleRequestCode(messageId), messageId.toInt())
+    for (code in codes) {
+        val pi = PendingIntent.getBroadcast(this, code, intent, flags)
+        alarmManager?.cancel(pi)
+        pi.cancel()
+    }
 }

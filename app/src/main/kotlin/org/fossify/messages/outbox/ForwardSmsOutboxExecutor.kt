@@ -70,8 +70,16 @@ class ForwardSmsOutboxExecutor : OutboxExecutor {
             SmsSendTriggerType.FORWARDING_SMS_DIRECT
         }
 
+        val outboxSource = SmsDirectBillingPolicy.outboxSource(task.taskId, deliveryId)
+        if (!isTest && SmsDirectSendGuard.isRecentOutboundLoop(content, outboxSource)) {
+            return OutboxExecutionResult.FatalFailure(
+                errorClass = "SmsDirectLoopBlocked",
+                errorMessage = "检测到短信内容与本机近期发出的直发短信一致，已拦截回环转发"
+            )
+        }
+
         return try {
-            SmsDirectSendGuard.sendPrepared(context, SmsDirectBillingPolicy.outboxSource(task.taskId, deliveryId), phone) { before ->
+            SmsDirectSendGuard.sendPrepared(context, outboxSource, phone) { before ->
                 context.sendMessageCompat(
                     text = content,
                     addresses = listOf(phone),
@@ -79,7 +87,10 @@ class ForwardSmsOutboxExecutor : OutboxExecutor {
                     attachments = emptyList(),
                     propagateErrors = true,
                     triggerType = triggerType,
-                    beforeBillableSubmit = before
+                    beforeBillableSubmit = { token ->
+                        before(token)
+                        SmsDirectSendGuard.recordOutboundContent(content, outboxSource)
+                    }
                 )
             }
 

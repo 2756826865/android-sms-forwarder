@@ -26,12 +26,15 @@ class HttpChannelPlugin(
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(15, TimeUnit.SECONDS)
             .writeTimeout(15, TimeUnit.SECONDS)
+            .followRedirects(false)
+            .followSslRedirects(false)
             .build()
     }
 
     override fun validateConfig(config: Map<String, String>): Boolean {
         val url = config["url"] ?: config["webhook_url"] ?: config["endpoint"]
-        return !url.isNullOrBlank() && (url.startsWith("http://") || url.startsWith("https://"))
+        return !url.isNullOrBlank() &&
+            org.fossify.messages.forwarding.ForwardingUrlPolicy.isAllowed(url, allowPrivateHttp = true)
     }
 
     override suspend fun send(context: Context, payload: ForwardPayload): ChannelResult = withContext(Dispatchers.IO) {
@@ -40,6 +43,14 @@ class HttpChannelPlugin(
             return@withContext ChannelResult.Failed(
                 errorClass = "InvalidConfig",
                 errorMessage = "Target URL is missing in targetConfig"
+            )
+        }
+        try {
+            org.fossify.messages.forwarding.ForwardingUrlPolicy.requireAllowed(url, allowPrivateHttp = true)
+        } catch (e: Exception) {
+            return@withContext ChannelResult.Failed(
+                errorClass = "BlockedUrl",
+                errorMessage = e.message ?: "Target URL blocked by security policy"
             )
         }
 

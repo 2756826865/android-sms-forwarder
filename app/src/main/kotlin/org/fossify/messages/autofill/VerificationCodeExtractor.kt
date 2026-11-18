@@ -6,10 +6,13 @@ package org.fossify.messages.autofill
  */
 object VerificationCodeExtractor {
 
-    private val KEYWORD_PATTERNS = listOf(
+    private val CN_KEYWORDS = listOf(
         "验证码", "动态密码", "验证密码", "动态码", "校验码", "确认码", "授权码", "随机码",
-        "安全码", "动态口令", "口令", "密码", "激活码", "提取码", "凭证码",
-        "code", "verification", "otp", "passcode", "pin"
+        "安全码", "动态口令", "口令", "密码", "激活码", "提取码", "凭证码"
+    )
+    private val EN_KEYWORD_REGEX = Regex(
+        """(?<![a-zA-Z])(?:code|verification|otp|passcode|pin)(?![a-zA-Z])""",
+        RegexOption.IGNORE_CASE
     )
 
     // 常见客服电话与年份过滤集合，防止误提取
@@ -19,41 +22,66 @@ object VerificationCodeExtractor {
         "2023", "2024", "2025", "2026", "2027", "2028", "2029", "2030"
     )
 
-    // 首尾签名正则（中括号、全角括号、英文括号）
-    private val SIGNATURE_START_REGEX = Regex("""^(?:\[|【|〔|\()(.+?)(?:\]|】|〕|\))""")
-    private val SIGNATURE_END_REGEX = Regex("""(?:\[|【|〔|\()(.+?)(?:\]|】|〕|\))$""")
+    // 首尾签名正则（限制括号内部不含嵌套括号，防止尾部正则跨段吞噬正文中部的【123456】）
+    private val SIGNATURE_START_REGEX = Regex("""^(?:\[|【|〔|\()([^\[【〔\(\]】〕\)]+)(?:\]|】|〕|\))""")
+    private val SIGNATURE_END_REGEX = Regex("""(?:\[|【|〔|\()([^\[【〔\(\]】〕\)]+)(?:\]|】|〕|\))$""")
+    private val TAIL_NUMBER_REGEX = Regex("""(?:尾号|末四位|后四位)(?:为|是)?\s*\d{4}""")
+    private val BRACKET_CODE_LIKE_REGEX = Regex("""^(?:[A-Za-z]-)?\d{4,8}$""")
+    private val FOUR_TO_EIGHT_DIGITS_REGEX = Regex("""(?<![0-9a-zA-Z])[0-9]{4,8}(?![0-9a-zA-Z])""")
 
     private val CODE_REGEXES = listOf(
-        // 1. 紧随关键词后的验证码（支持冒号、空格、等号、“为”、“是”）：如 验证码: 123456 / 动态口令为8888 / 动态密码是[998877]
-        Regex("""(?:验证码|动态密码|验证密码|动态码|校验码|确认码|授权码|安全码|动态口令|口令|密码|激活码|提取码|code|Code|OTP|otp|passcode|PIN)[^\d]*?([0-9a-zA-Z]{4,8})\b"""),
+        // 1. 强验证码关键词后的验证码（优先于宽泛的“密码”，并使用 ASCII 边界兼容 Android ICU 中文紧邻数字）
+        Regex(
+            """(?:验证码|动态密码|验证密码|动态码|校验码|确认码|授权码|安全码|动态口令|激活码|提取码|凭证码|verification\s+code|passcode|one-time\s+code|(?<![a-zA-Z])otp(?![a-zA-Z])|(?<![a-zA-Z])code(?![a-zA-Z])|(?<![a-zA-Z])pin(?![a-zA-Z]))[^0-9]{0,20}?(?<![0-9a-zA-Z])([0-9][0-9a-zA-Z]{3,7}|[a-zA-Z][0-9]{3,7})(?![0-9a-zA-Z])""",
+            RegexOption.IGNORE_CASE
+        ),
 
-        // 2. 关键词在后，验证码在前的格式：如 123456(动态验证码) / 8888为您的确认码
-        Regex("""\b([0-9a-zA-Z]{4,8})\s*(?:为您的|是您的|即为|为本次|作为|为登录)?\s*(?:验证码|动态密码|验证密码|动态码|校验码|确认码|授权码|安全码|动态口令|口令)"""),
+        // 2. 关键词在后，验证码在前的格式：如 123456(动态验证码) / 8888为您的确认码 / 123456 is your verification code
+        Regex(
+            """(?<![0-9a-zA-Z])([0-9]{4,8})(?![0-9a-zA-Z])\s*(?:为您的|是您的|即为|为本次|作为|为登录|is\s+your\s+[a-z\s]{0,20}?)?\s*(?:验证码|动态密码|验证密码|动态码|校验码|确认码|授权码|安全码|动态口令|口令|(?<![a-zA-Z])code(?![a-zA-Z])|(?<![a-zA-Z])otp(?![a-zA-Z]))""",
+            RegexOption.IGNORE_CASE
+        ),
 
         // 3. 正文中间括号/特殊符号专门包裹的验证码：如 您的验证码是【123456】 / [888888]
         Regex("""[【\[\(（]([0-9]{4,8})[】\]\)）]"""),
 
-        // 4. “是/为”紧跟纯数字：如 验证码为 123456 / 是 888888
-        Regex("""(?:为|是|：|:)\s*([0-9]{4,8})\b""")
+        // 4. 次级关键词（口令/密码）后的验证码
+        Regex("""(?:口令|密码)[^0-9]{0,12}?(?<![0-9a-zA-Z])([0-9]{4,8})(?![0-9a-zA-Z])"""),
+
+        // 5. “是/为”紧跟纯数字：如 验证码为 123456 / 是 888888
+        Regex("""(?:为|是|：|:)\s*(?<![0-9a-zA-Z])([0-9]{4,8})(?![0-9a-zA-Z])""")
     )
 
     fun isVerificationSms(body: String): Boolean {
-        val lower = body.lowercase()
-        return KEYWORD_PATTERNS.any { lower.contains(it) }
+        return CN_KEYWORDS.any { body.contains(it) } || EN_KEYWORD_REGEX.containsMatchIn(body)
     }
 
     fun extractCode(body: String): String? {
         if (!isVerificationSms(body)) return null
 
-        // 1. 预先剥离首尾发件方签名，严防将【10086】、【12306】等签名误判为验证码
-        var cleanBody = body.trim()
+        // 1. 预先剥离首尾发件方签名（若首尾括号内本身就是唯一验证码如【123456】是您的验证码，则保留）
+        var cleanBody = body.replace(TAIL_NUMBER_REGEX, " ").trim()
         val startSig = SIGNATURE_START_REGEX.find(cleanBody)
         if (startSig != null) {
-            cleanBody = cleanBody.substring(startSig.range.last + 1).trim()
+            val inner = startSig.groupValues[1].trim()
+            val remainder = cleanBody.substring(startSig.range.last + 1).trim()
+            val keepAsOtp = BRACKET_CODE_LIKE_REGEX.matches(inner) &&
+                !EXCLUDE_NUMBERS.contains(inner) &&
+                !FOUR_TO_EIGHT_DIGITS_REGEX.containsMatchIn(remainder)
+            if (!keepAsOtp) {
+                cleanBody = remainder
+            }
         }
         val endSig = SIGNATURE_END_REGEX.find(cleanBody)
         if (endSig != null) {
-            cleanBody = cleanBody.substring(0, endSig.range.first).trim()
+            val inner = endSig.groupValues[1].trim()
+            val beforeEnd = cleanBody.substring(0, endSig.range.first).trim()
+            val keepAsOtp = BRACKET_CODE_LIKE_REGEX.matches(inner) &&
+                !EXCLUDE_NUMBERS.contains(inner) &&
+                !FOUR_TO_EIGHT_DIGITS_REGEX.containsMatchIn(beforeEnd)
+            if (!keepAsOtp) {
+                cleanBody = beforeEnd
+            }
         }
 
         // 2. 按优先级尝试正则匹配
@@ -68,7 +96,10 @@ object VerificationCodeExtractor {
         }
 
         // 3. 兜底策略：如果正文包含强验证码关键词，提取正文中唯一孤立的 4~6 位纯数字（排除年份与尾号）
-        val fallbackMatches = Regex("""\b([0-9]{4,6})\b""").findAll(cleanBody).map { it.groupValues[1] }.toList()
+        val fallbackMatches = Regex("""(?<![0-9a-zA-Z])([0-9]{4,6})(?![0-9a-zA-Z])""")
+            .findAll(cleanBody)
+            .map { it.groupValues[1] }
+            .toList()
         val validFallbacks = fallbackMatches.filter { isValidCode(it) }
         if (validFallbacks.size == 1) {
             return validFallbacks.first()
@@ -85,8 +116,8 @@ object VerificationCodeExtractor {
         // 排除年份与常见客服号码
         if (EXCLUDE_NUMBERS.contains(code)) return false
 
-        // 纯字母如果不是 hex/特定码则不属于常见验证码
-        if (code.all { it.isLetter() } && len > 5) return false
+        // 验证码必须包含至少一位数字，杜绝将英文单词（如 from / code / will）误判为验证码
+        if (code.none { it.isDigit() }) return false
 
         return true
     }

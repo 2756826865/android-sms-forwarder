@@ -49,14 +49,15 @@ object RingBufferLogManager {
             message = maskSensitiveContent(message),
             timestamp = System.currentTimeMillis(),
             threadName = Thread.currentThread().name,
-            throwableDetails = throwable?.let { "${it.javaClass.simpleName}: ${it.message}" }
+            throwableDetails = throwable?.let { "${it.javaClass.simpleName}: ${maskSensitiveContent(it.message.orEmpty())}" }
         )
 
         buffer.add(entry)
-        if (count.incrementAndGet() > MAX_ENTRIES) {
+        while (count.incrementAndGet() > MAX_ENTRIES) {
             if (buffer.poll() != null) {
                 count.decrementAndGet()
             }
+            break
         }
     }
 
@@ -69,17 +70,30 @@ object RingBufferLogManager {
     }
 
     fun clear() {
-        buffer.clear()
+        while (buffer.poll() != null) {
+            count.updateAndGet { if (it > 0) it - 1 else 0 }
+        }
+        count.set(0)
     }
 
     fun size(): Int = buffer.size
 
-    private fun maskSensitiveContent(content: String): String {
-        // 手机号码脱敏 (保留前3后4)
-        val phoneMasked = content.replace(Regex("""(?<!\d)(1[3-9]\d)(\d{4})(\d{4})(?!\d)""")) {
+    fun maskSensitiveContent(content: String): String {
+        if (content.isEmpty()) return content
+        // URL Token / Secret / Telegram Bot Token 脱敏
+        var masked = content
+            .replace(Regex("""(?i)(token|secret|password|access_token|key|sign)=([^&\s"']+)""")) {
+                "${it.groupValues[1]}=[REDACTED]"
+            }
+            .replace(Regex("""bot\d{5,15}:[A-Za-z0-9_-]{20,}"""), "bot[REDACTED]")
+        // 手机号码脱敏 (支持 +86/86 前缀，保留前3后4)
+        masked = masked.replace(Regex("""(?<!\d)((?:\+?86[-\s]?)?1[3-9]\d)(\d{4})(\d{4})(?!\d)""")) {
             "${it.groupValues[1]}****${it.groupValues[3]}"
         }
-        // 6位验证码脱敏
-        return phoneMasked.replace(Regex("""(?<!\d)(\d{6})(?!\d)""")) { "******" }
+        // 验证码语境下 4-8 位验证码脱敏 + 通用独立 6 位数字脱敏
+        masked = masked.replace(Regex("""(?i)(验证码|校验码|动态码|code)[:：\s]*(\d{4,8})(?!\d)""")) {
+            "${it.groupValues[1]}: ******"
+        }
+        return masked.replace(Regex("""(?<!\d|-|:)(\d{6})(?!\d|-|:)""")) { "******" }
     }
 }

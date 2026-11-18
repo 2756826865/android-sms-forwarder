@@ -86,6 +86,6 @@ class DefaultSmsAppChangedReceiver : BroadcastReceiver() {
 
     private companion object {
         const val CHANNEL_ID = "default_sms_status_alerts"
-        const val NOTIFICATION_ID = 19082
+        const val NOTIFICATION_ID = 19083
     }
 }

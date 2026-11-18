@@ -42,19 +42,30 @@ class LowBatteryCheckWorker(
         }
 
         val selectedInstanceIds = config.lowBatteryChannelInstanceIds
-        val selectedInstances = if (config.hasLowBatteryInstanceSelection) {
-            ChannelRepository.getInstance(appContext).getEnabledInstances().filter { it.id in selectedInstanceIds }
-        } else emptyList()
+        val allEnabledInstances = ChannelRepository.getInstance(appContext).getEnabledInstances()
         val selectedChannels = config.lowBatteryChannels
+        val selectedInstances = if (config.hasLowBatteryInstanceSelection) {
+            allEnabledInstances.filter { it.id in selectedInstanceIds }
+        } else {
+            allEnabledInstances.filter { it.channelType in selectedChannels }
+        }
+        val instanceManagedTypes = allEnabledInstances.mapTo(mutableSetOf()) { it.channelType }
         val multiConfig = MultiForwardConfig(appContext)
-        val enabledMultiChannels = multiConfig.enabledChannelIds().intersect(selectedChannels)
+        val enabledMultiChannels = multiConfig.enabledChannelIds()
+            .intersect(selectedChannels)
+            .filterNotTo(mutableSetOf()) { it in instanceManagedTypes }
         val pushPlusEnabled = ForwardingChannels.PUSHPLUS in selectedChannels &&
+            ForwardingChannels.PUSHPLUS !in instanceManagedTypes &&
             PushPlusConfig(appContext).enabled
 
         if (config.hasLowBatteryInstanceSelection && selectedInstances.isEmpty()) {
             return Result.success()
         }
-        if (!config.hasLowBatteryInstanceSelection && enabledMultiChannels.isEmpty() && !pushPlusEnabled) {
+        if (!config.hasLowBatteryInstanceSelection &&
+            selectedInstances.isEmpty() &&
+            enabledMultiChannels.isEmpty() &&
+            !pushPlusEnabled
+        ) {
             return Result.success()
         }
 
@@ -76,28 +87,27 @@ class LowBatteryCheckWorker(
                 // All destinations below share this event ID; WorkManager retries keep it unchanged.
                 val uniqueId = "low-battery-$threshold-${UUID.randomUUID()}"
                 val now = System.currentTimeMillis()
-                if (config.hasLowBatteryInstanceSelection) {
-                    selectedInstances.forEach { instance ->
-                        MultiChannelForwardWorker.enqueueSingle(
-                            context = appContext,
-                            sender = appContext.getString(R.string.low_battery_system_sender),
-                            body = content,
-                            receivedAt = now,
-                            subscriptionId = -1,
-                            uniqueId = "$uniqueId-${instance.id}",
-                            targetChannel = instance.channelType,
-                            allowedChannels = setOf(instance.id),
-                            isTest = false,
-                            targetInstanceId = instance.id,
-                            bodyAlreadyRendered = true
-                        )
-                    }
-                } else {
-                    val allSelectedEnabled = buildSet {
+                selectedInstances.forEach { instance ->
+                    MultiChannelForwardWorker.enqueueSingle(
+                        context = appContext,
+                        sender = appContext.getString(R.string.low_battery_system_sender),
+                        body = content,
+                        receivedAt = now,
+                        subscriptionId = -1,
+                        uniqueId = "$uniqueId-${instance.id}",
+                        targetChannel = instance.channelType,
+                        allowedChannels = setOf(instance.id),
+                        isTest = false,
+                        targetInstanceId = instance.id,
+                        bodyAlreadyRendered = true
+                    )
+                }
+                if (!config.hasLowBatteryInstanceSelection) {
+                    val allSelectedLegacy = buildSet {
                         addAll(enabledMultiChannels)
                         if (pushPlusEnabled) add(ForwardingChannels.PUSHPLUS)
                     }
-                    allSelectedEnabled.forEach { channel ->
+                    allSelectedLegacy.forEach { channel ->
                         MultiChannelForwardWorker.enqueueSingle(
                             context = appContext,
                             sender = appContext.getString(R.string.low_battery_system_sender),

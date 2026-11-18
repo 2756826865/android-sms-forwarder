@@ -162,6 +162,7 @@ class MultiChannelForwardWorker(
             originalSim = receivedSimSnapshot(),
             allowSimLabelPrefix = inputData.getBoolean(KEY_ALLOW_SIM_LABEL_PREFIX, false),
             originalSmsDirectSource = inputData.getString(KEY_SMS_DIRECT_SOURCE).orEmpty(),
+            rawBodyHashOverride = inputData.getString(KEY_RAW_BODY_HASH).orEmpty(),
         )
     }
 
@@ -534,15 +535,23 @@ class MultiChannelForwardWorker(
                     }
                     ForwardingChannels.QQ -> {
                         val qmsgKey = instance.optString("qmsgKey")
-                        val onebotUrl = instance.optString("onebotUrl")
-                        val target = if (qmsgKey.isNotBlank()) qmsgKey else onebotUrl
-                        val type = if (qmsgKey.isNotBlank()) "qmsg" else "onebot"
+                        val onebotUrl = instance.optString("onebotUrl").ifBlank { instance.optString("webhook") }
+                        val target = qmsgKey.ifBlank { onebotUrl }
                         check(target.isNotBlank()) { "QQ 机器人未配置 Key 或 Webhook" }
+                        val resolvedTargetType = instance.optString("targetType").ifBlank {
+                            if (instance.optString("groupId").isNotBlank()) "group" else "private"
+                        }
+                        val resolvedTargetId = instance.optString("targetId")
+                            .ifBlank { instance.optString("userId") }
+                            .ifBlank { instance.optString("groupId") }
                         sendQq(
-                            target, type, title, content,
+                            target,
+                            if (qmsgKey.isNotBlank()) "qmsg" else instance.optString("type").ifBlank { "onebot" },
+                            title,
+                            content,
                             instance.optString("accessToken"),
-                            instance.optString("targetType").ifBlank { "private" },
-                            instance.optString("targetId")
+                            resolvedTargetType,
+                            resolvedTargetId
                         )
                     }
                     ForwardingChannels.SMS_DIRECT -> {
@@ -588,8 +597,9 @@ class MultiChannelForwardWorker(
         }
 
         // 网络渠道直接尝试发送，依赖 HTTP 超时和 WorkManager 约束
-        if (shouldRun(ForwardingChannels.PUSHPLUS, config.pushPlusEnabled)) runChannel("PushPlus", ForwardingChannels.PUSHPLUS) {
-            sendPushPlus(config.pushPlusToken(), config.pushPlusTopic(), title, content)
+        val legacyPushPlusCfg = PushPlusConfig(applicationContext)
+        if (shouldRun(ForwardingChannels.PUSHPLUS, config.pushPlusEnabled || legacyPushPlusCfg.enabled)) runChannel("PushPlus", ForwardingChannels.PUSHPLUS) {
+            sendPushPlus(config.pushPlusToken().ifBlank { legacyPushPlusCfg.getToken() }, config.pushPlusTopic(), title, content)
         }
         if (shouldRun(ForwardingChannels.WECHAT_TEST, config.wechatTestEnabled)) runChannel("微信测试号", ForwardingChannels.WECHAT_TEST) {
             sendWechatTest(config.wechatTestAppId(), config.wechatTestAppSecret(), config.wechatTestTemplateId(), config.wechatTestOpenId(), title, content)
@@ -847,14 +857,23 @@ class MultiChannelForwardWorker(
                     )
                     ForwardingChannels.QQ -> {
                         val qmsgKey = instance.optString("qmsgKey")
-                        val onebotUrl = instance.optString("onebotUrl")
+                        val onebotUrl = instance.optString("onebotUrl").ifBlank { instance.optString("webhook") }
                         val target = qmsgKey.ifBlank { onebotUrl }
                         check(target.isNotBlank()) { "QQ 机器人未配置 Key 或 Webhook" }
+                        val resolvedTargetType = instance.optString("targetType").ifBlank {
+                            if (instance.optString("groupId").isNotBlank()) "group" else "private"
+                        }
+                        val resolvedTargetId = instance.optString("targetId")
+                            .ifBlank { instance.optString("userId") }
+                            .ifBlank { instance.optString("groupId") }
                         sendQq(
-                            target, if (qmsgKey.isNotBlank()) "qmsg" else instance.optString("type").ifBlank { "onebot" }, title, content,
+                            target,
+                            if (qmsgKey.isNotBlank()) "qmsg" else instance.optString("type").ifBlank { "onebot" },
+                            title,
+                            content,
                             instance.optString("accessToken"),
-                            instance.optString("targetType").ifBlank { "private" },
-                            instance.optString("targetId")
+                            resolvedTargetType,
+                            resolvedTargetId
                         )
                     }
                     ForwardingChannels.SMS_DIRECT -> sendSmsDirect(
@@ -893,12 +912,17 @@ class MultiChannelForwardWorker(
         }
 
         // 识别是否属于永久性凭据/配置错误（不可通过无脑重试解决）
+        val permanentHttpStatusRegex = Regex(
+            """(?:HTTP(?:/\d(?:\.\d)?)?\s+|状态码[:：\s]*|status(?:\s+code)?[:=\s]+|^)(400|401|403|404|405|422)\b""",
+            RegexOption.IGNORE_CASE,
+        )
         fun isPermanentError(msg: String): Boolean {
             if (isRateLimitError(msg)) return false
+            if (permanentHttpStatusRegex.containsMatchIn(msg)) return true
             val permanentKeywords = listOf(
                 "令牌不正确", "令牌无效", "invalid token", "token invalid", "token expired",
-                "未配置", "配置不完整", "401", "403", "400", "404",
-                "unauthorized", "invalid secret", "不正确", "不存在", "签名错误", "签名不匹配"
+                "未配置", "配置不完整", "unauthorized", "invalid secret",
+                "不正确", "不存在", "签名错误", "签名不匹配"
             )
             return permanentKeywords.any { msg.contains(it, ignoreCase = true) }
         }
@@ -923,8 +947,10 @@ class MultiChannelForwardWorker(
                         "；跳过：${skippedReasons.joinToString("；")}"
                     history.markSuccess(historyRecordId, "已提交：${successes.joinToString("、")}$skippedDetail")
                 }
+                val isSmsWork = previousRecord?.workId?.startsWith("sms-") == true
                 if (
                     !isTest &&
+                    isSmsWork &&
                     config.markAsReadAfterForward &&
                     sender.isNotBlank() &&
                     (threadId > 0L || sender.any { it.isDigit() })
@@ -1011,7 +1037,11 @@ class MultiChannelForwardWorker(
         }
         val tokenUrl = "https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid=" +
             URLEncoder.encode(corpId, "UTF-8") + "&corpsecret=" + URLEncoder.encode(secret, "UTF-8")
-        val tokenResult = getJson(tokenUrl)
+        val tokenResult = try {
+            getJson(tokenUrl)
+        } catch (e: java.io.IOException) {
+            throw PreSubmitNetworkFailure(e)
+        }
         check(tokenResult.optInt("errcode", -1) == 0) {
             tokenResult.optString("errmsg", "获取企业微信 access_token 失败")
         }
@@ -1140,10 +1170,10 @@ class MultiChannelForwardWorker(
             doOutput = true
             setRequestProperty("Content-Type", "text/plain; charset=utf-8")
             setRequestProperty("Title", NtfyProtocol.titleHeader(title))
-            setRequestProperty("Priority", priority.ifBlank { "default" })
+            setRequestProperty("Priority", NtfyProtocol.asciiHeaderValue(priority).ifBlank { "default" })
             if (token.isNotBlank()) setRequestProperty("Authorization", "Bearer ${token.trim()}")
-            if (tags.isNotBlank()) setRequestProperty("Tags", tags.trim())
-            if (clickUrl.isNotBlank()) setRequestProperty("Click", clickUrl.trim())
+            NtfyProtocol.tagsHeader(tags).takeIf(String::isNotBlank)?.let { setRequestProperty("Tags", it) }
+            NtfyProtocol.asciiHeaderValue(clickUrl).takeIf(String::isNotBlank)?.let { setRequestProperty("Click", it) }
             outputStream.bufferedWriter(StandardCharsets.UTF_8).use { it.write(content) }
             val statusCode = responseCode
             val response = (if (statusCode in 200..299) inputStream else errorStream)
@@ -1159,15 +1189,17 @@ class MultiChannelForwardWorker(
         content: String
     ) {
         val trimmedKey = sendKey.trim()
+        require(trimmedKey.isNotBlank()) { "Server酱³ SendKey 未配置" }
         val url = if (trimmedKey.startsWith("http://") || trimmedKey.startsWith("https://")) {
+            ForwardingUrlPolicy.requireAllowed(trimmedKey, allowPrivateHttp = false)
             trimmedKey
         } else {
             val match = Regex("""^sctp(\d+)t""").find(trimmedKey)
             val uid = match?.groupValues?.get(1)
             if (uid != null) {
-                "https://$uid.push.ft07.com/send/$trimmedKey.send"
+                "https://$uid.push.ft07.com/send/${URLEncoder.encode(trimmedKey, "UTF-8")}.send"
             } else {
-                "https://push.ft07.com/send/$trimmedKey.send"
+                "https://push.ft07.com/send/${URLEncoder.encode(trimmedKey, "UTF-8")}.send"
             }
         }
         val payload = JSONObject()
@@ -1255,7 +1287,11 @@ class MultiChannelForwardWorker(
         }
         val tokenUrl = "https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=" +
             URLEncoder.encode(appId, "UTF-8") + "&secret=" + URLEncoder.encode(appSecret, "UTF-8")
-        val tokenRes = getJson(tokenUrl)
+        val tokenRes = try {
+            getJson(tokenUrl)
+        } catch (e: java.io.IOException) {
+            throw PreSubmitNetworkFailure(e)
+        }
         val token = tokenRes.optString("access_token")
         check(token.isNotBlank()) { tokenRes.optString("errmsg", "微信测试号获取 Token 失败") }
 
@@ -1287,6 +1323,19 @@ class MultiChannelForwardWorker(
         if (type == "qmsg" || !webhookOrKey.startsWith("http")) {
             QmsgSender.send(webhookOrKey, text)
         } else {
+            ForwardingUrlPolicy.requireAllowed(webhookOrKey, webhookOrKey.startsWith("http://"))
+            val headers = if (accessToken.isBlank()) emptyMap() else {
+                mapOf("Authorization" to "Bearer ${accessToken.trim()}")
+            }
+            if (targetId.isBlank() && (webhookOrKey.contains("user_id=") || webhookOrKey.contains("group_id="))) {
+                val response = postJson(webhookOrKey.trim(), JSONObject().put("message", text).put("auto_escape", false), headers)
+                if (response.has("retcode")) {
+                    check(response.optInt("retcode", -1) == 0) {
+                        response.optString("message").ifBlank { response.optString("wording", "OneBot 11 发送失败") }
+                    }
+                }
+                return
+            }
             require(targetId.isNotBlank()) { "OneBot 11 必须配置 user_id 或 group_id" }
             val isGroup = targetType == "group"
             val action = if (isGroup) "send_group_msg" else "send_private_msg"
@@ -1298,9 +1347,6 @@ class MultiChannelForwardWorker(
                 .put(idField, targetId.toLongOrNull() ?: targetId)
                 .put("message", text)
                 .put("auto_escape", false)
-            val headers = if (accessToken.isBlank()) emptyMap() else {
-                mapOf("Authorization" to "Bearer ${accessToken.trim()}")
-            }
             val response = postJson("$baseUrl/$action", payload, headers)
             check(response.optInt("retcode", -1) == 0 && response.optString("status") == "ok") {
                 response.optString("message").ifBlank { response.optString("wording", "OneBot 11 发送失败") }
@@ -1311,7 +1357,11 @@ class MultiChannelForwardWorker(
     private fun sendFeishuApp(appId: String, appSecret: String, receiveId: String, title: String, content: String) {
         require(appId.isNotBlank() && appSecret.isNotBlank() && receiveId.isNotBlank()) { "飞书自建应用配置不完整" }
         val authUrl = "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal"
-        val authRes = postJson(authUrl, JSONObject().put("app_id", appId).put("app_secret", appSecret))
+        val authRes = try {
+            postJson(authUrl, JSONObject().put("app_id", appId).put("app_secret", appSecret))
+        } catch (e: java.io.IOException) {
+            throw PreSubmitNetworkFailure(e)
+        }
         val token = authRes.optString("tenant_access_token")
         check(token.isNotBlank()) { authRes.optString("msg", "获取飞书 tenant_access_token 失败") }
 
@@ -1335,13 +1385,16 @@ class MultiChannelForwardWorker(
         content: String,
         customHost: String = "",
     ) {
-        require(botToken.isNotBlank() && chatId.isNotBlank()) { "Telegram 配置不完整" }
+        val trimmedToken = botToken.trim()
+        val trimmedChatId = chatId.trim()
+        require(trimmedToken.isNotBlank() && trimmedChatId.isNotBlank()) { "Telegram 配置不完整" }
         val text = "$title\n\n$content"
         val baseUrl = customHost.trim().trimEnd('/').ifBlank { "https://api.telegram.org" }
             .let { if (it.startsWith("http://") || it.startsWith("https://")) it else "https://$it" }
-        val url = "$baseUrl/bot$botToken/sendMessage"
+        ForwardingUrlPolicy.requireAllowed(baseUrl, allowPrivateHttp = true)
+        val url = "$baseUrl/bot$trimmedToken/sendMessage"
         val payload = JSONObject()
-            .put("chat_id", chatId)
+            .put("chat_id", trimmedChatId)
             .put("text", text)
         val result = postJson(url, payload)
         check(result.optBoolean("ok", false)) { result.optString("description", "Telegram 发送失败") }
@@ -1388,6 +1441,7 @@ class MultiChannelForwardWorker(
         }
         ForwardingUrlPolicy.requireAllowed(policyUrl, serverUrl.startsWith("ws://"))
         val latch = CountDownLatch(1)
+        val opened = AtomicBoolean(false)
         val sent = AtomicBoolean(false)
         val failure = AtomicReference<Throwable?>(null)
         val client = OkHttpClient.Builder()
@@ -1402,13 +1456,14 @@ class MultiChannelForwardWorker(
         }.build()
         client.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
+                opened.set(true)
                 sent.set(webSocket.send(payload.toString()))
                 webSocket.close(1000, "sent")
                 latch.countDown()
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                failure.set(t)
+                failure.set(if (!opened.get() && t is java.io.IOException) PreSubmitNetworkFailure(t) else t)
                 latch.countDown()
             }
         })
@@ -1454,14 +1509,31 @@ class MultiChannelForwardWorker(
         val receiver = if (subscriptionId >= 0) {
             receivedSimSnapshot()?.receiverNumber ?: ForwardingMessageFormatter.getReceiverNumber(applicationContext, MultiForwardConfig(applicationContext), subscriptionId)
         } else ""
+        fun urlEncoded(value: String): String = URLEncoder.encode(value, "UTF-8")
         fun encoded(value: String): String = when {
-            method == "GET" -> URLEncoder.encode(value, "UTF-8")
+            method == "GET" -> urlEncoded(value)
             contentType.contains("json", ignoreCase = true) -> JSONObject.quote(value).removeSurrounding("\"")
-            contentType.contains("x-www-form-urlencoded", ignoreCase = true) -> URLEncoder.encode(value, "UTF-8")
+            contentType.contains("x-www-form-urlencoded", ignoreCase = true) -> urlEncoded(value)
             else -> value
         }
-        val rendered = WebhookTemplateRenderer.render(
-            bodyTemplate.ifBlank { MultiForwardConfig.DEFAULT_CUSTOM_WEBHOOK_BODY },
+        val renderedBaseUrl = WebhookTemplateRenderer.render(
+            normalizedUrl,
+            mapOf(
+                "title" to urlEncoded(title), "msg" to urlEncoded(content),
+                "from" to urlEncoded(sender), "time" to urlEncoded(time),
+                "sim" to urlEncoded(sim), "sim_slot" to urlEncoded(simSlot),
+                "receiver" to urlEncoded(receiver)
+            )
+        )
+        val effectiveTemplate = if (method == "GET" &&
+            (bodyTemplate.isBlank() || bodyTemplate.trim() == MultiForwardConfig.DEFAULT_CUSTOM_WEBHOOK_BODY)
+        ) {
+            ""
+        } else {
+            bodyTemplate.ifBlank { MultiForwardConfig.DEFAULT_CUSTOM_WEBHOOK_BODY }
+        }
+        val rendered = if (effectiveTemplate.isBlank()) "" else WebhookTemplateRenderer.render(
+            effectiveTemplate,
             mapOf(
                 "title" to encoded(title), "msg" to encoded(content),
                 "from" to encoded(sender), "time" to encoded(time),
@@ -1470,8 +1542,8 @@ class MultiChannelForwardWorker(
             )
         )
         val requestUrl = if (method == "GET" && rendered.isNotBlank()) {
-            WebhookRequestUrl.appendQuery(normalizedUrl, rendered)
-        } else normalizedUrl
+            WebhookRequestUrl.appendQuery(renderedBaseUrl, rendered)
+        } else renderedBaseUrl
         val connection = URL(requestUrl).openConnection() as HttpURLConnection
         connection.withDisconnect {
             requestMethod = method
@@ -1541,6 +1613,7 @@ class MultiChannelForwardWorker(
             throw SmsDirectOutcomeUnknown("旧降级任务无法确认原短信身份，已阻止收费发送，请先核对收件端")
         val incomingSender = inputData.getString(KEY_SENDER).orEmpty()
         val incomingBody = inputData.getString(KEY_BODY).orEmpty()
+        val rawIncomingBodyHash = inputData.getString(KEY_RAW_BODY_HASH).orEmpty()
         val alreadyRendered = inputData.getBoolean(KEY_BODY_ALREADY_RENDERED, false)
         val multiConfig = MultiForwardConfig(applicationContext)
         val ownNumbers = buildList {
@@ -1563,7 +1636,13 @@ class MultiChannelForwardWorker(
         require(isTest || !SmsDirectBillingPolicy.isForwardedLoopContent(incomingBody, alreadyRendered)) {
             "检测到短信已包含转发模板特征，已拦截二次短信直发，避免循环扣费"
         }
-        require(isTest || !SmsDirectSendGuard.isRecentOutboundLoop(incomingBody)) {
+        require(
+            isTest || !SmsDirectSendGuard.isRecentOutboundLoop(
+                incomingBody = incomingBody,
+                currentSource = smsDirectSource,
+                rawIncomingBodyHash = rawIncomingBodyHash,
+            )
+        ) {
             "检测到短信内容与本机近期发出的直发短信一致，已拦截回环转发，避免循环扣费"
         }
         if (!isTest && rateLimitEnabled) {
@@ -1594,7 +1673,6 @@ class MultiChannelForwardWorker(
         }
         SmsDirectSendGuard.sendPrepared(applicationContext, smsDirectSource, normalized, recordId,
             receiptRecordId = recordId.takeIf { pureSms }.orEmpty()) { before ->
-            SmsDirectSendGuard.recordOutboundContent(incomingBody, content)
             applicationContext.sendMessageCompat(
                 text = content,
                 addresses = listOf(normalized),
@@ -1602,7 +1680,10 @@ class MultiChannelForwardWorker(
                 attachments = emptyList(),
                 propagateErrors = true,
                 triggerType = triggerType,
-                beforeBillableSubmit = before
+                beforeBillableSubmit = { token ->
+                    before(token)
+                    SmsDirectSendGuard.recordOutboundContent(content, smsDirectSource)
+                }
             )
         }
     }
@@ -1654,6 +1735,7 @@ class MultiChannelForwardWorker(
         const val KEY_RULE_ID = "rule_id"
         const val KEY_ACTION_ID = "action_id"
         private const val KEY_BODY_ALREADY_RENDERED = "body_already_rendered"
+        private const val KEY_RAW_BODY_HASH = "raw_body_hash"
         private const val KEY_ALLOW_SIM_LABEL_PREFIX = "allow_sim_label_prefix"
         private const val SMTP_TIMEOUT_MS = 12_000
         /** 规则启用但无任何渠道命中时，与 null（未启用规则）区分 */
@@ -1741,6 +1823,8 @@ class MultiChannelForwardWorker(
             allowSimLabelPrefix: Boolean = false,
             originalSmsDirectSource: String = "",
             retryOf: ForwardingHistoryRecord? = null,
+            rawBody: String = "",
+            rawBodyHashOverride: String = "",
         ) {
             val stableSmsDirectSource = originalSmsDirectSource.ifBlank {
                 SmsDirectBillingPolicy.workerSource(uniqueId, receivedAt, uniqueId)
@@ -1798,8 +1882,20 @@ class MultiChannelForwardWorker(
                 val mode = requestedInstance?.optString("executionMode", GroupExecutionPolicy.ALL) ?: GroupExecutionPolicy.ALL
                 if (mode != GroupExecutionPolicy.ALL) {
                     require(mode in setOf(GroupExecutionPolicy.UNTIL_SUCCESS, GroupExecutionPolicy.UNTIL_FAIL)) { "未知通道组执行策略" }
-                    val selected = members.map { id ->
-                        multiConfig.getChannelInstanceById(id) ?: error("顺序通道组仅支持已配置的通道实例")
+                    val selected = members.mapNotNull { id -> multiConfig.getChannelInstanceById(id) }
+                    if (selected.isEmpty()) {
+                        val history = ForwardingHistoryStore(context)
+                        val historyId = history.registerQueued(
+                            workId = uniqueId,
+                            channel = ForwardingChannels.CHANNEL_GROUP,
+                            sender = sender,
+                            body = body,
+                            receivedAt = receivedAt,
+                            subscriptionId = subscriptionId,
+                            isTest = isTest
+                        )
+                        history.markSkipped(historyId, "通道组没有可发送的有效成员实例")
+                        return
                     }
                     require(selected.size <= 16 && selected.none { it.channelType == ForwardingChannels.CHANNEL_GROUP }) {
                         "顺序通道组最多16个成员，暂不支持嵌套组"
@@ -1811,7 +1907,8 @@ class MultiChannelForwardWorker(
                     enqueueSingle(context, sender, body, receivedAt, subscriptionId,
                         "$uniqueId-step-0", first.channelType, setOf(first.id), isTest, operationId,
                         first.id, ruleId, actionId, bodyAlreadyRendered, visitedGroupIds + groupIdentity,
-                        threadId, plan.toString(), originalSim, allowSimLabelPrefix, stableSmsDirectSource)
+                        threadId, plan.toString(), originalSim, allowSimLabelPrefix, stableSmsDirectSource,
+                        rawBody = rawBody, rawBodyHashOverride = rawBodyHashOverride)
                     return
                 }
                 members.forEach { member ->
@@ -1838,6 +1935,8 @@ class MultiChannelForwardWorker(
                         originalSim = originalSim,
                         allowSimLabelPrefix = allowSimLabelPrefix,
                         originalSmsDirectSource = stableSmsDirectSource,
+                        rawBody = rawBody,
+                        rawBodyHashOverride = rawBodyHashOverride,
                     )
                 }
                 return
@@ -1876,6 +1975,9 @@ class MultiChannelForwardWorker(
                         .SmsIngressSnapshots(context)
                         .snapshotForWork(uniqueId)
                     ?: ForwardingMessageFormatter.captureSim(context, subscriptionId)
+            val rawBodyHash = rawBodyHashOverride.ifBlank {
+                SmsDirectSendGuard.bodyHash(rawBody.ifBlank { if (!bodyAlreadyRendered) body else "" })
+            }
             val retryPayload = JSONObject()
                 .put("sender", sender.take(256)).put("body", safeBody).put("receivedAt", receivedAt)
                 .put("subscriptionId", subscriptionId).put("channel", targetChannel)
@@ -1883,12 +1985,14 @@ class MultiChannelForwardWorker(
                 .put("bodyAlreadyRendered", bodyAlreadyRendered).put("threadId", threadId)
                 .put("allowSimLabelPrefix", allowSimLabelPrefix)
                 .put("smsDirectSource", stableSmsDirectSource)
+                .put("rawBodyHash", rawBodyHash)
                 .put("slot", capturedSim.slotIndex).put("sim", capturedSim.description)
                 .put("receiver", capturedSim.receiverNumber).put("label", capturedSim.customLabel)
             val requestData = runCatching {
                 workDataOf(
                     KEY_SENDER to sender.take(256),
                     KEY_BODY to safeBody,
+                    KEY_RAW_BODY_HASH to rawBodyHash,
                     KEY_RECEIVED_AT to receivedAt,
                     KEY_SUBSCRIPTION_ID to subscriptionId,
                     KEY_SIM_CAPTURED to true,

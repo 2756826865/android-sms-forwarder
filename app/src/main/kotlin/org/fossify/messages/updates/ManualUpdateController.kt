@@ -36,6 +36,7 @@ class ManualUpdateController(
     private val checkButton: TextView,
 ) {
     private val http = OkHttpClient.Builder()
+        .followSslRedirects(false)
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .callTimeout(5, TimeUnit.MINUTES)
@@ -112,7 +113,10 @@ class ManualUpdateController(
                 val actualHash = digest.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
                 check(actualHash == release.sha256) { "安装包校验失败，请重新下载" }
                 verifyPackage(partial, release)
-                check(partial.renameTo(destination)) { "无法保存安装包，请重试" }
+                if (!partial.renameTo(destination)) {
+                    destination.delete()
+                    check(partial.renameTo(destination)) { "无法保存安装包，请重试" }
+                }
                 destination
             } finally {
                 partial.delete()
@@ -124,15 +128,35 @@ class ManualUpdateController(
     @Suppress("DEPRECATION")
     private fun verifyPackage(file: File, release: GitHubRelease) {
         val manager = activity.packageManager
-        val archive = manager.getPackageArchiveInfo(file.absolutePath, PackageManager.GET_SIGNATURES)
+        val flags = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+            PackageManager.GET_SIGNING_CERTIFICATES
+        } else {
+            PackageManager.GET_SIGNATURES
+        }
+        val archive = manager.getPackageArchiveInfo(file.absolutePath, flags)
             ?: error("安装包无法解析")
         check(archive.packageName == activity.packageName) { "安装包应用不匹配" }
         check(PackageInfoCompat.getLongVersionCode(archive) == release.versionCode &&
             release.isNewerThan(BuildConfig.VERSION_CODE.toLong())) { "安装包版本不匹配" }
-        val installed = manager.getPackageInfo(activity.packageName, PackageManager.GET_SIGNATURES)
-        val original = installed.signatures.orEmpty().map { it.toCharsString() }.toSet()
-        val incoming = archive.signatures.orEmpty().map { it.toCharsString() }.toSet()
-        check(original.isNotEmpty() && original == incoming) { "安装包签名不匹配，无法覆盖安装" }
+        val installed = manager.getPackageInfo(activity.packageName, flags)
+        fun extractSigs(info: android.content.pm.PackageInfo): Set<String> {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                val signingInfo = info.signingInfo
+                if (signingInfo != null) {
+                    val signers = if (signingInfo.hasMultipleSigners()) {
+                        signingInfo.apkContentsSigners
+                    } else {
+                        signingInfo.signingCertificateHistory
+                    }
+                    val set = signers.orEmpty().map { it.toCharsString() }.toSet()
+                    if (set.isNotEmpty()) return set
+                }
+            }
+            return info.signatures.orEmpty().map { it.toCharsString() }.toSet()
+        }
+        val original = extractSigs(installed)
+        val incoming = extractSigs(archive)
+        check(original.isNotEmpty() && original.intersect(incoming).isNotEmpty()) { "安装包签名不匹配，无法覆盖安装" }
     }
 
     private fun showInstall(apk: File, release: GitHubRelease) {
@@ -194,7 +218,11 @@ class ManualUpdateController(
                 showError(error.message ?: "操作失败，请稍后重试")
             } finally {
                 activeCall = null
-                progress.dismiss()
+                runCatching {
+                    if (!activity.isFinishing && !activity.isDestroyed) {
+                        progress.dismiss()
+                    }
+                }
                 checkButton.isEnabled = true
             }
         }

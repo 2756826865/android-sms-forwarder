@@ -74,4 +74,22 @@ internal object ConfigRestoreGuard {
         state(context, "已回滚至恢复前配置")
         true
     }.getOrElse { state(context, "回滚未完成，已保留加密快照；下次启动将暂停后台初始化，请重新启动或恢复原备份"); false }
+
+    /**
+     * 当本机 Keystore 已重新可用（新密钥生成/重置后），但旧恢复快照因旧密钥永久丢失或文件损坏无法解密时，
+     * 归档移除死锁日志，避免应用冷启动及用户重新导入新备份被永久锁死。
+     */
+    @Synchronized fun clearUnrecoverablePendingIfKeystoreHealthy(context: Context): Boolean = runCatching {
+        if (!hasPending(context)) return@runCatching true
+        if (rollback(context)) return@runCatching true
+        val probe = AndroidKeystoreCipher.encrypt("keystore_health_probe")
+        if (probe.isBlank() || AndroidKeystoreCipher.decrypt(probe) != "keystore_health_probe") {
+            return@runCatching false
+        }
+        file(context).delete()
+        File(file(context).baseFile.path + ".bak").delete()
+        check(!hasPending(context))
+        state(context, "检测到旧恢复快照密钥已失效，已清理异常挂起标记以允许继续使用或重新导入备份")
+        true
+    }.getOrDefault(false)
 }

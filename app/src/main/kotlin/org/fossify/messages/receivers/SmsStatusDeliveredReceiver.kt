@@ -69,9 +69,10 @@ class SmsStatusDeliveredReceiver : SendStatusReceiver() {
             }
         }
 
-        if (messageUri != null) {
-            resolver.update(messageUri, values, null, null)
-        } else {
+        val msgId = messageUri?.lastPathSegment?.toLongOrNull() ?: 0L
+        if (messageUri != null && msgId < org.fossify.messages.services.IncomingSmsService.SYNTHETIC_MESSAGE_BASE) {
+            runCatching { resolver.update(messageUri, values, null, null) }
+        } else if (messageUri == null) {
             // 1B-3C: Prohibit blind "date desc" guesswork update to avoid corrupting unrelated SMS records
             Log.w(TAG, "updateSmsStatusAndDateSent skipped: messageUri is null, avoiding blind date desc update")
         }

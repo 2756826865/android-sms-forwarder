@@ -14,7 +14,9 @@ internal object SmsDirectBillingPolicy {
             return "worker:$it"
         }
         // Rule, instance and group suffixes are routes for the same received SMS.
-        val original = Regex("^sms-[0-9]+(?=-|$)").find(workId)?.value
+        val original = Regex("^sms-notify-[0-9]+-[a-f0-9]{16}-[0-9]+(?=-|$)").find(workId)?.value
+            ?: Regex("^sms-notify-[0-9]+--?[0-9]+-[0-9]+(?=-|$)").find(workId)?.value
+            ?: Regex("^sms-[0-9]+(?=-|$)").find(workId)?.value
             ?: workId.ifBlank { fallback }
         require(original.isNotBlank()) { "短信直发缺少原始任务标识" }
         return "worker:$original:$receivedAt"

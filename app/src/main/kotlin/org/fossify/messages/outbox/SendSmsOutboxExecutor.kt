@@ -27,6 +27,12 @@ class SendSmsOutboxExecutor : OutboxExecutor {
     override fun canExecute(taskType: String): Boolean = taskType == OutboxTaskType.SEND_SMS
 
     override suspend fun execute(context: Context, task: OutboxTaskEntity): OutboxExecutionResult {
+        if (task.attemptCount > 0) {
+            return OutboxExecutionResult.FatalFailure(
+                errorClass = "DuplicateSmsAttemptBlocked",
+                errorMessage = "Blocked retry attempt ${task.attemptCount} for billable SMS task ${task.taskId}"
+            )
+        }
         val payloadJson = task.payloadPayload ?: return OutboxExecutionResult.FatalFailure(
             errorClass = "IllegalArgumentException",
             errorMessage = "Missing payloadPayload for SEND_SMS outbox task ${task.taskId}"
@@ -76,18 +82,38 @@ class SendSmsOutboxExecutor : OutboxExecutor {
             }
         }
 
-        // 2. 执行底层发送
+        // 2. 执行底层发送（在提交电台前预注册回执监听，消除极速 IMS 发送回执竞态）
+        val isRemoteCmd = task.sourceType == OutboxSourceType.REMOTE_COMMAND && task.sourceId.isNotBlank()
+        val preBuiltReceipt = if (isRemoteCmd) {
+            org.fossify.messages.remote.RemoteControlPendingReceipt(
+                target = target,
+                content = body,
+                source = json.optString("source", "OUTBOX"),
+                requester = json.optString("requester", ""),
+                awaitDelivered = false,
+                sendSimLabel = json.optString("sendSimLabel", ""),
+                commandId = task.sourceId,
+                sourceInstanceId = json.optString("sourceInstanceId", "")
+            )
+        } else null
+
         return try {
             val uris = context.messagingUtils.sendSmsMessage(
                 text = body,
                 addresses = setOf(target),
                 subId = subId,
                 requireDeliveryReport = requireDeliveryReport,
-                triggerType = triggerType
+                triggerType = triggerType,
+                beforeSubmit = preBuiltReceipt?.let { receipt ->
+                    { uri ->
+                        org.fossify.messages.remote.RemoteControlReceiptForwarder
+                            .registerFromMessageUris(context, listOf(uri), receipt)
+                    }
+                }
             )
 
             // 3. 关联 RemoteCommandExecution (如果来源是远程指令)
-            if (task.sourceType == OutboxSourceType.REMOTE_COMMAND && task.sourceId.isNotBlank()) {
+            if (isRemoteCmd) {
                 val providerMsgId = uris.firstOrNull()?.lastPathSegment?.toLongOrNull()
                 val sendOpId = if (providerMsgId != null) {
                     context.getMessagesDB().SmsSendDao().getOperationByProviderMessageId(providerMsgId)?.sendOperationId
@@ -99,22 +125,6 @@ class SendSmsOutboxExecutor : OutboxExecutor {
                     commandId = task.sourceId,
                     sendOperationId = sendOpId
                 )
-
-                val requester = json.optString("requester", "")
-                val source = json.optString("source", "OUTBOX")
-                val sendSimLabel = json.optString("sendSimLabel", "")
-                val sourceInstanceId = json.optString("sourceInstanceId", "")
-                val receipt = org.fossify.messages.remote.RemoteControlPendingReceipt(
-                    target = target,
-                    content = body,
-                    source = source,
-                    requester = requester,
-                    awaitDelivered = false,
-                    sendSimLabel = sendSimLabel,
-                    commandId = task.sourceId,
-                    sourceInstanceId = sourceInstanceId
-                )
-                org.fossify.messages.remote.RemoteControlReceiptForwarder.registerFromMessageUris(context, uris, receipt)
             }
 
             OutboxExecutionResult.Success

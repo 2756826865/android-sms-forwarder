@@ -48,14 +48,53 @@ object ConfigBackupHelper {
             .put("rules", JSONArray(rulesConfig.encodeRules(rulesConfig.rules)))
         root.put("forwardingRules", rulesObj)
 
-        // 2. Multi-channel Forwarding Config
+        // 2. Multi-channel Forwarding Config (including all legacy channels & Classic remote settings)
         val multiConfig = MultiForwardConfig(context)
         val channelsObj = JSONObject()
+            .put("dingTalkEnabled", multiConfig.dingTalkEnabled)
             .put("dingTalkWebhook", multiConfig.dingTalkWebhook())
             .put("dingTalkSecret", multiConfig.dingTalkSecret())
+            .put("feishuEnabled", multiConfig.feishuEnabled)
             .put("feishuWebhook", multiConfig.feishuWebhook())
             .put("feishuSecret", multiConfig.feishuSecret())
+            .put("feishuAppEnabled", multiConfig.feishuAppEnabled)
+            .put("feishuAppId", multiConfig.feishuAppId())
+            .put("feishuAppSecret", multiConfig.feishuAppSecret())
+            .put("feishuReceiveId", multiConfig.feishuReceiveId())
+            .put("weComBotEnabled", multiConfig.weComBotEnabled)
             .put("weComBotWebhook", multiConfig.weComBotWebhook())
+            .put("weComEnabled", multiConfig.weComEnabled)
+            .put("weComCorpId", multiConfig.weComCorpId())
+            .put("weComAgentId", multiConfig.weComAgentId())
+            .put("weComSecret", multiConfig.weComSecret())
+            .put("weComToUser", multiConfig.weComToUser())
+            .put("wechatTestEnabled", multiConfig.wechatTestEnabled)
+            .put("wechatTestAppId", multiConfig.wechatTestAppId())
+            .put("wechatTestAppSecret", multiConfig.wechatTestAppSecret())
+            .put("wechatTestTemplateId", multiConfig.wechatTestTemplateId())
+            .put("wechatTestOpenId", multiConfig.wechatTestOpenId())
+            .put("qqEnabled", multiConfig.qqEnabled)
+            .put("qqWebhook", multiConfig.qqWebhook())
+            .put("qqType", multiConfig.qqType())
+            .put("telegramEnabled", multiConfig.telegramEnabled)
+            .put("telegramBotToken", multiConfig.telegramBotToken())
+            .put("telegramChatId", multiConfig.telegramChatId())
+            .put("discordEnabled", multiConfig.discordEnabled)
+            .put("discordWebhook", multiConfig.discordWebhook())
+            .put("tencentCloudEnabled", multiConfig.tencentCloudEnabled)
+            .put("tencentCloudWebhook", multiConfig.tencentCloudWebhook())
+            .put("tencentCloudSecret", multiConfig.tencentCloudSecret())
+            .put("websocketEnabled", multiConfig.websocketEnabled)
+            .put("websocketUrl", multiConfig.websocketUrl())
+            .put("websocketToken", multiConfig.websocketToken())
+            .put("customWebhookEnabled", multiConfig.customWebhookEnabled)
+            .put("customWebhookUrl", multiConfig.customWebhookUrl())
+            .put("customWebhookHeaders", multiConfig.customWebhookHeaders())
+            .put("customWebhookMethod", multiConfig.customWebhookMethod())
+            .put("customWebhookContentType", multiConfig.customWebhookContentType())
+            .put("customWebhookBodyTemplate", multiConfig.customWebhookBodyTemplate())
+            .put("channelGroupEnabled", multiConfig.channelGroupEnabled)
+            .put("channelGroupMembers", JSONArray(multiConfig.channelGroupMembers().toList()))
             .put("emailHost", multiConfig.emailHost())
             .put("emailPort", multiConfig.emailPort)
             .put("emailUser", multiConfig.emailUser())
@@ -63,11 +102,54 @@ object ConfigBackupHelper {
             .put("emailPassword", multiConfig.emailPassword())
             .put("emailSecurity", multiConfig.emailSecurity)
             .put("emailEnabled", multiConfig.emailEnabled)
+            .put("barkEnabled", multiConfig.barkEnabled)
             .put("barkServerUrl", multiConfig.barkServerUrl())
             .put("barkDeviceKey", multiConfig.barkDeviceKey())
+            .put("barkLevel", multiConfig.barkLevel)
+            .put("barkGroup", multiConfig.barkGroup)
+            .put("barkAutoCopyCode", multiConfig.barkAutoCopyCode)
+            .put("gotifyEnabled", multiConfig.gotifyEnabled)
             .put("gotifyServerUrl", multiConfig.gotifyServerUrl())
             .put("gotifyToken", multiConfig.gotifyToken())
+            .put("smsDirectEnabled", multiConfig.smsDirectEnabled)
             .put("smsDirectPhone", multiConfig.smsDirectPhone())
+            .put("dingTalkRemoteControlEnabled", multiConfig.dingTalkRemoteControlEnabled)
+            .put("dingTalkRemoteClientId", multiConfig.dingTalkRemoteClientId())
+            .put("dingTalkRemoteClientSecret", multiConfig.dingTalkRemoteClientSecret())
+            .put("dingTalkRemoteCustomPrefix", multiConfig.dingTalkRemoteCustomPrefix())
+            .put("dingTalkRemoteSendSimMode", multiConfig.dingTalkRemoteSendSimMode)
+            .put("feishuRemoteControlEnabled", multiConfig.feishuRemoteControlEnabled)
+            .put("feishuRemoteAppId", multiConfig.feishuRemoteAppId())
+            .put("feishuRemoteAppSecret", multiConfig.feishuRemoteAppSecret())
+            .put("feishuRemoteCustomPrefix", multiConfig.feishuRemoteCustomPrefix())
+            .put("feishuRemoteSendSimMode", multiConfig.feishuRemoteSendSimMode)
+            .put("weComRemoteControlEnabled", multiConfig.weComRemoteControlEnabled)
+            .put("weComRemoteBotId", multiConfig.weComRemoteBotId())
+            .put("weComRemoteSecret", multiConfig.weComRemoteSecret())
+            .put("weComRemoteChatId", multiConfig.weComRemoteChatId())
+            .put("weComRemoteCustomPrefix", multiConfig.weComRemoteCustomPrefix())
+            .put("weComRemoteSendSimMode", multiConfig.weComRemoteSendSimMode)
+            .put("telegramRemoteControlEnabled", multiConfig.telegramRemoteControlEnabled)
+            .put("telegramRemoteBotToken", multiConfig.telegramRemoteBotToken())
+            .put("telegramRemoteChatId", multiConfig.telegramRemoteChatId())
+            .put("telegramRemoteCustomHost", multiConfig.telegramRemoteCustomHost())
+            .put("telegramRemoteAuthorizedUsers", multiConfig.telegramRemoteAuthorizedUsers())
+            .put("telegramRemoteCustomPrefix", multiConfig.telegramRemoteCustomPrefix())
+            .put("telegramRemoteSendSimMode", multiConfig.telegramRemoteSendSimMode)
+            .put("emailRemoteControlEnabled", multiConfig.emailRemoteControlEnabled)
+            .put("emailRemoteHost", multiConfig.emailRemoteHost())
+            .put("emailRemotePort", multiConfig.emailRemotePort())
+            .put("emailRemoteUser", multiConfig.emailRemoteUser())
+            .put("emailRemotePassword", multiConfig.emailRemotePassword())
+            .put("emailRemoteAuthorizedSenders", multiConfig.emailRemoteAuthorizedSenders())
+            .put("emailRemoteSecurity", multiConfig.emailRemoteSecurity)
+            .put("emailRemoteCustomPrefix", multiConfig.emailRemoteCustomPrefix())
+            .put("emailRemoteSendSimMode", multiConfig.emailRemoteSendSimMode)
+            .put("websocketRemoteControlEnabled", multiConfig.websocketRemoteControlEnabled)
+            .put("websocketRemoteUrl", multiConfig.websocketRemoteUrl())
+            .put("websocketRemoteToken", multiConfig.websocketRemoteToken())
+            .put("websocketRemoteCustomPrefix", multiConfig.websocketRemoteCustomPrefix())
+            .put("websocketRemoteSendSimMode", multiConfig.websocketRemoteSendSimMode)
             .put("templateMode", multiConfig.templateMode)
             .put("customTemplate", multiConfig.customTemplate)
         root.put("forwardingChannels", channelsObj)
@@ -108,8 +190,12 @@ object ConfigBackupHelper {
 
     @Synchronized
     fun importFromJson(context: Context, jsonStr: String): Boolean {
-        // Do not overwrite a journal from an earlier interrupted restore.
-        if (!ConfigRestoreGuard.rollback(context)) return false
+        // Do not overwrite a journal from an earlier interrupted restore unless its key is permanently lost.
+        if (!ConfigRestoreGuard.rollback(context) &&
+            !ConfigRestoreGuard.clearUnrecoverablePendingIfKeystoreHealthy(context)
+        ) {
+            return false
+        }
         RemoteSourceRepository.getInstance(context).reloadConfigurationAfterRestore()
         val success = RestoreTransaction.run(
             apply = { applyImport(context, jsonStr) },
@@ -124,7 +210,7 @@ object ConfigBackupHelper {
         RemoteSourceRepository.getInstance(context).reloadAfterRestore()
         ChannelRepository.getInstance(context).refresh()
         org.fossify.messages.forwarding.repository.RuleRepository.getInstance(context).refresh()
-        org.fossify.messages.helpers.HeartbeatWorker.sync(context)
+        org.fossify.messages.helpers.HeartbeatWorker.sync(context, forceUpdate = true)
         org.fossify.messages.helpers.LowBatteryCheckWorker.sync(context)
         org.fossify.messages.security.root.RootMaintenanceWorker.sync(context)
         org.fossify.messages.services.SmsKeepAliveService.ensureStarted(context)
@@ -216,44 +302,161 @@ object ConfigBackupHelper {
         if (root.has("forwardingChannels")) {
             val multiConfig = MultiForwardConfig(context)
             val obj = root.getJSONObject("forwardingChannels")
-            
+
             if (obj.has("emailPassword")) {
                 multiConfig.saveEmail(obj.getString("emailHost"), obj.getInt("emailPort"),
                     obj.getString("emailUser"), obj.getString("emailPassword"),
                     obj.getString("emailRecipients"), obj.getInt("emailSecurity"))
                 if (obj.has("emailEnabled")) multiConfig.emailEnabled = obj.getBoolean("emailEnabled")
             }
-            val dtUrl = obj.optString("dingTalkWebhook")
-            val dtSecret = obj.optString("dingTalkSecret")
-            if (dtUrl.isNotBlank()) multiConfig.saveDingTalk(dtUrl, dtSecret)
+            if (obj.has("dingTalkWebhook")) multiConfig.saveDingTalk(obj.optString("dingTalkWebhook"), obj.optString("dingTalkSecret"))
+            if (obj.has("dingTalkEnabled")) multiConfig.dingTalkEnabled = obj.getBoolean("dingTalkEnabled")
 
-            val fsUrl = obj.optString("feishuWebhook")
-            val fsSecret = obj.optString("feishuSecret")
-            if (fsUrl.isNotBlank()) multiConfig.saveFeishu(fsUrl, fsSecret)
+            if (obj.has("feishuWebhook")) multiConfig.saveFeishu(obj.optString("feishuWebhook"), obj.optString("feishuSecret"))
+            if (obj.has("feishuEnabled")) multiConfig.feishuEnabled = obj.getBoolean("feishuEnabled")
 
-            val wcBotUrl = obj.optString("weComBotWebhook")
-            if (wcBotUrl.isNotBlank()) multiConfig.saveWeComBot(wcBotUrl)
+            if (obj.has("feishuAppId")) multiConfig.saveFeishuApp(obj.optString("feishuAppId"), obj.optString("feishuAppSecret"), obj.optString("feishuReceiveId"))
+            if (obj.has("feishuAppEnabled")) multiConfig.feishuAppEnabled = obj.getBoolean("feishuAppEnabled")
 
-            val barkUrl = obj.optString("barkServerUrl")
-            val barkKey = obj.optString("barkDeviceKey")
-            if (barkUrl.isNotBlank() && barkKey.isNotBlank()) multiConfig.saveBark(barkUrl, barkKey)
+            if (obj.has("weComBotWebhook")) multiConfig.saveWeComBot(obj.optString("weComBotWebhook"))
+            if (obj.has("weComBotEnabled")) multiConfig.weComBotEnabled = obj.getBoolean("weComBotEnabled")
 
-            val gotifyUrl = obj.optString("gotifyServerUrl")
-            val gotifyToken = obj.optString("gotifyToken")
-            if (gotifyUrl.isNotBlank() && gotifyToken.isNotBlank()) multiConfig.saveGotify(gotifyUrl, gotifyToken)
+            if (obj.has("weComCorpId")) multiConfig.saveWeCom(obj.optString("weComCorpId"), obj.optString("weComAgentId"), obj.optString("weComSecret"), obj.optString("weComToUser"))
+            if (obj.has("weComEnabled")) multiConfig.weComEnabled = obj.getBoolean("weComEnabled")
 
-            val smsPhone = obj.optString("smsDirectPhone")
-            if (smsPhone.isNotBlank()) multiConfig.saveSmsDirect(smsPhone)
+            if (obj.has("wechatTestAppId")) multiConfig.saveWechatTest(obj.optString("wechatTestAppId"), obj.optString("wechatTestAppSecret"), obj.optString("wechatTestTemplateId"), obj.optString("wechatTestOpenId"))
+            if (obj.has("wechatTestEnabled")) multiConfig.wechatTestEnabled = obj.getBoolean("wechatTestEnabled")
 
-            obj.optString("customTemplate").takeIf { it.isNotBlank() }?.let { multiConfig.customTemplate = it }
+            if (obj.has("qqWebhook")) multiConfig.saveQq(obj.optString("qqWebhook"), obj.optString("qqType", "qmsg"))
+            if (obj.has("qqEnabled")) multiConfig.qqEnabled = obj.getBoolean("qqEnabled")
+
+            if (obj.has("telegramBotToken")) multiConfig.saveTelegram(obj.optString("telegramBotToken"), obj.optString("telegramChatId"))
+            if (obj.has("telegramEnabled")) multiConfig.telegramEnabled = obj.getBoolean("telegramEnabled")
+
+            if (obj.has("discordWebhook")) multiConfig.saveDiscord(obj.optString("discordWebhook"))
+            if (obj.has("discordEnabled")) multiConfig.discordEnabled = obj.getBoolean("discordEnabled")
+
+            if (obj.has("tencentCloudWebhook")) multiConfig.saveTencentCloud(obj.optString("tencentCloudWebhook"), obj.optString("tencentCloudSecret"))
+            if (obj.has("tencentCloudEnabled")) multiConfig.tencentCloudEnabled = obj.getBoolean("tencentCloudEnabled")
+
+            if (obj.has("websocketUrl")) multiConfig.saveWebsocket(obj.optString("websocketUrl"), obj.optString("websocketToken"))
+            if (obj.has("websocketEnabled")) multiConfig.websocketEnabled = obj.getBoolean("websocketEnabled")
+
+            if (obj.has("customWebhookUrl")) {
+                multiConfig.saveCustomWebhook(
+                    url = obj.optString("customWebhookUrl"),
+                    headers = obj.optString("customWebhookHeaders"),
+                    method = obj.optString("customWebhookMethod", "POST"),
+                    contentType = obj.optString("customWebhookContentType", "application/json"),
+                    bodyTemplate = obj.optString("customWebhookBodyTemplate", MultiForwardConfig.DEFAULT_CUSTOM_WEBHOOK_BODY),
+                )
+            }
+            if (obj.has("customWebhookEnabled")) multiConfig.customWebhookEnabled = obj.getBoolean("customWebhookEnabled")
+
+            if (obj.has("channelGroupMembers")) {
+                val arr = obj.optJSONArray("channelGroupMembers")
+                val set = buildSet {
+                    if (arr != null) for (i in 0 until arr.length()) arr.optString(i).trim().takeIf(String::isNotBlank)?.let(::add)
+                }
+                multiConfig.saveChannelGroupMembers(set)
+            }
+            if (obj.has("channelGroupEnabled")) multiConfig.channelGroupEnabled = obj.getBoolean("channelGroupEnabled")
+
+            if (obj.has("barkDeviceKey") || obj.has("barkServerUrl")) {
+                multiConfig.saveBark(
+                    serverUrl = obj.optString("barkServerUrl", multiConfig.barkServerUrl()),
+                    deviceKey = obj.optString("barkDeviceKey"),
+                    level = obj.optString("barkLevel", multiConfig.barkLevel),
+                    group = obj.optString("barkGroup", multiConfig.barkGroup),
+                    autoCopyCode = obj.optBoolean("barkAutoCopyCode", multiConfig.barkAutoCopyCode),
+                )
+            }
+            if (obj.has("barkEnabled")) multiConfig.barkEnabled = obj.getBoolean("barkEnabled")
+
+            if (obj.has("gotifyServerUrl") || obj.has("gotifyToken")) {
+                multiConfig.saveGotify(obj.optString("gotifyServerUrl"), obj.optString("gotifyToken"))
+            }
+            if (obj.has("gotifyEnabled")) multiConfig.gotifyEnabled = obj.getBoolean("gotifyEnabled")
+
+            if (obj.has("smsDirectPhone")) multiConfig.saveSmsDirect(obj.optString("smsDirectPhone"))
+            if (obj.has("smsDirectEnabled")) multiConfig.smsDirectEnabled = obj.getBoolean("smsDirectEnabled")
+
+            if (obj.has("dingTalkRemoteClientId")) {
+                multiConfig.saveDingTalkRemoteControl(
+                    obj.optString("dingTalkRemoteClientId"),
+                    obj.optString("dingTalkRemoteClientSecret"),
+                    obj.optString("dingTalkRemoteCustomPrefix"),
+                )
+            }
+            if (obj.has("dingTalkRemoteControlEnabled")) multiConfig.dingTalkRemoteControlEnabled = obj.getBoolean("dingTalkRemoteControlEnabled")
+            if (obj.has("dingTalkRemoteSendSimMode")) multiConfig.dingTalkRemoteSendSimMode = obj.getInt("dingTalkRemoteSendSimMode")
+
+            if (obj.has("feishuRemoteAppId")) {
+                multiConfig.saveFeishuRemoteControl(
+                    obj.optString("feishuRemoteAppId"),
+                    obj.optString("feishuRemoteAppSecret"),
+                    obj.optString("feishuRemoteCustomPrefix"),
+                )
+            }
+            if (obj.has("feishuRemoteControlEnabled")) multiConfig.feishuRemoteControlEnabled = obj.getBoolean("feishuRemoteControlEnabled")
+            if (obj.has("feishuRemoteSendSimMode")) multiConfig.feishuRemoteSendSimMode = obj.getInt("feishuRemoteSendSimMode")
+
+            if (obj.has("weComRemoteBotId")) {
+                multiConfig.saveWeComRemoteControl(
+                    obj.optString("weComRemoteBotId"),
+                    obj.optString("weComRemoteSecret"),
+                    obj.optString("weComRemoteChatId"),
+                    obj.optString("weComRemoteCustomPrefix"),
+                )
+            }
+            if (obj.has("weComRemoteControlEnabled")) multiConfig.weComRemoteControlEnabled = obj.getBoolean("weComRemoteControlEnabled")
+            if (obj.has("weComRemoteSendSimMode")) multiConfig.weComRemoteSendSimMode = obj.getInt("weComRemoteSendSimMode")
+
+            if (obj.has("telegramRemoteBotToken")) {
+                multiConfig.saveTelegramRemoteControl(
+                    obj.optString("telegramRemoteBotToken"),
+                    obj.optString("telegramRemoteChatId"),
+                    obj.optString("telegramRemoteCustomHost"),
+                    obj.optString("telegramRemoteAuthorizedUsers"),
+                    obj.optString("telegramRemoteCustomPrefix"),
+                )
+            }
+            if (obj.has("telegramRemoteControlEnabled")) multiConfig.telegramRemoteControlEnabled = obj.getBoolean("telegramRemoteControlEnabled")
+            if (obj.has("telegramRemoteSendSimMode")) multiConfig.telegramRemoteSendSimMode = obj.getInt("telegramRemoteSendSimMode")
+
+            if (obj.has("emailRemoteHost")) {
+                multiConfig.saveEmailRemoteControl(
+                    obj.optString("emailRemoteHost"),
+                    obj.optInt("emailRemotePort", 993),
+                    obj.optString("emailRemoteUser"),
+                    obj.optString("emailRemotePassword"),
+                    obj.optString("emailRemoteAuthorizedSenders"),
+                    obj.optInt("emailRemoteSecurity", MultiForwardConfig.EMAIL_SECURITY_SSL),
+                    obj.optString("emailRemoteCustomPrefix"),
+                )
+            }
+            if (obj.has("emailRemoteControlEnabled")) multiConfig.emailRemoteControlEnabled = obj.getBoolean("emailRemoteControlEnabled")
+            if (obj.has("emailRemoteSendSimMode")) multiConfig.emailRemoteSendSimMode = obj.getInt("emailRemoteSendSimMode")
+
+            if (obj.has("websocketRemoteUrl")) {
+                multiConfig.saveWebSocketRemoteControl(
+                    obj.optString("websocketRemoteUrl"),
+                    obj.optString("websocketRemoteToken"),
+                    obj.optString("websocketRemoteCustomPrefix"),
+                )
+            }
+            if (obj.has("websocketRemoteControlEnabled")) multiConfig.websocketRemoteControlEnabled = obj.getBoolean("websocketRemoteControlEnabled")
+            if (obj.has("websocketRemoteSendSimMode")) multiConfig.websocketRemoteSendSimMode = obj.getInt("websocketRemoteSendSimMode")
+
+            if (obj.has("customTemplate")) multiConfig.customTemplate = obj.optString("customTemplate")
             if (obj.has("templateMode")) multiConfig.templateMode = obj.getInt("templateMode")
         }
 
         if (root.has("pushPlus")) {
             val pushPlusConfig = PushPlusConfig(context)
             val obj = root.getJSONObject("pushPlus")
-            obj.optString("token").takeIf { it.isNotBlank() }?.let { pushPlusConfig.saveToken(it) }
-            obj.optString("titlePrefix").takeIf { it.isNotBlank() }?.let { pushPlusConfig.titlePrefix = it }
+            if (obj.has("token")) pushPlusConfig.saveToken(obj.optString("token"))
+            if (obj.has("titlePrefix")) pushPlusConfig.titlePrefix = obj.optString("titlePrefix")
             if (obj.has("enabled")) pushPlusConfig.enabled = obj.getBoolean("enabled")
         }
 
@@ -269,8 +472,8 @@ object ConfigBackupHelper {
             val remoteConfig = RemoteSmsCommandConfig(context)
             val obj = root.getJSONObject("remoteCommand")
             if (obj.has("enabled")) remoteConfig.enabled = obj.getBoolean("enabled")
-            obj.optString("authorizedNumbers").takeIf { it.isNotBlank() }?.let { remoteConfig.authorizedNumbers = it }
-            obj.optString("customPrefix").takeIf { it.isNotBlank() }?.let { remoteConfig.customPrefix = it }
+            if (obj.has("authorizedNumbers")) remoteConfig.authorizedNumbers = obj.optString("authorizedNumbers")
+            if (obj.has("customPrefix")) remoteConfig.customPrefix = obj.optString("customPrefix")
         }
 
         // Runtime reconnect occurs only after the journal is committed or rolled back.

@@ -390,7 +390,7 @@ class ForwardingHistoryStore(context: Context) {
     }
 
     fun clear() = synchronized(lock) {
-        database.delete("history", null, null)
+        database.delete("history", "status NOT IN ('queued','waiting_network','retry','running')", null)
         // Keep the migration marker so clearing logs cannot restore the old JSON snapshot.
         notifyChanged()
     }

@@ -39,47 +39,53 @@ class DirectReplyReceiver : BroadcastReceiver() {
             )
             val subscriptionId: Int? = if (simResult.isSuccessful) simResult.resolvedSubscriptionId else null
 
+            val pendingResult = goAsync()
+            val appContext = context.applicationContext
             ensureBackgroundThread {
-                var messageId = 0L
                 try {
-                    context.sendMessageCompat(
-                        text = body,
-                        addresses = listOf(address),
-                        subId = subscriptionId,
-                        attachments = emptyList(),
-                        propagateErrors = true,
-                        triggerType = SmsSendTriggerType.DIRECT_REPLY
-                    )
-                    val message = context.getMessages(
-                        threadId = threadId, includeScheduledMessages = false, limit = 1
-                    ).lastOrNull()
-                    if (message != null) {
-                        context.messagesDB.insertOrUpdate(message)
-                        messageId = message.id
+                    var messageId = 0L
+                    try {
+                        appContext.sendMessageCompat(
+                            text = body,
+                            addresses = listOf(address),
+                            subId = subscriptionId,
+                            attachments = emptyList(),
+                            propagateErrors = true,
+                            triggerType = SmsSendTriggerType.DIRECT_REPLY
+                        )
+                        val message = appContext.getMessages(
+                            threadId = threadId, includeScheduledMessages = false, limit = 1
+                        ).lastOrNull()
+                        if (message != null) {
+                            appContext.messagesDB.insertOrUpdate(message)
+                            messageId = message.id
 
-                        context.updateLastConversationMessage(threadId)
+                            appContext.updateLastConversationMessage(threadId)
+                        }
+                    } catch (e: Exception) {
+                        appContext.showErrorToast(e)
+                        return@ensureBackgroundThread
                     }
-                } catch (e: Exception) {
-                    context.showErrorToast(e)
-                    return@ensureBackgroundThread
-                }
 
-                val photoUri = context.getNameAndPhotoFromPhoneNumber(address).photoUri.orEmpty()
-                val bitmap = context.getNotificationBitmap(photoUri)
-                Handler(Looper.getMainLooper()).post {
-                    context.notificationHelper.showMessageNotification(
-                        messageId = messageId,
-                        address = address,
-                        body = body,
-                        threadId = threadId,
-                        bitmap = bitmap,
-                        sender = null,
-                        alertOnlyOnce = true
-                    )
-                }
+                    val photoUri = appContext.getNameAndPhotoFromPhoneNumber(address).photoUri.orEmpty()
+                    val bitmap = appContext.getNotificationBitmap(photoUri)
+                    Handler(Looper.getMainLooper()).post {
+                        appContext.notificationHelper.showMessageNotification(
+                            messageId = messageId,
+                            address = address,
+                            body = body,
+                            threadId = threadId,
+                            bitmap = bitmap,
+                            sender = null,
+                            alertOnlyOnce = true
+                        )
+                    }
 
-                context.markThreadMessagesRead(threadId)
-                context.conversationsDB.markRead(threadId)
+                    appContext.markThreadMessagesRead(threadId)
+                    appContext.conversationsDB.markRead(threadId)
+                } finally {
+                    pendingResult.finish()
+                }
             }
         }
     }

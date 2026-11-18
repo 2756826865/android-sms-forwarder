@@ -19,12 +19,18 @@ class DeleteSmsReceiver : BroadcastReceiver() {
         val threadId = intent.getLongExtra(THREAD_ID, 0L)
         val messageId = intent.getLongExtra(MESSAGE_ID, 0L)
         val isMms = intent.getBooleanExtra(IS_MMS, false)
-        context.notificationManager.cancel(threadId.hashCode())
+        val pendingResult = goAsync()
+        val appContext = context.applicationContext
+        appContext.notificationManager.cancel(threadId.hashCode())
         ensureBackgroundThread {
-            context.deleteMessage(messageId, isMms)
-            context.updateLastConversationMessage(threadId)
-            refreshMessages()
-            refreshConversations()
+            try {
+                appContext.deleteMessage(messageId, isMms)
+                appContext.updateLastConversationMessage(threadId)
+                refreshMessages()
+                refreshConversations()
+            } finally {
+                pendingResult.finish()
+            }
         }
     }
 }

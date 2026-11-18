@@ -43,6 +43,7 @@ import androidx.annotation.StringRes
 import androidx.appcompat.content.res.AppCompatResources
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.content.ContextCompat
+import org.fossify.messages.helpers.stripInvisibleAndTrim
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.net.toUri
 import androidx.core.view.ViewCompat
@@ -594,24 +595,51 @@ class ThreadActivity : SimpleActivity() {
             val cachedSnapshot = messages.associateBy { it.getStableId() }
             if (!isRecycleBin) {
                 val number = participants.firstOrNull()?.phoneNumbers?.firstOrNull()?.normalizedNumber
+                val synBase = org.fossify.messages.services.IncomingSmsService.SYNTHETIC_MESSAGE_BASE
+                val synThreadBase = org.fossify.messages.services.IncomingSmsService.SYNTHETIC_THREAD_BASE
+                if (threadId >= synThreadBase && !number.isNullOrBlank()) {
+                    val resolvedThreadId = runCatching { getThreadId(number) }.getOrDefault(0L)
+                    if (resolvedThreadId in 1L until synThreadBase && resolvedThreadId != threadId) {
+                        val oldSynThreadId = threadId
+                        threadId = resolvedThreadId
+                        messages = messages.map { msg ->
+                            if (msg.threadId == oldSynThreadId) {
+                                val migrated = msg.copy(threadId = resolvedThreadId)
+                                runCatching { messagesDB.insertOrUpdate(migrated) }
+                                migrated
+                            } else {
+                                msg
+                            }
+                        }
+                        runCatching { conversationsDB.deleteThreadId(oldSynThreadId) }
+                    }
+                }
                 val providerMessages = try {
                     getMessages(threadId, address = number)
                 } catch (e: SecurityException) {
                     android.util.Log.w("ThreadActivity", "READ_SMS not granted, using cached messages only")
                     ArrayList()
                 }
-                val synBase = org.fossify.messages.services.IncomingSmsService.SYNTHETIC_MESSAGE_BASE
                 val realProviderMsgs = providerMessages.filter { it.id < synBase }
+                val reconciledReals = mutableListOf<Message>()
                 val remainingCached = messages.filter { cached ->
                     if (cached.id < synBase) return@filter true
-                    val cachedClean = cached.body.trim()
-                    val matchedReal = realProviderMsgs.any { real ->
-                        kotlin.math.abs(real.date - cached.date) <= 120 && real.body.trim() == cachedClean
+                    val cachedClean = cached.body.stripInvisibleAndTrim()
+                    val matchedReal = realProviderMsgs.firstOrNull { real ->
+                        kotlin.math.abs(real.date - cached.date) <= 120 &&
+                            real.body.stripInvisibleAndTrim() == cachedClean
                     }
-                    if (matchedReal) {
-                        runCatching { messagesDB.delete(cached.id) }
+                    if (matchedReal != null) {
+                        reconciledReals.add(matchedReal)
+                        runCatching {
+                            messagesDB.insertOrIgnore(matchedReal)
+                            messagesDB.delete(cached.id)
+                        }
                     }
-                    !matchedReal
+                    matchedReal == null
+                }
+                if (reconciledReals.isNotEmpty() && threadId in 1L until synThreadBase) {
+                    runCatching { syncThreadToLocal(threadId, address = number.orEmpty()) }
                 }
                 messages = (remainingCached + providerMessages)
                     .associateBy { it.getStableId() }
@@ -2245,6 +2273,7 @@ class ThreadActivity : SimpleActivity() {
             val newMessages = try {
                 getMessages(resolvedThreadId, address = number, includeScheduledMessages = false)
             } catch (_: SecurityException) { ArrayList() }
+            val synThreadBase = org.fossify.messages.services.IncomingSmsService.SYNTHETIC_THREAD_BASE
             if (messageSnapshot.isNotEmpty() && messageSnapshot.all { it.isScheduled } && newMessages.isNotEmpty()) {
                 // update scheduled messages with real thread id
                 threadId = resolvedThreadId
@@ -2252,6 +2281,15 @@ class ThreadActivity : SimpleActivity() {
                     messages = messageSnapshot.filter { it.threadId != threadId },
                     newThreadId = threadId
                 )
+            } else if (
+                threadId >= synThreadBase &&
+                resolvedThreadId > 0L &&
+                resolvedThreadId < synThreadBase &&
+                newMessages.isNotEmpty()
+            ) {
+                val oldSynThreadId = threadId
+                threadId = resolvedThreadId
+                runCatching { conversationsDB.deleteThreadId(oldSynThreadId) }
             }
 
             val localCached = try {
@@ -2264,18 +2302,24 @@ class ThreadActivity : SimpleActivity() {
                 emptyList()
             }
             val realMsgs = newMessages.filter { it.id < synBase }
+            val reconciledRealIds = HashSet<Long>()
             val activeSynthetics = (messageSnapshot + localCached)
                 .filter { it.id >= synBase && !it.isScheduled }
                 .distinctBy { it.id }
                 .filter { syn ->
-                    val synClean = syn.body.trim()
-                    val matchedReal = realMsgs.any { real ->
-                        kotlin.math.abs(real.date - syn.date) <= 120 && real.body.trim() == synClean
+                    val synClean = syn.body.stripInvisibleAndTrim()
+                    val matchedReal = realMsgs.firstOrNull { real ->
+                        kotlin.math.abs(real.date - syn.date) <= 120 &&
+                            real.body.stripInvisibleAndTrim() == synClean
                     }
-                    if (matchedReal) {
-                        runCatching { messagesDB.delete(syn.id) }
+                    if (matchedReal != null) {
+                        reconciledRealIds.add(matchedReal.id)
+                        runCatching {
+                            messagesDB.insertOrIgnore(matchedReal)
+                            messagesDB.delete(syn.id)
+                        }
                     }
-                    !matchedReal
+                    matchedReal == null
                 }
 
             messages = newMessages.apply {
@@ -2289,10 +2333,14 @@ class ThreadActivity : SimpleActivity() {
                 }
             }.distinctBy { it.getStableId() }.toSortedMessages()
 
-            messages.filter { !it.isScheduled && !it.isReceivedMessage() && it.id < synBase && it.id > lastMaxId }
-                .forEach { latestMessage ->
-                    messagesDB.insertOrIgnore(latestMessage)
-                }
+            messages.filter {
+                !it.isScheduled && it.id < synBase && (it.id > lastMaxId || it.id in reconciledRealIds)
+            }.forEach { latestMessage ->
+                messagesDB.insertOrIgnore(latestMessage)
+            }
+            if (reconciledRealIds.isNotEmpty()) {
+                runCatching { syncThreadToLocal(threadId, address = number) }
+            }
 
             setupAdapter()
             runOnUiThread {

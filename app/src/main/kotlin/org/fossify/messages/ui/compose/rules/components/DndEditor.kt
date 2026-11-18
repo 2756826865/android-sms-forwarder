@@ -42,6 +42,7 @@ fun DndEditor(
     start: String,
     end: String,
     days: List<Int>,
+    errorMessage: String? = null,
     onUpdate: (enabled: Boolean, start: String, end: String, days: List<Int>) -> Unit
 ) {
     val isDark = org.fossify.messages.ui.compose.theme.LocalGatewayDark.current
@@ -155,6 +156,15 @@ fun DndEditor(
                         )
                     }
                 }
+            }
+
+            if (!errorMessage.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = errorMessage,
+                    fontSize = 12.sp,
+                    color = org.fossify.messages.ui.compose.theme.GatewayRed
+                )
             }
         }
     }

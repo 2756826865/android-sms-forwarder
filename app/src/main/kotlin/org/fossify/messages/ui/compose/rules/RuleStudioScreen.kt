@@ -39,6 +39,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -102,6 +103,24 @@ fun RuleStudioScreen(
                 "【短信转发】\n发信人: {{FROM}}\n验证码: {{CODE}}\n内容: {{SMS}}\n时间: {{RECEIVE_TIME}}\n卡槽: {{SIM_SLOT}}"
             }
         )
+    }
+    val ruleRepository = remember { org.fossify.messages.forwarding.repository.RuleRepository.getInstance(context) }
+    val currentRulesList by ruleRepository.rulesFlow.collectAsState()
+    var rulesMasterEnabled by remember { mutableStateOf(ruleRepository.isRulesEnabled()) }
+    val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                ruleRepository.refresh()
+                rulesMasterEnabled = ruleRepository.isRulesEnabled()
+                currentMode = config.templateMode
+                if (config.customTemplate.isNotBlank()) {
+                    customTemplateText = config.customTemplate
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     // 沙箱测试变量
@@ -539,10 +558,6 @@ fun RuleStudioScreen(
                 if (!embeddedTemplateOnly) {
                 // 3. 智能规则列表与开关（与经典版实时双向同步）
                 item {
-                    val rulesConfig = remember { org.fossify.messages.forwarding.ForwardingRulesConfig(context) }
-                    var rulesMasterEnabled by remember { mutableStateOf(rulesConfig.enabled) }
-                    var currentRulesList by remember { mutableStateOf(rulesConfig.rules) }
-
                     Surface(
                         shape = RoundedCornerShape(22.dp),
                         color = androidx.compose.material3.MaterialTheme.colorScheme.surface,
@@ -574,7 +589,7 @@ fun RuleStudioScreen(
                                     checked = rulesMasterEnabled,
                                     onCheckedChange = {
                                         rulesMasterEnabled = it
-                                        rulesConfig.enabled = it
+                                        ruleRepository.setRulesEnabled(it)
                                         Toast.makeText(context, "规则总开关已${if (it) "开启" else "关闭"}", Toast.LENGTH_SHORT).show()
                                     },
                                     colors = SwitchDefaults.colors(
@@ -631,9 +646,13 @@ fun RuleStudioScreen(
                                                 Text(
                                                     text = buildString {
                                                         append(if (rule.simScope == org.fossify.messages.forwarding.ForwardingRule.SIM_1) "SIM1 " else if (rule.simScope == org.fossify.messages.forwarding.ForwardingRule.SIM_2) "SIM2 " else "双卡 ")
-                                                        if (rule.includeKeywords.isNotEmpty()) append("包含:[${rule.includeKeywords.take(3).joinToString(",")}] ")
-                                                        if (rule.excludeKeywords.isNotEmpty()) append("排除:[${rule.excludeKeywords.take(2).joinToString(",")}] ")
-                                                        if (rule.includeRegex.isNotBlank()) append("正则 ")
+                                                        if (rule.conditions.isNotEmpty()) {
+                                                            append("条件:${rule.conditions.count { it.enabled }}项 ")
+                                                        } else {
+                                                            if (rule.includeKeywords.isNotEmpty()) append("包含:[${rule.includeKeywords.take(3).joinToString(",")}] ")
+                                                            if (rule.excludeKeywords.isNotEmpty()) append("排除:[${rule.excludeKeywords.take(2).joinToString(",")}] ")
+                                                            if (rule.includeRegex.isNotBlank()) append("正则 ")
+                                                        }
                                                     }.ifBlank { "全量匹配" },
                                                     fontSize = 12.sp,
                                                     color = if (isDark) Color(0xFF9CA3AF) else TextSecondary,
@@ -645,10 +664,7 @@ fun RuleStudioScreen(
                                             Switch(
                                                 checked = rule.enabled,
                                                 onCheckedChange = { isChecked ->
-                                                    val updated = currentRulesList.toMutableList()
-                                                    updated[index] = rule.copy(enabled = isChecked)
-                                                    currentRulesList = updated
-                                                    rulesConfig.rules = updated
+                                                    ruleRepository.saveRule(rule.copy(enabled = isChecked))
                                                     Toast.makeText(context, "${rule.name} 已${if (isChecked) "启用" else "禁用"}", Toast.LENGTH_SHORT).show()
                                                 },
                                                 colors = SwitchDefaults.colors(
